@@ -10,13 +10,13 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, end of session 4):**
+**Current state (2026-10-15, end of session 5):**
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
   `--version` self-check), an empty `MainWindow` whose status bar shows the rsgain version, and empty `services/`
   and `ui/` packages. `uv run pyinstaller --noconfirm packaging/music_desk.spec` builds `dist/MusicDesk/`
   (about 104 MB); the built exe logs `rsgain 3.6` from its own bundle.
-- **M1 in progress** (references, fixtures, formats, tags and rename done):
+- **M1 in progress** (references, fixtures, formats, tags, rename and ReplayGain done; lyrics and playlists left):
   - git repo (local, branch `main`, no remote), one commit per finished task. `.gitattributes` keeps
     `tests/fixtures/generated/` and `tests/reference/` byte-exact (git's autocrlf is on).
   - The scripts are frozen in `tests/reference/` (hashes identical to the root copies).
@@ -49,15 +49,34 @@ two files alone.
     - Tests never use the real Recycle Bin (they inject a recorder). The parity tests patch the reference
       module's globals and never let it delete: renames are compared with its junk list emptied, junk lists with
       DRY_RUN.
-  - 174 tests pass, 8 are skipped (formats without a sample file), the 16 `slow` tests pass, and ruff is clean.
+  - `core/rsgain.py`: `scan(files, folder, target, exe, cancel=, on_line=) -> ScanResult`.
+    - It runs rsgain with `cwd=folder` and relative names, CREATE_NO_WINDOW and below-normal priority.
+    - Reader threads stream its lines; a cancel kills it.
+    - A command line over 32,000 characters isn't started.
+  - `core/replaygain.py`:
+    - `ReplayGainOptions` and `RunLog` (the script's report text).
+    - `process_album(folder, ...)` and `process_discography(root, ...)`, with an injectable `scanner`, `exe`,
+      `cancel`, `reporter` (Reporter protocol) and `now` clock.
+    - Every script step is ported one-to-one through `TaggedFile`.
+    - The as-built cancel, crash, unsupported-format and too-long rules are in SPEC §10B.
+  - **ReplayGain parity is proven early** (M5's "Done when", at core level): with the real rsgain on
+    `replaygain/Fixture Artist/` twins, the app's tags and every `replaygain.log` (album logs plus the
+    discography summary) match the script's, with timestamps, durations and paths masked.
+  - New fixtures `replaygain/Fixture Artist/`:
+    - Album A: a tone plus FLAC/MP3 spikes that clip after gain, with lite/bonus/CD2 subfolders.
+    - Album B: a loud FLAC, an ID3v2.3 MP3, and a `Scans/` folder without audio.
 
-**Next step:** `core/rsgain.py` scan runner + `core/replaygain.py` (next unchecked M1 task). Read SPEC §10B, §13,
-§16 and §17 first, and `tests/reference/music_tools.py` from the RunLog class to the end.
-- The rsgain call: `custom -s i -l <target>` with relative names, `cwd=`, CREATE_NO_WINDOW, below-normal
-  priority, cancellable.
-- RunLog, clipping fix, album values, LUFS comment and subfolder copies all go through `TaggedFile`.
-- Discography leveling.
-- Parity on RunLog text, timestamps and durations masked; slow tests with the real rsgain on `album/`.
+    59 fixture files in all. `tests/tagdump.py` is shared by the parity tests.
+  - 200 tests pass, 8 are skipped (formats without a sample file), the 21 `slow` tests pass, and ruff is clean.
+
+**Next step:** `core/lyrics.py` (next unchecked M1 task), then `core/playlists.py`, which completes M1. Read SPEC §8,
+§9, §14 and §17, and `tests/reference/seek_lyrics.py`, first.
+- **Port:** the LRCLIB client (`/api/get`, then `/api/search` with the ±3 s and normalized-artist match), the
+  retries, the statuses, the cache key and entry shape, the file-name fallback, and the LRC timestamp strip.
+- **Tags:** artist, title and album through `TaggedFile.fields()`, and the embed through `set_fields({"lyrics": ...})`.
+- **Changes from the script:** every track is looked up, and auto-embed fills only empty tags.
+- **Tests:** mocked HTTP only; tests never call the real API.
+- **Not yet:** the SQLite cache store waits for M2's index. For now, keep the cache an interface backed by a dict.
 
 Don't start it until Hugo says so.
 
@@ -147,6 +166,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Fixtures are tagged by `make_fixtures.py` with raw per-family mutagen writes, never through app code, so they stay an independent oracle. |
 | 2026-10-15 | `tags.py` deliberate differences from the script (SPEC §17): Vorbis ReplayGain keys written in uppercase, ID3 version kept on save, WMA disc read. Rename text fields are *not* stripped, to match TinyTag 2.0.0 and the script exactly (SPEC §17 wording corrected). |
 | 2026-10-15 | Rename preview = the script's *real* run, simulated in walk order (the script's `--dry-run` could differ). A `.lrc` follows only when exactly one audio file has its stem. Selection runs never recycle junk. Details in SPEC §10. |
+| 2026-10-15 | ReplayGain core: a cancelled album → STOPPED + warning (later albums CANCELLED, no leveling); a crash is logged as CRASHED, not re-raised; unscannable formats are listed as warnings; an over-long command line isn't run. Details in SPEC §10B. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -237,7 +257,7 @@ Done when: the built exe in `dist/` starts, shows a window, and reports the rsga
       verified: SPEC §1 and `tests/core/test_rsgain_keys.py`.)
 - [x] `core/rename.py`: plan, apply, validate, junk protections, .cue and .lrc handling, sidecar renames, plus
       parity tests
-- [ ] `core/rsgain.py` + `core/replaygain.py`: parity tests on RunLog text, plus slow tests with the real rsgain
+- [x] `core/rsgain.py` + `core/replaygain.py`: parity tests on RunLog text, plus slow tests with the real rsgain
 - [ ] `core/lyrics.py`: LRCLIB client and lookups, mocked HTTP tests
 - [ ] `core/playlists.py`: temporary .m3u8 writer
 

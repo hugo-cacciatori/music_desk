@@ -355,6 +355,13 @@ happen to which files.
   - Shows per-album progress and live log lines.
   - Cancel ends the current rsgain run and stops before the next album. Leveling is then skipped, and the report
     says so.
+  - As built at M1 (`core/replaygain.py`):
+    - A cancelled album gets "Scan: CANCELLED" and a warning, and its result is STOPPED. Albums after it show
+      CANCELLED in the discography summary, whose gain line reads "none, the run was cancelled before leveling".
+    - A crash is written to the album's log as CRASHED. The job goes on; the script re-raised.
+    - Audio files rsgain can't scan get a warning in the album's log ("skipped, format not supported by rsgain").
+    - An album whose command line is too long is reported as "Scan: FAILED (command line too long)", and rsgain
+      isn't started.
 - Report:
   - Per album: the RunLog track table (Track, Loudness, Peak, rsgain gain, Final gain, Note), the album values,
     the subfolder lines, warnings and errors, and the result.

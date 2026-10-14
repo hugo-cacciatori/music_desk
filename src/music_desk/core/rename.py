@@ -252,7 +252,10 @@ def folder_facts(entries: list[Path], options: RenameOptions) -> _FolderFacts:
     return _FolderFacts(single_file_cues, cue_audio, cue_files, sidecars, lrc_kept)
 
 
-def plan_renames(folder: str | Path, options: RenameOptions = RenameOptions(),
+DEFAULT_OPTIONS = RenameOptions()
+
+
+def plan_renames(folder: str | Path, options: RenameOptions = DEFAULT_OPTIONS,
                  selection: Iterable[str | Path] | None = None) -> RenamePlan:
     """The dry run: what renaming `folder` would do. Nothing on disk changes.
 

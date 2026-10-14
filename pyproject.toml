@@ -41,5 +41,6 @@ select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+norecursedirs = ["reference", "fixtures", ".*", "build", "dist"]
 qt_api = "pyside6"
 markers = ["slow: runs the real rsgain (deselect with -m \"not slow\")"]

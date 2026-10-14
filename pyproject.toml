@@ -1,0 +1,45 @@
+[project]
+name = "music-desk"
+version = "0.1.0"
+description = "Windows desktop app for browsing a music library, editing tags, tidying albums and finding lyrics."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    # Essentials only: the app needs QtCore/QtGui/QtWidgets, and the Addons wheel (WebEngine etc.) bloats the build.
+    "PySide6-Essentials==6.12.0",
+    "mutagen",
+    "watchdog",
+    "natsort",
+    "send2trash",
+]
+
+[project.gui-scripts]
+music-desk = "music_desk.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-qt",
+    "ruff",
+    "pyinstaller",
+    "tinytag==2.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/music_desk"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+extend-exclude = ["music_tools.py", "seek_lyrics.py", "tests/reference", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyside6"
+markers = ["slow: runs the real rsgain (deselect with -m \"not slow\")"]

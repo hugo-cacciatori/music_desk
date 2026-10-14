@@ -296,6 +296,78 @@ def make_cleanup() -> None:
     write_text(lrc / "no_lyrics.lrc", lyrics)
 
 
+def edge_picture(data: bytes, picture_type: int) -> "Picture":
+    from mutagen.flac import Picture
+
+    picture = Picture()
+    picture.type = picture_type
+    picture.mime = "image/jpeg"
+    picture.data = data
+    return picture
+
+
+def make_edge() -> None:
+    """edge/: values that need normalizing ("03/12" in one field, full dates, padded or blank text, legacy
+    fallback keys), an iTunes-style COMM with a description, a back cover stored before the front one, and the
+    TXXX "comment" frame older versions of the script wrote."""
+    from mutagen.id3 import APIC
+    from mutagen.mp4 import MP4Cover
+
+    folder = OUT / "edge"
+    make_jpeg(folder / "back.jpg", "green")
+    make_jpeg(folder / "front.jpg", "yellow")
+    back, front = (folder / "back.jpg").read_bytes(), (folder / "front.jpg").read_bytes()
+
+    flac_path = folder / "edge.flac"
+    encode(flac_path, ENCODERS["tone.flac"])
+    flac = FLAC(flac_path)
+    flac["TITLE"] = "  Spaced Title  "
+    flac["ARTIST"] = ""
+    flac["ALBUM"] = "Edge"
+    flac["TRACKNUMBER"] = "03/12"
+    flac["DISCNUMBER"] = "1"
+    flac["TOTALDISCS"] = "2"
+    flac["DATE"] = "2024-05-01"
+    flac["COMMENT"] = "edge comment"
+    flac["UNSYNCEDLYRICS"] = "Legacy lyrics"
+    flac.add_picture(edge_picture(back, 4))
+    flac.add_picture(edge_picture(front, 3))
+    flac.save()
+
+    mp3_path = folder / "edge.mp3"
+    encode(mp3_path, ENCODERS["tone.mp3"])
+    mp3 = MP3(mp3_path)
+    if mp3.tags is None:
+        mp3.add_tags()
+    mp3.tags.add(TIT2(encoding=3, text="  Spaced Title  "))
+    mp3.tags.add(TPE1(encoding=3, text=""))
+    mp3.tags.add(TALB(encoding=3, text="Edge"))
+    mp3.tags.add(TRCK(encoding=3, text="03/12"))
+    mp3.tags.add(TPOS(encoding=3, text="1/2"))
+    mp3.tags.add(TDRC(encoding=3, text="2024-05-01"))
+    mp3.tags.add(COMM(encoding=3, lang="eng", desc="iTunNORM", text=" 00000001 00000002"))
+    mp3.tags.add(COMM(encoding=3, lang="eng", desc="", text="edge comment"))
+    mp3.tags.add(TXXX(encoding=3, desc="comment", text="old comment"))
+    mp3.tags.add(USLT(encoding=3, lang="eng", desc="", text="Edge lyrics"))
+    mp3.tags.add(APIC(encoding=3, mime="image/jpeg", type=4, desc="back", data=back))
+    mp3.tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="front", data=front))
+    mp3.save(v2_version=4)
+
+    m4a_path = folder / "edge.m4a"
+    encode(m4a_path, ENCODERS["tone_aac.m4a"])
+    m4a = MP4(m4a_path)
+    if m4a.tags is None:
+        m4a.add_tags()
+    m4a.tags["\xa9nam"] = ["  Spaced Title  "]
+    m4a.tags["\xa9ART"] = [""]
+    m4a.tags["\xa9alb"] = ["Edge"]
+    m4a.tags["trkn"] = [(3, 12)]
+    m4a.tags["disk"] = [(1, 0)]
+    m4a.tags["\xa9day"] = ["2024-05-01"]
+    m4a.tags["covr"] = [MP4Cover(front, imageformat=MP4Cover.FORMAT_JPEG)]
+    m4a.save()
+
+
 def main() -> None:
     global FFMPEG
     FFMPEG = find_ffmpeg()
@@ -303,6 +375,7 @@ def main() -> None:
     make_formats()
     make_album()
     make_cleanup()
+    make_edge()
     count = sum(1 for p in OUT.rglob("*") if p.is_file())
     print(f"{count} fixture files in {OUT}")
 

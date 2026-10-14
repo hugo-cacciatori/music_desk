@@ -10,22 +10,35 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, end of session 1):**
+**Current state (2026-10-15, end of session 2):**
 - The spec is complete and approved (`docs/SPEC.md`).
-- **M0 is complete.** uv 0.13.1 is installed; `pyproject.toml`, `uv.lock` and `.venv/` exist. `src/music_desk/`
-  has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the `--version` self-check), an empty `MainWindow`
-  whose status bar shows the rsgain version, and empty `services/` and `ui/` packages. 8 tests pass, ruff is clean.
-- `uv run pyinstaller --noconfirm packaging/music_desk.spec` builds `dist/MusicDesk/` (about 104 MB). The built
-  exe starts, shows the window, and logs `rsgain 3.6` resolved from `dist\MusicDesk\_internal\resources\rsgain\`.
-- No git repo yet.
+- **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
+  `--version` self-check), an empty `MainWindow` whose status bar shows the rsgain version, and empty `services/`
+  and `ui/` packages. `uv run pyinstaller --noconfirm packaging/music_desk.spec` builds `dist/MusicDesk/`
+  (about 104 MB); the built exe logs `rsgain 3.6` from its own bundle.
+- **M1, first half done:**
+  - git repo (local, branch `main`, no remote), one commit per finished task. `.gitattributes` keeps
+    `tests/fixtures/generated/` and `tests/reference/` byte-exact (git's autocrlf is on).
+  - The scripts are frozen in `tests/reference/` (hashes identical to the root copies).
+  - `tests/fixtures/make_fixtures.py` generates 44 deterministic files (744 KB) into `tests/fixtures/generated/`:
+    `formats/` (one tagged tone per format ffmpeg can encode), `album/Fixture Artist - Fixture Album/` (rename
+    cases plus lite/bonus/CD2), `cleanup/` (single-file album .cue, per-track and missing-file .cue, .lrc with and
+    without a lyrics tag, replaygain.log, folder.jpg, .m3u, .nfo/.sfv/.txt), and `cover.jpg`. `tests/conftest.py`
+    has `fixtures_dir` and `fixture_copy` (copies into `tmp_path`).
+  - `core/formats.py` holds the SPEC §1 table (`FORMATS`, `format_for`, `open_audio`, `AUDIO_EXTENSIONS`,
+    `REPLAYGAIN_EXTENSIONS`). Every format with a fixture round-trips title, lyrics and cover through mutagen with
+    no downgrade needed; ID3v2.3 is preserved.
+  - rsgain's ReplayGain keys per format are verified and recorded in SPEC §1.
+  - 58 tests pass, 8 are skipped (formats without a sample file), and ruff is clean.
 
-**Next step:** M1 (see Progress), starting with freezing the scripts into `tests/reference/`. Don't start it until
-Hugo says so.
+**Next step:** `core/tags.py` family adapters (first unchecked M1 task), then `core/rename.py` with parity tests
+against `tests/reference/music_tools.py`. Don't start it until Hugo says so.
 
 **Session protocol:**
 1. Read this file, then the SPEC sections for the current milestone. Pick up the first unchecked task in Progress.
 2. Hugo's global rule: before running anything destructive (deleting files, etc.), tell him the exact command first.
-3. Don't run `git init` until Hugo asks. Don't install global tools without asking. Project dependencies go in the
+3. Commit each finished task on `main` (local repo; don't add a remote or push unless Hugo asks). Don't install
+   global tools without asking. Project dependencies go in the
    project's virtual environment.
 4. At the end of a session:
    - tick the finished tasks in Progress;
@@ -43,11 +56,15 @@ Hugo says so.
 - ffmpeg is installed at `C:\Program Files\ffmpeg\ffmpeg-master-latest-win64-gpl-shared\bin\ffmpeg.exe`. It is
   only for regenerating test fixtures (SPEC §18). The app never needs it, because rsgain has its decoders built in
   (SPEC §13).
-- git is installed, but there is no repo here.
+- git repo initialized 2026-10-15 (branch `main`, no remote).
+- The venv has mutagen 1.48.1 (newer than the global 1.47.0). Parity tests run the reference scripts inside the
+  venv, so both sides use the same mutagen.
+- ffmpeg's build has no libspeex encoder, so there is no Speex fixture.
 
 **Sources:**
-- `music_tools.py` and `seek_lyrics.py` at the project root: the code to port. Frozen copies go into
-  `tests/reference/` at M1. Keep the root copies out of ruff and pytest collection.
+- `music_tools.py` and `seek_lyrics.py` at the project root: the code to port. Their frozen copies are in
+  `tests/reference/` (since 2026-10-15); never edit those. Ruff excludes both locations, and pytest doesn't
+  collect `reference/` or `fixtures/`.
 - The original rsgain download (`rsgain-3.6-win64/`, with the legacy `scan_library_full.py`) is no longer on disk;
   `resources/rsgain/` is the only copy. The legacy script was superseded and isn't ported.
 - `music_tools.py` resolves rsgain as `<script folder>/rsgain-3.6-win64/rsgain.exe`, which doesn't exist anymore.
@@ -98,6 +115,9 @@ Hugo says so.
 | 2026-10-15 | Env: uv (installed by winget), hatchling build backend, `src/` layout. |
 | 2026-10-15 | Qt dependency is `PySide6-Essentials==6.12.0`, not the full `PySide6` meta-package: the app only needs QtCore/QtGui/QtWidgets, and Addons (WebEngine etc.) would bloat the build. If a later milestone needs an Addons module, switch back and pin the same version. |
 | 2026-10-15 | PyInstaller enters through `packaging/launcher.py` and bundles `resources/rsgain` as `resources/rsgain` inside `_internal/`. Icon and version info wait for the app name decision. |
+| 2026-10-15 | git repo created (Hugo's go). Local only, one commit per finished task. |
+| 2026-10-15 | Formats ffmpeg can't encode (APE, TAK, Musepack, OptimFROG, DSF/DFF, Speex) get skipped tests until Hugo supplies samples. |
+| 2026-10-15 | Fixtures are tagged by `make_fixtures.py` with raw per-family mutagen writes, never through app code, so they stay an independent oracle. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -160,7 +180,8 @@ Commands (from the project root):
           theme/
       resources/rsgain/     rsgain.exe 3.6 + DLLs + presets + licenses (the only copy left)
       resources/icons/
-      tests/                reference/ (frozen original scripts), fixtures/ (+ make_fixtures.py), core/, ui/
+      tests/                conftest.py, reference/ (frozen original scripts), fixtures/ (make_fixtures.py +
+                            generated/), core/, ui/
       packaging/            music_desk.spec, launcher.py (PyInstaller entry), installer.iss
 
 ## Progress
@@ -179,11 +200,12 @@ Tick tasks as they're done (`[x]`). A milestone is complete when its "Done when"
 Done when: the built exe in `dist/` starts, shows a window, and reports the rsgain version from its own bundle.
 
 **M1 Core port** (read SPEC §1, §9, §10, §14, §17 and §18)
-- [ ] Freeze the root `music_tools.py` and `seek_lyrics.py` into `tests/reference/`
-- [ ] `tests/fixtures/make_fixtures.py` (ffmpeg) and the generated fixtures, including the cleanup cases. Missing
+- [x] Freeze the root `music_tools.py` and `seek_lyrics.py` into `tests/reference/`
+- [x] `tests/fixtures/make_fixtures.py` (ffmpeg) and the generated fixtures, including the cleanup cases. Missing
       formats go in Open questions.
-- [ ] `core/formats.py` and round-trip tests per format
-- [ ] `core/tags.py` family adapters: fields, ReplayGain, lyrics, cover. Verify rsgain's ReplayGain keys per format.
+- [x] `core/formats.py` and round-trip tests per format
+- [ ] `core/tags.py` family adapters: fields, ReplayGain, lyrics, cover. (rsgain's ReplayGain keys per format are
+      already verified: SPEC §1 and `tests/core/test_rsgain_keys.py`.)
 - [ ] `core/rename.py`: plan, apply, validate, junk protections, .cue and .lrc handling, sidecar renames, plus
       parity tests
 - [ ] `core/rsgain.py` + `core/replaygain.py`: parity tests on RunLog text, plus slow tests with the real rsgain
@@ -255,8 +277,9 @@ Done when: the installer installs the app, and it runs from Program Files with t
 ## Open questions
 1. App name and icon: deferred by Hugo. "MusicDesk" is the working name until then.
 2. Retiring the root `music_tools.py` and `seek_lyrics.py`: deferred by Hugo. They stay, and the app never deletes them.
-3. At M1: small sample files for the formats ffmpeg can't encode: APE, TAK, Musepack, OptimFROG, DSF/DFF, and
-   possibly Speex.
+3. Small sample files for the formats ffmpeg can't encode: APE, TAK, Musepack, OptimFROG, DSF/DFF and Speex.
+   Their tests are skipped until then (decided 2026-10-15). Drop them in `tests/fixtures/samples/`, and a session
+   wires them into the round-trip and rsgain-key tests.
 4. ReplayGain for the formats rsgain can't handle (OptimFROG, TTA, DSF/DFF, M4B)?
    - It would mean bundling ffmpeg (about 100 MB) to measure loudness, and its results differ slightly from
      rsgain's.

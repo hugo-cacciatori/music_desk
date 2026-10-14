@@ -56,8 +56,16 @@ each format, and a row is downgraded (for example to read-only) if mutagen can't
 - Opus: keep rsgain's default `-o d`, which writes standard REPLAYGAIN_* tags and clears the header gain, so the
   post-processing works the same as for FLAC.
 - ID3 formats: rsgain's default `-I keep` keeps the file's ID3v2 version, and the app's own writes do the same.
-- The exact ReplayGain keys rsgain writes per format are verified at M1 by running the bundled rsgain on fixtures.
-  For example, MP4 is expected to use `----:com.apple.iTunes:REPLAYGAIN_TRACK_GAIN`. Don't assume them.
+- ReplayGain keys the bundled rsgain 3.6 writes, verified on the fixtures (2026-10-15,
+  `tests/core/test_rsgain_keys.py`, `slow`):
+  - Vorbis (FLAC, Ogg Vorbis, Ogg FLAC, Opus): `REPLAYGAIN_TRACK_GAIN`/`_PEAK` comments (mutagen lists Vorbis keys
+    in lowercase; match ignoring case). Opus gets no R128 tags with the default `-o d`.
+  - ID3 (MP3, MP2, WAV, AIFF): `TXXX:REPLAYGAIN_TRACK_GAIN`/`_PEAK`, uppercase descriptions.
+  - MP4 (AAC and ALAC .m4a): freeform `----:com.apple.iTunes:REPLAYGAIN_TRACK_GAIN`/`_PEAK`, UTF-8 bytes.
+  - APEv2 (WavPack) and ASF (WMA): `REPLAYGAIN_TRACK_GAIN`/`_PEAK`.
+  - Values: gain `"6.75 dB"` (2 decimals), peak `"0.124969"` (6 decimals).
+  - rsgain refuses .m4b, .tta and raw .aac ("not of a supported type"), which confirms the ✗ marks above.
+    APE, Musepack, TAK and Speex are still unverified (no fixture yet).
 
 Field mapping:
 

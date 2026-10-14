@@ -10,13 +10,13 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, end of session 3):**
+**Current state (2026-10-15, end of session 4):**
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
   `--version` self-check), an empty `MainWindow` whose status bar shows the rsgain version, and empty `services/`
   and `ui/` packages. `uv run pyinstaller --noconfirm packaging/music_desk.spec` builds `dist/MusicDesk/`
   (about 104 MB); the built exe logs `rsgain 3.6` from its own bundle.
-- **M1 in progress** (references, fixtures, formats and tags done):
+- **M1 in progress** (references, fixtures, formats, tags and rename done):
   - git repo (local, branch `main`, no remote), one commit per finished task. `.gitattributes` keeps
     `tests/fixtures/generated/` and `tests/reference/` byte-exact (git's autocrlf is on).
   - The scripts are frozen in `tests/reference/` (hashes identical to the root copies).
@@ -38,12 +38,28 @@ two files alone.
     The later modules (rename, replaygain, lyrics, Metadata tab) go through it, never through mutagen directly.
   - Parity: the script's get_tag/set_tag/set_comment and read_fields(TinyTag) agree with `tags.py`; the three
     deliberate differences are in SPEC §17.
-  - 142 tests pass, 8 are skipped (formats without a sample file), the 16 `slow` tests pass, and ruff is clean.
+  - `core/rename.py`:
+    - `RenameOptions`, and `validate(options)`: the script's checks plus the SPEC §10 refusals.
+    - `plan_renames(folder, options, selection=None) -> RenamePlan` is the dry run. It simulates the script's
+      walk order, so "name taken" is identical, and it handles case-only renames, the single-file-album .cue
+      (kept, audio left alone), junk, kept .lrc files and sidecar renames, plus cue warnings when cleanup is off.
+    - `apply_plan(plan, recycle=fsops.send_to_recycle_bin, cancel=None) -> RenameReport` re-checks each item
+      (changed source or newly taken target: skipped) and never deletes.
+    - New `core/fsops.py` (`send_to_recycle_bin`, `is_same_file`) and `core/cancel.py` (`CancelToken`).
+    - Tests never use the real Recycle Bin (they inject a recorder). The parity tests patch the reference
+      module's globals and never let it delete: renames are compared with its junk list emptied, junk lists with
+      DRY_RUN.
+  - 174 tests pass, 8 are skipped (formats without a sample file), the 16 `slow` tests pass, and ruff is clean.
 
-**Next step:** `core/rename.py` (next unchecked M1 task): `RenameOptions`, `validate`, `plan_renames`/`apply_plan`,
-junk protections, .cue/.lrc handling, sidecar renames, with parity tests against `tests/reference/music_tools.py`
-on the `album/` and `cleanup/` fixtures (read SPEC §10 and §17 first). Rename fields come from
-`TaggedFile.rename_fields()`; `sanitize` stays in `rename.py`. Don't start it until Hugo says so.
+**Next step:** `core/rsgain.py` scan runner + `core/replaygain.py` (next unchecked M1 task). Read SPEC §10B, §13,
+§16 and §17 first, and `tests/reference/music_tools.py` from the RunLog class to the end.
+- The rsgain call: `custom -s i -l <target>` with relative names, `cwd=`, CREATE_NO_WINDOW, below-normal
+  priority, cancellable.
+- RunLog, clipping fix, album values, LUFS comment and subfolder copies all go through `TaggedFile`.
+- Discography leveling.
+- Parity on RunLog text, timestamps and durations masked; slow tests with the real rsgain on `album/`.
+
+Don't start it until Hugo says so.
 
 **Session protocol:**
 1. Read this file, then the SPEC sections for the current milestone. Pick up the first unchecked task in Progress.
@@ -130,6 +146,7 @@ on the `album/` and `cleanup/` fixtures (read SPEC §10 and §17 first). Rename 
 | 2026-10-15 | Formats ffmpeg can't encode (APE, TAK, Musepack, OptimFROG, DSF/DFF, Speex) get skipped tests until Hugo supplies samples. |
 | 2026-10-15 | Fixtures are tagged by `make_fixtures.py` with raw per-family mutagen writes, never through app code, so they stay an independent oracle. |
 | 2026-10-15 | `tags.py` deliberate differences from the script (SPEC §17): Vorbis ReplayGain keys written in uppercase, ID3 version kept on save, WMA disc read. Rename text fields are *not* stripped, to match TinyTag 2.0.0 and the script exactly (SPEC §17 wording corrected). |
+| 2026-10-15 | Rename preview = the script's *real* run, simulated in walk order (the script's `--dry-run` could differ). A `.lrc` follows only when exactly one audio file has its stem. Selection runs never recycle junk. Details in SPEC §10. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -218,7 +235,7 @@ Done when: the built exe in `dist/` starts, shows a window, and reports the rsga
 - [x] `core/formats.py` and round-trip tests per format
 - [x] `core/tags.py` family adapters: fields, ReplayGain, lyrics, cover. (rsgain's ReplayGain keys per format are
       verified: SPEC §1 and `tests/core/test_rsgain_keys.py`.)
-- [ ] `core/rename.py`: plan, apply, validate, junk protections, .cue and .lrc handling, sidecar renames, plus
+- [x] `core/rename.py`: plan, apply, validate, junk protections, .cue and .lrc handling, sidecar renames, plus
       parity tests
 - [ ] `core/rsgain.py` + `core/replaygain.py`: parity tests on RunLog text, plus slow tests with the real rsgain
 - [ ] `core/lyrics.py`: LRCLIB client and lookups, mocked HTTP tests

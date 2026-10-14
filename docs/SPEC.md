@@ -319,7 +319,15 @@ happen to which files.
 - **Apply** executes exactly the previewed plan and re-checks each item; a file changed since the preview is
   skipped with a warning. Junk files go to the Recycle Bin after a confirmation dialog that lists them. The result
   summary has the same sections as the script.
-- Also works on a file selection, renaming only the selected files and their sidecars.
+- Also works on a file selection, renaming only the selected files and their sidecars. A selection run never
+  sends junk to the Recycle Bin.
+- Details pinned at M1 (`core/rename.py`):
+  - The preview simulates the renames in the script's walk order, so "name taken" matches what the script's
+    *real* run did. The script's own `--dry-run` checked names against the untouched folder and could differ.
+  - A `.lrc` follows an audio file only when exactly one audio file in the folder has its stem (ignoring case).
+  - A single-file album is a sheet whose FILE lines all name one audio file present in the folder, with at least
+    two TRACKs. The sheet shows "kept: needed to play <audio>", and the audio file shows
+    "kept: used by <name>.cue".
 
 **B. ReplayGain**
 - "Measures loudness with rsgain at the target level, lowers any track gain that would clip, sets the album gain

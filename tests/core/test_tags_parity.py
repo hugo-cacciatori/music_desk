@@ -10,6 +10,7 @@
 import shutil
 
 import pytest
+from tagdump import tag_dump
 from tinytag import TinyTag
 
 from music_desk.core.formats import AUDIO_EXTENSIONS
@@ -20,13 +21,6 @@ FLAC_MP3_FIXTURES = [f"{ALBUM}/01 First.flac", f"{ALBUM}/lowercase_rg.mp3", f"{A
                      "edge/edge.flac", "edge/edge.mp3"]
 # TinyTag 2.0.0 has no WavPack reader.
 TINYTAG_UNREADABLE = {".wv"}
-
-
-def tag_dump(audio) -> list:
-    """Every tag of a FLAC or MP3, comparable across the two implementations (Vorbis keys ignoring case)."""
-    if hasattr(audio.tags, "getall"):
-        return sorted((key, frame.pprint()) for key, frame in audio.tags.items())
-    return sorted((key.lower(), value) for key, value in audio.tags) + [p.data for p in audio.pictures]
 
 
 @pytest.fixture

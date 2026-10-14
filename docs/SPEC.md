@@ -485,8 +485,10 @@ and `seek_lyrics.py` at the project root, made at M1.
   adapters, which cover every format. They keep the same semantics: keys match ignoring case, and ReplayGain keys
   are written in uppercase.
 - Rename fields are read through mutagen instead of TinyTag, normalized to TinyTag 2.0.0's values (track, disc and
-  totals as int, other fields as stripped strings). Parity tests compare against TinyTag on every format TinyTag
-  reads.
+  totals as int, MP4's missing total as 0; text exactly as stored, **not stripped**, so "  Title  " keeps its
+  spaces in the new name as with the script; full dates such as "2024-05-01" kept whole). Blank text is dropped,
+  as `read_fields` does. `TaggedFile.rename_fields()` implements this; parity tests run the script's `read_fields`
+  on TinyTag for every fixture TinyTag reads (not WavPack, which it can't).
 - The lyrics cache moves to SQLite with the same entry shape, and every result is committed (`CACHE_SAVE_EVERY`
   goes away).
 
@@ -533,6 +535,11 @@ and `seek_lyrics.py` at the project root, made at M1.
   - .m3u is gone from the default list;
   - the protections and case-by-case keeps of §10 apply, and kept `.lrc` sidecars follow their audio file's rename.
 - No songs.html.
+- Tags (verified by `tests/core/test_tags_parity.py`):
+  - Vorbis ReplayGain keys are written in uppercase (`REPLAYGAIN_TRACK_GAIN`); the script writes the lowercase key
+    it is given. Vorbis keys are case-insensitive, so readers see no difference.
+  - Saving keeps the ID3 version (v2.3 stays v2.3); the script's `save()` upgraded files to v2.4.
+  - WMA disc number and total are read from WM/PartOfSet; TinyTag 2.0.0 ignored them.
 - `%` stays forbidden in new names, as in the script, even though Windows allows it.
 
 ## 18. Testing

@@ -10,29 +10,40 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, end of session 2):**
+**Current state (2026-10-15, end of session 3):**
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
   `--version` self-check), an empty `MainWindow` whose status bar shows the rsgain version, and empty `services/`
   and `ui/` packages. `uv run pyinstaller --noconfirm packaging/music_desk.spec` builds `dist/MusicDesk/`
   (about 104 MB); the built exe logs `rsgain 3.6` from its own bundle.
-- **M1, first half done:**
+- **M1 in progress** (references, fixtures, formats and tags done):
   - git repo (local, branch `main`, no remote), one commit per finished task. `.gitattributes` keeps
     `tests/fixtures/generated/` and `tests/reference/` byte-exact (git's autocrlf is on).
   - The scripts are frozen in `tests/reference/` (hashes identical to the root copies).
-  - `tests/fixtures/make_fixtures.py` generates 44 deterministic files (744 KB) into `tests/fixtures/generated/`:
+  - `tests/fixtures/make_fixtures.py` generates 49 deterministic files into `tests/fixtures/generated/`:
     `formats/` (one tagged tone per format ffmpeg can encode), `album/Fixture Artist - Fixture Album/` (rename
     cases plus lite/bonus/CD2), `cleanup/` (single-file album .cue, per-track and missing-file .cue, .lrc with and
-    without a lyrics tag, replaygain.log, folder.jpg, .m3u, .nfo/.sfv/.txt), and `cover.jpg`. `tests/conftest.py`
-    has `fixtures_dir` and `fixture_copy` (copies into `tmp_path`).
+    without a lyrics tag, replaygain.log, folder.jpg, .m3u, .nfo/.sfv/.txt), `edge/` (FLAC/MP3/M4A with "03/12",
+    full dates, padded/blank text, legacy keys, back+front covers, an iTunNORM COMM and a TXXX "comment"), and
+    `cover.jpg`. `tests/conftest.py` has `fixtures_dir`, `fixture_copy` (copies into `tmp_path`) and
+    `reference_music_tools` (the frozen script imported as a module).
   - `core/formats.py` holds the SPEC §1 table (`FORMATS`, `format_for`, `open_audio`, `AUDIO_EXTENSIONS`,
     `REPLAYGAIN_EXTENSIONS`). Every format with a fixture round-trips title, lyrics and cover through mutagen with
     no downgrade needed; ID3v2.3 is preserved.
   - rsgain's ReplayGain keys per format are verified and recorded in SPEC §1.
-  - 58 tests pass, 8 are skipped (formats without a sample file), and ruff is clean.
+  - `core/tags.py`: `TaggedFile(path)` with `fields()`/`set_fields()` (only named fields change, None clears),
+    `rename_fields()` (TinyTag-equivalent, for rename masks), `get_replaygain`/`set_replaygain`, `set_comment`,
+    `cover`/`set_cover`/`remove_cover` (front cover; other pictures kept), `stream_info()`, `save()` (keeps the ID3
+    version). One adapter per family: Vorbis, ID3, MP4, APEv2, ASF, and none (raw .aac: writes raise `TagError`).
+    The later modules (rename, replaygain, lyrics, Metadata tab) go through it, never through mutagen directly.
+  - Parity: the script's get_tag/set_tag/set_comment and read_fields(TinyTag) agree with `tags.py`; the three
+    deliberate differences are in SPEC §17.
+  - 142 tests pass, 8 are skipped (formats without a sample file), the 16 `slow` tests pass, and ruff is clean.
 
-**Next step:** `core/tags.py` family adapters (first unchecked M1 task), then `core/rename.py` with parity tests
-against `tests/reference/music_tools.py`. Don't start it until Hugo says so.
+**Next step:** `core/rename.py` (next unchecked M1 task): `RenameOptions`, `validate`, `plan_renames`/`apply_plan`,
+junk protections, .cue/.lrc handling, sidecar renames, with parity tests against `tests/reference/music_tools.py`
+on the `album/` and `cleanup/` fixtures (read SPEC §10 and §17 first). Rename fields come from
+`TaggedFile.rename_fields()`; `sanitize` stays in `rename.py`. Don't start it until Hugo says so.
 
 **Session protocol:**
 1. Read this file, then the SPEC sections for the current milestone. Pick up the first unchecked task in Progress.
@@ -118,6 +129,7 @@ against `tests/reference/music_tools.py`. Don't start it until Hugo says so.
 | 2026-10-15 | git repo created (Hugo's go). Local only, one commit per finished task. |
 | 2026-10-15 | Formats ffmpeg can't encode (APE, TAK, Musepack, OptimFROG, DSF/DFF, Speex) get skipped tests until Hugo supplies samples. |
 | 2026-10-15 | Fixtures are tagged by `make_fixtures.py` with raw per-family mutagen writes, never through app code, so they stay an independent oracle. |
+| 2026-10-15 | `tags.py` deliberate differences from the script (SPEC §17): Vorbis ReplayGain keys written in uppercase, ID3 version kept on save, WMA disc read. Rename text fields are *not* stripped, to match TinyTag 2.0.0 and the script exactly (SPEC §17 wording corrected). |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -204,8 +216,8 @@ Done when: the built exe in `dist/` starts, shows a window, and reports the rsga
 - [x] `tests/fixtures/make_fixtures.py` (ffmpeg) and the generated fixtures, including the cleanup cases. Missing
       formats go in Open questions.
 - [x] `core/formats.py` and round-trip tests per format
-- [ ] `core/tags.py` family adapters: fields, ReplayGain, lyrics, cover. (rsgain's ReplayGain keys per format are
-      already verified: SPEC §1 and `tests/core/test_rsgain_keys.py`.)
+- [x] `core/tags.py` family adapters: fields, ReplayGain, lyrics, cover. (rsgain's ReplayGain keys per format are
+      verified: SPEC §1 and `tests/core/test_rsgain_keys.py`.)
 - [ ] `core/rename.py`: plan, apply, validate, junk protections, .cue and .lrc handling, sidecar renames, plus
       parity tests
 - [ ] `core/rsgain.py` + `core/replaygain.py`: parity tests on RunLog text, plus slow tests with the real rsgain

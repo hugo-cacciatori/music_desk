@@ -4,7 +4,6 @@ The writes here use each family's raw keys; core/tags.py adapters get their own 
 """
 
 import base64
-import struct
 
 import pytest
 from mutagen.apev2 import BINARY, APEValue
@@ -14,6 +13,7 @@ from mutagen.id3 import APIC, ID3, TIT2, USLT
 from mutagen.mp4 import MP4Cover
 
 from music_desk.core.formats import AUDIO_EXTENSIONS, FORMATS, REPLAYGAIN_EXTENSIONS, TagFamily, format_for, open_audio
+from music_desk.core.tags import Cover, pack_asf_picture, unpack_asf_picture
 
 TITLE = "Round Trip – ünïcødé"
 LYRICS = "Line one\nLine two"
@@ -82,18 +82,11 @@ def flac_picture(data: bytes) -> Picture:
 
 
 def asf_picture(data: bytes) -> bytes:
-    """WM/Picture: type, size, MIME and description as null-terminated UTF-16LE, then the data."""
-    return (struct.pack("<bI", 3, len(data)) + "image/jpeg\0".encode("utf-16-le") + "\0".encode("utf-16-le")
-            + data)
+    return pack_asf_picture(Cover(data, "image/jpeg"))
 
 
 def asf_picture_data(raw: bytes) -> bytes:
-    position = 5
-    for _ in range(2):  # skip MIME and description, each a null-terminated UTF-16LE string
-        while raw[position:position + 2] != b"\0\0":
-            position += 2
-        position += 2
-    return raw[position:]
+    return unpack_asf_picture(raw)[1].data
 
 
 def write(audio, family: TagFamily, cover: bytes) -> None:

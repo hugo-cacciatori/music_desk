@@ -19,7 +19,7 @@ from pathlib import Path
 from mutagen.aiff import AIFF
 from mutagen.apev2 import APEv2File
 from mutagen.asf import ASF
-from mutagen.flac import FLAC
+from mutagen.flac import FLAC, Picture
 from mutagen.id3 import COMM, ID3, TALB, TCON, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX, USLT
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
@@ -296,9 +296,7 @@ def make_cleanup() -> None:
     write_text(lrc / "no_lyrics.lrc", lyrics)
 
 
-def edge_picture(data: bytes, picture_type: int) -> "Picture":
-    from mutagen.flac import Picture
-
+def edge_picture(data: bytes, picture_type: int) -> Picture:
     picture = Picture()
     picture.type = picture_type
     picture.mime = "image/jpeg"

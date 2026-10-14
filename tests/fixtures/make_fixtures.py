@@ -63,11 +63,17 @@ def find_ffmpeg() -> str:
 FFMPEG = ""
 
 
-def encode(target: Path, codec_args: list[str], seconds: float = 1.0, frequency: int = 440) -> None:
+def encode(target: Path, codec_args: list[str], seconds: float = 1.0, frequency: int = 440,
+           source: str | None = None) -> None:
+    """Encode a 1/8-amplitude sine, or `source` (an aevalsrc expression of t) when given."""
     target.parent.mkdir(parents=True, exist_ok=True)
+    if source is None:
+        lavfi = f"sine=frequency={frequency}:duration={seconds}:sample_rate=44100"
+    else:
+        lavfi = f"aevalsrc=exprs={source.replace(',', chr(92) + ',')}:d={seconds}:s=44100"
     subprocess.run(
         [FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
-         "-f", "lavfi", "-i", f"sine=frequency={frequency}:duration={seconds}:sample_rate=44100",
+         "-f", "lavfi", "-i", lavfi,
          "-ac", "1", "-map_metadata", "-1", "-fflags", "+bitexact", "-flags:a", "+bitexact",
          *codec_args, str(target)],
         check=True,
@@ -366,6 +372,38 @@ def make_edge() -> None:
     m4a.save()
 
 
+# A 10 ms full-scale burst, then silence: quiet overall, so rsgain's gain pushes the peak over full scale.
+SPIKE = "if(lt(t,0.01),0.99*sin(2*PI*1000*t),0)"
+LOUD = "0.9*sin(2*PI*440*t)"
+
+
+def rg_track(path: Path, source: str | None = None, **tags) -> None:
+    codec = ENCODERS["tone.mp3"] if path.suffix.lower() == ".mp3" else ENCODERS["tone.flac"]
+    id3_options = {k: tags.pop(k) for k in ("v2_version",) if k in tags}
+    encode(path, codec, source=source)
+    tag_file(path, {"artist": "Fixture Artist", "albumartist": "Fixture Artist", "year": "2024", **tags},
+             **id3_options)
+
+
+def make_replaygain() -> None:
+    """replaygain/Fixture Artist/: two albums for the ReplayGain step and discography leveling.
+    Album A has tracks that clip after gain, and lite/bonus/CD2 subfolders; Album B is louder, with an
+    ID3v2.3 MP3 and a subfolder without audio."""
+    a = OUT / "replaygain" / "Fixture Artist" / "Album A"
+    rg_track(a / "01 Tone.flac", album="Album A", track=1, title="Tone")
+    rg_track(a / "02 Spike.flac", SPIKE, album="Album A", track=2, title="Spike")
+    rg_track(a / "03 Spike.mp3", SPIKE, album="Album A", track=3, title="Spike")
+    rg_track(a / "lite" / "01 Tone.flac", album="Album A", track=1, title="Tone")
+    rg_track(a / "lite" / "02 Spike.flac", SPIKE, album="Album A", track=2, title="Spike")
+    rg_track(a / "bonus" / "01 Tone.flac", album="Album A", track=1, title="Tone")
+    rg_track(a / "CD2" / "01 Disc Two.flac", album="Album A", track=1, title="Disc Two", disc=2)
+
+    b = OUT / "replaygain" / "Fixture Artist" / "Album B"
+    rg_track(b / "01 Loud.flac", LOUD, album="Album B", track=1, title="Loud")
+    rg_track(b / "02 Quiet.mp3", album="Album B", track=2, title="Quiet", v2_version=3)
+    make_jpeg(b / "Scans" / "back.jpg", "gray")
+
+
 def main() -> None:
     global FFMPEG
     FFMPEG = find_ffmpeg()
@@ -374,6 +412,7 @@ def main() -> None:
     make_album()
     make_cleanup()
     make_edge()
+    make_replaygain()
     count = sum(1 for p in OUT.rglob("*") if p.is_file())
     print(f"{count} fixture files in {OUT}")
 

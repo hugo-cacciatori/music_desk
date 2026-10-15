@@ -203,9 +203,8 @@ Explorer-like, with no copy, paste, delete or new.
     │ ▸ H:\Music   │ 📁 Lite                                             │  cover                │
     │ ▾ D:\Rips    │ 🎵 01 Airbag.flac    1  Airbag    Radiohead  4:44 ✓ ✓│  Title  [Airbag    ]  │
     │   ▸ Björk    │ 🎵 02 Paranoid….flac 2  Paranoid… Radiohead  6:23 ✓ –│  Artist [Radiohead ]  │
-    │ SMART VIEWS  │                                                     │  …                    │
-    │  No lyrics   │                                                     │  [Revert]   [Save]    │
-    │  No RG       │                                                     │                       │
+    │              │                                                     │  …                    │
+    │              │                                                     │  [Revert]   [Save]    │
     ├──────────────┴───────────────────────────────────────────────────┴───────────────────────┤
     │ Indexing 12,034 files · Lyrics 3,100 / 12,034 ⏸ · LRCLIB ok · Jobs: 1 running ▴           │
     └──────────────────────────────────────────────────────────────────────────────────────────┘
@@ -232,7 +231,6 @@ Explorer-like, with no copy, paste, delete or new.
   - Library-wide search over file names, tags and lyrics.
   - Tag columns for every supported format, without Windows property handlers.
   - ReplayGain and lyrics health columns.
-  - Smart views.
   - The layout and position are remembered.
 - As built (M2 task 5):
   - The tree and the list read the index on the UI's read-only connection, and update in place when the indexer
@@ -270,16 +268,18 @@ Explorer-like, with no copy, paste, delete or new.
   - A right-click on the list background gives the open folder's menu, without Open.
   - Double-click or Enter on a file opens it with its default app, whatever the type.
   - "Open in File Explorer" opens a folder itself, and shows a file selected in its folder.
-- **Smart views (sidebar):**
-  - No lyrics in tags.
-  - Found on LRCLIB but not in tags: the candidates for "Save to file tags".
-  - Not found on LRCLIB.
-  - No ReplayGain.
-  - Missing tags (no title, artist or track).
-  - Name doesn't match rename mask.
-  - Recently modified.
+- **Smart views: dropped** (Hugo, 2026-10-15). A sidebar section of library-wide lists would give them more weight
+  than they have:
+  - not every track needs lyrics in its tags, since the app shows LRCLIB's lyrics anyway;
+  - a name that doesn't match the rename masks depends on each user's masks;
+  - missing ReplayGain matters inside a folder (the RG column) and is overwhelming library-wide;
+  - "recently modified" doesn't answer a need.
 
-  Each one is a query over the index, shown as a flat list.
+  What remains useful, finding the songs that need a lyrics action, is three **Find** entries in the Lyrics
+  menu. Each opens library search (§6) with a ready-made query over the whole library:
+  - "Find songs LRCLIB didn't find": `lrclib:notfound` (to look them up on Genius or Google);
+  - "Find songs without lyrics in their tags": `lyricstag:no lyricstag:lrc`;
+  - "Find songs LRCLIB can't look up (no artist or title)": `lrclib:notags`.
 
 ## 6. Library search
 - Ctrl+K searches the whole library, with a scope toggle for "this folder and below". Matching runs as you type
@@ -287,7 +287,7 @@ Explorer-like, with no copy, paste, delete or new.
 - Field filters:
   - `artist:` `album:` `year:` `genre:` `ext:opus`
   - `lyricstag:yes|no|lrc`
-  - `lrclib:synced|plain|instrumental|notfound|pending|error`
+  - `lrclib:synced|plain|instrumental|notfound|pending|error|notags`
   - `rg:none`
   - `"quoted phrase"` keeps spaces and punctuation as typed. The phrase is still matched as a substring, in
     every free-text column, lyrics included.
@@ -295,7 +295,7 @@ Explorer-like, with no copy, paste, delete or new.
   Free text searches the free-text columns (below) as substrings.
 - Results appear as a flat list with a Folder column (up to 5,000 shown, with the total count). Enter or a
   double-click goes to the file's folder with the file selected. Esc returns to the previous folder. Search
-  results and smart views can be played (§14).
+  results can be played (§14).
 
 ### Preserved from seek_lyrics' songs.html search (must not be lost)
 songs.html is gone (§17), but its search box was a real feature: type anything, and see every song whose title,
@@ -375,7 +375,7 @@ fill the index at any time and nothing is lost by waiting.
     (`artist:"Sigur Rós"`). `artist:` covers the album artist too. `year:` is a prefix of the date. `ext:` takes
     "opus" or ".opus". `lyricstag:` follows the ♪ column (yes = a tag, lrc = only a sidecar, no = neither).
     `lrclib:` follows the LRCLIB column (`error` = a key whose lookup failed this session, from the lyrics
-    service). `rg:` takes none, partial or full.
+    service; `notags` = no artist or title, never looked up). `rg:` takes none, partial or full.
 - **Matching** (`text_search`): tracks only. Every part of 3 or more characters goes into one FTS5 `MATCH`
   (FTS5 allows one per table per query), as a quoted phrase with column filters; shorter parts use `LIKE` over
   the same columns. For a short non-ASCII part, a Python function `md_contains` folds both sides, since SQLite's
@@ -951,8 +951,7 @@ Applies to files and folders.
 ## 14. Playback
 v1 plays through the default app; MusicDesk has no player of its own.
 - **Open with default app** (double-click on an audio file, or the context menu): `os.startfile(path)`.
-- **Play folder**, **Play folder and subfolders**, **Play selection**, and **Play results** (search results and
-  smart views):
+- **Play folder**, **Play folder and subfolders**, **Play selection**, and **Play results** (search results):
   - The app writes a temporary playlist to `%LOCALAPPDATA%\MusicDesk\playlists\` and opens it with
     `os.startfile`, so the default player loads the whole set.
   - Format: UTF-8 `.m3u8` with `#EXTM3U`, one `#EXTINF:<seconds>,<artist> - <title>` per entry, absolute paths,
@@ -980,7 +979,7 @@ Planned for M7, not in v1. A sketch to refine with Hugo before M7:
 - A PLAYLISTS section in the sidebar: create, rename and delete playlists. They are stored in the DB, so deleting
   one only deletes app data.
 - Adding tracks:
-  - "Add to playlist ▸" in the context menus, for files, folders (recursive), search results and smart views;
+  - "Add to playlist ▸" in the context menus, for files, folders (recursive) and search results;
   - dragging rows from the file list onto a playlist in the sidebar. This is an internal drag, unlike the
     disabled drag-out.
 - Playlist view:

@@ -11,6 +11,11 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 9):**
+- **M6 task 2: smart views were dropped** (Hugo's review, Decisions log). In their place, the Lyrics menu has
+  three Find entries (`MainWindow.FIND_QUERIES`, `MainWindow.find(query)`): songs LRCLIB didn't find, songs
+  without lyrics in their tags, and songs LRCLIB can't look up (the new `lrclib:notags` filter). Tests are in
+  `tests/ui/test_lyrics_find.py`. 843 tests pass (the slow ones included), 8 are skipped, ruff is clean, and the
+  app exits 0 offscreen.
 - **M6 task 1 is done (library search).** Details are in SPEC §6, "As built (M6 task 1)", and §2.
   - Index: schema v3 (trigram `search` with an `lrclib` column; the v2 → v3 migration is tested).
     `record_lyrics` and `scanner._write_tracks` keep `lrclib` current.
@@ -614,15 +619,14 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M6 task 2: smart views (SPEC §5, "Smart views"). Read SPEC §5 and §6 "As built (M6 task 1)"
-first.
-- Each view is a query over the index shown as a flat list, so it can reuse `SearchView` (or its model and
-  delegates) and much of `text_search`'s filters: no lyrics in tags (`lyricstag:no`/`lrc`), found on LRCLIB
-  but not in tags, not found on LRCLIB, no ReplayGain (`rg:none`), missing tags, name doesn't match the rename
-  mask, recently modified.
-- The sidebar has a "SMART VIEWS" section under LIBRARY (SPEC §5's sketch). Play results (§14) applies to them.
-- The view-specific ones (missing tags, rename mask, recently modified) need new queries; the mask one needs the
-  Rename tool's masks (`Settings.rename_options`) and `core/rename.py`'s naming, computed off the UI thread.
+**Next step:** M6 task 3: the Settings dialog (SPEC §12). Read SPEC §12, and `settings.py` for what is saved
+today. Settings currently live in the View and Lyrics menus and on the Tools cards.
+- Sections: Library (roots, hide folders without music, watch for changes), Lyrics (offline mode, auto-save),
+  Tools defaults (§10's options), Appearance (theme and font size, which may wait for the theme task),
+  Performance (tag-reading workers), About (versions, licenses).
+- Before building it, settle with Hugo which of these are really needed (as with smart views, which were
+  dropped): "watch for changes" and the worker count may not answer a user need, and the menus already hold
+  Offline and Auto-save.
 
 **Done in session 9 (the original M6 task 1 brief, kept for reference):** the schema v3 migration and the
 `lrclib` column, `text_search` with the parity test, then the Ctrl+K UI (results with a Folder column, up to
@@ -761,6 +765,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | ReplayGain tool: a preview from the file system (album folders, keyword subfolders, skipped formats, a command line too long), then a job holding the folder lock. Live lines are batched; the report shows each album's RunLog as written, plus the discography table. After the job, the index rescans the folder recursively. Tidy is the rename preview, then ReplayGain started automatically after Apply, even with nothing to rename (no ReplayGain preview, as in the script). Details in SPEC §10. |
 | 2026-10-15 | Jobs panel: a bottom dock listing this session's jobs (not saved), with Open, Stop and Clear finished. Jobs go on while you browse, and their pages reopen from the panel. Each tool runs one job at a time: a preview on a busy tool shows the running job instead, since a new preview would otherwise cancel it. Rename and ReplayGain may run together on different folders, with the locks refusing an overlap. Tidy is one job. Quitting with a running job asks, then stops it. M5 is complete. Details in SPEC §10. |
 | 2026-10-15 | Library search as built: unquoted text is one substring (the page's rule), quoted phrases are more, all ANDed; filters are repeatable and ORed per field. Tracks only, natural folder order, cut at 5,000. Short parts use LIKE (ASCII keeps accents, a known limit). The query field lives in the toolbar; the results page replaces the file list, Esc returns, Enter goes to the file. Opening the search shows the Lyrics tab. Results re-run when the index changes, in place for the same query. Sort keys are computed on the worker, and the results model sorts itself (no proxy) to stay under the 50 ms stall target. The seek_lyrics parity test passes. Details in SPEC §6. |
+| 2026-10-15 | Smart views dropped (Hugo): not every track needs lyrics in its tags (LRCLIB's are shown), a rename-mask mismatch depends on each user's masks, missing ReplayGain is overwhelming library-wide (the folder's RG column covers it), and "recently modified" answers no need. A sidebar section would give them weight they don't have. Instead, the Lyrics menu has three Find entries that open library search with a ready-made query: LRCLIB didn't find, no lyrics in the tags, can't be looked up (`lrclib:notags`, new). Details in SPEC §5. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -902,7 +907,7 @@ cleanup fixture case gets the expected status.
 **M6 Polish** (read SPEC §5, §6, §12 and §13)
 - [x] Library search (FTS5, filters, scope), Play results, with seek_lyrics search parity: read SPEC §6
       "Preserved from seek_lyrics" and "Implementation notes (M6)" first
-- [ ] Smart views
+- [x] Smart views: dropped (Hugo, 2026-10-15); three Find entries in the Lyrics menu instead
 - [ ] Settings dialog
 - [ ] Theme and icons
 - [ ] Inno Setup installer; check the licenses of the FFmpeg libraries built into rsgain

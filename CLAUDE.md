@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M2 in progress** (task 1 done: DB schema, DbWriter, read connection):
+- **M2 in progress** (tasks 1 and 2 done: DB schema, DbWriter, read connection; library roots):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
     `folder_stats`, FTS5 `search` with `unicode61 remove_diacritics 2`). `MIGRATIONS[n]` takes v`n` to v`n+1`,
     applied in one transaction and recorded in `PRAGMA user_version`. A newer DB raises `SchemaError`, untouched.
@@ -25,7 +25,24 @@ two files alone.
     - `LyricsStore(read_conn, writer)` implements `core.lyrics.LyricsCache` over the `lyrics` table with the
       script's per-status entry shape.
   - `paths.library_db_path()`. The Qt `services/db_writer.py` wrapper is deferred to the indexer task.
-  - 321 tests pass, 8 are skipped, the 21 `slow` tests pass, and ruff is clean.
+  - `core/index/roots.py`: `add_root(writer, path) -> AddResult` (ADDED, MERGED, ALREADY_ROOT, INSIDE_ROOT,
+    IS_A_FILE, NOT_A_FOLDER), `remove_root`, `list_roots`, `check_online`. They block (file system + writer), so
+    the app calls them off the UI thread.
+    - Roots never nest. Adding a parent of existing roots merges them: their top entries become ordinary folders
+      under the new root (intermediate folders created), so their index is kept.
+    - Adding a root inserts only its `roots` row and top entry. The scanner (task 3) fills the rest.
+  - `services/library.py` `LibraryService` (Qt) owns the DbWriter and the UI's read connection, and runs root work
+    on one `library-fs` worker thread. Its signals are `rootsChanged`, `addFinished(list[AddResult])` and `failed(str)`.
+    It checks roots online at start and every 30 s.
+  - UI:
+    - `ui/sidebar.py`: the LIBRARY list (offline roots dimmed with a tooltip), "Add folder…", and a context menu
+      with "Remove from library". The folder tree (task 5) grows from it.
+    - `ui/toast.py`: a non-modal notice with an action button.
+    - `MainWindow(library)`: File > Add folder… (Ctrl+O), the drop overlay, a toast offering a dropped file's
+      folder, and confirmation before removing a root. Without a library (the index failed to open) it runs
+      disabled.
+    - `app.py` creates the service and closes it on quit.
+  - 347 tests pass, 8 are skipped, the 21 `slow` tests pass, and ruff is clean.
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
   `--version` self-check), an empty `MainWindow` whose status bar shows the rsgain version, and empty `services/`
@@ -98,13 +115,21 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M2's second task: roots (picker, drop, remove, offline roots). Read SPEC §3, §2 and §16 first.
-- Core: add, remove and list roots over `DbWriter` + `connect_read`. A folder inside an existing root only
-  navigates there, and adding a parent of existing roots merges them. Offline detection is a root path that
-  doesn't exist; the root stays browsable.
-- UI: "Add folder…", a drop overlay on the main window ("Add to library"; dropped files get a toast offering their
-  folder), and "Remove from library" (index only). pytest-qt tests.
-- **Not yet:** the scanner (task 3). Adding a root inserts only its `roots` row and top entry.
+**Next step:** M2's third task: scanner phases A and B, incremental, on-screen folder first. Read SPEC §4, §2,
+§16 and §18 (the performance test), first.
+- Core (`core/index/scanner.py`):
+  - Phase A: a breadth-first `os.scandir` walk inserting `entries` in batches through the DbWriter (about 500 rows
+    or 200 ms).
+  - Phase B: tag reads through `TaggedFile` into `tracks` for new or changed files (size, mtime), with
+    `has_lrc_sidecar`, `lyrics_key` (`core.lyrics.cache_key`) and `read_error`.
+  - `scan_gen` removal of entries that disappeared, plus `folder_stats` and `search` rows.
+  - Every pass takes a `CancelToken`.
+- Service: the Qt indexer (and the `services/db_writer.py` progress wrapper if needed). It scans a root when it is
+  added, rescans at startup, and puts the on-screen folder first (an API, since the file list comes in task 5).
+  Status bar progress.
+- Tests: fixture copies, incremental rescans (changed, added and removed files), cancel, merge-then-scan, and the
+  scan_gen cleanup. Add a synthetic 10k-entry tree for timing; the 100k one goes in `slow`.
+- **Not yet:** the watcher (task 4), and the tree and list models (task 5).
 
 Don't start it until Hugo says so.
 
@@ -198,6 +223,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Lyrics core: the HTTP opener, sleep, jitter and clock are injected; the cache is a `LyricsCache` protocol (dict now, SQLite in M2/M4); `lookup` returns errors without caching; the circuit breaker counts in core and pauses/retries in M4's service. Details in SPEC §9. |
 | 2026-10-15 | Temporary playlists: `play-<YYYYMMDD-HHMMSS>[-n].m3u8`, UTF-8 with CRLF, `#EXTINF` label "Artist - Title", else the title, else the file stem, and -1 seconds when unknown. Pruning keeps the newest 20 by name and touches only `play-*.m3u8`. Details in SPEC §14. |
 | 2026-10-15 | Index: the DbWriter lives in `core/index/store.py` with no Qt (one thread, one transaction per job, futures); the Qt service wrapper comes with the indexer. Root top folders are `entries` rows with `parent_id NULL` named by the full root path. Schema migrations go through `PRAGMA user_version`; a newer DB is refused untouched. Details in SPEC §2. |
+| 2026-10-15 | Roots: never nested; adding a parent merges the roots inside it, keeping their index; a folder inside a root returns INSIDE_ROOT (the app will navigate there once the browser exists). Removing a root asks for confirmation (it costs a rescan). Offline = the root folder isn't reachable, checked at start and every 30 s off the UI thread. Dropped files get a toast offering their folder. Details in SPEC §3. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -297,7 +323,7 @@ with a fixture.
 
 **M2 Index and browser** (read SPEC §2, §3, §4, §5, §14 and §16)
 - [x] DB schema, DbWriter, read connection
-- [ ] Roots: picker, drop, remove, offline roots
+- [x] Roots: picker, drop, remove, offline roots
 - [ ] Scanner phases A and B, incremental, on-screen folder first
 - [ ] Watcher, plus revalidation on open as a fallback
 - [ ] Folder tree (lazy, natural order) and file list (columns, sort, persisted layout, Ctrl+F filter)

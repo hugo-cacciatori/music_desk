@@ -9,13 +9,13 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from rsgain_fake import VALUES, FakeScanner  # noqa: F401 - VALUES is used by the tests below
 
 from music_desk.core.cancel import CancelToken
 from music_desk.core.replaygain import (
     ALBUM_GAIN,
     ALBUM_PEAK,
     TRACK_GAIN,
-    TRACK_PEAK,
     ReplayGainOptions,
     files_summary,
     find_album_folders,
@@ -29,41 +29,6 @@ from music_desk.core.tags import TaggedFile
 ARTIST = "replaygain/Fixture Artist"
 NOW = datetime(2026, 1, 2, 3, 4, 5)
 EXE = Path(r"C:\fake\rsgain.exe")
-
-# Values the real rsgain 3.6 writes for these fixtures (see the parity tests).
-VALUES = {
-    "01 Tone.flac": ("6.75 dB", "0.124969"),
-    "02 Spike.flac": ("4.11 dB", "0.990021"),
-    "03 Spike.mp3": ("4.53 dB", "0.956879"),
-    "01 Loud.flac": ("-10.40 dB", "0.900024"),
-    "02 Quiet.mp3": ("7.20 dB", "0.118866"),
-}
-
-
-class FakeScanner:
-    def __init__(self, values=None, result=None, before=None):
-        self.values = VALUES if values is None else values
-        self.result = result
-        self.before = before  # called with the folder before tagging
-        self.calls = []
-
-    def __call__(self, files, folder, target, exe, cancel=None, on_line=None):
-        self.calls.append((list(files), Path(folder), target, exe))
-        if self.result is not None:
-            return self.result
-        for name in files:
-            if name in self.values:
-                gain, peak = self.values[name]
-                tagged = TaggedFile(Path(folder) / name)
-                tagged.set_replaygain(TRACK_GAIN, gain)
-                tagged.set_replaygain(TRACK_PEAK, peak)
-                tagged.save()
-        if on_line:
-            on_line("fake rsgain done")
-        if self.before:
-            self.before(Path(folder))
-        return ScanResult(0, "done\n", "", 0.5)
-
 
 def run_album(folder, scanner=None, **kwargs):
     return process_album(folder, scanner=scanner or FakeScanner(), exe=EXE, now=lambda: NOW, **kwargs)
@@ -289,3 +254,42 @@ def test_level_album_skips_files_without_album_gain(artist):
 
 def test_discography_with_no_album(tmp_path):
     assert process_discography(tmp_path, scanner=FakeScanner(), exe=EXE) is None
+
+
+# -- the preview (the Tools page) --
+
+def test_preview_of_one_album(album_a, fixtures_dir):
+    from music_desk.core.replaygain import preview
+
+    shutil.copy2(fixtures_dir / "formats" / "tone.tta", album_a / "04 Tone.tta")
+    (album_a / "notes.txt").write_text("x")
+    [album] = preview(album_a, exe=EXE)
+    assert album.name == "Album A (this folder)"
+    assert sorted(album.files) == ["01 Tone.flac", "02 Spike.flac", "03 Spike.mp3"]
+    assert album.unsupported == ["04 Tone.tta"]
+    assert album.subfolders == [("CD2", 1), ("bonus", 1), ("lite", 2)]
+    assert album.warnings == ["1 file skipped, format not supported by rsgain: 04 Tone.tta"]
+    assert not (album_a / "replaygain.log").exists()  # a preview changes nothing
+
+
+def test_preview_of_a_discography(artist):
+    from music_desk.core.replaygain import preview
+
+    albums = preview(artist, discography=True, exe=EXE)
+    assert [a.name for a in albums] == ["Album A", "Album B"]  # keyword subfolders go with their album
+    assert preview(artist / "Album B" / "Scans", exe=EXE) == []
+
+
+def test_preview_flags_a_command_line_too_long(album_a, monkeypatch):
+    from music_desk.core import replaygain, rsgain
+
+    monkeypatch.setattr(rsgain, "MAX_COMMAND_LINE", 50)
+    [album] = replaygain.preview(album_a, exe=EXE)
+    assert album.too_long and album.warnings == ["too many files for one rsgain call: this album can't be scanned"]
+
+
+def test_discography_reports_each_album_as_it_goes(artist):
+    seen = []
+    process_discography(artist, scanner=FakeScanner(), exe=EXE, now=lambda: NOW, on_album=seen.append)
+    assert [run_log.folder.name for run_log in seen] == ["Album A", "Album B"]
+    assert all(run_log.result() == "OK" for run_log in seen)

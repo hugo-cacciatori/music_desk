@@ -41,6 +41,7 @@ from music_desk.services.library import LibraryService
 from music_desk.services.lyrics_embedder import AutoEmbedder
 from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
 from music_desk.services.rename_job import Applied, Planned, RenameRunner
+from music_desk.services.replaygain_job import Finished, Previewed, ReplayGainRunner
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
@@ -50,7 +51,8 @@ from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
 from music_desk.ui.tools.rename_preview import RenamePreview
-from music_desk.ui.tools.tools_page import RENAME, ToolRequest, ToolScope, ToolsPage
+from music_desk.ui.tools.rg_report import ReplayGainView
+from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN, TIDY, ToolRequest, ToolScope, ToolsPage
 
 log = logging.getLogger(__name__)
 
@@ -140,10 +142,26 @@ class MainWindow(QMainWindow):
         self.rename_runner.applied.connect(self._rename_applied)
         self._rename_token: int | None = None
         self._rename_request: ToolRequest | None = None
+        self.rg_view = ReplayGainView()
+        self.rg_view.backRequested.connect(lambda: self.center.setCurrentWidget(self.tools_page))
+        self.rg_view.doneRequested.connect(self.close_tools)
+        self.rg_view.runRequested.connect(self.run_replaygain)
+        self.rg_view.cancelRequested.connect(lambda: self.rg_runner.cancel())
+        self.rg_view.openLogRequested.connect(self.open_log)
+        self.rg_view.revealRequested.connect(lambda path: self._in_shell(
+            lambda: self.show_in_explorer(path, True), f"File Explorer couldn't show {path}.", "", True))
+        self.rg_runner = ReplayGainRunner(library.locks if library is not None else PathLocks(), self)
+        self.rg_runner.previewed.connect(self._rg_previewed)
+        self.rg_runner.lines.connect(self.rg_view.add_lines)
+        self.rg_runner.progress.connect(self.rg_view.set_progress)
+        self.rg_runner.finished.connect(self._rg_finished)
+        self._rg_token: int | None = None
+        self._rg_request: ToolRequest | None = None
         self.center = QStackedWidget()  # the file list, or the Tools page and its previews (SPEC §10)
         self.center.addWidget(self.file_view)
         self.center.addWidget(self.tools_page)
         self.center.addWidget(self.rename_preview)
+        self.center.addWidget(self.rg_view)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.center)
@@ -476,8 +494,9 @@ class MainWindow(QMainWindow):
         self.center.setCurrentWidget(self.tools_page)
 
     def close_tools(self) -> None:
-        if self.center.currentWidget() is self.rename_preview and self.rename_preview.state == "applying":
-            return  # a running rename stays on screen until it ends
+        if self.center.currentWidget() is self.rename_preview and self.rename_preview.state == "applying" or \
+                self.center.currentWidget() is self.rg_view and self.rg_view.state == "running":
+            return  # a running job stays on screen until it ends
         if self.center.currentWidget() is not self.file_view:
             if self.rename_preview.state == "planning":
                 self.rename_runner.cancel()
@@ -493,19 +512,77 @@ class MainWindow(QMainWindow):
             self.tools_page.set_example(fields, extension)
 
     def run_tool(self, request: ToolRequest) -> None:
-        """A card's Preview: the rename preview here; ReplayGain and Tidy come with the next M5 task."""
+        """A card's Preview: the rename preview, the ReplayGain preview, or Tidy's rename preview."""
         if request.tool == RENAME:
             self.preview_rename(request)
+        elif request.tool == REPLAYGAIN:
+            self.preview_replaygain(request)
+        elif request.tool == TIDY:
+            self.preview_rename(request)  # Tidy: the rename step is previewed; ReplayGain follows Apply
+
+    def _unsaved_edits_under(self, folder: Path) -> bool:
+        """Unsaved Metadata edits on a file a job is about to change: ask Save, Discard or Cancel first."""
+        metadata = self.side_panel.metadata
+        edited = [p for p in ([metadata.path] if metadata.path else []) + list(metadata.paths)
+                  if Path(p).is_relative_to(folder)]
+        return bool(edited) and not self.side_panel.can_leave()
+
+    # -- the ReplayGain tool (SPEC §10 B) --
+
+    def preview_replaygain(self, request: ToolRequest) -> None:
+        self._rg_request = request
+        self.rg_view.show_previewing(request.scope.folder, request.discography)
+        self.center.setCurrentWidget(self.rg_view)
+        self._rg_token = self.rg_runner.preview(request.scope.folder, request.replaygain_options,
+                                                request.discography)
+
+    def _rg_previewed(self, result: Previewed) -> None:
+        if result.token != self._rg_token:
             return
-        what = {"replaygain": "The ReplayGain preview", "tidy": "The Tidy preview"}[request.tool]
-        self.toast.show_message(f"{what} isn't built yet: it comes with the next M5 task.")
+        if result.albums is None:
+            self.rg_view.show_error(f"The preview failed: {result.error}")
+        else:
+            self.rg_view.show_preview(result.albums)
+
+    def run_replaygain(self, request: ToolRequest | None = None, title: str | None = None) -> bool:
+        """Start the job for the previewed request (or Tidy's). False when it didn't start."""
+        request = request or self._rg_request
+        if request is None or not self._library_open():
+            return False
+        folder = request.scope.folder
+        if self._unsaved_edits_under(folder):
+            return False
+        try:
+            self._rg_token = self.rg_runner.run(folder, request.replaygain_options, request.discography)
+        except LockedError as e:
+            self.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            return False
+        self._rg_request = request
+        self.rg_view.show_running(folder, title)
+        self.center.setCurrentWidget(self.rg_view)
+        return True
+
+    def _rg_finished(self, finished: Finished) -> None:
+        if finished.token != self._rg_token:
+            return
+        if self._library_open():
+            self.library.indexer.scan_path(str(finished.folder), recursive=True)  # new tags: re-read changed files
+        self.rg_view.show_result(finished)
+        if not finished.error and not finished.nothing:
+            albums = len(finished.album_logs)
+            what = "stopped" if finished.cancelled else "done"
+            self.statusBar().showMessage(f"ReplayGain {what}: {albums} album{'s' if albums != 1 else ''}.", STATUS_MS)
+
+    def open_log(self, path: str) -> None:
+        self._in_shell(lambda: self.launch(path), f"Windows couldn't open {os.path.basename(path)}.",
+                       os.path.dirname(path), True)
 
     # -- the Rename tool (SPEC §10 A) --
 
     def preview_rename(self, request: ToolRequest) -> None:
         scope = request.scope
         self._rename_request = request
-        self.rename_preview.show_planning(scope.folder, len(scope.files))
+        self.rename_preview.show_planning(scope.folder, len(scope.files), tidy=request.tool == TIDY)
         self.center.setCurrentWidget(self.rename_preview)
         self._rename_token = self.rename_runner.plan(scope.folder, request.rename_options,
                                                      list(scope.files) or None)
@@ -534,10 +611,7 @@ class MainWindow(QMainWindow):
         plan = self.rename_preview.plan
         if plan is None or not self._library_open():
             return
-        metadata = self.side_panel.metadata
-        edited = [p for p in ([metadata.path] if metadata.path else []) + list(metadata.paths)
-                  if Path(p).is_relative_to(plan.folder)]
-        if edited and not self.side_panel.can_leave():  # unsaved tag edits on a file about to be renamed
+        if self._unsaved_edits_under(plan.folder):  # unsaved tag edits on a file about to be renamed
             return
         junk = [i.source.relative_to(plan.folder).as_posix() for i in plan.items if i.status is rename.Status.JUNK]
         if junk:
@@ -568,6 +642,12 @@ class MainWindow(QMainWindow):
         self.rename_preview.show_report(report)
         count = len(report.renamed)
         self.statusBar().showMessage(f"Renamed {count} file{'s' if count != 1 else ''}.", STATUS_MS)
+        request = self._rename_request
+        if request is not None and request.tool == TIDY:  # Tidy, step 2: ReplayGain on the final names
+            if report.cancelled:
+                self.rename_preview.message.setText("Stopped, so ReplayGain was not run.")
+            elif not self.run_replaygain(request, "Tidy album, step 2 of 2: ReplayGain"):
+                self.rename_preview.message.setText("Renamed. ReplayGain was not started (see the message).")
 
     def _rename_back(self) -> None:
         if self.rename_preview.state == "planning":
@@ -722,6 +802,7 @@ class MainWindow(QMainWindow):
         if self.embedder is not None:
             self.embedder.close()  # before the writer: it may still hand it a batch
         self.rename_runner.close()  # a running rename stops between two files
+        self.rg_runner.close()  # a running rsgain is killed; its album is reported as cancelled
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
         self.save_state()

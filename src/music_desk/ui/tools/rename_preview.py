@@ -72,6 +72,7 @@ class RenamePreview(QWidget):
         self.plan: RenamePlan | None = None
         self.report: RenameReport | None = None
         self.state = "idle"  # planning, preview, applying, result, error
+        self.tidy = False  # step 1 of Tidy: Apply also starts ReplayGain, even with nothing to rename
 
         self.back_button = QPushButton("← Back to Tools")
         self.back_button.clicked.connect(self.backRequested)
@@ -142,10 +143,12 @@ class RenamePreview(QWidget):
 
     # -- states --
 
-    def show_planning(self, folder: Path, selection: int = 0) -> None:
-        self.plan, self.report = None, None
+    def show_planning(self, folder: Path, selection: int = 0, tidy: bool = False) -> None:
+        self.plan, self.report, self.tidy = None, None, tidy
         what = f"{selection} selected file{'s' if selection != 1 else ''} in {folder}" if selection else str(folder)
-        self.heading.setText(f"<b>Rename preview</b> · {what}")
+        title = "Tidy album, step 1 of 2: rename preview" if tidy else "Rename preview"
+        self.heading.setText(f"<b>{title}</b> · {what}")
+        self.apply_button.setText("Apply, then run ReplayGain" if tidy else "Apply")
         self.table.setRowCount(0)
         self._show("planning", "Reading the tags… Nothing is renamed until you click Apply.")
 
@@ -158,9 +161,14 @@ class RenamePreview(QWidget):
         self.extras.setPlainText(self._extras_text(plan))
         self.extras.setVisible(bool(self.extras.toPlainText()))
         actionable = any(i.status in (Status.RENAME, Status.JUNK) for i in plan.items)
-        self._show("preview", "Nothing has changed yet. Apply renames exactly these files." if actionable else
-                   "Nothing to rename: every file already has its name, or can't be renamed.")
-        self.apply_button.setEnabled(actionable)
+        if self.tidy:
+            message = ("Nothing has changed yet. Apply renames exactly these files, then runs ReplayGain on the final "
+                       "names." if actionable else "Nothing to rename. Apply runs ReplayGain.")
+        else:
+            message = ("Nothing has changed yet. Apply renames exactly these files." if actionable else
+                       "Nothing to rename: every file already has its name, or can't be renamed.")
+        self._show("preview", message)
+        self.apply_button.setEnabled(actionable or self.tidy)
 
     def show_applying(self) -> None:
         self._show("applying", "Renaming… Files in this folder can't be edited meanwhile.")

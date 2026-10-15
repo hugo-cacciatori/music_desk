@@ -223,13 +223,6 @@ def test_opening_another_folder_returns_to_the_list(window, service, library_dir
     assert not window.showing_tools
 
 
-def test_preview_is_announced_until_built(window, service, library_dir):
-    window.open_folder(folder_id(service, library_dir / "Artist"))
-    window.open_tools([])
-    window.tools_page.replaygain_card.preview_button.click()  # Rename's preview exists (test_rename_tool.py)
-    assert "isn't built yet" in window.toast.label.text()
-
-
 def test_rsgain_unavailable_disables_replaygain(window):
     window.show_rsgain_version(None)
     assert not window.tools_page.replaygain_card.preview_button.isEnabled()

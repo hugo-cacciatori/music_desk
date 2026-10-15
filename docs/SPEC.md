@@ -704,6 +704,42 @@ happen to which files.
   - Discography summary table: Album, Result, Album gain, Leveled to, Files changed, plus notes.
   - Buttons: "Open replaygain.log" and "Open in File Explorer".
 
+**As built (M5 task 1): the page and the cards** (`ui/tools/`):
+- **Opening.** The page opens from:
+  - the toolbar's **Tools** action (the selection, or the open folder);
+  - "Tools…" in the folder menus (list and tree) and the file menu (greyed out without a music file);
+  - the folder summary's **Tools…** button.
+- **Scope** (`ToolScope`):
+  - one folder;
+  - else the music files among the selected items (a selection: renames only, with no subfolders or junk;
+    ReplayGain and Tidy say they need a folder);
+  - with nothing selected, the open folder.
+- **Layout.** The page replaces the file list in the centre (a QStackedWidget), with "← Back". Opening another
+  folder returns to the list.
+- **Rename card:**
+  - an ordered, editable, drag-reorderable mask list, with Add, Remove and "Insert field";
+  - a live example from the first track (natural order, read off the UI thread by `TagIO.read_rename_fields`);
+  - the replacement, subfolders, Recycle Bin and junk types; music file types under "Advanced".
+- **ReplayGain card:**
+  - scope (This album / Discography);
+  - the target, whose spin box only allows rsgain's −30 to −5 LUFS;
+  - "Advanced" with the threshold, margin, keywords (comma-separated, since they may hold spaces), log file name
+    and comment text.
+- **Tidy card:** a scope, and the two cards' options ("Preview rename…").
+- **Validation**, inline, under each card:
+  - Rename: `rename.validate`.
+  - ReplayGain: the new `replaygain.validate`. The script had no ReplayGain checks. It checks rsgain's target
+    range, a threshold in (0, 1], a margin of 0–6 dB, non-empty lowercase keywords (folder names are compared in
+    lowercase), a valid log file name, and a comment that only uses `{target}`.
+  - Tidy: needs both cards valid.
+  - A Preview button stays disabled until its card is valid, and while rsgain is unavailable (the startup
+    self-check).
+- **Saved options.** Each change is saved to `Settings.rename_options` / `replaygain_options` (JSON through
+  `options_to_json` / `options_from_json`). A mistyped saved value falls back to its default; a well-typed invalid
+  value is kept for validation to show. "Reset to defaults" is per card.
+- **The run:** a Rename request carries the ReplayGain card's log file name as `protected_names`, so the
+  configured log is never junk. Until M5 tasks 2–3, a Preview shows a toast saying it isn't built yet.
+
 **C. Tidy album**: runs A, then B on the final names. This is the script run without flags. The preview covers
 the rename step only; as in the script, ReplayGain can't be previewed on names that are about to change.
 

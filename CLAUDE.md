@@ -10,7 +10,33 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, end of session 7):**
+**Current state (2026-10-15, session 8):**
+- **M5 task 1 is done (the Tools page and cards).** Details are in SPEC §10, "As built (M5 task 1)".
+  - `ui/tools/`:
+    - `tools_page.py`: `ToolsPage`, `ToolScope`, `ToolRequest`;
+    - `rename_card.py`: `Card` and `RenameCard`;
+    - `replaygain_card.py`: `ReplayGainCard` and `TidyCard`.
+  - Core:
+    - `replaygain.validate`, `TARGET_RANGE` (rsgain's −30 to −5 LUFS);
+    - `options_to_json` / `options_from_json` in `rename` and `replaygain`;
+    - `Settings.rename_options` / `replaygain_options`.
+  - `TagIO.read_rename_fields` → `renameFields`.
+  - MainWindow:
+    - `center` (a QStackedWidget: the file list or the Tools page), `open_tools(ids)`, `tool_scope(ids)`,
+      `close_tools`, `showing_tools`;
+    - the toolbar's Tools action, "Tools…" in the menus, and the folder summary's "Tools…";
+    - `run_tool` is a placeholder toast until tasks 2–3.
+  - The page was checked visually with real fonts, rendered off screen (an offscreen grab only shows boxes): it
+    wraps cleanly from about 480 px.
+  - **Fix found on the way (M4 code):** turning auto-save off didn't stop a backfill queued just before. That
+    backfill could still fill an empty Lyrics tag, which raced the Lyrics tab's own save (a flaky window test).
+    `AutoEmbedder._find` now checks the setting before and after reading the index. A test failed on the old code
+    and passes now.
+  - Tests: `tests/core/test_tool_options.py` and `tests/ui/test_tools_page.py`; the menu tests list "Tools…".
+  - 729 tests pass (the slow ones included), 8 are skipped, ruff is clean, and the app exits 0 offscreen.
+  - **Watch for:** after the fix, one full run had one unidentified failure; its output wasn't saved. Three
+    further full runs with saved output were clean. If a full run fails again, keep the output
+    (`uv run pytest > out.txt`) to name the test.
 - **M4 is complete.** Its "Done when" holds:
   - every Lyrics tab state is reachable with mocked LRCLIB (`tests/ui/test_lyrics_tab.py`);
   - a real run on a copied folder works (Hugo's go, 2026-10-15).
@@ -493,8 +519,18 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M5 task 1: the Tools page and cards (Rename, ReplayGain, Tidy), options and validation. Read SPEC
-§10 and §13 first, and `core/rename.py` and `core/replaygain.py` (both ported in M1, with parity tests).
+**Next step:** M5 task 2: the rename preview and apply (SPEC §10 A "Preview" and "Apply"). Read SPEC §10 A
+(with "As built (M5 task 1)"), `core/rename.py` (`plan_renames`, `apply_plan`, `RenamePlan`, `RenameReport`),
+`ui/tools/tools_page.py` (`ToolRequest`) and `MainWindow.run_tool`, first.
+- `ui/tools/rename_preview.py`: the "Old name → New name" table with a status per row, a status filter, junk and
+  sidecars listed separately, and counts matching the script's summary.
+- `plan_renames` runs off the UI thread (it reads tags). Apply re-checks each item.
+- Junk goes to the Recycle Bin only after a dialog that lists the files (a `confirm_*` method, replaced in tests).
+- The result summary has the script's sections.
+- Jobs take `LibraryService.locks` for their folder. After a run, the index is updated (`Indexer.apply_renames`,
+  or a folder rescan).
+- A selection run renames only the selected files and their sidecars (`plan_renames(selection=)`), never junk.
+- Replace the placeholder toast in `MainWindow.run_tool` for "rename".
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
@@ -623,6 +659,7 @@ two files alone.
 | 2026-10-15 | Saving lyrics into tags: one path, `TagWriter.embed_lyrics` (the save lock and index catch-up as any save). Save to file tags asks before replacing, and is refused while the Metadata tab has unsaved edits on the file. Auto-save, like the script's `--embed`, covers every found track, earlier ones included (a backfill at start and when turned on), but only fills empty tags (checked in the file). Locked files are skipped, and each file is tried once per session. Until the Settings dialog, a Lyrics menu holds Offline mode and Auto-save. Details in SPEC §8 and §9. |
 | 2026-10-15 | lyrics_cache.json import: only at a root's top, when the root is added or merged, before its scan. The file is read-only. Merge rule per key: lyrics or instrumental beat not_found; otherwise the newer `checked` wins, and a tie keeps the index's. Entries the script never wrote (errors, malformed ones) are skipped and counted. Details in SPEC §9. |
 | 2026-10-15 | LRCLIB column: "no tags" for tracks that can't be looked up, blank for unreadable files, and "offline" or "error" over "pending" from the service's state. The pending count for the status bar is kept by the lyrics service on its own connection (counted at refills, decremented per result), never on the UI thread. The status bar button is Pause, Resume or Retry now. Details in SPEC §5 and §9. |
+| 2026-10-15 | Tools page: it replaces the file list in the centre, with Back; opening another folder returns to the list. Scope: one folder, else the selected music files (Rename only), else the open folder. ReplayGain gets its own validation (rsgain's target range, threshold, margin, lowercase keywords, log name, comment). Card options are saved on every change, and a well-typed invalid saved value is kept for validation to show. Details in SPEC §10. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -753,7 +790,7 @@ Done when: every format with a fixture round-trips through the UI, and ID3 versi
 Done when: every tab state is reachable with mocked LRCLIB, and a real run on a small copied folder works.
 
 **M5 Tools** (read SPEC §10 and §13)
-- [ ] Tools page and cards (Rename, ReplayGain, Tidy), options, validation
+- [x] Tools page and cards (Rename, ReplayGain, Tidy), options, validation
 - [ ] Rename preview and apply: kept files with reasons, sidecar renames, junk files to the Recycle Bin
 - [ ] ReplayGain album and discography jobs (one album at a time), cancel, reports
 - [ ] Jobs panel, locks, index reconciliation

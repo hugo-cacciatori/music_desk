@@ -10,7 +10,38 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, end of session 6):**
+**Current state (2026-10-15, session 7):**
+- **M4 task 1 is done (LyricsService):**
+  - `core/index/lyrics_index.py`:
+    - `pending_tracks(conn, retry_before, folder_id=, entry_id=, skip=, limit=)`: one track per pending key,
+      folder by folder;
+    - `record_lyrics(conn, key, entry) -> folders`: the upsert plus `n_lrclib_found` deltas through the
+      scanner's now-public `adjust_folder_stats`;
+    - `retry_before`.
+    `store.upsert_lyrics` is shared with `LyricsStore.put`.
+  - `services/lyrics_service.py` `LyricsService`:
+    - 4 workers with a three-tier queue (selected track, open folder, background batches), dedupe by key, and
+      10-minute cooldowns for keys that failed;
+    - the circuit breaker pause (`unreachable`, `retry_now`, auto-resume, `resumed`);
+    - offline (no calls); `pause`/`resume`;
+    - signals: `entryReady(key, entry)`, `foldersChanged`, `progress(LyricsProgress)`.
+  - `LibraryService.lyrics`:
+    - `start()` on the indexer's idle, `wake()` on `scanFinished`, and stopped in `close()`;
+    - `lyrics_client=`, `lyrics_offline=` (app.py passes `Settings.lyrics_offline`), and the
+      `lyrics_offline_default` class attribute.
+  - MainWindow:
+    - `prioritize_folder` on open, and `prioritize_track` for one selected audio file;
+    - `lyrics_updated` refreshes the open folder's list;
+    - `lrclib_unreachable` shows a toast with Retry now.
+  - Found and fixed: `LrclibClient`'s default opener was bound when the module was imported, so the test network
+    guard never covered it. It is now resolved at call time. The guard is autouse for every test
+    (`tests/conftest.py`), and the UI tests' libraries are offline (`tests/ui/conftest.py`). pytest has
+    `pythonpath = ["tests/core"]` so any test can import `lrclib_fake`.
+  - Tests: `tests/core/test_lyrics_index.py` and `tests/ui/test_lyrics_service.py`. In service tests, use
+    `collect(signal)` and `waitUntil` rather than `qtbot.waitSignal`: a worker thread can emit while the blocker
+    is being set up.
+  - 646 tests pass (the slow ones included), 8 are skipped, and ruff is clean. The app starts and exits 0
+    offscreen.
 - **M3 is complete** (its "Done when" holds: every fixture format round-trips through the UI, and ID3v2.3 is kept):
   - `core/metadata.py`: `read_snapshot(path) -> Snapshot` (fields, stream details, RG values, the cover with its
     source, the ID3 version, `format_line` such as "FLAC 16-bit/44.1 kHz · 4:44 · 32 MB", with bit depth for
@@ -382,8 +413,19 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M4's first task: LyricsService (priority queue, 4 workers, circuit breaker, offline mode). Read
-SPEC §9 and §8, and `core/lyrics.py`, first.
+**Next step:** M4 task 2: the Lyrics tab, every state (SPEC §8). Read SPEC §8 and §9 (as built), and
+`services/lyrics_service.py`, first.
+- `ui/side_panel/lyrics_tab.py`: one selected track reads its `lyrics_key` entry from the UI read connection and
+  follows `LyricsService.entryReady`:
+  - queued or looking up: a spinner;
+  - found: a timestamps toggle, "LRCLIB #id · checked <date>", and Copy (Save to file tags is task 3);
+  - instrumental, not found, missing tags, error and offline: the Genius/Google buttons (`core.lyrics.search_urls`);
+  - Retry now for not found and errors;
+  - a note when the file's lyrics tag differs.
+- Retry for one key needs a small service addition (drop it from `_handled`/`_errored` and queue it as
+  selected).
+
+**Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
   - one priority queue of tracks (the selected track, then the open folder, then the rest folder by folder) and
     4 worker threads running `core.lyrics.lookup` with an `LrclibClient`;
@@ -397,9 +439,7 @@ SPEC §9 and §8, and `core/lyrics.py`, first.
   `Scanner.update_file`, or a small helper.
 - Tests: mocked HTTP only (`tests/core/lrclib_fake.py`, and the autouse network guard). Priority order,
   deduplication, the breaker pausing and resuming, offline mode, and a restart resuming the pending tracks.
-- **Not yet:** the Lyrics tab (task 2), auto-embed (task 3), and the lyrics_cache.json import (task 4).
-
-Don't start it until Hugo says so.
+- **Not yet:** auto-embed (task 3), the lyrics_cache.json import (task 4), and the status bar progress (task 5).
 
 **Session protocol:**
 1. Read this file, then the SPEC sections for the current milestone. Pick up the first unchecked task in Progress.
@@ -506,6 +546,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | .lrc import: any same-stem .lrc (ignoring case) is offered while the Lyrics field is empty, for one file. Its text is decoded as UTF-8, else Windows-1252 (never an error). The .lrc file itself is never modified. Details in SPEC §7. |
 | 2026-10-15 | Inline rename: on disk off the UI thread under a path lock, then the index is updated in place (ids kept). Reconcile also matches renames by kind, extension, size and mtime, so outside renames keep ids and tags. Roots can't be renamed. Changing the extension asks first. The hint uses the Rename tool's default masks. Tests may never open a real dialog. Details in SPEC §11. |
 | 2026-10-15 | The repo is on GitHub, public: hugo-cacciatori/music_desk. Push only when Hugo asks. |
+| 2026-10-15 | LyricsService: three tiers (selected track, open folder, background folder by folder), with one lookup per key. Its state lives only in the `lyrics` table, so a restart resumes. A failed key waits 10 minutes, unless it is selected. The breaker pauses 10 minutes, and Retry now ends it. Offline makes no call. Lookups start at the first indexer idle. UI tests build offline libraries, and a global guard blocks urllib's opener in every test. Details in SPEC §9. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -627,7 +668,7 @@ the index.
 Done when: every format with a fixture round-trips through the UI, and ID3 versions are preserved.
 
 **M4 Lyrics** (read SPEC §8 and §9)
-- [ ] LyricsService: priority queue, 4 workers, circuit breaker, offline mode
+- [x] LyricsService: priority queue, 4 workers, circuit breaker, offline mode
 - [ ] Lyrics tab, every state
 - [ ] Save to file tags, and the auto-embed setting
 - [ ] `lyrics_cache.json` import

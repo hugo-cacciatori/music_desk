@@ -413,6 +413,30 @@ not it has a lyrics tag.
   retry), `embed_lyrics(path, entry, only_if_empty=)` returning WRITTEN, SAME_TEXT, HAS_OTHER_LYRICS,
   NOTHING_TO_EMBED or NOT_EMBEDDABLE, and `search_urls` (encoded like JS `encodeURIComponent`). Tracks with the
   same key are deduplicated by the service, not by `lookup`.
+- As built (M4 task 1):
+  - `core/index/lyrics_index.py`:
+    - `pending_tracks` lists the tracks whose key has no entry or only a stale not_found, one per key, folder by
+      folder. The `Track` is rebuilt from the index with the scanner's file-name fallback.
+    - `record_lyrics` stores an entry, moves `n_lrclib_found` up to the root when the key becomes found (or stops
+      being found), and returns the folders that hold the key.
+  - `services/lyrics_service.py` `LyricsService`:
+    - 4 worker threads, each with its own read connection, share a three-tier queue (selected track, open folder,
+      background batches of 200 from the index). A key in flight or already done isn't looked up twice.
+    - Errors aren't cached: a failed key sits out 10 minutes, except when it is the selected track.
+    - The breaker pauses every lookup for 10 minutes (`unreachable`). `retry_now()` ends the pause and clears
+      the failed keys.
+    - Offline makes no call and writes nothing. `pause()`/`resume()` are there for the status bar (task 5).
+    - Signals: `entryReady`, `foldersChanged`, `progress`, `unreachable`, `resumed`.
+  - `LibraryService` owns it:
+    - `start()` on the indexer's idle, `wake()` after each scan;
+    - offline from `Settings.lyrics_offline`;
+    - stopped before the indexer and the writer.
+  - The window:
+    - opening a folder prioritizes it, and selecting one audio file prioritizes that track;
+    - `foldersChanged` refreshes the open folder's list;
+    - a trip shows a toast, "LRCLIB unreachable, retrying in 10 min." with Retry now.
+  - `LrclibClient` resolves urllib's opener at call time, so the tests' global network guard covers it. UI tests
+    build their libraries offline.
 - When a root is added, a `lyrics_cache.json` at its top (the script's cache) is imported into the DB cache. The
   file itself is left untouched.
 

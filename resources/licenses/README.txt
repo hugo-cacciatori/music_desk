@@ -1,3 +1,6 @@
+MusicDesk is free software under the GNU General Public License, version 3 or later (GPL-3.0-or-later); its
+licence text is GPL-3.0.txt.
+
 MusicDesk ships with these third-party components. Their licence texts are in this folder.
 
   Python                          PSF License 2.0       python-PSF.txt

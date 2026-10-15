@@ -3,6 +3,8 @@ name = "music-desk"
 version = "0.1.0"
 description = "Windows desktop app for browsing a music library, editing tags, tidying albums and finding lyrics."
 requires-python = ">=3.13,<3.14"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 dependencies = [
     # Essentials only: the app needs QtCore/QtGui/QtWidgets, and the Addons wheel (WebEngine etc.) bloats the build.
     "PySide6-Essentials==6.12.0",

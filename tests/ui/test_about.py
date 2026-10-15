@@ -30,6 +30,7 @@ def test_about_shows_versions_and_components(window):
     window.show_rsgain_version("rsgain 3.6")
     [dialog] = open_about(window)
     assert "rsgain 3.6" in dialog.versions.text()
+    assert any("version 3 or later" in label.text() for label in dialog.findChildren(type(dialog.versions)))
     assert dialog.findChildren(type(dialog.versions))[0].text() == f"<b>MusicDesk {__version__}</b>"
     rows = dialog.rows()
     assert [r[0] for r in rows] == [c.name for c in COMPONENTS]

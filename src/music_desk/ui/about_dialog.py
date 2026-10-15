@@ -46,7 +46,9 @@ class AboutDialog(QDialog):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for column in (1, 2):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        note = QLabel("The licence texts are in the app's licences folder. rsgain includes FFmpeg libraries.")
+        note = QLabel("MusicDesk is free software, under the GNU General Public License, version 3 or later. "
+                      "It comes with no warranty. The licence texts of MusicDesk and of the components above are in "
+                      "the app's licences folder.")
         note.setWordWrap(True)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         self.licenses_button = QPushButton("Open licences folder")

@@ -34,6 +34,15 @@ def test_the_readme_names_every_file():
             assert path.name in readme, path.name
 
 
+def test_the_app_licence():
+    """MusicDesk is GPL-3.0-or-later: the repo's LICENSE is the GPL-3.0 text, also shipped in the licences folder."""
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert project["license"] == "GPL-3.0-or-later"
+    licence = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    assert "GNU GENERAL PUBLIC LICENSE" in licence and "Version 3, 29 June 2007" in licence
+    assert licence == (licenses_dir() / "GPL-3.0.txt").read_text(encoding="utf-8")
+
+
 def test_installed_versions():
     versions = {c.name: c.installed_version() for c in COMPONENTS}
     assert versions["mutagen"] and versions["Qt for Python (PySide6, shiboken6)"] == "6.12.0"

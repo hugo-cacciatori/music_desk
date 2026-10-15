@@ -975,8 +975,9 @@ watcher always runs, with revalidation on open as its fallback, and the scanner 
   - That licence isn't GPL-compatible. It is shipped inside rsgain.exe, a separate program the app runs, not
     linked into the app, which is the usual "aggregate" reading. Keep it in mind when choosing the app's
     licence.
-- The app's own licence is unsettled: the repo has no LICENSE file, and mutagen's GPL-2.0-or-later applies to
-  the distributed app.
+- **MusicDesk's own licence: GPL-3.0-or-later** (Hugo, 2026-10-15). It is compatible with mutagen's
+  GPL-2.0-or-later and Qt's LGPL-3.0. `LICENSE` at the repo root is the GPL-3.0 text (the same file as
+  `resources/licenses/GPL-3.0.txt`), `pyproject.toml` declares it, and About says so.
 
 ## 14. Playback
 v1 plays through the default app; MusicDesk has no player of its own.

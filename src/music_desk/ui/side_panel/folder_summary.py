@@ -54,7 +54,7 @@ class FolderSummaryView(QWidget):
         grid = QGridLayout()
         self.values: dict[str, QLabel] = {}
         rows = (("tracks", "Tracks"), ("duration", "Duration"), ("formats", "Formats"), ("rg", "ReplayGain"),
-                ("lyrics", "Lyrics tag"), ("contents", "In this folder"))
+                ("lyrics", "Lyrics tag"), ("lrclib", "LRCLIB lyrics"), ("contents", "In this folder"))
         for row, (key, label) in enumerate(rows):
             value = QLabel()
             value.setWordWrap(True)
@@ -91,6 +91,7 @@ class FolderSummaryView(QWidget):
         self.values["formats"].setText(summary.formats or "–")
         self.values["rg"].setText(_coverage(summary.n_with_rg, summary.n_tracks))
         self.values["lyrics"].setText(_coverage(summary.n_with_lyrics_tag, summary.n_tracks))
+        self.values["lrclib"].setText(_coverage(summary.n_lrclib_found, summary.n_tracks))  # found on LRCLIB
         parts = []
         if summary.n_subfolders:
             parts.append(f"{summary.n_subfolders} subfolder{'s' if summary.n_subfolders > 1 else ''}")

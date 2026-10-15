@@ -47,6 +47,7 @@ def test_open_folder_shows_its_summary(qtbot, window, service, library_dir):
     assert view.name_label.text() == "Album" and view.path_label.text() == str(library_dir / "Artist" / "Album")
     assert view.values["tracks"].text() == "4" and view.values["formats"].text() == "FLAC, MP3"
     assert view.values["rg"].text() == "0 of 4 tracks" and view.values["lyrics"].text() == "0 of 4 tracks"
+    assert view.values["lrclib"].text() == "0 of 4 tracks"
     assert view.values["contents"].text() == "2 subfolders, 5 files"
     assert view.play_button.isEnabled() and view.play_all_button.isEnabled()
     qtbot.wait(300)  # the test library's cover.jpg isn't a real picture: no cover is shown
@@ -114,3 +115,15 @@ def test_summary_follows_the_index(qtbot, window, service, library_dir):
     tagged.save()
     service.indexer.update_file(str(track))
     qtbot.waitUntil(lambda: window.side_panel.summary.values["lyrics"].text() == "1 of 4 tracks", timeout=10000)
+
+
+def test_lrclib_coverage_follows_lookups(qtbot, window, service):
+    from music_desk.core.index.lyrics_index import record_lyrics
+
+    album = entry(service, "Artist", "Album")
+    window.open_folder(album)
+    key = "fixture artist\x1ftone tone.flac"  # the album's three FLAC copies share it
+    found = {"status": "found", "source": "lrclib", "plain": "la la", "checked": "2026-10-15"}
+    service.writer.submit(lambda conn: record_lyrics(conn, key, found)).result()
+    window.lyrics_updated([album])
+    qtbot.waitUntil(lambda: window.side_panel.summary.values["lrclib"].text() == "3 of 4 tracks", timeout=10000)

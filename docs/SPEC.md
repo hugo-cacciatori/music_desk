@@ -150,6 +150,20 @@ Indexing runs in the background.
   Where the watcher fails (network or some removable drives), a folder is revalidated each time it is opened.
 - Stale-while-revalidate: opening a folder shows its indexed content at once, then a quick scandir of that one
   folder reconciles any differences without a model reset.
+- As built (M2 task 3, `core/index/scanner.py`, `services/indexer.py`):
+  - Removal is per folder: each folder's listing is diffed with its indexed children, and vanished entries are
+    deleted with their subtrees (cascade). This also works for one-folder scans. `scan_gen` is stamped on
+    inserted and updated rows.
+  - A file's tags are re-read when its size or mtime differ from `tracks.read_size`/`read_mtime`. An unreadable
+    file gets a `tracks` row with `read_error`.
+  - An unreachable root isn't scanned, and a folder that can't be listed keeps its index. Junctions and symbolic
+    links aren't followed.
+  - `folder_stats` count the folder's whole subtree, and are recomputed for the root after each scan, together
+    with the `.lrc` sidecar flags.
+  - `search` rows use `rowid` = `entries.id` (schema v2), and a delete trigger keeps them in step.
+  - One Indexer thread runs one scan at a time from a queue, with a 4-thread tag-reader pool. The on-screen folder
+    is served inside a running scan through `request_folder`. Progress is throttled to 10 updates a second.
+  - Every root is rescanned at startup and when it comes back online.
 
 ## 5. Browser
 Explorer-like, with no copy, paste, delete or new.

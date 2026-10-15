@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M2 in progress** (tasks 1 and 2 done: DB schema, DbWriter, read connection; library roots):
+- **M2 in progress** (tasks 1 to 3 done: DB schema, DbWriter, read connection; library roots; scanner):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
     `folder_stats`, FTS5 `search` with `unicode61 remove_diacritics 2`). `MIGRATIONS[n]` takes v`n` to v`n+1`,
     applied in one transaction and recorded in `PRAGMA user_version`. A newer DB raises `SchemaError`, untouched.
@@ -42,7 +42,31 @@ two files alone.
       folder, and confirmation before removing a root. Without a library (the index failed to open) it runs
       disabled.
     - `app.py` creates the service and closes it on quit.
-  - 347 tests pass, 8 are skipped, the 21 `slow` tests pass, and ruff is clean.
+  - Schema v2 (the v1 → v2 migration is tested): `search` rows are keyed by `rowid` = `entries.id`, and an
+    `AFTER DELETE` trigger on `entries` removes them, cascades included.
+  - `core/index/scanner.py` `Scanner(writer, workers=4, batch_rows=500, batch_seconds=0.2, on_progress=, on_folder=)`:
+    - `scan_root(root_id, cancel)`: phase A is a breadth-first scandir walk that reconciles each folder against
+      its indexed children (insert, update on size/mtime/name case, delete with cascade), in DbWriter batches.
+      Phase B reads tags with `read_file` (through `TaggedFile`) in a thread pool, into `tracks` and `search`, for
+      new or changed files only. Then come the `.lrc` sidecar flags, `folder_stats` (subtree totals) and
+      `last_scan`.
+    - `scan_folder(entry_id)` does one level (F5, revalidation). `request_folder(entry_id)` serves a folder
+      inside a running scan.
+    - Safety: an unreachable root isn't scanned, and an unlistable folder keeps its index, so an unplugged drive
+      never empties the index. Junctions and symlinks aren't followed.
+    - Timing on this machine: 10k entries take 1.3 s for the first scan (with 500 tag reads) and 0.15 s to
+      rescan; 100k entries take 3.4 s for phase A (a `slow` test).
+  - `core/lyrics.track_from_fields()` is split out of `read_track`, so the scanner reads each file once.
+  - `services/indexer.py` `Indexer(writer)`: one thread, a queue of root and folder scans (no duplicates),
+    `request_folder` (inside a running scan, or at the front of the queue), `cancel_root` (used before a removal),
+    and `stop`. Signals: `progress` (at most 10 a second), `folderUpdated`, `scanFinished`, `idle` and `failed`.
+  - `LibraryService` owns the indexer. It scans added or merged roots, rescans every root at startup and roots
+    that come back online, and cancels a root's scan before removing it. `roots()` returns [] once closed (a
+    queued signal may arrive after close).
+  - The status bar shows "Indexing <root>: N folders, M files" and then "Reading tags in <root>: x / y", and hides
+    the label when the indexer is idle.
+  - 378 tests pass, 8 are skipped, the 22 `slow` tests pass (rsgain, plus the 100k scan), and ruff is clean. A UI
+    test run that takes 30 s or more is pytest deleting an old 100k-file temp tree, not a hang.
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
   `--version` self-check), an empty `MainWindow` whose status bar shows the rsgain version, and empty `services/`
@@ -115,21 +139,18 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M2's third task: scanner phases A and B, incremental, on-screen folder first. Read SPEC §4, §2,
-§16 and §18 (the performance test), first.
-- Core (`core/index/scanner.py`):
-  - Phase A: a breadth-first `os.scandir` walk inserting `entries` in batches through the DbWriter (about 500 rows
-    or 200 ms).
-  - Phase B: tag reads through `TaggedFile` into `tracks` for new or changed files (size, mtime), with
-    `has_lrc_sidecar`, `lyrics_key` (`core.lyrics.cache_key`) and `read_error`.
-  - `scan_gen` removal of entries that disappeared, plus `folder_stats` and `search` rows.
-  - Every pass takes a `CancelToken`.
-- Service: the Qt indexer (and the `services/db_writer.py` progress wrapper if needed). It scans a root when it is
-  added, rescans at startup, and puts the on-screen folder first (an API, since the file list comes in task 5).
-  Status bar progress.
-- Tests: fixture copies, incremental rescans (changed, added and removed files), cancel, merge-then-scan, and the
-  scan_gen cleanup. Add a synthetic 10k-entry tree for timing; the 100k one goes in `slow`.
-- **Not yet:** the watcher (task 4), and the tree and list models (task 5).
+**Next step:** M2's fourth task: the watcher, plus revalidation on open as a fallback. Read SPEC §4 (live updates)
+and §16 first.
+- `services/watcher.py`: watchdog observers on the online roots. Events are debounced (500 ms) and coalesced per
+  folder, then `Indexer.scan_folder(parent)` runs. A created folder is scanned as a new subtree; a moved or
+  deleted folder reconciles both parents.
+- Roots are watched when added or back online, and unwatched when removed or offline. A watcher that fails (a
+  network share, some removable drives) is logged, and that root falls back to revalidation on open: the browser
+  calls `Indexer.request_folder` when a folder is opened (the API exists; the browser comes in task 5).
+- `scan_folder` reconciles one level only. A new subfolder found that way needs its own subtree scan, so add a
+  recursive variant or queue `scan_folder` for new subfolders.
+- Tests: pytest-qt with real file changes in tmp_path (create, modify, delete, rename, folder moves), waiting on
+  `folderUpdated`, plus a debounce test (many events lead to one scan).
 
 Don't start it until Hugo says so.
 
@@ -224,6 +245,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Temporary playlists: `play-<YYYYMMDD-HHMMSS>[-n].m3u8`, UTF-8 with CRLF, `#EXTINF` label "Artist - Title", else the title, else the file stem, and -1 seconds when unknown. Pruning keeps the newest 20 by name and touches only `play-*.m3u8`. Details in SPEC §14. |
 | 2026-10-15 | Index: the DbWriter lives in `core/index/store.py` with no Qt (one thread, one transaction per job, futures); the Qt service wrapper comes with the indexer. Root top folders are `entries` rows with `parent_id NULL` named by the full root path. Schema migrations go through `PRAGMA user_version`; a newer DB is refused untouched. Details in SPEC §2. |
 | 2026-10-15 | Roots: never nested; adding a parent merges the roots inside it, keeping their index; a folder inside a root returns INSIDE_ROOT (the app will navigate there once the browser exists). Removing a root asks for confirmation (it costs a rescan). Offline = the root folder isn't reachable, checked at start and every 30 s off the UI thread. Dropped files get a toast offering their folder. Details in SPEC §3. |
+| 2026-10-15 | Scanner: vanished entries are deleted per folder during reconciliation (cascade) instead of by a final `scan_gen` sweep, which also works for one-folder scans; `scan_gen` is still stamped on inserted and updated rows. An unreachable root or unlistable folder never loses its index. Links and junctions aren't followed. `folder_stats` count whole subtrees. Search rows are keyed by entry id (schema v2). Details in SPEC §4. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -324,7 +346,7 @@ with a fixture.
 **M2 Index and browser** (read SPEC §2, §3, §4, §5, §14 and §16)
 - [x] DB schema, DbWriter, read connection
 - [x] Roots: picker, drop, remove, offline roots
-- [ ] Scanner phases A and B, incremental, on-screen folder first
+- [x] Scanner phases A and B, incremental, on-screen folder first
 - [ ] Watcher, plus revalidation on open as a fallback
 - [ ] Folder tree (lazy, natural order) and file list (columns, sort, persisted layout, Ctrl+F filter)
 - [ ] Address bar, history, keyboard navigation

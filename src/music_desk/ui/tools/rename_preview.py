@@ -199,7 +199,6 @@ class RenamePreview(QWidget):
         self.extras.setVisible(state == "result" or (preview and bool(self.extras.toPlainText())))
         self.apply_button.setVisible(preview)
         self.cancel_button.setVisible(state in ("planning", "applying"))
-        self.back_button.setEnabled(state != "applying")
         self.done_button.setVisible(state in ("result", "error", "preview"))
         self.done_button.setText("Done" if state == "result" else "Close")
 

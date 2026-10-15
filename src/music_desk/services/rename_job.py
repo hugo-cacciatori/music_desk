@@ -54,6 +54,7 @@ class RenameRunner(QObject):
         self._token = 0
         self._cancel = CancelToken()
         self._closed = False
+        self.running = False  # applying (a preview isn't a job: it changes nothing)
 
     def plan(self, folder: str | Path, options: RenameOptions, selection: list[Path] | None = None) -> int:
         """Start a preview. A selection renames only those files and their sidecars: no subfolders, no junk."""
@@ -85,6 +86,7 @@ class RenameRunner(QObject):
         self._token += 1
         token, cancel = self._token, CancelToken()
         self._cancel = cancel
+        self.running = True
 
         def run() -> None:
             try:
@@ -95,12 +97,14 @@ class RenameRunner(QObject):
                 return
             finally:
                 self.locks.release(lock)
+                self.running = False
             log.info("rename tool in %s: %d renamed, %d sidecars, %d to the Recycle Bin, %d skipped", plan.folder,
                      len(report.renamed), len(report.sidecars_renamed), len(report.junk), len(report.skipped))
             self.applied.emit(Applied(token, report))
 
         if not self._submit(run):
             self.locks.release(lock)
+            self.running = False
         return token
 
     def cancel(self) -> None:

@@ -50,6 +50,25 @@ def fill(widget: QTableWidget, rows: list[tuple[str, ...]]) -> None:
     widget.resizeColumnsToContents()
 
 
+def short_result(finished: Finished) -> str:
+    """One line for the jobs panel (after its state word: Done, Stopped, Failed)."""
+    if finished.error:
+        return finished.error
+    if finished.nothing:
+        return "nothing to do, no audio file rsgain can scan"
+    if finished.cancelled:
+        return "nothing was leveled; see the report"
+    results = [run_log.result() for run_log in finished.album_logs]
+    problems = sum(1 for r in results if r != "OK")
+    if problems:
+        text = f"{plural(len(results), 'album')}, {problems} need{'s' if problems == 1 else ''} checking"
+    else:
+        text = f"{plural(len(results), 'album')} OK"
+    if finished.result is not None and finished.result.target is not None:
+        text += f", leveled to {format_gain(finished.result.target)}"
+    return text
+
+
 class ReplayGainView(QWidget):
     backRequested = Signal()
     runRequested = Signal()
@@ -210,7 +229,6 @@ class ReplayGainView(QWidget):
         self.stop_button.setVisible(state == "running")
         self.open_log_button.setVisible(state == "result" and self.finished is not None and not self.finished.nothing)
         self.reveal_button.setVisible(state in ("result", "error"))
-        self.back_button.setEnabled(state != "running")
         self.done_button.setVisible(state != "running")
         self.done_button.setText("Done" if state == "result" else "Close")
 

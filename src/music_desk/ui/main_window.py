@@ -18,6 +18,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QDockWidget,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -37,6 +38,8 @@ from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
 from music_desk.core.index.store import path_of
 from music_desk.core.path_locks import LockedError, PathLocks
+from music_desk.services import jobs as jobs_module
+from music_desk.services.jobs import JobList
 from music_desk.services.library import LibraryService
 from music_desk.services.lyrics_embedder import AutoEmbedder
 from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
@@ -47,11 +50,12 @@ from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
 from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.file_view import FileView
+from music_desk.ui.jobs_panel import JobsPanel
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
 from music_desk.ui.tools.rename_preview import RenamePreview
-from music_desk.ui.tools.rg_report import ReplayGainView
+from music_desk.ui.tools.rg_report import ReplayGainView, short_result
 from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN, TIDY, ToolRequest, ToolScope, ToolsPage
 
 log = logging.getLogger(__name__)
@@ -110,6 +114,12 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.lyrics_label)
         self.statusBar().addPermanentWidget(self.lyrics_button)
         self._lyrics_state = ""
+        self.jobs_button = QToolButton()
+        self.jobs_button.setAutoRaise(True)
+        self.jobs_button.setToolTip("Show or hide the jobs panel (Ctrl+J)")
+        self.jobs_button.clicked.connect(lambda: self.jobs_dock.setVisible(not self.jobs_dock.isVisible()))
+        self.jobs_button.hide()
+        self.statusBar().addPermanentWidget(self.jobs_button)
         self.rsgain_label = QLabel("Checking rsgain…")
         self.statusBar().addPermanentWidget(self.rsgain_label)
 
@@ -154,9 +164,26 @@ class MainWindow(QMainWindow):
         self.rg_runner.previewed.connect(self._rg_previewed)
         self.rg_runner.lines.connect(self.rg_view.add_lines)
         self.rg_runner.progress.connect(self.rg_view.set_progress)
+        self.rg_runner.progress.connect(self._rg_progress)
         self.rg_runner.finished.connect(self._rg_finished)
         self._rg_token: int | None = None
         self._rg_request: ToolRequest | None = None
+        # The jobs panel (SPEC §10): this session's runs, in a bottom drawer; they go on while you browse.
+        self.jobs = JobList(self)
+        self.jobs_panel = JobsPanel(self.jobs)
+        self.jobs_panel.openRequested.connect(self.show_job)
+        self.jobs_panel.stopRequested.connect(self.stop_job)
+        self.jobs_dock = QDockWidget("Jobs", self)
+        self.jobs_dock.setObjectName("jobs")
+        self.jobs_dock.setWidget(self.jobs_panel)
+        self.jobs_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea)
+        self.jobs_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.jobs_dock)
+        self.jobs_dock.hide()
+        self.jobs.changed.connect(self._update_jobs_button)
+        self.jobs.removed.connect(self._update_jobs_button)
+        self._rename_job: int | None = None  # the job id of the running rename (or Tidy's rename step)
+        self._rg_job: int | None = None
         self.center = QStackedWidget()  # the file list, or the Tools page and its previews (SPEC §10)
         self.center.addWidget(self.file_view)
         self.center.addWidget(self.tools_page)
@@ -186,6 +213,10 @@ class MainWindow(QMainWindow):
         self.hide_empty_action.setChecked(self.settings.hide_folders_without_music)
         self.hide_empty_action.toggled.connect(self.set_hide_folders_without_music)
         view_menu.addAction(self.hide_empty_action)
+        self.jobs_action = self.jobs_dock.toggleViewAction()
+        self.jobs_action.setText("&Jobs panel")
+        self.jobs_action.setShortcut(QKeySequence("Ctrl+J"))
+        view_menu.addAction(self.jobs_action)
         lyrics_menu = self.menuBar().addMenu("&Lyrics")
         self.offline_action = QAction("&Offline mode (no LRCLIB lookups)", self, checkable=True)
         self.offline_action.setChecked(self.settings.lyrics_offline)
@@ -494,9 +525,7 @@ class MainWindow(QMainWindow):
         self.center.setCurrentWidget(self.tools_page)
 
     def close_tools(self) -> None:
-        if self.center.currentWidget() is self.rename_preview and self.rename_preview.state == "applying" or \
-                self.center.currentWidget() is self.rg_view and self.rg_view.state == "running":
-            return  # a running job stays on screen until it ends
+        """Back to the file list. A running job goes on (the jobs panel shows it and reopens its page)."""
         if self.center.currentWidget() is not self.file_view:
             if self.rename_preview.state == "planning":
                 self.rename_runner.cancel()
@@ -512,7 +541,19 @@ class MainWindow(QMainWindow):
             self.tools_page.set_example(fields, extension)
 
     def run_tool(self, request: ToolRequest) -> None:
-        """A card's Preview: the rename preview, the ReplayGain preview, or Tidy's rename preview."""
+        """A card's Preview: the rename preview, the ReplayGain preview, or Tidy's rename preview. A tool runs one
+        job at a time: while its job runs, the preview shows that job instead."""
+        busy = None
+        if request.tool in (RENAME, TIDY) and self._rename_job is not None:
+            busy = self._rename_job
+        elif request.tool in (REPLAYGAIN, TIDY) and self._rg_job is not None:
+            busy = self._rg_job
+        if busy is not None:
+            job = self.jobs.get(busy)
+            self.toast.show_message(f"{job.kind} is still running in {job.folder}. It can be followed in the jobs "
+                                    "panel; start another run when it has finished.")
+            self.show_job(busy)
+            return
         if request.tool == RENAME:
             self.preview_rename(request)
         elif request.tool == REPLAYGAIN:
@@ -558,8 +599,15 @@ class MainWindow(QMainWindow):
             self.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
             return False
         self._rg_request = request
+        if request.tool == TIDY and self._rename_job is not None:
+            self._rg_job, self._rename_job = self._rename_job, None  # the same Tidy job, step 2
+            self.jobs.update(self._rg_job, status="ReplayGain")
+        else:
+            self._rg_job = self._start_job(jobs_module.REPLAYGAIN, folder)
+        follow = self.center.currentWidget() in (self.rg_view, self.rename_preview, self.tools_page)
         self.rg_view.show_running(folder, title)
-        self.center.setCurrentWidget(self.rg_view)
+        if follow:  # Tidy's step 2 doesn't pull you back if you went browsing meanwhile
+            self.center.setCurrentWidget(self.rg_view)
         return True
 
     def _rg_finished(self, finished: Finished) -> None:
@@ -568,6 +616,12 @@ class MainWindow(QMainWindow):
         if self._library_open():
             self.library.indexer.scan_path(str(finished.folder), recursive=True)  # new tags: re-read changed files
         self.rg_view.show_result(finished)
+        if self._rg_job is not None:
+            self.jobs.report(self._rg_job, "replaygain", finished)
+            state = jobs_module.FAILED if finished.error else jobs_module.STOPPED if finished.cancelled else \
+                jobs_module.DONE
+            self.jobs.finish(self._rg_job, state, short_result(finished))
+            self._rg_job = None
         if not finished.error and not finished.nothing:
             albums = len(finished.album_logs)
             what = "stopped" if finished.cancelled else "done"
@@ -625,6 +679,9 @@ class MainWindow(QMainWindow):
         except LockedError as e:
             self.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
             return
+        tidy = self._rename_request is not None and self._rename_request.tool == TIDY
+        self._rename_job = self._start_job(jobs_module.TIDY if tidy else jobs_module.RENAME, plan.folder)
+        self.jobs.update(self._rename_job, status="Renaming")
         self.rename_preview.show_applying()
 
     def _rename_applied(self, result: Applied) -> None:
@@ -632,8 +689,14 @@ class MainWindow(QMainWindow):
             return
         if result.report is None:
             self.rename_preview.show_error(f"Renaming failed: {result.error}")
+            if self._rename_job is not None:
+                self.jobs.finish(self._rename_job, jobs_module.FAILED, f"Renaming failed: {result.error}")
+                self._rename_job = None
             return
         report = result.report
+        job = self._rename_job
+        if job is not None:
+            self.jobs.report(job, "rename", report)
         if self._library_open():
             if report.steps:
                 self.library.indexer.apply_renames(report.steps)  # in place: ids, tags and selection kept
@@ -643,11 +706,67 @@ class MainWindow(QMainWindow):
         count = len(report.renamed)
         self.statusBar().showMessage(f"Renamed {count} file{'s' if count != 1 else ''}.", STATUS_MS)
         request = self._rename_request
+        summary = rename.summary_sections(report, dry_run=False)[0][0]
         if request is not None and request.tool == TIDY:  # Tidy, step 2: ReplayGain on the final names
             if report.cancelled:
                 self.rename_preview.message.setText("Stopped, so ReplayGain was not run.")
-            elif not self.run_replaygain(request, "Tidy album, step 2 of 2: ReplayGain"):
+            elif self.run_replaygain(request, "Tidy album, step 2 of 2: ReplayGain"):
+                return  # the job goes on (its rename report is kept)
+            else:
                 self.rename_preview.message.setText("Renamed. ReplayGain was not started (see the message).")
+        if job is not None:
+            self.jobs.finish(job, jobs_module.STOPPED if report.cancelled else jobs_module.DONE, summary)
+            self._rename_job = None
+
+    # -- the jobs panel --
+
+    def _start_job(self, kind: str, folder: Path) -> int:
+        job = self.jobs.add(kind, folder)
+        self.jobs_dock.show()
+        self.jobs_panel.select(job.id)
+        return job.id
+
+    def _update_jobs_button(self, _job_id: int = 0) -> None:
+        running = len(self.jobs.running)
+        self.jobs_button.setText(f"Jobs: {running} running" if running else "Jobs")
+        self.jobs_button.setVisible(bool(self.jobs.jobs))
+
+    def show_job(self, job_id: int) -> None:
+        """A job's page: live while it runs, its report once it has finished."""
+        job = self.jobs.get(job_id)
+        if job is None:
+            return
+        if job_id == self._rename_job:
+            self.center.setCurrentWidget(self.rename_preview)
+        elif job_id == self._rg_job:
+            self.center.setCurrentWidget(self.rg_view)
+        elif "replaygain" in job.reports:
+            self.rg_view.show_result(job.reports["replaygain"])
+            self.rg_view.heading.setText(f"<b>{job.kind}</b> · {job.folder}")
+            self.center.setCurrentWidget(self.rg_view)
+        elif "rename" in job.reports:
+            self.rename_preview.heading.setText(f"<b>{job.kind}</b> · {job.folder}")
+            self.rename_preview.show_report(job.reports["rename"])
+            self.center.setCurrentWidget(self.rename_preview)
+        else:
+            self.toast.show_message(f"{job.kind} in {job.folder}: {job.status}")
+
+    def stop_job(self, job_id: int) -> None:
+        if job_id == self._rename_job:
+            self.rename_runner.cancel()
+        elif job_id == self._rg_job:
+            self.rg_runner.cancel()
+
+    def _rg_progress(self, done: int, total: int, label: str) -> None:
+        if self._rg_job is not None and label != "done":
+            self.jobs.update(self._rg_job, status=label, progress=(done, total))
+
+    def confirm_quit_with_jobs(self, names: list[str]) -> bool:
+        answer = QMessageBox.question(
+            self, "A job is running",
+            "Still running:\n" + "\n".join(names) + "\n\nStop it and quit? A stopped rename leaves the files "
+            "after that point as they were; a stopped ReplayGain album is reported as cancelled.")
+        return answer == QMessageBox.StandardButton.Yes
 
     def _rename_back(self) -> None:
         if self.rename_preview.state == "planning":
@@ -797,6 +916,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if not self.side_panel.can_leave():
+            event.ignore()
+            return
+        running = [f"{job.kind}: {job.folder}" for job in self.jobs.running]
+        if running and not self.confirm_quit_with_jobs(running):
             event.ignore()
             return
         if self.embedder is not None:

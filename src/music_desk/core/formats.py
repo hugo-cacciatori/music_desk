@@ -91,12 +91,23 @@ def is_audio(path: str | Path) -> bool:
     return format_for(path) is not None
 
 
-def open_audio(path: str | Path) -> FileType:
-    """Open an audio file with its format's mutagen class. Raises ValueError for non-audio or unreadable files."""
+def open_audio(path: str | Path, shared: bool = False) -> FileType:
+    """Open an audio file with its format's mutagen class. Raises ValueError for non-audio or unreadable files.
+
+    shared: read through a handle that doesn't block a delete or rename in Explorer meanwhile (for reads that
+    won't be saved: the index, the side panel)."""
     info = format_for(path)
     if info is None:
         raise ValueError(f"{Path(path).name}: not an audio file")
-    audio = MutagenFile(path, options=list(info.mutagen_classes))
+    if shared:
+        from music_desk.core.fsops import open_shared
+
+        with open_shared(path) as fileobj:
+            audio = MutagenFile(fileobj, options=list(info.mutagen_classes))
+        if audio is not None:
+            audio.filename = str(path)  # mutagen saves by name: a later save() still finds the file
+    else:
+        audio = MutagenFile(path, options=list(info.mutagen_classes))
     if audio is None:
         raise ValueError(f"{Path(path).name}: not a valid {info.container} file")
     return audio

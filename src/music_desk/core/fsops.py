@@ -46,3 +46,35 @@ def open_in_explorer(path: str | Path, is_dir: bool, run=None) -> None:
     /select,"…" itself, so it can't go through list quoting)."""
     command = explorer_command(path, is_dir)
     (run or (lambda cmd: subprocess.Popen(cmd)))(command)
+
+
+def _shared_opener(path: str, flags: int) -> int:
+    """os.open with FILE_SHARE_DELETE (Windows): the file can still be deleted or renamed while it is read."""
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create = kernel32.CreateFileW
+    create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
+                       wintypes.DWORD, wintypes.HANDLE)
+    create.restype = wintypes.HANDLE
+    generic_read, share_all, open_existing, normal = 0x80000000, 0x7, 3, 0x80
+    handle = create(path, generic_read, share_all, None, open_existing, normal, None)
+    if handle == wintypes.HANDLE(-1).value:
+        error = ctypes.get_last_error()
+        raise OSError(error, ctypes.FormatError(error).strip(), path)
+    try:
+        return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+    except OSError:
+        kernel32.CloseHandle(handle)
+        raise
+
+
+def open_shared(path: str | Path):
+    """Open a file for reading without blocking others: Python's open() doesn't share delete access on Windows,
+    so a file being read couldn't be deleted or renamed in Explorer at that moment. The file object keeps its
+    name (mutagen recognizes some formats by it)."""
+    if os.name != "nt":
+        return open(path, "rb")  # noqa: SIM115 - the caller closes it
+    return open(str(path), "rb", opener=_shared_opener)  # noqa: SIM115 - the caller closes it

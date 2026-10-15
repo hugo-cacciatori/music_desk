@@ -128,7 +128,7 @@ def read_file(path: Path, size: int | None, mtime: float | None) -> tuple[dict, 
     row.update(format=path.suffix.lstrip(".").upper(), read_size=size, read_mtime=mtime,
                has_lyrics_tag=0, has_cover=0)
     try:
-        tagged = TaggedFile(path)
+        tagged = TaggedFile(path, shared=True)  # never blocks a delete or rename in Explorer
         fields = tagged.fields()
         stream = tagged.stream_info()
         track = track_from_fields(fields, path.name, stream.duration)

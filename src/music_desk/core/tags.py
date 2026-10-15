@@ -581,13 +581,13 @@ ADAPTERS: dict[TagFamily, _Adapter] = {
 class TaggedFile:
     """An audio file opened for tag reading and editing."""
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, *, shared: bool = False) -> None:
         self.path = Path(path)
         info = format_for(self.path)
         if info is None:
             raise ValueError(f"{self.path.name}: not an audio file")
         self.info: FormatInfo = info
-        self.audio = open_audio(self.path)
+        self.audio = open_audio(self.path, shared=shared)  # shared: for reads only (see open_audio)
         self._adapter = ADAPTERS[info.family]
 
     def _wrap(self, error: Exception) -> TagError:

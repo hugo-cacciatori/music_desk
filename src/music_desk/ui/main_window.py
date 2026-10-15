@@ -33,9 +33,11 @@ from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
 from music_desk.core.index.store import path_of
 from music_desk.services.library import LibraryService
+from music_desk.services.tag_io import TagIO
 from music_desk.settings import Settings
 from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.file_view import FileView
+from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
 
@@ -91,11 +93,17 @@ class MainWindow(QMainWindow):
         self.sidebar = Sidebar(conn, self.settings.expanded_folders)
         self.sidebar.model.only_music = self.settings.hide_folders_without_music
         self.file_view = FileView(conn)
+        self.tag_io = TagIO(self)
+        self.side_panel = SidePanel(self.tag_io)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.file_view)
+        self.splitter.addWidget(self.side_panel)
         self.splitter.setStretchFactor(1, 1)
-        self.splitter.setSizes([280, 920])
+        self.splitter.setCollapsible(1, False)
+        self.splitter.setSizes([260, 640, 340])
+        self._selected_ids: list[int] = []
+        self._restoring_selection = False
         self.setCentralWidget(self.splitter)
         self._build_navigation(conn)
         self._restore_state()
@@ -122,6 +130,9 @@ class MainWindow(QMainWindow):
         self.file_view.fileActivated.connect(lambda entry_id: self.open_files([entry_id]))
         self.file_view.menuRequested.connect(lambda ids, pos: self.list_menu(ids).exec(pos))
         self.sidebar.folder_menu_provider = self.add_folder_actions
+        self.file_view.selectionChanged.connect(self._selection_changed)
+        self.side_panel.metadata.fileSaved.connect(self._file_saved)
+        self.side_panel.metadata.saveFailed.connect(lambda message: self.toast.show_message(message))
         self.shellFailed.connect(self._shell_failed)
         QApplication.instance().installEventFilter(self)  # the mouse back/forward buttons, anywhere in the window
 
@@ -157,6 +168,10 @@ class MainWindow(QMainWindow):
         `record`: a new step in the history (not for back, forward, or a replacement of a vanished folder)."""
         if not self._library_open() or entry_id == self.folder_id or not self._folder_exists(entry_id):
             return  # a row being removed can still be selected for a moment
+        if not self.side_panel.can_leave():  # unsaved tag edits: Save, Discard or Cancel
+            if self.folder_id is not None:
+                self.sidebar.tree.select_entry(queries.folder_path_ids(self.library.conn, self.folder_id))
+            return
         if record and self.folder_id is not None:
             self.history_back.append(self.folder_id)
             self.history_forward.clear()
@@ -166,6 +181,7 @@ class MainWindow(QMainWindow):
         crumbs = queries.folder_crumbs(self.library.conn, entry_id)
         self.address_bar.set_location(crumbs, self.folder_path)
         self.sidebar.tree.select_entry([entry for entry, _name in crumbs])
+        self._show_selection([])
         self.library.folder_opened(entry_id)
         self._update_navigation()
 
@@ -285,6 +301,34 @@ class MainWindow(QMainWindow):
                 return True
         return False
 
+    # -- selection and the side panel --
+
+    def _selection_changed(self, ids: list[int]) -> None:
+        if self._restoring_selection or ids == self._selected_ids:
+            return
+        if not self.side_panel.can_leave():
+            self._restoring_selection = True  # Cancel: back to the file being edited
+            self.file_view.select_ids(self._selected_ids)
+            self._restoring_selection = False
+            return
+        self._show_selection(ids)
+
+    def _show_selection(self, ids: list[int]) -> None:
+        self._selected_ids = ids
+        items = []
+        for entry_id in ids:
+            row = self.file_view.model.row_for(entry_id)
+            if row is not None and self.folder_path:
+                r = self.file_view.model.rows[row]
+                items.append(SelectedItem(Path(self.folder_path, r.name), r.is_dir, r.is_audio))
+        self.side_panel.show_selection(items)
+
+    def _file_saved(self, path: str) -> None:
+        """Tags changed on disk: bring the file's folder up to date in the index (and so in the list)."""
+        if self._library_open():
+            self.library.indexer.scan_path(os.path.dirname(path))
+        self.statusBar().showMessage(f"Saved the tags of {os.path.basename(path)}.", STATUS_MS)
+
     def folder_updated(self, entry_id: int) -> None:
         if not self._library_open():
             return
@@ -360,6 +404,10 @@ class MainWindow(QMainWindow):
         self.settings.save()
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if not self.side_panel.can_leave():
+            event.ignore()
+            return
+        self.tag_io.close()  # a save in progress finishes first
         self.save_state()
         QApplication.instance().removeEventFilter(self)
         self._shell.shutdown(wait=False)

@@ -182,6 +182,7 @@ class MainWindow(QMainWindow):
             library.rootsChanged.connect(self.refresh_roots)
             library.addFinished.connect(self.show_add_results)
             library.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
+            library.notice.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
             library.indexer.progress.connect(self.show_index_progress)
             library.indexer.idle.connect(self.index_label.hide)
             library.indexer.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))

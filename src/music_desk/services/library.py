@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from music_desk.core.index import roots
+from music_desk.core.index import lyrics_import, roots
 from music_desk.core.index.roots import AddResult, Root
 from music_desk.core.index.store import DbWriter, connect_read
 from music_desk.core.lyrics import LrclibClient
@@ -26,6 +26,7 @@ class LibraryService(QObject):
     rootsChanged = Signal()
     addFinished = Signal(object)  # list[AddResult], one per path of an add_folders call
     failed = Signal(str)  # a plain message for the status bar
+    notice = Signal(str)  # an informational message for the status bar
 
     lyrics_offline_default = False  # the UI tests set it, so a library they build never reaches LRCLIB
 
@@ -117,11 +118,21 @@ class LibraryService(QObject):
             results.append(result)
         added = [r for r in results if r.status in (roots.AddStatus.ADDED, roots.AddStatus.MERGED)]
         for result in added:
+            self._import_lyrics_cache(result.path)  # before the scan, whose folder totals then count it
             self.indexer.scan_root(result.root_id)
         if added:
             self._sync_watches()
             self.rootsChanged.emit()
         self.addFinished.emit(results)
+
+    def _import_lyrics_cache(self, folder: str) -> None:
+        """seek_lyrics' lyrics_cache.json at the top of a new root (SPEC §9): read, never changed."""
+        report = lyrics_import.import_cache(self.writer, folder)
+        if report is None:
+            return
+        if report.imported:
+            self.lyrics.wake()
+        (self.failed if report.error else self.notice).emit(report.message(folder))
 
     def _remove(self, root_id: int) -> None:
         if roots.remove_root(self.writer, root_id):

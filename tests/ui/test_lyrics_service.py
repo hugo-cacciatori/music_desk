@@ -248,3 +248,19 @@ def test_the_window_prioritizes_and_offers_retry(qtbot, service, library_dir, mo
     assert window.toast.label.text() == "LRCLIB unreachable, retrying in 10 min."
     window.toast.button.click()
     assert ("retry",) in calls
+
+
+def test_adding_a_root_imports_its_lyrics_cache(qtbot, tmp_path, library, reference_seek_lyrics):
+    songs, _errors = reference_seek_lyrics.scan(library)
+    cache = {reference_seek_lyrics.cache_key(s): {"status": "not_found", "checked": "2026-10-01"} for s in songs}
+    reference_seek_lyrics.save_cache(library / "lyrics_cache.json", cache)
+    service = LibraryService(tmp_path / "db3" / "library.db", lyrics_offline=True)
+    try:
+        notices = collect(service.notice)
+        with qtbot.waitSignal(service.addFinished, timeout=5000):
+            service.add_folders([library])
+        qtbot.waitUntil(lambda: bool(notices), timeout=5000)
+        assert notices[0][0] == f"Imported {len(cache)} lyrics lookups from lyrics_cache.json in {library}."
+        assert service.conn.execute("SELECT count(*) FROM lyrics").fetchone()[0] == len(cache)
+    finally:
+        service.close()

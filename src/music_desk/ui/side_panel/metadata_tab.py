@@ -9,6 +9,7 @@
 Ctrl+S saves and Esc reverts. Reads go through TagIO and writes through TagWriter, both off the UI thread.
 """
 
+import html
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
@@ -200,7 +201,18 @@ class MetadataTab(QWidget):
         self.lyrics = QPlainTextEdit()
         self.lyrics.setMinimumHeight(120)
         self.lyrics.textChanged.connect(lambda: self._edited("lyrics"))
-        form.addRow("Lyrics", self.lyrics)
+        self.lyrics.textChanged.connect(self._update_import_link)
+        self.import_link = QLabel()
+        self.import_link.setTextFormat(Qt.TextFormat.RichText)
+        self.import_link.linkActivated.connect(lambda _link: self.import_lrc())
+        self.import_link.hide()
+        lyrics_box = QVBoxLayout()
+        lyrics_box.setContentsMargins(0, 0, 0, 0)
+        lyrics_box.addWidget(self.lyrics)
+        lyrics_box.addWidget(self.import_link)
+        lyrics_widget = QWidget()
+        lyrics_widget.setLayout(lyrics_box)
+        form.addRow("Lyrics", lyrics_widget)
         outer.addLayout(form)
 
         buttons = QHBoxLayout()
@@ -466,6 +478,7 @@ class MetadataTab(QWidget):
         self.lyrics.setToolTip(tooltip)
         self._can_edit_cover = editable
         self._update_cover_buttons()
+        self._update_import_link()
         notes = self._multi_notes() if self.multi else []
         if not can_tag:
             notes.insert(0, f"{files[0].container} files have no tags, so they can't be edited here."
@@ -606,6 +619,22 @@ class MetadataTab(QWidget):
             self.error_label.show()
         self._set_dirty(self.dirty)
         self.saveFailed.emit(message)
+
+    # -- lyrics from a .lrc sidecar --
+
+    def _update_import_link(self) -> None:
+        """"Import from <name>.lrc" when the Lyrics field is empty and a same-stem .lrc sits next to the file."""
+        s = self.snapshot
+        show = (not self.multi and s is not None and s.lrc_text is not None and s.editable
+                and self.locked_by is None and not self.lyrics.toPlainText().strip())
+        if show:
+            self.import_link.setText(f'<a href="import">Import from {html.escape(s.lrc_name)}</a>')
+        self.import_link.setVisible(show)
+
+    def import_lrc(self) -> None:
+        """Fill the Lyrics field from the sidecar. Saving is the usual Save; the .lrc file is never touched."""
+        if self.snapshot is not None and self.snapshot.lrc_text is not None:
+            self.lyrics.setPlainText(_normalize_lyrics(self.snapshot.lrc_text).strip("\n"))
 
     # -- the cover --
 

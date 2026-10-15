@@ -36,6 +36,8 @@ class Snapshot:
     cover: bytes | None
     cover_source: str  # "embedded", the folder image's file name, or "" for none
     id3_version: str | None  # "2.3" / "2.4" for ID3 files
+    lrc_name: str | None = None  # a same-stem .lrc next to the file (SPEC §7: "Import from <name>.lrc")
+    lrc_text: str | None = None
 
     @property
     def format_line(self) -> str:
@@ -78,6 +80,32 @@ def _size(size: int) -> str:
     return ""
 
 
+def decode_text(data: bytes) -> str:
+    """A text file of unknown encoding: UTF-8 (with or without a BOM), else Windows-1252, the usual encoding of
+    .lrc files written by older Windows tools. Undecodable bytes become U+FFFD rather than failing."""
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return data.decode("cp1252", errors="replace")
+
+
+def lrc_sidecar(path: Path) -> tuple[str, str] | None:
+    """The .lrc file with the same stem next to an audio file (matched ignoring case): (name, text)."""
+    try:
+        names = os.listdir(path.parent)
+    except OSError:
+        return None
+    wanted = (path.stem + ".lrc").casefold()
+    for name in names:
+        if name.casefold() == wanted:
+            try:
+                with open_shared(path.parent / name) as f:
+                    return name, decode_text(f.read())
+            except OSError:
+                return None
+    return None
+
+
 def folder_cover(folder: Path) -> tuple[bytes, str] | None:
     """The first folder image (folder.jpg, cover.jpg, front.jpg), matched ignoring case."""
     try:
@@ -107,6 +135,7 @@ def read_snapshot(path: str | Path) -> Snapshot:
     id3_version = None
     if tagged.info.family.value == "ID3" and tags is not None and hasattr(tags, "version"):
         id3_version = f"2.{tags.version[1]}"
+    sidecar = lrc_sidecar(path)
     return Snapshot(
         path=path, size=stat.st_size, mtime=stat.st_mtime, editable=tagged.info.tags,
         family=tagged.info.family.value, container=tagged.info.container, fields=tagged.fields(),
@@ -114,6 +143,7 @@ def read_snapshot(path: str | Path) -> Snapshot:
         bits_per_sample=stream.bits_per_sample, channels=stream.channels,
         replaygain={key: tagged.get_replaygain(key) for key in RG_KEYS},
         cover=cover, cover_source=source, id3_version=id3_version,
+        lrc_name=sidecar[0] if sidecar else None, lrc_text=sidecar[1] if sidecar else None,
     )
 
 

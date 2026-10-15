@@ -683,3 +683,61 @@ def test_index_follows_cover_changes(qtbot, window, service, new_cover, monkeypa
 def test_blank_text_in_a_file_isnt_an_edit(qtbot, panel, fixture_copy):
     tab = load(qtbot, panel, fixture_copy("edge/edge.flac"))  # its artist is blank padding
     assert tab.changes() == {} and not tab.dirty
+
+
+# -- lyrics from a .lrc sidecar (SPEC §7) --
+
+def test_import_from_lrc(qtbot, panel, fixture_copy):
+    folder = fixture_copy("cleanup/lrc")
+    lrc = folder / "no_lyrics.lrc"
+    lrc_bytes = lrc.read_bytes()
+    tab = load(qtbot, panel, folder / "no_lyrics.flac")
+    assert tab.import_link.isVisibleTo(tab) and "Import from no_lyrics.lrc" in tab.import_link.text()
+    tab.import_link.linkActivated.emit("import")
+    expected = lrc_bytes.decode("utf-8").replace("\r\n", "\n").strip("\n")
+    assert tab.lyrics.toPlainText() == expected and tab.dirty
+    assert not tab.import_link.isVisibleTo(tab)  # the field isn't empty any more
+    save(qtbot, tab)
+    assert TaggedFile(folder / "no_lyrics.flac").fields().lyrics == expected
+    assert lrc.read_bytes() == lrc_bytes  # the .lrc file itself is never touched
+
+
+def test_no_link_when_the_tag_has_lyrics(qtbot, panel, fixture_copy):
+    folder = fixture_copy("cleanup/lrc")
+    tab = load(qtbot, panel, folder / "with_lyrics.flac")
+    assert not tab.import_link.isVisibleTo(tab)
+    tab.lyrics.setPlainText("")  # emptied by hand: the sidecar is offered again
+    assert tab.import_link.isVisibleTo(tab)
+
+
+def test_no_link_without_a_sidecar(qtbot, panel, fixture_copy):
+    tab = load(qtbot, panel, fixture_copy("formats/tone.flac"))
+    assert not tab.import_link.isVisibleTo(tab)
+
+
+def test_cp1252_sidecar(qtbot, panel, fixture_copy):
+    path = fixture_copy("formats/tone.mp3")
+    path.with_suffix(".LRC").write_bytes("[00:01.00]Café crème".encode("cp1252"))
+    tab = load(qtbot, panel, path)
+    assert "Import from tone.LRC" in tab.import_link.text()
+    tab.import_lrc()
+    assert tab.lyrics.toPlainText() == "[00:01.00]Café crème"
+
+
+def test_no_link_in_multi_or_when_locked(qtbot, panel, locks, fixture_copy):
+    folder = fixture_copy("cleanup/lrc")
+    tab = load_many(qtbot, panel, [folder / "no_lyrics.flac", folder / "with_lyrics.flac"])
+    assert not tab.import_link.isVisibleTo(tab)
+    tab = load(qtbot, panel, folder / "no_lyrics.flac")
+    assert tab.import_link.isVisibleTo(tab)
+    with locks.lock([folder], "Tidy album"):
+        qtbot.waitUntil(lambda: not tab.import_link.isVisibleTo(tab), timeout=3000)
+    qtbot.waitUntil(lambda: tab.import_link.isVisibleTo(tab), timeout=3000)
+
+
+def test_revert_after_import(qtbot, panel, fixture_copy):
+    folder = fixture_copy("cleanup/lrc")
+    tab = load(qtbot, panel, folder / "no_lyrics.flac")
+    tab.import_lrc()
+    tab.revert()
+    assert tab.lyrics.toPlainText() == "" and not tab.dirty and tab.import_link.isVisibleTo(tab)

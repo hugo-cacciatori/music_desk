@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M2 in progress** (tasks 1 to 4 done: DB schema, DbWriter, read connection; library roots; scanner; watcher):
+- **M2 in progress** (tasks 1 to 5 done: DB schema, DbWriter, read connection; library roots; scanner; watcher; folder tree and file list):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
     `folder_stats`, FTS5 `search` with `unicode61 remove_diacritics 2`). `MIGRATIONS[n]` takes v`n` to v`n+1`,
     applied in one transaction and recorded in `PRAGMA user_version`. A newer DB raises `SchemaError`, untouched.
@@ -86,7 +86,41 @@ two files alone.
         folder open.
     - Checked: watching locks nothing. Folders under a watched root, and the root itself, can still be renamed.
       An outside folder rename is seen as a delete plus a create, so that subtree's tags are read again.
-  - 391 tests pass, 8 are skipped, the 22 `slow` tests pass (rsgain, plus the 100k scan), and ruff is clean. A
+  - Browser (task 5):
+    - `settings.py` `Settings`: a typed dataclass saved to JSON (atomic replace). Unknown keys and values of the
+      wrong type fall back to the defaults. It holds the SPEC §12 fields plus UI state: geometry, splitter, file
+      list header state, expanded folders (as paths) and the last folder.
+    - `core/index/queries.py`:
+      - `child_folders(conn, id, only_music=)` in natural order, and `folder_listing(conn, id) -> list[FileRow]`
+        (entries, tracks, folder_stats and lyrics joined, with RG full/partial/none, lyrics tag/lrc/none and
+        LRCLIB synced/plain/instrumental/not found/pending);
+      - `folder_path_ids`.
+    - `ui/folder_tree.py`:
+      - `FolderTreeModel` is lazy (`canFetchMore`/`fetchMore`). Updates diff children by entry id (remove,
+        move, insert, dataChanged; no reset) through `refresh(id)`, `refresh_loaded()`, `set_roots()` and
+        `set_only_music()`.
+      - `FolderTreeView` remembers the expanded folders by path and re-expands them as rows load;
+        `select_entry(ids)` reveals a folder.
+    - `ui/file_view.py`:
+      - `FileListModel` is reset only on a folder change, and updated in place by `refresh()`.
+      - `FileSortProxy` keeps folders first in both directions, using precomputed natural keys.
+      - `FileView` adds Ctrl+F filtering by name, a header menu to show or hide columns (and reset them), and
+        saves and restores the header state (order, sizes, hidden columns, sort). Bitrate and Modified are
+        hidden by default.
+    - `MainWindow(library, settings)`:
+      - The sidebar holds the tree; the file list is in the centre. View > Hide folders without music.
+      - Opening a folder lists it from the index, then calls `folder_opened` (revalidation).
+      - `folderUpdated` and `scanFinished` refresh the tree and the list in place.
+      - When the open folder leaves the index, its nearest surviving ancestor opens, as in Explorer. This is
+        checked before the tree drops the row, which would select a neighbour.
+      - State is saved on close and restored at start, last folder included. `app.py` loads `Settings.load()`.
+    - Robustness fixes:
+      - `scan_root` and `scan_folder` return None for a root or entry that left the index.
+      - UI handlers ignore signals once the library is closed (`LibraryService.closed`; the models' connection
+        provider returns None).
+      - `LibraryService.close()` closes the writer last, so no `-wal`/`-shm` files are left behind.
+    - Smoke check: `app.main()` starts offscreen, with `LOCALAPPDATA` pointed at a scratch folder, and exits 0.
+  - 416 tests pass, 8 are skipped, the 22 `slow` tests pass (rsgain, plus the 100k scan), and ruff is clean. A
     test run that takes 30 s or more is pytest deleting an old 100k-file temp tree, not a hang.
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
@@ -160,21 +194,20 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M2's fifth task: the folder tree (lazy, natural order) and the file list (columns, sort, persisted
-layout, Ctrl+F filter). Read SPEC §5, §16 (models), §2 (columns come from `entries`, `tracks`, `folder_stats` and
-`lyrics`) and §12 (settings), first.
-- `ui/folder_tree.py`: `FolderTreeModel` (QAbstractItemModel) with roots at the top, folders only, loaded lazily
-  through `canFetchMore`/`fetchMore` on `LibraryService.conn`. Use `fsops.natural_key`. Offline roots are dimmed.
-  The expanded state is remembered.
-- `ui/file_view.py`: `FileListModel` (QAbstractTableModel) plus a proxy with precomputed natural-sort keys.
-  Folders come first, and non-audio files are dimmed. Columns: SPEC §5 (LRCLIB shows "pending" until M4).
-- Incremental updates on `Indexer.folderUpdated` and `scanFinished`: `dataChanged`/`rowsInserted`/`rowsRemoved`,
-  never a model reset. Opening a folder calls `LibraryService.folder_opened` (revalidation).
-- Persisted layout (column order, sizes, hidden columns, sort): this needs `settings.py` (typed, JSON in
-  `%LOCALAPPDATA%\MusicDesk\settings.json`, SPEC §12), so write a minimal one now.
-- pytest-qt: lazy loading, sort order ("Track 2" before "Track 10"), filter, an update without a reset (the
-  selection is kept), and the layout round trip.
-- **Not yet:** the address bar and history (task 6), and the context menus (task 7).
+**Next step:** M2's sixth task: the address bar, history and keyboard navigation. Read SPEC §5 (address bar,
+navigation) first.
+- `ui/address_bar.py`:
+  - A breadcrumb of the open folder (`MainWindow.folder_path`). Each segment is clickable and has a dropdown of
+    its subfolders (`queries.child_folders`).
+  - Clicking the bar, or Ctrl+L, turns it into a text path. A pasted path navigates if it lies inside a root
+    (`scanner.find_folder`; exact matches only, otherwise a plain message).
+- History: back and forward stacks of entry ids in MainWindow, with Alt+←/→, the mouse back/forward buttons and
+  toolbar buttons. Up is Backspace or Alt+↑. F5 rescans the open folder (`Indexer.scan_folder`). A folder that
+  left the index is skipped in the history.
+- Typing selects by name (QTreeView's keyboardSearch already does it on the Name column; check it). Ctrl/Shift
+  extend the selection (ExtendedSelection is on).
+- pytest-qt tests for each of these.
+- **Not yet:** the context menus and drag-out (task 7).
 
 Don't start it until Hugo says so.
 
@@ -271,6 +304,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Roots: never nested; adding a parent merges the roots inside it, keeping their index; a folder inside a root returns INSIDE_ROOT (the app will navigate there once the browser exists). Removing a root asks for confirmation (it costs a rescan). Offline = the root folder isn't reachable, checked at start and every 30 s off the UI thread. Dropped files get a toast offering their folder. Details in SPEC §3. |
 | 2026-10-15 | Scanner: vanished entries are deleted per folder during reconciliation (cascade) instead of by a final `scan_gen` sweep, which also works for one-folder scans; `scan_gen` is still stamped on inserted and updated rows. An unreachable root or unlistable folder never loses its index. Links and junctions aren't followed. `folder_stats` count whole subtrees. Search rows are keyed by entry id (schema v2). Details in SPEC §4. |
 | 2026-10-15 | Watcher: one watchdog observer over the online roots; per-folder coalescing with a 0.5 s debounce and a 5 s cap; jobs carry paths resolved when they run; new or moved-in folders are scanned recursively. Every folder open triggers a revalidation (stale-while-revalidate), which is also the fallback when a root can't be watched. Details in SPEC §4. |
+| 2026-10-15 | Browser: the tree and list read the index on the UI's read connection (instant), update in place on indexer signals, and reset only when another folder opens. Folders stay first in both sort directions. Folder rows show their subtree's track count (Title column) and total duration. Layout persists through `QHeaderView.saveState` in settings.json. When the open folder disappears, its nearest surviving ancestor opens. Settings live in `settings.py` (typed, JSON). Details in SPEC §5. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -373,7 +407,7 @@ with a fixture.
 - [x] Roots: picker, drop, remove, offline roots
 - [x] Scanner phases A and B, incremental, on-screen folder first
 - [x] Watcher, plus revalidation on open as a fallback
-- [ ] Folder tree (lazy, natural order) and file list (columns, sort, persisted layout, Ctrl+F filter)
+- [x] Folder tree (lazy, natural order) and file list (columns, sort, persisted layout, Ctrl+F filter)
 - [ ] Address bar, history, keyboard navigation
 - [ ] Context menus: Open with default app, Play folder/selection, Open in Explorer, Copy path. Drag-out disabled.
 

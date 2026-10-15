@@ -220,6 +220,19 @@ Explorer-like, with no copy, paste, delete or new.
   - ReplayGain and lyrics health columns.
   - Smart views.
   - The layout and position are remembered.
+- As built (M2 task 5):
+  - The tree and the list read the index on the UI's read-only connection, and update in place when the indexer
+    reports a folder or finishes a scan. Rows are inserted, removed, moved or changed, never reset, so the
+    selection stays put. The list is reset only when another folder opens.
+  - Folders stay first in both sort directions. Ties sort by name, using natural keys precomputed per row.
+  - A folder row shows its subtree's track count in the Title column, and the subtree's total duration.
+  - The LRCLIB column shows "pending" until M4.
+  - Bitrate and Modified are hidden by default. The header menu shows or hides columns and can reset them.
+  - The layout (column order, sizes, hidden columns, sort) is saved as the header state in settings.json, with
+    the window geometry, the splitter, the expanded folders (by path) and the last open folder, which reopens at
+    start.
+  - When the open folder leaves the index (deleted or moved outside the app), its nearest surviving ancestor
+    opens, as in Explorer.
 - **Smart views (sidebar):**
   - No lyrics in tags.
   - Found on LRCLIB but not in tags: the candidates for "Save to file tags".

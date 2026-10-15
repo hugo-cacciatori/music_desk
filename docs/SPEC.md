@@ -121,6 +121,11 @@ WMA has no standard track total, so that field is disabled for .wma, with a tool
     partial unique index allows one per root, because NULLs are distinct in UNIQUE.
   - `search` uses the `unicode61 remove_diacritics 2` tokenizer, so "Sigur Ros" finds "Sigur Rós". (Replaced by
     trigram with `remove_diacritics 1` in schema v3, at M6.)
+- As built (M6 task 1): schema v3. `search` is `fts5(name, title, artist, albumartist, album, genre, lyrics, lrclib,
+  tokenize='trigram remove_diacritics 1')`. The migration copies the v2 rows through a temporary table with their
+  rowids, fills `lrclib` from the found keys, and recreates the delete trigger (tested from a v2 database).
+  `lrclib` follows `record_lyrics` (the key's plain text when found, else NULL; the cache import goes through it
+  too) and `_write_tracks` (a new track takes its key's text at once).
   - Connections: `foreign_keys=ON` and `busy_timeout=5000`. The writer adds `journal_mode=WAL` and
     `synchronous=NORMAL`. Readers open with `mode=ro` and `query_only`, and check the schema version.
   - `DbWriter.submit(fn)` runs each job in its own `BEGIN IMMEDIATE` transaction and returns a Future. A failing
@@ -360,6 +365,53 @@ fill the index at any time and nothing is lost by waiting.
   - a key going from found to not_found drops its text from the matches;
   - the parity test above.
 
+### As built (M6 task 1)
+- **Query syntax** (`core/index/search.py` `parse_query`):
+  - The unquoted text left after the filters, trimmed, is **one** substring, as the page took the whole box:
+    "glove like" doesn't find "like a glove". Each `"quoted phrase"` is another substring; all parts are ANDed.
+  - A word before a colon that isn't a filter name stays text ("Re: Stacks"). A filter with an unknown value is
+    ignored and named in a note above the results. An empty `artist:` (being typed) is ignored.
+  - Every filter is repeatable; a filter's values are ORed, different filters ANDed. Values may be quoted
+    (`artist:"Sigur Rós"`). `artist:` covers the album artist too. `year:` is a prefix of the date. `ext:` takes
+    "opus" or ".opus". `lyricstag:` follows the ♪ column (yes = a tag, lrc = only a sidecar, no = neither).
+    `lrclib:` follows the LRCLIB column (`error` = a key whose lookup failed this session, from the lyrics
+    service). `rg:` takes none, partial or full.
+- **Matching** (`text_search`): tracks only. Every part of 3 or more characters goes into one FTS5 `MATCH`
+  (FTS5 allows one per table per query), as a quoted phrase with column filters; shorter parts use `LIKE` over
+  the same columns. For a short non-ASCII part, a Python function `md_contains` folds both sides, since SQLite's
+  LIKE folds ASCII only. Known limit: a 1–2 character ASCII query keeps accents ("jo" doesn't find "Jóga").
+- **Chips:** With lyrics = the key is found or instrumental; Missing = every other track (pending, not found,
+  no tags, unreadable). An empty query with All shows the prompt; an empty query with another chip lists every
+  track it covers, as the page did.
+- **Order and cap:** every match is sorted in Python by (folder path, name), natural order (a folder's files
+  before its subfolders'), then cut at 5,000; the count reads "N of M tracks". The header can sort by any
+  column; the Folder column's order is the result order (the default).
+- **Rows** (`result_rows`): file list rows plus the folder path, highlight spans for Title and Artist (free text,
+  and the `artist:` values) and the snippet: the first line of the LRCLIB text, else of the tags' lyrics
+  (timestamps stripped), containing a part that matches none of name, title, artist, album artist, album or
+  genre. `fold()` (NFD, marks dropped, casefold, with offsets) places the highlights; `fold_text()` is the fast
+  form for long texts.
+- **Service** (`services/search_service.py` `SearchService`): one worker with its own read connection. A new
+  query interrupts the running one (`sqlite3` interrupt) and stale results are never emitted. The rows' sort keys
+  are computed there too (`search_view.sort_keys`, as per-column ranks), so the UI thread only swaps rows.
+  Measured on 5,000 tracks with 1.5 KB of lyrics each: about 0.1–0.2 s to match, 0.5 s to build 5,000 rows with
+  snippets and 0.35 s for the keys, all on the worker; showing them costs the UI thread about 20 ms plus a repaint.
+- **Page** (`ui/search_view.py` `SearchView`, a page of the window's centre):
+  - The query field is in the toolbar ("Search library (Ctrl+K)"). Typing opens the page and runs after 120 ms.
+    Enter in the field moves to the results; Esc (field or results) returns to the file list as it was. The
+    query is kept for the next Ctrl+K.
+  - Under it: the chips, "Only in <folder> and below" (the folder open when the search started), the count and
+    Play results. Columns: Name, Title, Artist, Lyrics (the snippet), Album, Folder (elided on the left), then
+    the file list's other columns. The model sorts itself (no sort proxy) and isn't editable or draggable.
+  - Enter or a double-click goes to the file's folder with the file selected. The context menu has Go to folder,
+    Open, Play selection, Open in File Explorer, Copy path(s), and "Filter by <artist>"; Ctrl+click on an artist
+    does the same (the page's artist checkboxes).
+  - Opening the search switches the side panel to the Lyrics tab once. A result's selection drives the side
+    panel as the file list does, unsaved edits included (Cancel keeps the result, and the search).
+  - Live results: folder updates, finished scans and LRCLIB results re-run the query after 1 s while the page
+    shows. The same query's results are applied in place (removals in runs, changed rows, additions, then the
+    current sort), so the selection stays; a new query resets the list.
+
 ## 7. Side panel and Metadata tab
 The side panel sits on the right; it is resizable and collapsible. Tabs: **Metadata** | **Lyrics** (§8). With a
 folder selected, the panel shows a folder summary instead: track count, duration, formats, ReplayGain and lyrics
@@ -571,7 +623,7 @@ not it has a lyrics tag.
     build their libraries offline.
 - At M6 (§6 "Implementation notes"), `record_lyrics` also writes the LRCLIB plain text into `search.lrclib` for
   every track with the key (NULL when the key stops being found), and scanned tracks take it from the `lyrics`
-  table. Until then LRCLIB text isn't in the search index; the `lyrics` table keeps it.
+  table. Done at M6 task 1 (§2, "As built (M6 task 1)").
 - As built (M4 task 3), **auto-save** (`services/lyrics_embedder.py` `AutoEmbedder`, owned by the window):
   - Its toggles, until the Settings dialog (M6), are the **Lyrics** menu's "Offline mode" and "Automatically save
     found lyrics into tags", saved in settings.json.
@@ -920,6 +972,8 @@ v1 plays through the default app; MusicDesk has no player of its own.
     - Writing the playlist and calling `os.startfile` run on a worker thread.
     - The fallback opens the played folder, or shows the first selected file in Explorer.
     - "Play folder" with no audio files says so in the status bar.
+  - As built (M6 task 1): Play results plays the shown search results (up to 5,000) in the list's current sort
+    order, through the same path as Play selection.
 
 ## 15. Playlist builder (M7)
 Planned for M7, not in v1. A sketch to refine with Hugo before M7:
@@ -1027,9 +1081,13 @@ and `seek_lyrics.py` at the project root, made at M1.
   - .m3u is gone from the default list;
   - the protections and case-by-case keeps of §10 apply, and kept `.lrc` sidecars follow their audio file's rename.
 - No songs.html. Its search behaviour is kept in library search (§6), with these differences:
-  - accents are ignored;
+  - accents are ignored (except in 1–2 character ASCII queries, §6 "As built");
   - every audio file under the roots is searchable;
-  - the file name, album artist and genre are searched too.
+  - the file name, album artist and genre are searched too;
+  - a track with a lyrics tag is also searched by its LRCLIB text (the app looks every track up).
+
+  The parity test (`tests/core/test_search_parity.py`) compares the songs whose title, artist and album are the
+  same on both sides (the page showed file-name fallbacks), with LRCLIB text only on keys without a lyrics tag.
 - Tags (verified by `tests/core/test_tags_parity.py`):
   - Vorbis ReplayGain keys are written in uppercase (`REPLAYGAIN_TRACK_GAIN`); the script writes the lowercase key
     it is given. Vorbis keys are case-insensitive, so readers see no difference.

@@ -10,7 +10,33 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, end of session 8):**
+**Current state (2026-10-15, end of session 9):**
+- **M6 task 1 is done (library search).** Details are in SPEC §6, "As built (M6 task 1)", and §2.
+  - Index: schema v3 (trigram `search` with an `lrclib` column; the v2 → v3 migration is tested).
+    `record_lyrics` and `scanner._write_tracks` keep `lrclib` current.
+  - `core/index/search.py`:
+    - `parse_query` → `SearchQuery` (text parts, filters, errors);
+    - `text_search(conn, query, scope=, chip=, error_keys=, columns=, limit=)` → `SearchResult(ids, total)`;
+    - `result_rows` → `SearchRow` (a `FileRow` plus folder, snippet and highlight spans);
+    - `fold` / `fold_text` / `spans` / `snippet`.
+    `queries.LISTING_SELECT` and `listing_fields` are shared with `folder_listing`.
+  - `services/search_service.py` `SearchService(db_path, prepare=)`: one worker, interrupt on a new query, latest
+    result only. `LyricsService.error_keys()` is new.
+  - `ui/search_view.py`: `SearchView`, `SearchResultsModel` (sorts itself on precomputed per-column ranks from
+    `sort_keys`, no proxy; in-place updates for the same query), `HighlightDelegate`, `ElideLeftDelegate`.
+    `FileListModel` now takes its `columns` from a class attribute, and `_apply(rows)` is split out of `refresh`.
+  - MainWindow: the toolbar's `search_field`, Ctrl+K `open_search`, `close_search` (Esc), `go_to_result`,
+    `result_menu`, `add_artist_filter`, `showing_search`, `search_limit` (tests), `search_shown` (tests wait on
+    it). `_selected_item` gives the side panel either page's rows. `showing_tools` excludes the search page.
+  - Found on the way: `NOT (x IN (...))` with a NULL lyrics status is NULL, so Missing dropped pending tracks
+    (fixed with `coalesce`, and tested). A big regex class for combining marks cost 400 µs per lyrics text; it is
+    now `str.translate` with an ASCII fast path.
+  - Measured on 5,000 tracks with 1.5 KB of lyrics each: the worker takes about 1 s at the 5,000-row cap
+    (matching, rows with snippets, sort keys), and the UI thread about 20 ms plus a repaint.
+  - Tests: `tests/core/test_search.py`, `tests/core/test_search_parity.py` (the M6 "Done when" parity test,
+    passing), `tests/ui/test_library_search.py`. The UI test file can't be named `test_search.py`: pytest
+    refuses two test modules with the same name.
+  - Checked visually with real fonts: the results with highlights and snippets, and the Lyrics tab beside them.
 - **M5 is complete.** Its "Done when" holds:
   - the app's replaygain.log, from a job run through the window with the real rsgain, matches the script on a copy
     of the same album, timestamps masked (`tests/ui/test_jobs_panel.py`, slow);
@@ -588,21 +614,20 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M6 task 1: library search (FTS5, filters, scope), Play results, with seek_lyrics' search
-parity. Read SPEC §6 in full first: "Preserved from seek_lyrics" (the behaviour that must not be lost) and
-"Implementation notes (M6)" (the schema v3 trigram `search` with an `lrclib` column, `record_lyrics` and the scanner
-filling it, `core/index/search.py` `text_search`, the snippet, and the tests). Also read SPEC §2 (search,
-schema v3) and §14 (Play results).
-- The groundwork comes first: the schema v3 migration with its test, then the `lrclib` column kept up to date,
-  then `text_search` with the parity test against the script's haystack rule.
-- Then the Ctrl+K UI:
-  - a flat result list with a Folder column (up to 5,000 rows, plus the total);
-  - the field filters and the script's chips (All, With lyrics, Missing) and artist filter;
-  - the snippet column and the highlighted matches;
-  - the scope toggle; Enter goes to the file; Esc returns;
-  - selecting a result shows its lyrics in the Lyrics tab;
-  - Play results.
-- It may be worth splitting into two commits (the index and search core, then the UI).
+**Next step:** M6 task 2: smart views (SPEC §5, "Smart views"). Read SPEC §5 and §6 "As built (M6 task 1)"
+first.
+- Each view is a query over the index shown as a flat list, so it can reuse `SearchView` (or its model and
+  delegates) and much of `text_search`'s filters: no lyrics in tags (`lyricstag:no`/`lrc`), found on LRCLIB
+  but not in tags, not found on LRCLIB, no ReplayGain (`rg:none`), missing tags, name doesn't match the rename
+  mask, recently modified.
+- The sidebar has a "SMART VIEWS" section under LIBRARY (SPEC §5's sketch). Play results (§14) applies to them.
+- The view-specific ones (missing tags, rename mask, recently modified) need new queries; the mask one needs the
+  Rename tool's masks (`Settings.rename_options`) and `core/rename.py`'s naming, computed off the UI thread.
+
+**Done in session 9 (the original M6 task 1 brief, kept for reference):** the schema v3 migration and the
+`lrclib` column, `text_search` with the parity test, then the Ctrl+K UI (results with a Folder column, up to
+5,000 plus the total; filters, chips and the artist filter; snippets and highlights; the scope; Enter and Esc;
+the Lyrics tab as the detail pane; Play results). Two commits: the core, then the UI.
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
@@ -735,6 +760,7 @@ schema v3) and §14 (Play results).
 | 2026-10-15 | Rename tool run: the preview page replaces the Tools page. Junk asks "Rename and recycle", "Rename only" or Cancel. The folder tree is locked ("the Rename tool") for the run, and a conflict is refused at once. The result uses the script's summary wording (parity-tested), with "sent to the Recycle Bin" for "deleted". The index follows through in-place renames (ids kept), plus a rescan of folders that lost junk. Details in SPEC §10. |
 | 2026-10-15 | ReplayGain tool: a preview from the file system (album folders, keyword subfolders, skipped formats, a command line too long), then a job holding the folder lock. Live lines are batched; the report shows each album's RunLog as written, plus the discography table. After the job, the index rescans the folder recursively. Tidy is the rename preview, then ReplayGain started automatically after Apply, even with nothing to rename (no ReplayGain preview, as in the script). Details in SPEC §10. |
 | 2026-10-15 | Jobs panel: a bottom dock listing this session's jobs (not saved), with Open, Stop and Clear finished. Jobs go on while you browse, and their pages reopen from the panel. Each tool runs one job at a time: a preview on a busy tool shows the running job instead, since a new preview would otherwise cancel it. Rename and ReplayGain may run together on different folders, with the locks refusing an overlap. Tidy is one job. Quitting with a running job asks, then stops it. M5 is complete. Details in SPEC §10. |
+| 2026-10-15 | Library search as built: unquoted text is one substring (the page's rule), quoted phrases are more, all ANDed; filters are repeatable and ORed per field. Tracks only, natural folder order, cut at 5,000. Short parts use LIKE (ASCII keeps accents, a known limit). The query field lives in the toolbar; the results page replaces the file list, Esc returns, Enter goes to the file. Opening the search shows the Lyrics tab. Results re-run when the index changes, in place for the same query. Sort keys are computed on the worker, and the results model sorts itself (no proxy) to stay under the 50 ms stall target. The seek_lyrics parity test passes. Details in SPEC §6. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -788,9 +814,9 @@ Commands (from the project root):
           fsops.py          rename validation, natural sort key, open in Explorer, open with default app, Recycle Bin
           index/            schema.py, scanner.py, store.py, search.py
         services/           (Qt glue: QObject workers and signals)
-          indexer.py, watcher.py, lyrics_service.py, jobs.py, tag_writer.py, path_locks.py, db_writer.py
+          indexer.py, watcher.py, lyrics_service.py, search_service.py, jobs.py, tag_writer.py, path_locks.py, db_writer.py
         ui/
-          main_window.py, sidebar.py, folder_tree.py, file_view.py, address_bar.py, search_bar.py,
+          main_window.py, sidebar.py, folder_tree.py, file_view.py, address_bar.py, search_view.py,
           status_bar.py, jobs_panel.py, settings_dialog.py
           side_panel/       panel.py, metadata_tab.py, lyrics_tab.py, cover_widget.py, folder_summary.py
           tools/            tools_page.py, rename_card.py, replaygain_card.py, rename_preview.py, rg_report.py
@@ -874,7 +900,7 @@ Done when: the app's `replaygain.log` matches a script run on the same copied al
 cleanup fixture case gets the expected status.
 
 **M6 Polish** (read SPEC §5, §6, §12 and §13)
-- [ ] Library search (FTS5, filters, scope), Play results, with seek_lyrics search parity: read SPEC §6
+- [x] Library search (FTS5, filters, scope), Play results, with seek_lyrics search parity: read SPEC §6
       "Preserved from seek_lyrics" and "Implementation notes (M6)" first
 - [ ] Smart views
 - [ ] Settings dialog

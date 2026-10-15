@@ -49,3 +49,8 @@ def playlists_dir() -> Path:
     path = app_data_dir() / "playlists"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def library_db_path() -> Path:
+    """The index and lyrics cache (SPEC §2)."""
+    return app_data_dir() / "library.db"

@@ -84,33 +84,37 @@ def _lrclib_state(status: str | None, synced: str | None, key: str | None = "", 
     return "pending"
 
 
+# The file list's columns for a set of entries; the WHERE clause is the caller's (a folder, or search results).
+LISTING_SELECT = """
+    SELECT e.id, e.name, e.is_dir, e.ext, e.size, e.mtime,
+           t.entry_id IS NOT NULL, t.track, t.title, t.artist, t.album, t.date, coalesce(t.duration, s.duration),
+           t.format, t.bitrate, t.rg_track_gain, t.rg_track_peak, t.rg_album_gain, t.rg_album_peak,
+           t.has_lyrics_tag, t.has_lrc_sidecar, l.status, l.synced, t.read_error, s.n_tracks, t.lyrics_key
+    FROM entries e
+    LEFT JOIN tracks t ON t.entry_id = e.id
+    LEFT JOIN lyrics l ON l.key = t.lyrics_key
+    LEFT JOIN folder_stats s ON s.entry_id = e.id
+"""
+
+
+def listing_fields(r: tuple) -> dict:
+    """FileRow's fields from a LISTING_SELECT row."""
+    is_audio = bool(r[6])
+    return dict(
+        id=r[0], name=r[1], is_dir=bool(r[2]), ext=r[3], size=r[4], mtime=r[5], is_audio=is_audio,
+        track=r[7], title=r[8], artist=r[9], album=r[10], year=r[11], duration=r[12], format=r[13],
+        bitrate=r[14],
+        rg=_rg_state(r[15:19]) if is_audio else None,
+        lyrics_tag=("tag" if r[19] else "lrc" if r[20] else "none") if is_audio else None,
+        lrclib=_lrclib_state(r[21], r[22], r[25], r[23]) if is_audio else None,
+        read_error=r[23], n_tracks=r[24] if r[2] else None, lyrics_key=r[25],
+    )
+
+
 def folder_listing(conn: sqlite3.Connection, folder_id: int) -> list[FileRow]:
     """Every entry of a folder (folders and files, all of them), in no particular order: the view sorts."""
-    rows = conn.execute(
-        """
-        SELECT e.id, e.name, e.is_dir, e.ext, e.size, e.mtime,
-               t.entry_id IS NOT NULL, t.track, t.title, t.artist, t.album, t.date, coalesce(t.duration, s.duration),
-               t.format, t.bitrate, t.rg_track_gain, t.rg_track_peak, t.rg_album_gain, t.rg_album_peak,
-               t.has_lyrics_tag, t.has_lrc_sidecar, l.status, l.synced, t.read_error, s.n_tracks, t.lyrics_key
-        FROM entries e
-        LEFT JOIN tracks t ON t.entry_id = e.id
-        LEFT JOIN lyrics l ON l.key = t.lyrics_key
-        LEFT JOIN folder_stats s ON s.entry_id = e.id
-        WHERE e.parent_id = ?
-        """, (folder_id,)).fetchall()
-    listing = []
-    for r in rows:
-        is_audio = bool(r[6])
-        listing.append(FileRow(
-            id=r[0], name=r[1], is_dir=bool(r[2]), ext=r[3], size=r[4], mtime=r[5], is_audio=is_audio,
-            track=r[7], title=r[8], artist=r[9], album=r[10], year=r[11], duration=r[12], format=r[13],
-            bitrate=r[14],
-            rg=_rg_state(r[15:19]) if is_audio else None,
-            lyrics_tag=("tag" if r[19] else "lrc" if r[20] else "none") if is_audio else None,
-            lrclib=_lrclib_state(r[21], r[22], r[25], r[23]) if is_audio else None,
-            read_error=r[23], n_tracks=r[24] if r[2] else None, lyrics_key=r[25],
-        ))
-    return listing
+    rows = conn.execute(f"{LISTING_SELECT} WHERE e.parent_id = ?", (folder_id,)).fetchall()
+    return [FileRow(**listing_fields(r)) for r in rows]
 
 
 def folder_crumbs(conn: sqlite3.Connection, entry_id: int) -> list[tuple[int, str]]:

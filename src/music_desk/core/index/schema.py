@@ -6,7 +6,7 @@ a plain name, so paths are rebuilt from parents and renaming a folder is one row
 
 import sqlite3
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 BUSY_TIMEOUT_MS = 5000
 
@@ -108,6 +108,29 @@ MIGRATIONS: list[str] = [
         name, title, artist, albumartist, album, genre, lyrics,
         tokenize = 'unicode61 remove_diacritics 2'
     );
+    CREATE TRIGGER entries_search_delete AFTER DELETE ON entries BEGIN
+        DELETE FROM search WHERE rowid = old.id;
+    END;
+    """,
+    # v3 (SPEC §6): trigram tokens, so free text matches any substring as seek_lyrics' search did, and an lrclib
+    # column with the LRCLIB plain text of found keys. The rows are copied over with their rowids.
+    """
+    CREATE TEMP TABLE search_v2 AS
+        SELECT rowid AS id, name, title, artist, albumartist, album, genre, lyrics FROM search;
+    DROP TABLE search;
+    CREATE VIRTUAL TABLE search USING fts5(
+        name, title, artist, albumartist, album, genre, lyrics, lrclib,
+        tokenize = 'trigram remove_diacritics 1'
+    );
+    INSERT INTO search (rowid, name, title, artist, albumartist, album, genre, lyrics)
+        SELECT id, name, title, artist, albumartist, album, genre, lyrics FROM search_v2;
+    DROP TABLE search_v2;
+    UPDATE search SET lrclib = (
+        SELECT l.plain FROM tracks t JOIN lyrics l ON l.key = t.lyrics_key
+        WHERE t.entry_id = search.rowid AND l.status = 'found'
+    ) WHERE rowid IN (SELECT t.entry_id FROM tracks t JOIN lyrics l ON l.key = t.lyrics_key
+                      WHERE l.status = 'found');
+    DROP TRIGGER IF EXISTS entries_search_delete;
     CREATE TRIGGER entries_search_delete AFTER DELETE ON entries BEGIN
         DELETE FROM search WHERE rowid = old.id;
     END;

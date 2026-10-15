@@ -154,12 +154,15 @@ def embed_candidates(conn: sqlite3.Connection, *, key: str | None = None, skip: 
 
 def record_lyrics(conn: sqlite3.Connection, key: str, entry: dict) -> list[int]:
     """Store a lookup result (a writer job). When the key becomes found, or stops being found, n_lrclib_found
-    follows up to the root for every track with that key. Returns the folders whose files carry the key, whose
-    LRCLIB column changed."""
+    follows up to the root for every track with that key, and so does the search index's lrclib text. Returns the
+    folders whose files carry the key, whose LRCLIB column changed."""
     old = conn.execute("SELECT status FROM lyrics WHERE key = ?", (key,)).fetchone()
     was_found = old is not None and old[0] == FOUND
     upsert_lyrics(conn, key, entry)
     found = entry.get("status") == FOUND
+    # Library search matches the LRCLIB text (SPEC §6): every track with the key follows.
+    conn.execute("UPDATE search SET lrclib = ? WHERE rowid IN (SELECT entry_id FROM tracks WHERE lyrics_key = ?)",
+                 (entry.get("plain") if found else None, key))
     folders = [row[0] for row in conn.execute(
         "SELECT e.parent_id FROM tracks t JOIN entries e ON e.id = t.entry_id "
         "WHERE t.lyrics_key = ? AND t.read_error IS NULL", (key,))]

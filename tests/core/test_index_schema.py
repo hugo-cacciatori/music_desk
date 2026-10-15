@@ -33,7 +33,7 @@ def add_entry(conn, root, parent, name, is_dir=False) -> int:
 
 
 def test_fresh_database(conn):
-    assert schema.version(conn) == SCHEMA_VERSION == 2
+    assert schema.version(conn) == SCHEMA_VERSION == 3
     names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'index')")}
     assert TABLES <= names
     assert {"entries_parent", "entries_root", "entries_top", "tracks_lyrics_key"} <= names
@@ -138,7 +138,43 @@ def test_v1_database_is_upgraded(tmp_path, monkeypatch):
         migrate(conn)
     conn.execute("INSERT INTO roots (path, added_at) VALUES ('C:/Music', 'x')")
     migrate(conn)
-    assert schema.version(conn) == 2
+    assert schema.version(conn) == SCHEMA_VERSION
     assert conn.execute("SELECT count(*) FROM roots").fetchone()[0] == 1
     conn.execute("INSERT INTO search (rowid, name) VALUES (1, 'x')")
+    conn.close()
+
+
+def test_v2_database_is_upgraded(tmp_path, monkeypatch):
+    path = tmp_path / "library.db"
+    conn = sqlite3.connect(path, autocommit=True)
+    configure(conn, write=True)
+    with monkeypatch.context() as patch:
+        patch.setattr(schema, "SCHEMA_VERSION", 2)
+        patch.setattr(schema, "MIGRATIONS", schema.MIGRATIONS[:2])
+        migrate(conn)
+    root, top = add_root(conn)
+    folder = add_entry(conn, root, top, "Album", is_dir=True)
+    found = add_entry(conn, root, folder, "01 Glove.flac")
+    missing = add_entry(conn, root, folder, "02 Other.flac")
+    conn.execute("INSERT INTO tracks (entry_id, title, artist, lyrics_key) VALUES (?, 'Glove', 'Björk', 'k1')",
+                 (found,))
+    conn.execute("INSERT INTO tracks (entry_id, title, lyrics_key) VALUES (?, 'Other', 'k2')", (missing,))
+    conn.execute("INSERT INTO lyrics (key, status, plain) VALUES ('k1', 'found', 'lovely day')")
+    conn.execute("INSERT INTO lyrics (key, status) VALUES ('k2', 'not_found')")
+    conn.execute("INSERT INTO search (rowid, name) VALUES (?, 'Album')", (folder,))
+    conn.execute("INSERT INTO search (rowid, name, title, artist, lyrics) VALUES (?, '01 Glove.flac', 'Glove', "
+                 "'Björk', 'tag words')", (found,))
+    conn.execute("INSERT INTO search (rowid, name, title) VALUES (?, '02 Other.flac', 'Other')", (missing,))
+    migrate(conn)
+    assert schema.version(conn) == 3
+    rows = conn.execute("SELECT rowid, name, title, artist, lyrics, lrclib FROM search ORDER BY rowid").fetchall()
+    assert rows == [(folder, "Album", None, None, None, None),
+                    (found, "01 Glove.flac", "Glove", "Björk", "tag words", "lovely day"),
+                    (missing, "02 Other.flac", "Other", None, None, None)]
+    assert conn.execute("SELECT rowid FROM search WHERE search MATCH '\"ove\"'").fetchall() == [(found,)]
+    assert conn.execute("SELECT rowid FROM search WHERE search MATCH 'lrclib:\"vely\"'").fetchall() == [(found,)]
+    assert conn.execute("SELECT rowid FROM search WHERE search MATCH '\"bjork\"'").fetchall() == [(found,)]
+    conn.execute("DELETE FROM entries WHERE id = ?", (folder,))  # the trigger is back: the rows go with it
+    assert conn.execute("SELECT count(*) FROM search").fetchone()[0] == 0
+    assert not conn.execute("SELECT name FROM sqlite_temp_master").fetchall()
     conn.close()

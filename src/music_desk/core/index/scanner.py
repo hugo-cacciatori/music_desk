@@ -566,10 +566,12 @@ def _write_tracks(conn: sqlite3.Connection, chunk: list, results: list) -> None:
         conn.execute(f"INSERT OR REPLACE INTO tracks (entry_id, {columns}) VALUES ({marks})",
                      (entry_id, *(row[c] for c in TRACK_COLUMNS)))
         conn.execute("DELETE FROM search WHERE rowid = ?", (entry_id,))
-        conn.execute("INSERT INTO search (rowid, name, title, artist, albumartist, album, genre, lyrics) "
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        # lrclib: a new copy of an already-found song is searchable by its lyrics at once (SPEC §6).
+        conn.execute("INSERT INTO search (rowid, name, title, artist, albumartist, album, genre, lyrics, lrclib) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, "
+                     "(SELECT plain FROM lyrics WHERE key = ? AND status = 'found'))",
                      (entry_id, name, row["title"], row["artist"], row["albumartist"], row["album"], row["genre"],
-                      lyrics))
+                      lyrics, row["lyrics_key"]))
 
 
 def _update_sidecars(conn: sqlite3.Connection, root_id: int) -> None:

@@ -6,7 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QEvent, QObject, Qt, Signal
+from PySide6.QtCore import QByteArray, QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -36,6 +37,7 @@ from music_desk.core import fsops, inline_rename, playlists, rename
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
+from music_desk.core.index.search import ALL, LIMIT
 from music_desk.core.index.store import path_of
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services import jobs as jobs_module
@@ -45,12 +47,15 @@ from music_desk.services.lyrics_embedder import AutoEmbedder
 from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
 from music_desk.services.rename_job import Applied, Planned, RenameRunner
 from music_desk.services.replaygain_job import Finished, Previewed, ReplayGainRunner
+from music_desk.services.search_service import SearchResults, SearchService
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
 from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.file_view import FileView
 from music_desk.ui.jobs_panel import JobsPanel
+from music_desk.ui.search_view import SearchView
+from music_desk.ui.search_view import sort_keys as search_sort_keys
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
@@ -184,8 +189,30 @@ class MainWindow(QMainWindow):
         self.jobs.removed.connect(self._update_jobs_button)
         self._rename_job: int | None = None  # the job id of the running rename (or Tidy's rename step)
         self._rg_job: int | None = None
-        self.center = QStackedWidget()  # the file list, or the Tools page and its previews (SPEC §10)
+        # Library search (SPEC §6): the query is typed in the toolbar, the results replace the file list.
+        self.search_view = SearchView()
+        self.search_view.optionsChanged.connect(self._run_search)
+        self.search_view.resultActivated.connect(self.go_to_result)
+        self.search_view.menuRequested.connect(lambda ids, pos: self.result_menu(ids).exec(pos))
+        self.search_view.playRequested.connect(self.play_selection)
+        self.search_view.artistRequested.connect(self.add_artist_filter)
+        self.search_view.closeRequested.connect(self.close_search)
+        self.search_service = (SearchService(library.db_path, self, prepare=search_sort_keys)
+                               if library is not None else None)
+        if self.search_service is not None:
+            self.search_service.results.connect(self._search_results)
+        self.search_limit = LIMIT  # lowered in tests
+        self._search_token: int | None = None
+        self.search_shown: int | None = None
+        self._search_request: tuple | None = None  # (text, scope, chip) of the query running, and shown
+        self._shown_request: tuple | None = None
+        self._search_timer = QTimer(self, singleShot=True, interval=120)  # runs as you type, debounced
+        self._search_timer.timeout.connect(self._run_search)
+        self._search_refresh = QTimer(self, singleShot=True, interval=1000)  # the index changed: run it again
+        self._search_refresh.timeout.connect(self._run_search)
+        self.center = QStackedWidget()  # the file list, the search results, or the Tools page and its previews
         self.center.addWidget(self.file_view)
+        self.center.addWidget(self.search_view)
         self.center.addWidget(self.tools_page)
         self.center.addWidget(self.rename_preview)
         self.center.addWidget(self.rg_view)
@@ -251,7 +278,11 @@ class MainWindow(QMainWindow):
         self.sidebar.renameRequested.connect(self.rename_entry)
         self.renameDone.connect(self._renamed)
         self.renameFailed.connect(lambda message: self.toast.show_message(message))
-        self.file_view.selectionChanged.connect(self._selection_changed)
+        # Each page's selection counts only while it is on screen.
+        self.file_view.selectionChanged.connect(
+            lambda ids: None if self.showing_search else self._selection_changed(ids))
+        self.search_view.selectionChanged.connect(
+            lambda ids: self._selection_changed(ids) if self.showing_search else None)
         self.side_panel.metadata.fileSaved.connect(self._file_saved)
         self.side_panel.metadata.renameSuggested.connect(self.rename_path)
         self.side_panel.metadata.filesSaved.connect(
@@ -278,6 +309,7 @@ class MainWindow(QMainWindow):
             library.lyrics.progress.connect(self.show_lyrics_progress)
             library.lyrics.entryReady.connect(self._lyrics_entry)
             self.file_view.model.lrclib_status = library.lyrics.status_for
+            self.search_view.model.lrclib_status = library.lyrics.status_for
             self.refresh_roots()
             self._reopen_last_folder()
 
@@ -358,6 +390,19 @@ class MainWindow(QMainWindow):
         self.tools_action.setToolTip("Rename from tags, ReplayGain and Tidy, for the selection or this folder")
         self.tools_action.triggered.connect(lambda: self.open_tools(self.file_view.selected_ids()))
         toolbar.addAction(self.tools_action)
+        self.search_field = QLineEdit()
+        self.search_field.setPlaceholderText("Search library (Ctrl+K)")
+        self.search_field.setClearButtonEnabled(True)
+        self.search_field.setMinimumWidth(180)
+        self.search_field.setMaximumWidth(320)
+        self.search_field.textEdited.connect(self._search_edited)
+        self.search_field.returnPressed.connect(lambda: self.search_view.focus_results())
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self.search_field, activated=self.close_search,
+                  context=Qt.ShortcutContext.WidgetShortcut)
+        toolbar.addWidget(self.search_field)
+        self.search_action = QAction("Search library", self, shortcut=QKeySequence("Ctrl+K"))
+        self.search_action.triggered.connect(self.open_search)
+        self.addAction(self.search_action)
         self.addToolBar(toolbar)
 
         # Backspace goes up, but only from the lists (it edits text everywhere else).
@@ -446,28 +491,38 @@ class MainWindow(QMainWindow):
             return
         if not self.side_panel.can_leave():
             self._restoring_selection = True  # Cancel: back to the file being edited
-            self.file_view.select_ids(self._selected_ids)
+            (self.search_view if self.showing_search else self.file_view).select_ids(self._selected_ids)
             self._restoring_selection = False
             return
         self._show_selection(ids)
+
+    def _selected_item(self, entry_id: int) -> SelectedItem | None:
+        """A row of the page on screen: the file list (the open folder), or the search results (any folder)."""
+        if self.showing_search:
+            r = self.search_view.row(entry_id)
+            return SelectedItem(Path(r.folder, r.name), r.is_dir, r.is_audio, entry_id) if r else None
+        row = self.file_view.model.row_for(entry_id)
+        if row is None or not self.folder_path:
+            return None
+        r = self.file_view.model.rows[row]
+        return SelectedItem(Path(self.folder_path, r.name), r.is_dir, r.is_audio, entry_id)
 
     def _show_selection(self, ids: list[int]) -> None:
         self._selected_ids = ids
         items, folder_ids, audio_ids = [], [], []
         for entry_id in ids:
-            row = self.file_view.model.row_for(entry_id)
-            if row is not None and self.folder_path:
-                r = self.file_view.model.rows[row]
-                items.append(SelectedItem(Path(self.folder_path, r.name), r.is_dir, r.is_audio, entry_id))
-                if r.is_dir:
+            item = self._selected_item(entry_id)
+            if item is not None:
+                items.append(item)
+                if item.is_dir:
                     folder_ids.append(entry_id)
-                elif r.is_audio:
+                elif item.is_audio:
                     audio_ids.append(entry_id)
         if len(items) == 1 and audio_ids:
             self.library.lyrics.prioritize_track(audio_ids[0])  # the selected track's lyrics first (SPEC §9)
         if len(items) == 1 and folder_ids:
             self.side_panel.show_folder(folder_ids[0])  # one folder selected: its summary
-        elif not items and self.folder_id is not None:
+        elif not items and self.folder_id is not None and not self.showing_search:
             self.side_panel.show_folder(self.folder_id)  # nothing selected: the open folder's summary
         else:
             self.side_panel.show_selection(items)
@@ -486,6 +541,121 @@ class MainWindow(QMainWindow):
             self._show_selection(self._selected_ids)  # a renamed file reloads under its new name
         self._refresh_location()
         self.side_panel.refresh_folder()
+        self._refresh_search_later()
+
+    # -- library search (SPEC §6) --
+
+    @property
+    def showing_search(self) -> bool:
+        return self.center.currentWidget() is self.search_view
+
+    def open_search(self) -> None:
+        """Ctrl+K: the search page, with the query field focused. The results stand in for the file list."""
+        if not self._library_open():
+            return
+        if not self.showing_search:
+            if not self.side_panel.can_leave():  # unsaved tag edits on the selection the search replaces
+                return
+            if self.rename_preview.state == "planning":
+                self.rename_runner.cancel()
+            name = Path(self.folder_path).name or self.folder_path if self.folder_path else ""
+            self.search_view.set_scope_folder(self.folder_id, name)
+            self.center.setCurrentWidget(self.search_view)
+            self.side_panel.tabs.setCurrentWidget(self.side_panel.lyrics)  # the page's detail pane: the lyrics
+            self._show_selection(self.search_view.selected_ids())
+            self._run_search()
+        self.search_field.setFocus()
+        self.search_field.selectAll()
+
+    def close_search(self) -> None:
+        """Esc: back to the folder that was open, as it was."""
+        if not self.showing_search or not self.side_panel.can_leave():
+            return
+        self._leave_search()
+        self.center.setCurrentWidget(self.file_view)
+        self._show_selection(self.file_view.selected_ids())
+        self.file_view.view.setFocus()
+
+    def _leave_search(self) -> None:
+        self._search_timer.stop()
+        self._search_refresh.stop()
+        self._search_token = None
+        self._shown_request = None  # the next search starts afresh
+        if self.search_service is not None:
+            self.search_service.cancel()
+
+    def _search_edited(self, _text: str) -> None:
+        if not self.showing_search:
+            self.open_search()
+        self._search_timer.start()
+
+    def _run_search(self) -> None:
+        self._search_timer.stop()
+        if not self._library_open() or not self.showing_search or self.search_service is None:
+            return
+        self._search_request = (self.search_field.text(), self.search_view.scope, self.search_view.chip)
+        self._search_token = self.search_service.search(
+            self.search_field.text(), scope=self.search_view.scope, chip=self.search_view.chip,
+            error_keys=self.library.lyrics.error_keys(), limit=self.search_limit)
+
+    def _refresh_search_later(self) -> None:
+        if self.showing_search:
+            self._search_refresh.start()
+
+    def _search_results(self, results: SearchResults) -> None:
+        if results.token != self._search_token or not self.showing_search:
+            return
+        self.search_shown = results.token  # the results on screen (tests wait for it)
+        in_place = self._search_request == self._shown_request  # run again after the index changed
+        self._shown_request = self._search_request
+        if results.query.empty and self.search_view.chip == ALL and not results.error:
+            self.search_view.show_prompt()
+        else:
+            self.search_view.show_results(results.rows, results.total, results.query.errors, results.error,
+                                          keys=results.keys, in_place=in_place)
+
+    def add_artist_filter(self, artist: str) -> None:
+        """Ctrl+click on an artist, or "Filter by": the page's artist checkboxes, as artist: filters (ORed)."""
+        term = 'artist:"{}"'.format(artist.replace('"', ""))
+        text = self.search_field.text()
+        if term.casefold() not in text.casefold():
+            self.search_field.setText(f"{text.rstrip()} {term}".strip())
+            self._run_search()
+
+    def go_to_result(self, entry_id: int) -> None:
+        """Enter or a double-click on a result: its folder, with the file selected."""
+        row = self.search_view.row(entry_id)
+        if row is None or not self._library_open():
+            return
+        if not self._folder_exists(row.folder_id):
+            self.statusBar().showMessage(f"{row.folder} is no longer in the library.", STATUS_MS)
+            return
+        if not self.side_panel.can_leave():
+            return
+        self._leave_search()
+        self.center.setCurrentWidget(self.file_view)
+        if row.folder_id != self.folder_id:
+            self.open_folder(row.folder_id)
+        self.file_view.select_ids([entry_id])
+        self.file_view.view.setFocus()
+
+    def result_menu(self, ids: list[int]) -> QMenu:
+        menu = QMenu(self)
+        if not self._library_open() or not ids:
+            return menu
+        go = menu.addAction("Go to folder", lambda: self.go_to_result(ids[0]))
+        go.setEnabled(len(ids) == 1)
+        open_action = menu.addAction("Open", lambda: self.open_files(ids))
+        open_action.setEnabled(len(ids) == 1)
+        menu.addAction("Play selection", lambda: self.play_selection(ids))
+        menu.addSeparator()
+        menu.addAction("Open in File Explorer", lambda: self.reveal(ids[0]))
+        menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: self.copy_paths(ids))
+        row = self.search_view.row(ids[0])
+        if len(ids) == 1 and row is not None and row.artist:
+            menu.addSeparator()
+            menu.addAction(f"Filter by {row.artist}", lambda: self.add_artist_filter(row.artist))
+        return menu
 
     # -- Tools (SPEC §10) --
 
@@ -527,6 +697,8 @@ class MainWindow(QMainWindow):
     def close_tools(self) -> None:
         """Back to the file list. A running job goes on (the jobs panel shows it and reopens its page)."""
         if self.center.currentWidget() is not self.file_view:
+            if self.showing_search:
+                self._leave_search()
             if self.rename_preview.state == "planning":
                 self.rename_runner.cancel()
             self.center.setCurrentWidget(self.file_view)
@@ -534,7 +706,7 @@ class MainWindow(QMainWindow):
 
     @property
     def showing_tools(self) -> bool:
-        return self.center.currentWidget() is not self.file_view
+        return self.center.currentWidget() not in (self.file_view, self.search_view)
 
     def _tool_example(self, token: int, fields: dict | None, extension: str) -> None:
         if token == self._example_token:
@@ -787,8 +959,11 @@ class MainWindow(QMainWindow):
             self.embedder.set_enabled(enabled)
 
     def lyrics_updated(self, folder_ids: list[int]) -> None:
-        """LRCLIB results: the open folder's LRCLIB column follows."""
-        if not self._library_open() or self.folder_id not in folder_ids:
+        """LRCLIB results: the open folder's LRCLIB column follows, and the search results (their text too)."""
+        if not self._library_open():
+            return
+        self._refresh_search_later()
+        if self.folder_id not in folder_ids:
             return
         self.file_view.refresh()
         self.side_panel.refresh_folder()
@@ -800,6 +975,7 @@ class MainWindow(QMainWindow):
         if progress.state != self._lyrics_state:  # offline on or off: the LRCLIB column's pending rows change
             self._lyrics_state = progress.state
             self.file_view.model.refresh_column("lrclib")
+            self.search_view.model.refresh_column("lrclib")
         left = f"{progress.pending:,} to look up" if progress.pending is not None else "starting"
         button = None
         if progress.state == OFFLINE:
@@ -832,6 +1008,7 @@ class MainWindow(QMainWindow):
     def _lyrics_entry(self, _key: str, entry: dict) -> None:
         if entry.get("status") == "error" and self._library_open():
             self.file_view.model.refresh_column("lrclib")  # the failed key's rows show "error"
+            self.search_view.model.refresh_column("lrclib")
 
     def lrclib_unreachable(self, resume_at: float) -> None:
         minutes = max(1, round((resume_at - time.time()) / 60))
@@ -855,6 +1032,7 @@ class MainWindow(QMainWindow):
         if self.folder_id is not None:
             self.file_view.refresh()
         self.side_panel.refresh_folder()
+        self._refresh_search_later()
 
     def _keep_open_folder(self) -> None:
         """If the open folder left the index (deleted or moved outside the app), open its nearest surviving
@@ -928,6 +1106,8 @@ class MainWindow(QMainWindow):
         self.rg_runner.close()  # a running rsgain is killed; its album is reported as cancelled
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
+        if self.search_service is not None:
+            self.search_service.close()
         self.save_state()
         QApplication.instance().removeEventFilter(self)
         self._shell.shutdown(wait=False)

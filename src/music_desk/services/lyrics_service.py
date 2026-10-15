@@ -172,6 +172,11 @@ class LyricsService(QObject):
                 return "offline"
             return "error" if key in self._last_error else None
 
+    def error_keys(self) -> frozenset[str]:
+        """The keys whose last lookup this session failed (library search's `lrclib:error`)."""
+        with self._cond:
+            return frozenset(self._last_error)
+
     def set_offline(self, offline: bool) -> None:
         with self._cond:
             self._offline = offline

@@ -5,10 +5,12 @@ Free text is matched through the trigram FTS5 `search` table (schema v3), so any
 characters uses the index; shorter text falls back to LIKE over the same columns.
 """
 
+import functools
 import json
 import re
 import sqlite3
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -49,9 +51,9 @@ class SearchQuery:
 
     def needles(self, *fields: str) -> list[str]:
         """The folded text to highlight: the free text, plus the values of the named text fields."""
-        found = [fold(t)[0] for t in self.text]
+        found = [fold_text(t) for t in self.text]
         for name in fields:
-            found += [fold(v)[0] for v in self.filters.get(name, ())]
+            found += [fold_text(v) for v in self.filters.get(name, ())]
         return [n for n in found if n]
 
 
@@ -102,6 +104,19 @@ def fold(text: str) -> tuple[str, list[int]]:
     return "".join(out), offsets
 
 
+@functools.cache
+def _no_combining() -> dict[int, None]:
+    """A str.translate table removing every combining mark (built once)."""
+    return dict.fromkeys(c for c in range(0x110000) if unicodedata.combining(chr(c)))
+
+
+def fold_text(text: str) -> str:
+    """fold() without the offsets, much faster on long texts (lyrics). Line breaks are kept where they were."""
+    if text.isascii():
+        return text.casefold()
+    return unicodedata.normalize("NFD", text).translate(_no_combining()).casefold()
+
+
 def spans(text: str | None, needles: list[str]) -> tuple[tuple[int, int], ...]:
     """Where the folded needles occur in `text`, as (start, end) offsets into the original, merged and sorted."""
     if not text or not needles:
@@ -123,7 +138,7 @@ def spans(text: str | None, needles: list[str]) -> tuple[tuple[int, int], ...]:
 
 
 def _contains(needle: str, text: str | None) -> bool:
-    return bool(text) and fold(needle)[0] in fold(text)[0]
+    return bool(text) and needle in fold_text(text)
 
 
 @dataclass(frozen=True)
@@ -150,11 +165,12 @@ _LRCLIB_STATE = f"""CASE
     ELSE 'pending' END"""
 _RG_COUNT = ("((t.rg_track_gain IS NOT NULL) + (t.rg_track_peak IS NOT NULL) + (t.rg_album_gain IS NOT NULL)"
              " + (t.rg_album_peak IS NOT NULL))")
-_WITH_LYRICS = f"(t.read_error IS NULL AND t.lyrics_key IS NOT NULL AND l.status IN ('{FOUND}', '{INSTRUMENTAL}'))"
+_WITH_LYRICS = (f"(t.read_error IS NULL AND t.lyrics_key IS NOT NULL"
+                f" AND coalesce(l.status, '') IN ('{FOUND}', '{INSTRUMENTAL}'))")  # never NULL: NOT must work
 
 
 def _md_contains(text, needle) -> int:
-    return int(text is not None and needle in fold(text)[0])
+    return int(text is not None and needle in fold_text(text))
 
 
 def _value_condition(name: str, value: str, params: list) -> str:
@@ -204,7 +220,7 @@ def text_search(conn: sqlite3.Connection, query: SearchQuery, *, scope: int | No
                 params += [_like(text)] * len(cols)
             else:
                 alternatives += [f"md_contains(search.{c}, ?)" for c in cols]
-                params += [fold(text)[0]] * len(cols)
+                params += [fold_text(text)] * len(cols)
         where.append("(" + " OR ".join(alternatives) + ")")
     for name in ("year", "ext", *VALUE_FIELDS):
         values = query.filters.get(name)
@@ -291,15 +307,20 @@ def snippet(texts: list[str | None], needles: list[str]) -> str:
     for text in texts:
         if not text:
             continue
-        for line in strip_timestamps(text).splitlines():
-            folded = fold(line)[0]
-            if line.strip() and any(n in folded for n in needles):
+        text = strip_timestamps(text)
+        folded = fold_text(text)
+        if not any(n in folded for n in needles):
+            continue
+        for line, folded_line in zip(text.splitlines(), folded.splitlines(), strict=False):
+            if line.strip() and any(n in folded_line for n in needles):
                 return line.strip()
     return ""
 
 
-def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery) -> list[SearchRow]:
-    """The shown results in `ids` order, with their folder, highlights and snippet. Ids gone since are dropped."""
+def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery,
+                cancelled: Callable[[], bool] | None = None) -> list[SearchRow]:
+    """The shown results in `ids` order, with their folder, highlights and snippet. Ids gone since are dropped.
+    `cancelled` is checked now and then (a newer query): the rows built so far are returned."""
     if not ids:
         return []
     with consistent_read(conn):
@@ -312,7 +333,9 @@ def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery) ->
         free = query.needles()
         title_needles, artist_needles = query.needles(), query.needles("artist")
         results = []
-        for entry_id in ids:
+        for n, entry_id in enumerate(ids):
+            if cancelled is not None and n % 200 == 0 and cancelled():
+                break
             if entry_id not in rows or entry_id not in extra:
                 continue
             fields = listing_fields(rows[entry_id])

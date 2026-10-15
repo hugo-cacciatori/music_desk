@@ -111,7 +111,10 @@ COLUMN_INDEX = {column.key: i for i, column in enumerate(COLUMNS)}
 
 
 class FileListModel(QAbstractTableModel):
+    """The open folder's rows. The search results model reuses it with its own columns and rows."""
+
     renameRequested = Signal(int, str)  # entry id, the new name as typed
+    columns: tuple[Column, ...] = COLUMNS
 
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], parent=None) -> None:
         super().__init__(parent)
@@ -145,7 +148,11 @@ class FileListModel(QAbstractTableModel):
         conn = self._conn()
         if self.folder_id is None or conn is None:
             return
-        fresh = {row.id: row for row in queries.folder_listing(conn, self.folder_id)}
+        self._apply(queries.folder_listing(conn, self.folder_id))
+
+    def _apply(self, rows: list[FileRow]) -> None:
+        """Rows removed, changed (their data or their sort keys) and appended, in place: the selection stays."""
+        fresh = {row.id: row for row in rows}
         for i in range(len(self.rows) - 1, -1, -1):
             if self.rows[i].id not in fresh:
                 self.beginRemoveRows(_NO_PARENT, i, i)
@@ -153,9 +160,10 @@ class FileListModel(QAbstractTableModel):
                 self.endRemoveRows()
         for i, row in enumerate(self.rows):
             new = fresh.pop(row.id)
-            if new != row:
-                self.rows[i], self.keys[i] = new, self._keys(new)
-                self.dataChanged.emit(self.index(i, 0), self.index(i, len(COLUMNS) - 1))
+            keys = self._keys(new)
+            if new != row or keys != self.keys[i]:
+                self.rows[i], self.keys[i] = new, keys
+                self.dataChanged.emit(self.index(i, 0), self.index(i, len(self.columns) - 1))
         if fresh:
             start = len(self.rows)
             self.beginInsertRows(_NO_PARENT, start, start + len(fresh) - 1)
@@ -167,12 +175,11 @@ class FileListModel(QAbstractTableModel):
     def refresh_column(self, key: str) -> None:
         """A column whose text depends on something outside the rows (the LRCLIB column on the service's state)."""
         if self.rows:
-            column = COLUMN_INDEX[key]
+            column = next(i for i, c in enumerate(self.columns) if c.key == key)
             self.dataChanged.emit(self.index(0, column), self.index(len(self.rows) - 1, column))
 
-    @staticmethod
-    def _keys(row: FileRow) -> tuple:
-        return tuple(column.sort_key(row) for column in COLUMNS)
+    def _keys(self, row: FileRow) -> tuple:
+        return tuple(column.sort_key(row) for column in self.columns)
 
     def row_for(self, entry_id: int) -> int | None:
         return next((i for i, row in enumerate(self.rows) if row.id == entry_id), None)
@@ -183,18 +190,18 @@ class FileListModel(QAbstractTableModel):
         return 0 if parent.isValid() else len(self.rows)
 
     def columnCount(self, parent: QModelIndex = _NO_PARENT) -> int:
-        return 0 if parent.isValid() else len(COLUMNS)
+        return 0 if parent.isValid() else len(self.columns)
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
-            return COLUMNS[section].title
+            return self.columns[section].title
         return None
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
         if not index.isValid():
             return None
         row = self.rows[index.row()]
-        column = COLUMNS[index.column()]
+        column = self.columns[index.column()]
         if role == Qt.ItemDataRole.DisplayRole:
             if column.key == "lrclib" and row.lrclib == "pending" and row.lyrics_key:
                 return self.lrclib_status(row.lyrics_key) or "pending"

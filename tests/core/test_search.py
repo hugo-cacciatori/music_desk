@@ -14,6 +14,7 @@ from music_desk.core.index.search import (
     MISSING,
     WITH_LYRICS,
     fold,
+    fold_text,
     parse_query,
     result_rows,
     snippet,
@@ -217,6 +218,9 @@ def test_chips(lib, songs):
     assert find(lib, "o", chip=WITH_LYRICS) == {"01 Hunter.flac", "02 Jóga.flac", "Glove.mp3"}
     assert find(lib, "o", chip=MISSING) == {"lovely.opus"}
     assert find(lib, "", chip=MISSING) == {"lovely.opus", "untitled.flac"}
+    lib.track(songs[0], "03 Pending.flac", title="Pending", key="k5")  # no lyrics row yet
+    assert find(lib, "pending", chip=MISSING) == {"03 Pending.flac"}
+    assert find(lib, "pending", chip=WITH_LYRICS) == set()
 
 
 def test_scope(lib, songs):
@@ -256,6 +260,8 @@ def test_fold_offsets():
     assert spans("Straße Jóga", ["sse", "jog"]) == ((4, 6), (7, 10))
     assert spans("abab", ["ab"]) == ((0, 4),)  # adjacent matches paint as one
     assert spans("aaa", ["aa", "a"]) == ((0, 3),)
+    for text in ("Jóga", "Straße", decomposed, "Sigur Rós\nÇa ira", "İstanbul", "ǰ", "ﬁne", "Ångström"):
+        assert fold_text(text) == fold(text)[0]
 
 
 def test_result_rows(lib, songs):

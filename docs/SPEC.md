@@ -970,7 +970,8 @@ watcher always runs, with revalidation on open as its fallback, and the scanner 
   the avcodec, avformat, swresample and fdk-aac features, without "gpl" (rsgain's `vcpkg.json` at tag v3.6), so
   FFmpeg is LGPL-2.1-or-later. The exe embeds no configuration string; the `libfdk_aac` strings in it confirm the
   FDK AAC part. `FFmpeg-LGPL-2.1.txt` is shipped, and the README points to FFmpeg's and rsgain's source.
-  - Still to add: the **Fraunhofer FDK AAC** licence (the `NOTICE` file of github.com/mstorsjo/fdk-aac).
+  - The **Fraunhofer FDK AAC** licence (the `NOTICE` file of github.com/mstorsjo/fdk-aac) was downloaded with
+    Hugo's go, as `FDK-AAC-NOTICE.txt`.
   - That licence isn't GPL-compatible. It is shipped inside rsgain.exe, a separate program the app runs, not
     linked into the app, which is the usual "aggregate" reading. Keep it in mind when choosing the app's
     licence.

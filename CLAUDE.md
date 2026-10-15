@@ -15,7 +15,7 @@ two files alone.
   and `.png`; `paths.icon_path()`; `app.py` sets the window icon and the Windows AppUserModelID (so a run from
   source shows the app's icon in the taskbar); the PyInstaller spec embeds the icon and `packaging/version_info.txt`
   and bundles `resources/icons`. The unused `theme` setting is removed. FFmpeg's licence is checked (LGPL, plus
-  Fraunhofer FDK AAC, whose notice is pending) and `FFmpeg-LGPL-2.1.txt` is shipped. Tests: `tests/test_packaging.py`.
+  Fraunhofer FDK AAC); `FFmpeg-LGPL-2.1.txt` is shipped, and `FDK-AAC-NOTICE.txt` was downloaded with Hugo's go. Tests: `tests/test_packaging.py`.
 - **M6 task 3: the Settings dialog was dropped** (Hugo's review, Decisions log). In its place:
   - Help › About MusicDesk (`ui/about_dialog.py` `AboutDialog`; `MainWindow.open_about`, and `show_about`,
     which tests replace);
@@ -637,8 +637,6 @@ the root scripts once the installed v1 is in use. Read SPEC §13 first. Settle t
 Hugo before building:
 - **The app's own licence.** The repo has no LICENSE file, and mutagen is GPL-2.0-or-later, so the distributed
   app must be under a GPL-compatible licence.
-- **The Fraunhofer FDK AAC licence** (inside rsgain, SPEC §13): its text (the `NOTICE` file of
-  github.com/mstorsjo/fdk-aac) isn't on this machine; downloading it needs Hugo's go.
 - The name stays **MusicDesk** (Hugo, 2026-10-15); the icon exists (M6 task 4).
 
 **Done in session 9 (the original M6 task 1 brief, kept for reference):** the schema v3 migration and the
@@ -781,7 +779,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Smart views dropped (Hugo): not every track needs lyrics in its tags (LRCLIB's are shown), a rename-mask mismatch depends on each user's masks, missing ReplayGain is overwhelming library-wide (the folder's RG column covers it), and "recently modified" answers no need. A sidebar section would give them weight they don't have. Instead, the Lyrics menu has three Find entries that open library search with a ready-made query: LRCLIB didn't find, no lyrics in the tags, can't be looked up (`lrclib:notags`, new). Details in SPEC §5. |
 | 2026-10-15 | No Settings dialog (Hugo): every preference already lives where it's used (sidebar, View and Lyrics menus, the Tools cards; Qt follows Windows' theme). The unused `watch_for_changes` and `tag_workers` settings are removed (old settings.json files still load). Help › About shows the versions and the third-party licences, whose texts are bundled in `resources/licenses/`. Details in SPEC §12 and §13. |
 | 2026-10-15 | Release decisions (Hugo): an Inno Setup installer, chosen over a portable zip and a one-file exe for a normal Windows install (Start menu, uninstaller, clean updates). The README is written with the installer, once the name, licence and install steps are known. The root scripts are deleted as the last M6 step, once the installed v1 replaces them; `tests/reference/` keeps the frozen copies. |
-| 2026-10-15 | The name stays MusicDesk (Hugo). The icon is drawn by `packaging/make_icon.py` (no image editor, reproducible) and embedded in the exe with a version resource. No theme setting: Qt follows Windows' light and dark (checked). FFmpeg inside rsgain is an LGPL build with Fraunhofer FDK AAC; the LGPL-2.1 text is shipped, FDK AAC's notice is pending. Details in SPEC §13. |
+| 2026-10-15 | The name stays MusicDesk (Hugo). The icon is drawn by `packaging/make_icon.py` (no image editor, reproducible) and embedded in the exe with a version resource. No theme setting: Qt follows Windows' light and dark (checked). FFmpeg inside rsgain is an LGPL build with Fraunhofer FDK AAC; the LGPL-2.1 text and FDK AAC's notice are shipped. Details in SPEC §13. |
 
 ## Stack
 | Concern        | Choice |

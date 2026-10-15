@@ -11,10 +11,10 @@ MusicDesk ships with these third-party components. Their licence texts are in th
   CRC++ (built into rsgain)       BSD-3-Clause          CRCpp-BSD.txt
 
   FFmpeg 7.1 (built into rsgain)  LGPL-2.1-or-later     FFmpeg-LGPL-2.1.txt
+  Fraunhofer FDK AAC (built into  FDK AAC licence       FDK-AAC-NOTICE.txt
+    rsgain)
 
 rsgain 3.6's Windows build gets FFmpeg from vcpkg with the avcodec, avformat, swresample and fdk-aac features,
 and without "gpl" (see rsgain's vcpkg.json at https://github.com/complexlogic/rsgain), so FFmpeg is under the
 LGPL. Its source code is at https://ffmpeg.org/, and rsgain's at https://github.com/complexlogic/rsgain.
-
-Still to add: the licence of the Fraunhofer FDK AAC library, which that build includes
-(https://github.com/mstorsjo/fdk-aac, file NOTICE).
+The FDK AAC library's source code is at https://github.com/mstorsjo/fdk-aac.

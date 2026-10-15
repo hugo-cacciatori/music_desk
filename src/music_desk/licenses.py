@@ -37,8 +37,9 @@ COMPONENTS: tuple[Component, ...] = (
     Component("rsgain", "BSD-2-Clause", ("rsgain-BSD-2-Clause.txt",), version="3.6"),
     Component("CRC++ (in rsgain)", "BSD-3-Clause", ("CRCpp-BSD.txt",)),
     # rsgain's Windows build takes FFmpeg from vcpkg without its "gpl" feature (rsgain's vcpkg.json, v3.6), so the
-    # LGPL applies. That build also enables Fraunhofer's FDK AAC, whose licence text is still to be added.
+    # LGPL applies. That build also enables Fraunhofer's FDK AAC, under its own licence.
     Component("FFmpeg (in rsgain)", "LGPL-2.1-or-later", ("FFmpeg-LGPL-2.1.txt",), version="7.1"),
+    Component("Fraunhofer FDK AAC (in rsgain)", "FDK AAC licence", ("FDK-AAC-NOTICE.txt",)),
 )
 
 

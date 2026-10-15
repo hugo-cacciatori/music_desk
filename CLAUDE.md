@@ -11,6 +11,14 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 9):**
+- **M6 task 3: the Settings dialog was dropped** (Hugo's review, Decisions log). In its place:
+  - Help › About MusicDesk (`ui/about_dialog.py` `AboutDialog`; `MainWindow.open_about`, and `show_about`,
+    which tests replace);
+  - `music_desk/licenses.py` `COMPONENTS`, with the texts in `resources/licenses/` (bundled by the PyInstaller
+    spec);
+  - `watch_for_changes` and `tag_workers` removed from `Settings`.
+  Tests: `tests/ui/test_about.py`, `tests/test_licenses.py`, `tests/test_settings.py`. Still missing from
+  `resources/licenses/`: the LGPL-3.0 text and FFmpeg's notice (Next step).
 - **M6 task 2: smart views were dropped** (Hugo's review, Decisions log). In their place, the Lyrics menu has
   three Find entries (`MainWindow.FIND_QUERIES`, `MainWindow.find(query)`): songs LRCLIB didn't find, songs
   without lyrics in their tags, and songs LRCLIB can't look up (the new `lrclib:notags` filter). Tests are in
@@ -619,14 +627,15 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M6 task 3: the Settings dialog (SPEC §12). Read SPEC §12, and `settings.py` for what is saved
-today. Settings currently live in the View and Lyrics menus and on the Tools cards.
-- Sections: Library (roots, hide folders without music, watch for changes), Lyrics (offline mode, auto-save),
-  Tools defaults (§10's options), Appearance (theme and font size, which may wait for the theme task),
-  Performance (tag-reading workers), About (versions, licenses).
-- Before building it, settle with Hugo which of these are really needed (as with smart views, which were
-  dropped): "watch for changes" and the worker count may not answer a user need, and the menus already hold
-  Offline and Auto-save.
+**Next step:** the remaining M6 tasks, "Theme and icons" and the Inno Setup installer (SPEC §13). The installer
+completes M6. Read SPEC §13 first. Settle these with Hugo before building:
+- **The app's own licence.** The repo has no LICENSE file, and mutagen is GPL-2.0-or-later, so the distributed
+  app must be under a GPL-compatible licence.
+- **The LGPL-3.0 text** (Qt) for `resources/licenses/`. It isn't on this machine; downloading it from gnu.org
+  needs Hugo's go.
+- **FFmpeg's licence** inside rsgain 3.6 (LGPL or GPL build): check, and add its notice.
+- **The app name and icon** (deferred, Open question 1). "Theme and icons" is mostly the app icon, since Qt
+  already follows Windows' light and dark mode. Ask whether the theme task is still needed.
 
 **Done in session 9 (the original M6 task 1 brief, kept for reference):** the schema v3 migration and the
 `lrclib` column, `text_search` with the parity test, then the Ctrl+K UI (results with a Folder column, up to
@@ -766,6 +775,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Jobs panel: a bottom dock listing this session's jobs (not saved), with Open, Stop and Clear finished. Jobs go on while you browse, and their pages reopen from the panel. Each tool runs one job at a time: a preview on a busy tool shows the running job instead, since a new preview would otherwise cancel it. Rename and ReplayGain may run together on different folders, with the locks refusing an overlap. Tidy is one job. Quitting with a running job asks, then stops it. M5 is complete. Details in SPEC §10. |
 | 2026-10-15 | Library search as built: unquoted text is one substring (the page's rule), quoted phrases are more, all ANDed; filters are repeatable and ORed per field. Tracks only, natural folder order, cut at 5,000. Short parts use LIKE (ASCII keeps accents, a known limit). The query field lives in the toolbar; the results page replaces the file list, Esc returns, Enter goes to the file. Opening the search shows the Lyrics tab. Results re-run when the index changes, in place for the same query. Sort keys are computed on the worker, and the results model sorts itself (no proxy) to stay under the 50 ms stall target. The seek_lyrics parity test passes. Details in SPEC §6. |
 | 2026-10-15 | Smart views dropped (Hugo): not every track needs lyrics in its tags (LRCLIB's are shown), a rename-mask mismatch depends on each user's masks, missing ReplayGain is overwhelming library-wide (the folder's RG column covers it), and "recently modified" answers no need. A sidebar section would give them weight they don't have. Instead, the Lyrics menu has three Find entries that open library search with a ready-made query: LRCLIB didn't find, no lyrics in the tags, can't be looked up (`lrclib:notags`, new). Details in SPEC §5. |
+| 2026-10-15 | No Settings dialog (Hugo): every preference already lives where it's used (sidebar, View and Lyrics menus, the Tools cards; Qt follows Windows' theme). The unused `watch_for_changes` and `tag_workers` settings are removed (old settings.json files still load). Help › About shows the versions and the third-party licences, whose texts are bundled in `resources/licenses/`. Details in SPEC §12 and §13. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -822,7 +832,7 @@ Commands (from the project root):
           indexer.py, watcher.py, lyrics_service.py, search_service.py, jobs.py, tag_writer.py, path_locks.py, db_writer.py
         ui/
           main_window.py, sidebar.py, folder_tree.py, file_view.py, address_bar.py, search_view.py,
-          status_bar.py, jobs_panel.py, settings_dialog.py
+          status_bar.py, jobs_panel.py, about_dialog.py
           side_panel/       panel.py, metadata_tab.py, lyrics_tab.py, cover_widget.py, folder_summary.py
           tools/            tools_page.py, rename_card.py, replaygain_card.py, rename_preview.py, rg_report.py
           theme/
@@ -908,7 +918,7 @@ cleanup fixture case gets the expected status.
 - [x] Library search (FTS5, filters, scope), Play results, with seek_lyrics search parity: read SPEC §6
       "Preserved from seek_lyrics" and "Implementation notes (M6)" first
 - [x] Smart views: dropped (Hugo, 2026-10-15); three Find entries in the Lyrics menu instead
-- [ ] Settings dialog
+- [x] Settings dialog: dropped (Hugo, 2026-10-15); Help › About with the versions and licences instead
 - [ ] Theme and icons
 - [ ] Inno Setup installer; check the licenses of the FFmpeg libraries built into rsgain
 

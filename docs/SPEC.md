@@ -920,12 +920,24 @@ Applies to files and folders.
     from the file's.
 
 ## 12. Settings
-- Library: roots, hide folders without music, watch for changes.
-- Lyrics: offline mode, auto-save found lyrics into tags.
-- Tools defaults: every option from §10.
-- Appearance: theme (follow Windows, light or dark), font size.
-- Performance: tag-reading workers.
-- About: app version, rsgain version (from `rsgain --version`), licenses.
+**No Settings dialog** (Hugo, 2026-10-15). Each preference is set where it is used, and a dialog would only
+duplicate those controls:
+- library folders: the sidebar (Add folder…, Remove from library);
+- hide folders without music: the View menu;
+- offline mode and auto-save of found lyrics: the Lyrics menu;
+- the tools' options: the Tools cards, which remember every change (§10);
+- light or dark, and text size: Qt follows Windows.
+
+The planned "watch for changes" and "tag-reading workers" settings were dropped: they answer no user need (the
+watcher always runs, with revalidation on open as its fallback, and the scanner uses 4 workers).
+`settings.py` keeps the preferences above and the windows' UI state in settings.json.
+
+**Help › About MusicDesk** (`ui/about_dialog.py`):
+- the app version, the Python and Qt versions, and the rsgain version from the startup self-check (or "rsgain
+  unavailable");
+- a table of the third-party components with their versions and licences (`music_desk/licenses.py`
+  `COMPONENTS`);
+- "Open licences folder", which opens `resources/licenses/` in Explorer through the window's shell thread.
 
 ## 13. rsgain and packaging
 - `resources/rsgain/` holds `rsgain.exe`, its DLLs, `presets/` and the licenses. `paths.resource_path()` returns
@@ -947,6 +959,11 @@ Applies to files and folders.
 - Licenses to ship: rsgain (BSD-2-Clause), CRCpp, and the FFmpeg libraries built into rsgain. Those are LGPL or
   GPL depending on how they were built, so check before distributing the installer. Also Qt/PySide6 (LGPL) and
   mutagen (GPL-2.0-or-later).
+- As built (M6 task 3): the texts are in `resources/licenses/` (bundled as `resources/licenses`, listed in its
+  `README.txt` and in `music_desk/licenses.py`; `tests/test_licenses.py` checks that every runtime dependency is
+  covered and every file exists). Still to add before distributing: the LGPL-3.0 text (Qt; the GPL-3.0 text it
+  supplements is there) and FFmpeg's notice. The app's own licence is unsettled: the repo has no LICENSE file,
+  and mutagen's GPL-2.0-or-later applies to the distributed app.
 
 ## 14. Playback
 v1 plays through the default app; MusicDesk has no player of its own.

@@ -371,3 +371,39 @@ def test_hundred_thousand_entries(writer, tmp_path):
     print(f"\n100k entries: phase A {elapsed:.2f} s")
     assert report.files == 100_000
     assert elapsed < 300
+
+
+# -- path scans (the watcher's entry point) --
+
+def test_find_folder(writer, read, library, root_id):
+    from music_desk.core.index.scanner import find_folder
+
+    scanner(writer).scan_root(root_id)
+    album = entry_id(read, library, f"Fixture Artist/{ALBUM}")
+    top = list_roots(read)[0].top_entry_id
+    assert find_folder(read, library) == (top, True)
+    assert find_folder(read, str(library / "fixture artist" / ALBUM.upper())) == (album, True)
+    assert find_folder(read, library / "Fixture Artist" / ALBUM / "new" / "deeper") == (album, False)
+    assert find_folder(read, library / "Formats" / "tone.flac") == (entry_id(read, library, "Formats"), False)
+    assert find_folder(read, library.parent / "elsewhere") is None
+
+
+def test_scan_path_finds_new_subtrees(writer, read, library, root_id, fixtures_dir):
+    scanner(writer).scan_root(root_id)
+    new = library / "Fixture Artist" / "New Album" / "CD1"
+    new.mkdir(parents=True)
+    shutil.copy2(fixtures_dir / "formats" / "tone.flac", new / "01.flac")
+    report = scanner(writer).scan_path(new)  # not indexed yet: its nearest ancestor's subtree is scanned
+    assert report.folder_id == entry_id(read, library, "Fixture Artist")
+    assert indexed_paths(read, library) == disk_paths(library)
+    assert track(read, library, "Fixture Artist/New Album/CD1/01.flac")["format"] == "FLAC"
+    assert scanner(writer).scan_path(library.parent / "elsewhere") is None
+
+
+def test_scan_folder_recursive(writer, read, library, root_id):
+    scanner(writer).scan_root(root_id)
+    (library / "Formats" / "a" / "b").mkdir(parents=True)
+    (library / "Formats" / "a" / "b" / "c.txt").write_text("x")
+    scanner(writer).scan_folder(entry_id(read, library, "Formats"), recursive=True)
+    assert "Formats/a/b/c.txt" in indexed_paths(read, library)
+    assert list_roots(read)[0].last_scan == "2026-10-15T12:00:00"  # set by the root scan, not changed since

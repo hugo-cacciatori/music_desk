@@ -27,6 +27,7 @@ from pathlib import Path
 
 from music_desk.core.cancel import CancelToken
 from music_desk.core.formats import AUDIO_EXTENSIONS
+from music_desk.core.index.roots import is_inside
 from music_desk.core.index.store import DbWriter, connect_read, path_of
 from music_desk.core.lyrics import FOUND, cache_key, track_from_fields
 from music_desk.core.tags import TaggedFile
@@ -66,6 +67,7 @@ class ScanReport:
     tag_errors: int = 0
     offline: bool = False
     cancelled: bool = False
+    folder_id: int | None = None  # the scanned folder (the root's top entry for a root scan)
 
 
 @dataclass
@@ -147,6 +149,27 @@ def read_file(path: Path, size: int | None, mtime: float | None) -> tuple[dict, 
         return row, None
 
 
+def find_folder(conn: sqlite3.Connection, path: str | Path) -> tuple[int, bool] | None:
+    """The indexed folder for a path: (entry id, True) when indexed, else its nearest indexed ancestor
+    (entry id, False). None when the path is outside every root. A file path resolves to its folder's lookup."""
+    path = os.path.normpath(os.path.abspath(path))
+    for root_path, top in conn.execute(
+            "SELECT r.path, e.id FROM roots r JOIN entries e ON e.root_id = r.id AND e.parent_id IS NULL"):
+        if os.path.normcase(path) == os.path.normcase(root_path):
+            return top, True
+        if not is_inside(path, root_path):
+            continue
+        current = top
+        for name in Path(path).relative_to(root_path).parts:
+            row = conn.execute("SELECT id, is_dir FROM entries WHERE parent_id = ? AND name = ? COLLATE NOCASE",
+                               (current, name)).fetchone()
+            if row is None or not row[1]:
+                return current, False
+            current = row[0]
+        return current, True
+    return None
+
+
 class Scanner:
     """Scans roots and folders into the index. One scan at a time; `request_folder` may be called from any
     thread to serve a folder (the one on screen) ahead of the walk."""
@@ -161,7 +184,9 @@ class Scanner:
         self.batch_seconds = batch_seconds
         self.tag_batch = tag_batch
         self.on_progress = on_progress or (lambda _progress: None)
-        self.on_folder = on_folder or (lambda _entry_id: None)  # a folder's entries (and tags) are up to date
+        # A folder served out of priority (request_folder) is up to date. Scans of their own report through
+        # their ScanReport instead.
+        self.on_folder = on_folder or (lambda _entry_id: None)
         self.now = now
         self._priority: deque[int] = deque()
         self._lock = threading.Lock()
@@ -174,8 +199,6 @@ class Scanner:
     # -- public scans --
 
     def scan_root(self, root_id: int, cancel: CancelToken | None = None) -> ScanReport:
-        cancel = cancel or CancelToken()
-        report = ScanReport(root_id)
         conn = connect_read(self.writer.path)
         try:
             row = conn.execute(
@@ -183,41 +206,24 @@ class Scanner:
                 "WHERE r.id = ?", (root_id,)).fetchone()
             if row is None:
                 raise KeyError(f"no root {root_id}")
-            root_path, top = row[0], row[1]
-            if not os.path.isdir(root_path):
-                report.offline = True
-                return report
-            gen = (conn.execute("SELECT max(scan_gen) FROM entries WHERE root_id = ?", (root_id,)).fetchone()[0]
-                   or 0) + 1
-            progress = ScanProgress(root_id, "structure")
-            with ThreadPoolExecutor(self.workers, thread_name_prefix="tag-reader") as pool:
-                ctx = _Context(conn, pool, root_id, gen, report, progress, cancel)
-                ctx.paths[top] = root_path
-                self._walk(ctx, _Ref(top), root_path)
-                if not cancel.cancelled:
-                    progress.phase = "tags"
-                    self._read_tags(ctx, "e.root_id = ?", (root_id,))
-            if cancel.cancelled:
-                report.cancelled = True
-                return report
-            progress.phase = "stats"
-            self.on_progress(progress)
-            self._finish(root_id, last_scan=self.now().isoformat(timespec="seconds"))
-            progress.phase = "done"
-            self.on_progress(progress)
-            return report
+            return self._scan_tree(conn, root_id, row[1], row[0], cancel or CancelToken(), whole_root=True)
         finally:
             conn.close()
 
-    def scan_folder(self, entry_id: int, cancel: CancelToken | None = None) -> ScanReport:
-        """Reconcile one folder's direct children and read their tags (F5, revalidation on open)."""
+    def scan_folder(self, entry_id: int, cancel: CancelToken | None = None, *,
+                    recursive: bool = False) -> ScanReport:
+        """Reconcile one folder: its direct children (F5, revalidation on open), or its whole subtree."""
         cancel = cancel or CancelToken()
         conn = connect_read(self.writer.path)
         try:
             root_id = conn.execute("SELECT root_id FROM entries WHERE id = ?", (entry_id,)).fetchone()[0]
-            report = ScanReport(root_id)
+            if recursive:
+                return self._scan_tree(conn, root_id, entry_id, str(path_of(conn, entry_id)), cancel,
+                                       whole_root=False)
+            report = ScanReport(root_id, folder_id=entry_id)
             with ThreadPoolExecutor(self.workers, thread_name_prefix="tag-reader") as pool:
-                ctx = _Context(conn, pool, root_id, 0, report, ScanProgress(root_id, "structure"), cancel)
+                ctx = _Context(conn, pool, root_id, self._next_gen(conn, root_id), report,
+                               ScanProgress(root_id, "structure"), cancel)
                 if not self._serve_folder(ctx, entry_id):
                     report.offline = not os.path.isdir(ctx.path_of(entry_id))
                     return report
@@ -227,6 +233,50 @@ class Scanner:
             return report
         finally:
             conn.close()
+
+    def scan_path(self, path: str | Path, cancel: CancelToken | None = None, *,
+                  recursive: bool = False) -> ScanReport | None:
+        """Bring a path's folder up to date (the watcher's entry point). A path that isn't indexed yet (a new
+        folder) is found by scanning the subtree of its nearest indexed ancestor. None if outside every root."""
+        conn = connect_read(self.writer.path)
+        try:
+            found = find_folder(conn, path)
+        finally:
+            conn.close()
+        if found is None:
+            return None
+        entry_id, exact = found
+        return self.scan_folder(entry_id, cancel, recursive=recursive or not exact)
+
+    @staticmethod
+    def _next_gen(conn: sqlite3.Connection, root_id: int) -> int:
+        return (conn.execute("SELECT max(scan_gen) FROM entries WHERE root_id = ?", (root_id,)).fetchone()[0]
+                or 0) + 1
+
+    def _scan_tree(self, conn: sqlite3.Connection, root_id: int, top: int, top_path: str, cancel: CancelToken,
+                   *, whole_root: bool) -> ScanReport:
+        """Phase A from `top` down, then phase B for the root's stale files, then the root's totals."""
+        report = ScanReport(root_id, folder_id=top)
+        if not os.path.isdir(top_path):
+            report.offline = True
+            return report
+        progress = ScanProgress(root_id, "structure")
+        with ThreadPoolExecutor(self.workers, thread_name_prefix="tag-reader") as pool:
+            ctx = _Context(conn, pool, root_id, self._next_gen(conn, root_id), report, progress, cancel)
+            ctx.paths[top] = top_path
+            self._walk(ctx, _Ref(top), top_path)
+            if not cancel.cancelled:
+                progress.phase = "tags"
+                self._read_tags(ctx, "e.root_id = ?", (root_id,))
+        if cancel.cancelled:
+            report.cancelled = True
+            return report
+        progress.phase = "stats"
+        self.on_progress(progress)
+        self._finish(root_id, last_scan=self.now().isoformat(timespec="seconds") if whole_root else None)
+        progress.phase = "done"
+        self.on_progress(progress)
+        return report
 
     # -- phase A --
 
@@ -327,9 +377,9 @@ class Scanner:
                 entry_id = self._priority.popleft()
             self._flush(ctx, batch)  # the folder may be in the pending batch
             batch.clear()
-            self._serve_folder(ctx, entry_id)
+            self._serve_folder(ctx, entry_id, notify=True)
 
-    def _serve_folder(self, ctx: "_Context", entry_id: int) -> bool:
+    def _serve_folder(self, ctx: "_Context", entry_id: int, notify: bool = False) -> bool:
         row = ctx.conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()
         if row is None or not row[0]:
             return False
@@ -341,7 +391,8 @@ class Scanner:
             return False
         self._flush(ctx, batch)
         self._read_tags(ctx, "e.parent_id = ?", (entry_id,))
-        self.on_folder(entry_id)
+        if notify:
+            self.on_folder(entry_id)
         return True
 
     # -- phase B --

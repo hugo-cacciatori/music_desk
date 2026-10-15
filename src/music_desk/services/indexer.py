@@ -32,9 +32,9 @@ class Indexer(QObject):
         super().__init__(parent)
         self.scanner = Scanner(writer, workers=workers, on_progress=self._on_progress,
                                on_folder=self.folderUpdated.emit)
-        self._jobs: deque[tuple[str, int]] = deque()
+        self._jobs: deque[tuple[str, object]] = deque()  # ("root", id), ("folder", id), ("path", (path, rec))
         self._condition = threading.Condition()
-        self._current: tuple[str, int] | None = None
+        self._current: tuple[str, object] | None = None
         self._cancel = CancelToken()
         self._stopping = False
         self._last_progress = 0.0
@@ -49,6 +49,10 @@ class Indexer(QObject):
 
     def scan_folder(self, entry_id: int) -> None:
         self._queue(("folder", entry_id))
+
+    def scan_path(self, path: str, recursive: bool = False) -> None:
+        """Bring a folder up to date by path, resolved when the job runs (the watcher's changes)."""
+        self._queue(("path", (path, recursive)))
 
     def request_folder(self, entry_id: int) -> None:
         """Bring a folder up to date first: inside the running root scan, or on its own when idle."""
@@ -110,11 +114,16 @@ class Indexer(QObject):
                 kind, entity = job
                 if kind == "root":
                     report = self.scanner.scan_root(entity, cancel)
+                elif kind == "path":
+                    path, recursive = entity
+                    report = self.scanner.scan_path(path, cancel, recursive=recursive)
                 else:
                     report = self.scanner.scan_folder(entity, cancel)
-                    self.folderUpdated.emit(entity)
-                log.info("scan %s %s: %s", kind, entity, report)
-                self.scanFinished.emit(report)
+                if report is not None:  # None: a path outside the library (its root removed meanwhile)
+                    log.info("scan %s %s: %s", kind, entity, report)
+                    if kind != "root" and report.folder_id is not None:
+                        self.folderUpdated.emit(report.folder_id)
+                    self.scanFinished.emit(report)
             except Exception as e:  # noqa: BLE001 - the indexer keeps serving later jobs
                 log.exception("scan %s failed", job)
                 if not cancel.cancelled:  # a cancelled scan of a removed root may fail on its last writes

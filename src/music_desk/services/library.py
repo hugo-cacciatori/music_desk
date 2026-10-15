@@ -1,5 +1,5 @@
-"""The library service: owns the index writer and runs root changes and online checks off the UI thread
-(Ground rule 2). Results come back to the UI as queued signals."""
+"""The library service: owns the index writer, the indexer and the watcher, and runs root changes and online
+checks off the UI thread (Ground rule 2). Results come back to the UI as queued signals."""
 
 import logging
 import sqlite3
@@ -12,6 +12,7 @@ from music_desk.core.index import roots
 from music_desk.core.index.roots import AddResult, Root
 from music_desk.core.index.store import DbWriter, connect_read
 from music_desk.services.indexer import Indexer
+from music_desk.services.watcher import Watcher
 
 log = logging.getLogger(__name__)
 
@@ -23,11 +24,17 @@ class LibraryService(QObject):
     addFinished = Signal(object)  # list[AddResult], one per path of an add_folders call
     failed = Signal(str)  # a plain message for the status bar
 
-    def __init__(self, db_path: str | Path, parent: QObject | None = None, *, online_check_ms: int = ONLINE_CHECK_MS):
+    def __init__(self, db_path: str | Path, parent: QObject | None = None, *, online_check_ms: int = ONLINE_CHECK_MS,
+                 watcher_options: dict | None = None):
         super().__init__(parent)
+        self.db_path = Path(db_path)
         self.writer = DbWriter(db_path).start()
         self.conn: sqlite3.Connection = connect_read(db_path)  # the UI thread's read-only connection
         self.indexer = Indexer(self.writer, self)
+        self.watcher = Watcher(self.indexer.scan_path, self, **(watcher_options or {}))
+        self.watcher.unwatched.connect(
+            lambda _root_id, reason: self.failed.emit(
+                f"Live updates are off for a library folder ({reason}). Its folders are refreshed when opened."))
         # One file-system worker: probing an unplugged network drive can hang for seconds.
         self._fs = ThreadPoolExecutor(1, thread_name_prefix="library-fs")
         self._timer = QTimer(self)
@@ -36,6 +43,7 @@ class LibraryService(QObject):
         self._timer.start()
         self._closed = False
         self.refresh_online()  # roots unplugged since the last run show as offline at once
+        self._run(self._sync_watches)  # after the online check: same worker, so in order
         for root in self.roots():  # the startup rescan; an offline root is skipped by the scanner
             self.indexer.scan_root(root.id)
 
@@ -56,6 +64,11 @@ class LibraryService(QObject):
     def refresh_online(self) -> Future:
         return self._run(self._check_online, self.roots())
 
+    def folder_opened(self, entry_id: int) -> None:
+        """Revalidate a folder the browser shows (stale-while-revalidate, and the fallback where watching fails):
+        its indexed content is shown at once, then reconciled ahead of other indexing."""
+        self.indexer.request_folder(entry_id)
+
     def close(self) -> None:
         """Stop the timer, finish pending work, flush the writer and close the connections."""
         if self._closed:
@@ -63,6 +76,7 @@ class LibraryService(QObject):
         self._closed = True
         self._timer.stop()
         self._fs.shutdown(wait=True)
+        self.watcher.stop()
         self.indexer.stop()
         self.writer.stop()
         self.conn.close()
@@ -88,12 +102,14 @@ class LibraryService(QObject):
         for result in added:
             self.indexer.scan_root(result.root_id)
         if added:
+            self._sync_watches()
             self.rootsChanged.emit()
         self.addFinished.emit(results)
 
     def _remove(self, root_id: int) -> None:
         if roots.remove_root(self.writer, root_id):
             log.info("removed root %s from the library", root_id)
+            self._sync_watches()
             self.rootsChanged.emit()
 
     def _check_online(self, current: list[Root]) -> None:
@@ -103,4 +119,14 @@ class LibraryService(QObject):
             if root.online:
                 self.indexer.scan_root(root.id)  # catch up with what changed while it was away
         if changed:
+            self._sync_watches()
             self.rootsChanged.emit()
+
+    def _sync_watches(self) -> None:
+        """Watch the online roots (worker thread: it reads the roots on its own connection)."""
+        conn = connect_read(self.db_path)
+        try:
+            current = roots.list_roots(conn)
+        finally:
+            conn.close()
+        self.watcher.sync({root.id: root.path for root in current if root.online})

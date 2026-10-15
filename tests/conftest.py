@@ -17,6 +17,15 @@ def reference_music_tools():
     return module
 
 
+@pytest.fixture(scope="session")
+def reference_seek_lyrics():
+    """The frozen seek_lyrics.py, imported as a module (it has no side effects at import)."""
+    spec = importlib.util.spec_from_file_location("reference_seek_lyrics", REFERENCE / "seek_lyrics.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.fixture
 def fixtures_dir() -> Path:
     """The committed fixtures. Read-only: use `fixture_copy` for anything that writes."""

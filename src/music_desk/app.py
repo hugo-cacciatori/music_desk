@@ -47,8 +47,9 @@ def main() -> int:
     app.setApplicationName(APP_TITLE)
     app.setApplicationVersion(__version__)
 
+    settings = Settings.load()
     try:
-        library = LibraryService(library_db_path())
+        library = LibraryService(library_db_path(), lyrics_offline=settings.lyrics_offline)
     except Exception as e:  # noqa: BLE001 - the window still opens, without a library
         log.exception("could not open the library index")
         library = None
@@ -57,7 +58,7 @@ def main() -> int:
     else:
         app.aboutToQuit.connect(library.close)
 
-    window = MainWindow(library, Settings.load())
+    window = MainWindow(library, settings)
     window.show()
 
     check = RsgainCheck()

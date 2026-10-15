@@ -39,21 +39,14 @@ RECORD = {"id": 7, "artistName": "Fixture Artist", "trackName": "First", "durati
           "instrumental": False, "plainLyrics": "Line one\nLine two", "syncedLyrics": SYNCED}
 
 
-@pytest.fixture(autouse=True)
-def no_network(monkeypatch):
-    """The default opener must never be used by a test."""
-
-    def refuse(*_args, **_kwargs):
-        raise AssertionError("a test tried to reach the network")
-
-    monkeypatch.setattr(urllib.request, "urlopen", refuse)
-
-
 def client(fake: FakeUrlopen, sleep: SleepRecorder | None = None) -> LrclibClient:
     return LrclibClient(urlopen=fake, sleep=sleep or SleepRecorder(), jitter=no_jitter)
 
 
 def test_default_client_never_reaches_the_network():
+    """The default opener is looked up at call time, so the autouse guard in conftest.py covers it."""
+    with pytest.raises(AssertionError, match="network"):
+        LrclibClient().get("get", track_name="x")
     with pytest.raises(AssertionError, match="network"):
         LrclibClient(urlopen=urllib.request.urlopen).get("get", track_name="x")
 

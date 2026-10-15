@@ -196,10 +196,14 @@ class LyricsStore:
         return {k: values[k] for k in keys}
 
     def put(self, key: str, entry: dict) -> Future:
-        values = [entry.get(column) for column in LYRICS_COLUMNS]
-        updates = ", ".join(f"{c} = excluded.{c}" for c in LYRICS_COLUMNS)
-        return self._writer.execute(
-            f"INSERT INTO lyrics (key, {', '.join(LYRICS_COLUMNS)}) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
-            f"ON CONFLICT(key) DO UPDATE SET {updates}",
-            [key, *values],
-        )
+        return self._writer.submit(lambda conn: upsert_lyrics(conn, key, entry))
+
+
+def upsert_lyrics(conn: sqlite3.Connection, key: str, entry: dict) -> None:
+    """Write one cache entry (inside a writer job); the keys an entry doesn't have are cleared."""
+    updates = ", ".join(f"{c} = excluded.{c}" for c in LYRICS_COLUMNS)
+    conn.execute(
+        f"INSERT INTO lyrics (key, {', '.join(LYRICS_COLUMNS)}) VALUES (?, {', '.join('?' * len(LYRICS_COLUMNS))}) "
+        f"ON CONFLICT(key) DO UPDATE SET {updates}",
+        [key, *(entry.get(column) for column in LYRICS_COLUMNS)],
+    )

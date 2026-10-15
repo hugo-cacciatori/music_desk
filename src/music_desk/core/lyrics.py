@@ -119,11 +119,11 @@ class LrclibClient:
     """GETs LRCLIB endpoints with the script's retry rules. The opener, sleep and jitter are injectable so tests
     never touch the network or wait."""
 
-    def __init__(self, options: LyricsOptions | None = None, *, urlopen: Callable = urllib.request.urlopen,
+    def __init__(self, options: LyricsOptions | None = None, *, urlopen: Callable | None = None,
                  sleep: Callable[[float], None] = time.sleep,
                  jitter: Callable[[float, float], float] = random.uniform) -> None:
         self.options = options or LyricsOptions()
-        self._urlopen = urlopen
+        self._urlopen = urlopen  # None: urllib's, looked up at call time (so the tests' network guard applies)
         self._sleep = sleep
         self._jitter = jitter
 
@@ -140,7 +140,8 @@ class LrclibClient:
         overloads = failures = 0
         while True:
             try:
-                with self._urlopen(request, timeout=options.request_timeout) as response:
+                urlopen = self._urlopen or urllib.request.urlopen
+                with urlopen(request, timeout=options.request_timeout) as response:
                     return json.load(response)
             except urllib.error.HTTPError as e:
                 if e.code in (400, 404):  # unknown song, or a query LRCLIB refuses

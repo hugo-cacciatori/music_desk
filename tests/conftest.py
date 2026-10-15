@@ -1,5 +1,6 @@
 import importlib.util
 import shutil
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -63,3 +64,14 @@ def no_real_dialogs(monkeypatch):
         monkeypatch.setattr(QMessageBox, name, refuse(f"QMessageBox.{name}"))
     for name in ("getOpenFileName", "getOpenFileNames", "getSaveFileName", "getExistingDirectory"):
         monkeypatch.setattr(QFileDialog, name, refuse(f"QFileDialog.{name}"))
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """No test may reach LRCLIB (or anything else): urllib's opener fails the test. Lyrics tests inject a
+    scripted opener (tests/core/lrclib_fake.py)."""
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("a test tried to reach the network")
+
+    monkeypatch.setattr(urllib.request, "urlopen", refuse)

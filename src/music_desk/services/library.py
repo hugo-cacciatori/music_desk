@@ -1,5 +1,5 @@
-"""The library service: owns the index writer, the indexer and the watcher, and runs root changes and online
-checks off the UI thread (Ground rule 2). Results come back to the UI as queued signals."""
+"""The library service: owns the index writer, the indexer, the watcher and the lyrics service, and runs root
+changes and online checks off the UI thread (Ground rule 2). Results come back to the UI as queued signals."""
 
 import logging
 import sqlite3
@@ -11,8 +11,10 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from music_desk.core.index import roots
 from music_desk.core.index.roots import AddResult, Root
 from music_desk.core.index.store import DbWriter, connect_read
+from music_desk.core.lyrics import LrclibClient
 from music_desk.core.path_locks import PathLocks
 from music_desk.services.indexer import Indexer
+from music_desk.services.lyrics_service import LyricsService
 from music_desk.services.watcher import Watcher
 
 log = logging.getLogger(__name__)
@@ -25,8 +27,11 @@ class LibraryService(QObject):
     addFinished = Signal(object)  # list[AddResult], one per path of an add_folders call
     failed = Signal(str)  # a plain message for the status bar
 
+    lyrics_offline_default = False  # the UI tests set it, so a library they build never reaches LRCLIB
+
     def __init__(self, db_path: str | Path, parent: QObject | None = None, *, online_check_ms: int = ONLINE_CHECK_MS,
-                 watcher_options: dict | None = None):
+                 watcher_options: dict | None = None, lyrics_client: LrclibClient | None = None,
+                 lyrics_offline: bool | None = None, lyrics_options: dict | None = None):
         super().__init__(parent)
         self.db_path = Path(db_path)
         self.writer = DbWriter(db_path).start()
@@ -34,6 +39,11 @@ class LibraryService(QObject):
         self.indexer = Indexer(self.writer, self)
         self.locks = PathLocks()  # shared by jobs and the tag writer (SPEC §16)
         self.watcher = Watcher(self.indexer.scan_path, self, **(watcher_options or {}))
+        offline = self.lyrics_offline_default if lyrics_offline is None else lyrics_offline
+        self.lyrics = LyricsService(db_path, self.writer, self, client=lyrics_client, offline=offline,
+                                    **(lyrics_options or {}))
+        self.indexer.idle.connect(self.lyrics.start)  # the first time the tags are indexed, then new tracks
+        self.indexer.scanFinished.connect(lambda _report: self.lyrics.wake())
         self.watcher.unwatched.connect(
             lambda _root_id, reason: self.failed.emit(
                 f"Live updates are off for a library folder ({reason}). Its folders are refreshed when opened."))
@@ -83,6 +93,7 @@ class LibraryService(QObject):
         self._timer.stop()
         self._fs.shutdown(wait=True)
         self.watcher.stop()
+        self.lyrics.stop()
         self.indexer.stop()
         self.conn.close()
         self.writer.stop()  # last: only a writing connection can checkpoint and remove the WAL files

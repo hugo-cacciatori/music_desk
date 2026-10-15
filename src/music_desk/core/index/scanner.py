@@ -283,7 +283,7 @@ class Scanner:
             conn.execute("UPDATE entries SET name = ?, size = ?, mtime = ? WHERE id = ?",
                          (path.name, stat.st_size, stat.st_mtime, entry_id))
             _write_tracks(conn, [entry], [(track, lyrics)])
-            _adjust_folder_stats(conn, folder_id, before, _stats_values(conn, entry_id))
+            adjust_folder_stats(conn, folder_id, before, _stats_values(conn, entry_id))
 
         self.writer.submit(write).result()
         report = ScanReport(root_id, files=1, updated=1, tags_read=1, folder_id=folder_id)
@@ -628,7 +628,7 @@ def _stats_values(conn: sqlite3.Connection, entry_id: int) -> tuple:
     return (1, row[1] or 0.0, int(bool(row[2])), int(bool(row[3])), int(bool(row[4])))
 
 
-def _adjust_folder_stats(conn: sqlite3.Connection, folder_id: int, before: tuple, after: tuple) -> None:
+def adjust_folder_stats(conn: sqlite3.Connection, folder_id: int, before: tuple, after: tuple) -> None:
     """Apply one file's change to its folder and every folder above it (the formats list is left to scans)."""
     delta = tuple(a - b for a, b in zip(after, before, strict=True))
     if not any(delta):

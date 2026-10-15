@@ -41,6 +41,7 @@ select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests/core"]  # shared helpers such as lrclib_fake, for tests in any folder
 norecursedirs = ["reference", "fixtures", ".*", "build", "dist"]
 qt_api = "pyside6"
 markers = ["slow: runs the real rsgain (deselect with -m \"not slow\")"]

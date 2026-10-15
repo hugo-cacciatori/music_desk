@@ -1,6 +1,7 @@
 import base64
 import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -165,6 +166,8 @@ class MainWindow(QMainWindow):
             library.indexer.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
             library.indexer.folderUpdated.connect(self.folder_updated)
             library.indexer.scanFinished.connect(self.scan_finished)
+            library.lyrics.foldersChanged.connect(self.lyrics_updated)
+            library.lyrics.unreachable.connect(self.lrclib_unreachable)
             self.refresh_roots()
             self._reopen_last_folder()
 
@@ -200,6 +203,7 @@ class MainWindow(QMainWindow):
         self.sidebar.tree.select_entry([entry for entry, _name in crumbs])
         self._show_selection([])
         self.library.folder_opened(entry_id)
+        self.library.lyrics.prioritize_folder(entry_id)
         self._update_navigation()
 
     # -- history and navigation --
@@ -332,7 +336,7 @@ class MainWindow(QMainWindow):
 
     def _show_selection(self, ids: list[int]) -> None:
         self._selected_ids = ids
-        items, folder_ids = [], []
+        items, folder_ids, audio_ids = [], [], []
         for entry_id in ids:
             row = self.file_view.model.row_for(entry_id)
             if row is not None and self.folder_path:
@@ -340,6 +344,10 @@ class MainWindow(QMainWindow):
                 items.append(SelectedItem(Path(self.folder_path, r.name), r.is_dir, r.is_audio))
                 if r.is_dir:
                     folder_ids.append(entry_id)
+                elif r.is_audio:
+                    audio_ids.append(entry_id)
+        if len(items) == 1 and audio_ids:
+            self.library.lyrics.prioritize_track(audio_ids[0])  # the selected track's lyrics first (SPEC §9)
         if len(items) == 1 and folder_ids:
             self.side_panel.show_folder(folder_ids[0])  # one folder selected: its summary
         elif not items and self.folder_id is not None:
@@ -361,6 +369,18 @@ class MainWindow(QMainWindow):
             self._show_selection(self._selected_ids)  # a renamed file reloads under its new name
         self._refresh_location()
         self.side_panel.refresh_folder()
+
+    def lyrics_updated(self, folder_ids: list[int]) -> None:
+        """LRCLIB results: the open folder's LRCLIB column follows."""
+        if not self._library_open() or self.folder_id not in folder_ids:
+            return
+        self.file_view.refresh()
+        self.side_panel.refresh_folder()
+
+    def lrclib_unreachable(self, resume_at: float) -> None:
+        minutes = max(1, round((resume_at - time.time()) / 60))
+        self.toast.show_message(f"LRCLIB unreachable, retrying in {minutes} min.", "Retry now",
+                                self.library.lyrics.retry_now)
 
     def _refresh_location(self) -> None:
         """The open folder (or a folder above it) may have been renamed: its path and breadcrumb follow."""

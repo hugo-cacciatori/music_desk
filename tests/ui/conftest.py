@@ -11,6 +11,12 @@ from music_desk.ui.main_window import MainWindow
 ALBUM = "Fixture Artist - Fixture Album"
 
 
+@pytest.fixture(autouse=True)
+def lyrics_offline(monkeypatch):
+    """Libraries built by UI tests make no LRCLIB lookups (tests/ui/test_lyrics_service.py scripts its own)."""
+    monkeypatch.setattr(LibraryService, "lyrics_offline_default", True)
+
+
 @pytest.fixture
 def library_dir(tmp_path, fixtures_dir):
     lib = tmp_path / "lib"

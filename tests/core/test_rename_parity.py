@@ -91,3 +91,20 @@ def test_junk_parity_with_deliberate_keeps(script, monkeypatch, fixtures_dir, tm
     assert deliberate <= set(script_report.junk_deleted)  # the script did treat them as junk
     assert kept["Fixture Album.cue"] == "needed to play Fixture Album.flac"
     assert sidecar_kept == {"no_lyrics.lrc": "lyrics not in the tags yet"}
+
+
+def test_summary_wording_matches_the_script(script, fixtures_dir, tmp_path, capsys):
+    """The result's section titles are the script's print_summary lines (its list output aside)."""
+    from music_desk.core.rename import summary_sections
+
+    script_dir, app_dir = twins(fixtures_dir, tmp_path, "album/Fixture Artist - Fixture Album")
+    script_report = script.RenameReport()
+    script.process_folder(script_dir, script_report)
+    capsys.readouterr()
+    script.print_summary(script_report)
+    printed = [line for line in capsys.readouterr().out.splitlines() if line[:1].isdigit()]
+
+    app_report = apply_plan(plan_renames(app_dir, RenameOptions(audio_extensions=SCRIPT_FORMATS)), recycle=Recorder())
+    titles = [title for title, _entries in summary_sections(app_report, dry_run=False)]
+    assert titles == printed
+    assert len(printed) >= 3  # renamed, fallback, missing tags or name taken: not vacuous

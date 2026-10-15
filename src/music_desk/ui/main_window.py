@@ -1,4 +1,5 @@
 import base64
+import dataclasses
 import logging
 import os
 import time
@@ -30,15 +31,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from music_desk.core import fsops, inline_rename, playlists
+from music_desk.core import fsops, inline_rename, playlists, rename
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
 from music_desk.core.index.store import path_of
-from music_desk.core.path_locks import PathLocks
+from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services.library import LibraryService
 from music_desk.services.lyrics_embedder import AutoEmbedder
 from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
+from music_desk.services.rename_job import Applied, Planned, RenameRunner
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
@@ -47,7 +49,8 @@ from music_desk.ui.file_view import FileView
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
-from music_desk.ui.tools.tools_page import ToolRequest, ToolScope, ToolsPage
+from music_desk.ui.tools.rename_preview import RenamePreview
+from music_desk.ui.tools.tools_page import RENAME, ToolRequest, ToolScope, ToolsPage
 
 log = logging.getLogger(__name__)
 
@@ -127,9 +130,20 @@ class MainWindow(QMainWindow):
         self.tools_page.runRequested.connect(self.run_tool)
         self.tag_io.renameFields.connect(self._tool_example)
         self._example_token: int | None = None
-        self.center = QStackedWidget()  # the file list, or the Tools page in its place (SPEC §10)
+        self.rename_preview = RenamePreview()
+        self.rename_preview.backRequested.connect(self._rename_back)
+        self.rename_preview.doneRequested.connect(self._rename_done)
+        self.rename_preview.applyRequested.connect(self.apply_rename)
+        self.rename_preview.cancelRequested.connect(lambda: self.rename_runner.cancel())
+        self.rename_runner = RenameRunner(library.locks if library is not None else PathLocks(), self)
+        self.rename_runner.planned.connect(self._rename_planned)
+        self.rename_runner.applied.connect(self._rename_applied)
+        self._rename_token: int | None = None
+        self._rename_request: ToolRequest | None = None
+        self.center = QStackedWidget()  # the file list, or the Tools page and its previews (SPEC §10)
         self.center.addWidget(self.file_view)
         self.center.addWidget(self.tools_page)
+        self.center.addWidget(self.rename_preview)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.center)
@@ -462,23 +476,106 @@ class MainWindow(QMainWindow):
         self.center.setCurrentWidget(self.tools_page)
 
     def close_tools(self) -> None:
-        if self.center.currentWidget() is self.tools_page:
+        if self.center.currentWidget() is self.rename_preview and self.rename_preview.state == "applying":
+            return  # a running rename stays on screen until it ends
+        if self.center.currentWidget() is not self.file_view:
+            if self.rename_preview.state == "planning":
+                self.rename_runner.cancel()
             self.center.setCurrentWidget(self.file_view)
             self.file_view.view.setFocus()
 
     @property
     def showing_tools(self) -> bool:
-        return self.center.currentWidget() is self.tools_page
+        return self.center.currentWidget() is not self.file_view
 
     def _tool_example(self, token: int, fields: dict | None, extension: str) -> None:
         if token == self._example_token:
             self.tools_page.set_example(fields, extension)
 
     def run_tool(self, request: ToolRequest) -> None:
-        """The previews and jobs come with the next M5 tasks (SPEC §10)."""
-        what = {"rename": "The rename preview", "replaygain": "The ReplayGain preview",
-                "tidy": "The Tidy preview"}[request.tool]
-        self.toast.show_message(f"{what} isn't built yet: it comes with the next M5 tasks.")
+        """A card's Preview: the rename preview here; ReplayGain and Tidy come with the next M5 task."""
+        if request.tool == RENAME:
+            self.preview_rename(request)
+            return
+        what = {"replaygain": "The ReplayGain preview", "tidy": "The Tidy preview"}[request.tool]
+        self.toast.show_message(f"{what} isn't built yet: it comes with the next M5 task.")
+
+    # -- the Rename tool (SPEC §10 A) --
+
+    def preview_rename(self, request: ToolRequest) -> None:
+        scope = request.scope
+        self._rename_request = request
+        self.rename_preview.show_planning(scope.folder, len(scope.files))
+        self.center.setCurrentWidget(self.rename_preview)
+        self._rename_token = self.rename_runner.plan(scope.folder, request.rename_options,
+                                                     list(scope.files) or None)
+
+    def _rename_planned(self, result: Planned) -> None:
+        if result.token != self._rename_token or result.cancelled:
+            return
+        if result.plan is None:
+            self.rename_preview.show_error(f"The preview failed: {result.error}")
+        else:
+            self.rename_preview.show_plan(result.plan)
+
+    def ask_recycle(self, names: list[str]) -> str:
+        """Junk files listed for the Recycle Bin: "recycle", "keep" (rename only) or "cancel"."""
+        shown = "\n".join(names[:30]) + (f"\n… and {len(names) - 30} more" if len(names) > 30 else "")
+        box = QMessageBox(QMessageBox.Icon.Question, "Send junk files to the Recycle Bin",
+                          f"These {len(names)} file{'s' if len(names) != 1 else ''} will be sent to the Recycle "
+                          f"Bin (you can restore them from there):\n\n{shown}", parent=self)
+        recycle = box.addButton("Rename and recycle", QMessageBox.ButtonRole.AcceptRole)
+        keep = box.addButton("Rename only", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return "recycle" if box.clickedButton() is recycle else "keep" if box.clickedButton() is keep else "cancel"
+
+    def apply_rename(self) -> None:
+        plan = self.rename_preview.plan
+        if plan is None or not self._library_open():
+            return
+        metadata = self.side_panel.metadata
+        edited = [p for p in ([metadata.path] if metadata.path else []) + list(metadata.paths)
+                  if Path(p).is_relative_to(plan.folder)]
+        if edited and not self.side_panel.can_leave():  # unsaved tag edits on a file about to be renamed
+            return
+        junk = [i.source.relative_to(plan.folder).as_posix() for i in plan.items if i.status is rename.Status.JUNK]
+        if junk:
+            answer = self.ask_recycle(junk)
+            if answer == "cancel":
+                return
+            if answer == "keep":
+                plan = dataclasses.replace(plan, items=[i for i in plan.items if i.status is not rename.Status.JUNK])
+        try:
+            self._rename_token = self.rename_runner.apply(plan)
+        except LockedError as e:
+            self.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            return
+        self.rename_preview.show_applying()
+
+    def _rename_applied(self, result: Applied) -> None:
+        if result.token != self._rename_token:
+            return
+        if result.report is None:
+            self.rename_preview.show_error(f"Renaming failed: {result.error}")
+            return
+        report = result.report
+        if self._library_open():
+            if report.steps:
+                self.library.indexer.apply_renames(report.steps)  # in place: ids, tags and selection kept
+            for folder in {path.parent for path in report.recycled}:
+                self.library.indexer.scan_path(str(folder))
+        self.rename_preview.show_report(report)
+        count = len(report.renamed)
+        self.statusBar().showMessage(f"Renamed {count} file{'s' if count != 1 else ''}.", STATUS_MS)
+
+    def _rename_back(self) -> None:
+        if self.rename_preview.state == "planning":
+            self.rename_runner.cancel()
+        self.center.setCurrentWidget(self.tools_page)
+
+    def _rename_done(self) -> None:
+        self.close_tools()
 
     def set_lyrics_offline(self, offline: bool) -> None:
         self.settings.lyrics_offline = offline
@@ -624,6 +721,7 @@ class MainWindow(QMainWindow):
             return
         if self.embedder is not None:
             self.embedder.close()  # before the writer: it may still hand it a batch
+        self.rename_runner.close()  # a running rename stops between two files
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
         self.save_state()

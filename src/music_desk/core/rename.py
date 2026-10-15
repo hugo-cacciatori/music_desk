@@ -255,19 +255,27 @@ def folder_facts(entries: list[Path], options: RenameOptions) -> _FolderFacts:
 DEFAULT_OPTIONS = RenameOptions()
 
 
+class PlanCancelled(Exception):
+    """plan_renames was cancelled (it reads every file's tags, which takes a while on a big tree)."""
+
+
 def plan_renames(folder: str | Path, options: RenameOptions = DEFAULT_OPTIONS,
-                 selection: Iterable[str | Path] | None = None) -> RenamePlan:
+                 selection: Iterable[str | Path] | None = None, cancel: CancelToken | None = None) -> RenamePlan:
     """The dry run: what renaming `folder` would do. Nothing on disk changes.
 
     With `selection`, only those audio files (and their sidecars) are planned, and there is no junk cleanup.
+    A cancel raises PlanCancelled.
     """
     plan = RenamePlan(Path(folder), options)
     selected = {Path(p).resolve() for p in selection} if selection is not None else None
-    _plan_folder(Path(folder), options, selected, plan)
+    _plan_folder(Path(folder), options, selected, plan, cancel)
     return plan
 
 
-def _plan_folder(folder: Path, options: RenameOptions, selected: set[Path] | None, plan: RenamePlan) -> None:
+def _plan_folder(folder: Path, options: RenameOptions, selected: set[Path] | None, plan: RenamePlan,
+                 cancel: CancelToken | None = None) -> None:
+    if cancel is not None and cancel.cancelled:
+        raise PlanCancelled
     entries = list(folder.iterdir())
     facts = folder_facts(entries, options)
     state = _FolderState(p.name for p in entries)
@@ -288,9 +296,11 @@ def _plan_folder(folder: Path, options: RenameOptions, selected: set[Path] | Non
     staying_sidecars = {audio: lrc for audio, lrc in facts.sidecars.items() if not is_junk(lrc)}
 
     for path in entries:
+        if cancel is not None and cancel.cancelled:
+            raise PlanCancelled
         if path.is_dir():
             if options.recursive:
-                _plan_folder(path, options, selected, plan)
+                _plan_folder(path, options, selected, plan, cancel)
             continue
         if not path.is_file():
             continue
@@ -389,6 +399,10 @@ class RenameReport:
     skipped: list[str] = field(default_factory=list)  # changed since the preview
     warnings: list[str] = field(default_factory=list)
     cancelled: bool = False
+    # What happened on disk, for the app's index: (old path, new path) per rename, sidecars included, in order;
+    # and the files sent to the Recycle Bin.
+    steps: list[tuple[Path, Path]] = field(default_factory=list)
+    recycled: list[Path] = field(default_factory=list)
 
 
 def unchanged_since_plan(item: PlanItem) -> bool:
@@ -436,9 +450,67 @@ def apply_plan(plan: RenamePlan, recycle: Callable[[Path], None] = fsops.send_to
                     report.errors.append(f"{name}: could not be sent to the Recycle Bin ({e})")
                     continue
                 report.junk.append(name)
+                report.recycled.append(item.source)
             case Status.RENAME:
                 _apply_rename(item, report)
     return report
+
+
+def preview_report(plan: RenamePlan) -> RenameReport:
+    """What apply_plan would report if nothing changes meanwhile: the preview's counts and lists."""
+    report = RenameReport(warnings=list(plan.warnings))
+    for item in plan.items:
+        name = item.source.name
+        if item.is_audio:
+            report.scanned += 1
+        match item.status:
+            case Status.MISSING_TAGS:
+                report.missing_tags.append(f"{name} (missing: {item.detail})")
+            case Status.NAME_TAKEN:
+                report.name_taken.append(f"{name} -> {item.target.name}")
+            case Status.UNREADABLE:
+                report.errors.append(f"{name}: {item.detail}")
+            case Status.KEPT:
+                report.kept.append(f"{name} (kept: {item.detail})")
+            case Status.JUNK:
+                report.junk.append(name)
+            case Status.RENAME:
+                report.renamed.append(item.target.name)
+                if item.fallback_missing is not None:
+                    report.fallback.append(f"{item.target.name} (missing: {item.fallback_missing})")
+                if item.sidecar is not None and item.sidecar.status is Status.RENAME:
+                    report.sidecars_renamed.append(f"{item.sidecar.source.name} -> {item.sidecar.target.name}")
+    return report
+
+
+def count_files(count: int, verb_singular: str = "", verb_plural: str = "") -> str:
+    """'1 file was' / '2 files were' (the script's count_files)."""
+    return f"{count} file{'' if count == 1 else 's'}" + (
+        f" {verb_singular if count == 1 else verb_plural}" if verb_singular else "")
+
+
+def summary_sections(report: RenameReport, dry_run: bool) -> list[tuple[str, list[str]]]:
+    """The script's print_summary, as (title, entries) sections, with its wording; then the app's additions
+    (kept files, sidecars, skipped files, warnings). Empty sections are left out, as the script did, except the
+    first line, which is always there."""
+    was, were = ("would be", "would be") if dry_run else ("was", "were")
+    junk_verb = "sent to the Recycle Bin as junk"
+    sections = [
+        (f"{len(report.renamed)}/{count_files(report.scanned, was, were)} renamed", report.renamed),
+        (f"{count_files(len(report.fallback), was, were)} renamed with a fallback mask", report.fallback),
+        (f"{count_files(len(report.missing_tags))} could not be renamed: missing tags", report.missing_tags),
+        (f"{count_files(len(report.name_taken))} could not be renamed because another file already has that name",
+         report.name_taken),
+        (f"{count_files(len(report.errors))} could not be processed", report.errors),
+        (f"{count_files(len(report.junk), was, were)} {junk_verb}", report.junk),
+        (f"{count_files(len(report.kept))} kept", report.kept),
+        (f"{len(report.sidecars_renamed)} .lrc file{'' if len(report.sidecars_renamed) == 1 else 's'} "
+         f"{'would follow' if dry_run else 'followed'} {'its' if len(report.sidecars_renamed) == 1 else 'their'} "
+         "music file", report.sidecars_renamed),
+        (f"{count_files(len(report.skipped))} skipped: changed since the preview", report.skipped),
+        ("Warnings", report.warnings),
+    ]
+    return [sections[0]] + [(title, entries) for title, entries in sections[1:] if entries]
 
 
 def _apply_rename(item: PlanItem, report: RenameReport) -> None:
@@ -454,6 +526,7 @@ def _apply_rename(item: PlanItem, report: RenameReport) -> None:
     except OSError as e:
         report.errors.append(f"{name}: could not be renamed to {new_name} ({e})")
         return
+    report.steps.append((item.source, item.target))
     report.renamed.append(new_name)
     if item.fallback_missing is not None:
         report.fallback.append(f"{new_name} (missing: {item.fallback_missing})")
@@ -470,6 +543,7 @@ def _apply_rename(item: PlanItem, report: RenameReport) -> None:
     except OSError as e:
         report.warnings.append(f"{sidecar.source.name} could not be renamed ({e})")
         return
+    report.steps.append((sidecar.source, sidecar.target))
     report.sidecars_renamed.append(f"{sidecar.source.name} -> {sidecar.target.name}")
 
 

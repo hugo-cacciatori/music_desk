@@ -1,12 +1,17 @@
+import base64
 import os
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QKeySequence
+from PySide6.QtCore import QByteArray, Qt
+from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QKeySequence
 from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox, QSplitter, QWidget
 
+from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
-from music_desk.core.index.scanner import ScanProgress
+from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
+from music_desk.core.index.store import path_of
 from music_desk.services.library import LibraryService
+from music_desk.settings import Settings
+from music_desk.ui.file_view import FileView
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
 
@@ -32,9 +37,12 @@ class DropOverlay(QLabel):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, library: LibraryService | None = None) -> None:
+    def __init__(self, library: LibraryService | None = None, settings: Settings | None = None) -> None:
         super().__init__()
         self.library = library
+        self.settings = settings or Settings()
+        self.folder_id: int | None = None
+        self.folder_path: str | None = None  # to find the nearest surviving folder if this one disappears
         self.setWindowTitle(APP_TITLE)
         self.resize(1200, 760)
         self.index_label = QLabel()
@@ -43,15 +51,17 @@ class MainWindow(QMainWindow):
         self.rsgain_label = QLabel("Checking rsgain…")
         self.statusBar().addPermanentWidget(self.rsgain_label)
 
-        self.sidebar = Sidebar()
-        self.center = QLabel("Select a library folder.")  # the file list comes in a later M2 task
-        self.center.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        splitter = QSplitter()
-        splitter.addWidget(self.sidebar)
-        splitter.addWidget(self.center)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([280, 920])
-        self.setCentralWidget(splitter)
+        conn = lambda: self.library.conn if self._library_open() else None  # noqa: E731
+        self.sidebar = Sidebar(conn, self.settings.expanded_folders)
+        self.sidebar.model.only_music = self.settings.hide_folders_without_music
+        self.file_view = FileView(conn)
+        self.splitter = QSplitter()
+        self.splitter.addWidget(self.sidebar)
+        self.splitter.addWidget(self.file_view)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setSizes([280, 920])
+        self.setCentralWidget(self.splitter)
+        self._restore_state()
 
         self.add_folder_action = QAction("&Add folder…", self, shortcut=QKeySequence("Ctrl+O"))
         self.add_folder_action.triggered.connect(self.add_folder)
@@ -59,12 +69,19 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.add_folder_action)
         file_menu.addSeparator()
         file_menu.addAction("E&xit", self.close)
+        view_menu = self.menuBar().addMenu("&View")
+        self.hide_empty_action = QAction("&Hide folders without music", self, checkable=True)
+        self.hide_empty_action.setChecked(self.settings.hide_folders_without_music)
+        self.hide_empty_action.toggled.connect(self.set_hide_folders_without_music)
+        view_menu.addAction(self.hide_empty_action)
 
         self.overlay = DropOverlay(self)
         self.toast = Toast(self)
         self.setAcceptDrops(library is not None)
         self.sidebar.addFolderRequested.connect(self.add_folder)
         self.sidebar.removeRequested.connect(self.remove_root)
+        self.sidebar.folderSelected.connect(self.open_folder)
+        self.file_view.folderActivated.connect(self.open_folder)
 
         if library is None:
             self.add_folder_action.setEnabled(False)
@@ -76,7 +93,10 @@ class MainWindow(QMainWindow):
             library.indexer.progress.connect(self.show_index_progress)
             library.indexer.idle.connect(self.index_label.hide)
             library.indexer.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
+            library.indexer.folderUpdated.connect(self.folder_updated)
+            library.indexer.scanFinished.connect(self.scan_finished)
             self.refresh_roots()
+            self._reopen_last_folder()
 
     # -- rsgain --
 
@@ -87,6 +107,94 @@ class MainWindow(QMainWindow):
         else:
             self.rsgain_label.setText("rsgain unavailable: ReplayGain tools disabled")
             self.rsgain_label.setToolTip("The bundled rsgain.exe could not run. See the log for details.")
+
+    # -- browsing --
+
+    def open_folder(self, entry_id: int) -> None:
+        """Show a folder at once from the index, then have it revalidated (stale-while-revalidate)."""
+        if not self._library_open() or entry_id == self.folder_id or not self._folder_exists(entry_id):
+            return  # a row being removed can still be selected for a moment
+        self.folder_id = entry_id
+        self.folder_path = str(path_of(self.library.conn, entry_id))
+        self.file_view.set_folder(entry_id)
+        self.sidebar.tree.select_entry(queries.folder_path_ids(self.library.conn, entry_id))
+        self.library.folder_opened(entry_id)
+
+    def folder_updated(self, entry_id: int) -> None:
+        if not self._library_open():
+            return
+        self._keep_open_folder()
+        self.sidebar.model.refresh(entry_id)
+        if entry_id == self.folder_id:
+            self.file_view.refresh()
+
+    def scan_finished(self, _report: ScanReport) -> None:
+        if not self._library_open():
+            return
+        self._keep_open_folder()
+        self.sidebar.model.refresh_loaded()
+        if self.folder_id is not None:
+            self.file_view.refresh()
+
+    def _keep_open_folder(self) -> None:
+        """If the open folder left the index (deleted or moved outside the app), open its nearest surviving
+        ancestor, as Explorer does. Done before the tree drops the row, which would select a neighbour."""
+        if self.folder_id is None or self._folder_exists(self.folder_id):
+            return
+        found = find_folder(self.library.conn, self.folder_path) if self.folder_path else None
+        if found is None:
+            self._close_folder()
+        else:
+            self.open_folder(found[0])
+
+    def _library_open(self) -> bool:
+        """False without a library, and once it is closed: queued signals can arrive after the shutdown."""
+        return self.library is not None and not self.library.closed
+
+    def _folder_exists(self, entry_id: int) -> bool:
+        return self.library.conn.execute("SELECT 1 FROM entries WHERE id = ?", (entry_id,)).fetchone() is not None
+
+    def _close_folder(self) -> None:
+        self.folder_id = None
+        self.folder_path = None
+        self.file_view.set_folder(None)
+
+    def set_hide_folders_without_music(self, hide: bool) -> None:
+        self.settings.hide_folders_without_music = hide
+        self.sidebar.model.set_only_music(hide)
+
+    # -- window state --
+
+    def _restore_state(self) -> None:
+        for value, restore in ((self.settings.window_geometry, self.restoreGeometry),
+                               (self.settings.splitter_state, self.splitter.restoreState)):
+            if value:
+                try:
+                    restore(QByteArray(base64.b64decode(value, validate=True)))
+                except ValueError:
+                    pass
+        self.file_view.restore_layout(self.settings.file_list_header)
+
+    def _reopen_last_folder(self) -> None:
+        if not self.settings.last_folder:
+            return
+        found = find_folder(self.library.conn, self.settings.last_folder)
+        if found and found[1]:
+            self.open_folder(found[0])
+
+    def save_state(self) -> None:
+        self.settings.window_geometry = base64.b64encode(bytes(self.saveGeometry())).decode("ascii")
+        self.settings.splitter_state = base64.b64encode(bytes(self.splitter.saveState())).decode("ascii")
+        self.settings.file_list_header = self.file_view.save_layout()
+        self.settings.expanded_folders = self.sidebar.tree.expanded_paths()
+        self.settings.last_folder = ""
+        if self._library_open() and self.folder_id is not None and self._folder_exists(self.folder_id):
+            self.settings.last_folder = str(path_of(self.library.conn, self.folder_id))
+        self.settings.save()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self.save_state()
+        super().closeEvent(event)
 
     # -- indexing --
 
@@ -107,6 +215,9 @@ class MainWindow(QMainWindow):
     # -- roots --
 
     def refresh_roots(self) -> None:
+        if not self._library_open():
+            return
+        self._keep_open_folder()  # its root may have been removed, or merged into a new one
         self.sidebar.set_roots(self.library.roots())
 
     def choose_folder(self) -> str:

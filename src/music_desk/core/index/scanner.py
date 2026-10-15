@@ -198,25 +198,30 @@ class Scanner:
 
     # -- public scans --
 
-    def scan_root(self, root_id: int, cancel: CancelToken | None = None) -> ScanReport:
+    def scan_root(self, root_id: int, cancel: CancelToken | None = None) -> ScanReport | None:
+        """Scan a whole root. None if the root was removed meanwhile."""
         conn = connect_read(self.writer.path)
         try:
             row = conn.execute(
                 "SELECT r.path, e.id FROM roots r JOIN entries e ON e.root_id = r.id AND e.parent_id IS NULL "
                 "WHERE r.id = ?", (root_id,)).fetchone()
             if row is None:
-                raise KeyError(f"no root {root_id}")
+                return None
             return self._scan_tree(conn, root_id, row[1], row[0], cancel or CancelToken(), whole_root=True)
         finally:
             conn.close()
 
     def scan_folder(self, entry_id: int, cancel: CancelToken | None = None, *,
-                    recursive: bool = False) -> ScanReport:
-        """Reconcile one folder: its direct children (F5, revalidation on open), or its whole subtree."""
+                    recursive: bool = False) -> ScanReport | None:
+        """Reconcile one folder: its direct children (F5, revalidation on open), or its whole subtree.
+        None if the entry left the index meanwhile (its root removed, or a parent scan deleted it)."""
         cancel = cancel or CancelToken()
         conn = connect_read(self.writer.path)
         try:
-            root_id = conn.execute("SELECT root_id FROM entries WHERE id = ?", (entry_id,)).fetchone()[0]
+            row = conn.execute("SELECT root_id FROM entries WHERE id = ?", (entry_id,)).fetchone()
+            if row is None:
+                return None
+            root_id = row[0]
             if recursive:
                 return self._scan_tree(conn, root_id, entry_id, str(path_of(conn, entry_id)), cancel,
                                        whole_root=False)

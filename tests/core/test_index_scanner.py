@@ -407,3 +407,14 @@ def test_scan_folder_recursive(writer, read, library, root_id):
     scanner(writer).scan_folder(entry_id(read, library, "Formats"), recursive=True)
     assert "Formats/a/b/c.txt" in indexed_paths(read, library)
     assert list_roots(read)[0].last_scan == "2026-10-15T12:00:00"  # set by the root scan, not changed since
+
+
+def test_scan_folder_of_a_vanished_entry(writer, read, library, root_id):
+    scanner(writer).scan_root(root_id)
+    gone = entry_id(read, library, "Empty")
+    writer.execute("DELETE FROM entries WHERE id = ?", (gone,)).result()
+    assert scanner(writer).scan_folder(gone) is None
+
+
+def test_scan_of_a_removed_root(writer):
+    assert scanner(writer).scan_root(999) is None

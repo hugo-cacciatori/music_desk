@@ -47,6 +47,10 @@ class LibraryService(QObject):
         for root in self.roots():  # the startup rescan; an offline root is skipped by the scanner
             self.indexer.scan_root(root.id)
 
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
     def roots(self) -> list[Root]:
         if self._closed:  # a signal queued before close() may still be delivered
             return []
@@ -78,8 +82,8 @@ class LibraryService(QObject):
         self._fs.shutdown(wait=True)
         self.watcher.stop()
         self.indexer.stop()
-        self.writer.stop()
         self.conn.close()
+        self.writer.stop()  # last: only a writing connection can checkpoint and remove the WAL files
 
     # -- worker side --
 

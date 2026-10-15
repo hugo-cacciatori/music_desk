@@ -9,6 +9,7 @@ from music_desk.core.rsgain import rsgain_version
 from music_desk.logging_setup import setup_logging
 from music_desk.paths import app_data_dir, library_db_path, rsgain_path
 from music_desk.services.library import LibraryService
+from music_desk.settings import Settings
 from music_desk.ui.main_window import APP_TITLE, MainWindow
 
 log = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ def main() -> int:
     else:
         app.aboutToQuit.connect(library.close)
 
-    window = MainWindow(library)
+    window = MainWindow(library, Settings.load())
     window.show()
 
     check = RsgainCheck()

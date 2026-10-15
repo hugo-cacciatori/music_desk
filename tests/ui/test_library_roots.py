@@ -3,7 +3,7 @@
 import shutil
 
 import pytest
-from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
+from PySide6.QtCore import QMimeData, QModelIndex, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
 from music_desk.core.index import roots as roots_module
@@ -42,7 +42,7 @@ def add(qtbot, service, *paths):
 
 
 def sidebar_texts(window):
-    return [window.sidebar.list.item(row).text() for row in range(window.sidebar.list.count())]
+    return window.sidebar.root_texts()
 
 
 _KEEP_ALIVE = []  # Qt events don't own their mime data: it must outlive the event
@@ -134,7 +134,7 @@ def test_offline_root_is_dimmed(qtbot, window, service, library_dir, tmp_path):
     with qtbot.waitSignal(service.rootsChanged, timeout=5000):
         service.refresh_online()
     qtbot.waitUntil(lambda: sidebar_texts(window) == [f"{library_dir / 'Rips'}  (offline)"])
-    assert "browsable" in window.sidebar.list.item(0).toolTip()
+    assert "browsable" in window.sidebar.model.index(0, 0).data(Qt.ItemDataRole.ToolTipRole)
 
 
 def test_remove_asks_first(qtbot, window, service, library_dir, monkeypatch):
@@ -156,9 +156,9 @@ def test_remove_asks_first(qtbot, window, service, library_dir, monkeypatch):
 def test_context_menu_offers_remove(qtbot, window, service, library_dir):
     add(qtbot, service, library_dir / "Music")
     qtbot.waitUntil(lambda: len(sidebar_texts(window)) == 1)
-    menu = window.sidebar.context_menu_for(window.sidebar.list.item(0))
+    menu = window.sidebar.context_menu_for(window.sidebar.model.index(0, 0))
     assert [a.text() for a in menu.actions() if a.text()] == ["Remove from library", "Add folder…"]
-    assert [a.text() for a in window.sidebar.context_menu_for(None).actions()] == ["Add folder…"]
+    assert [a.text() for a in window.sidebar.context_menu_for(QModelIndex()).actions()] == ["Add folder…"]
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # QDragEnterEvent has only the QPoint constructor
@@ -196,3 +196,9 @@ def test_window_without_a_library(qtbot):
     assert not window.acceptDrops()
     assert not window.add_folder_action.isEnabled()
     assert not window.sidebar.isEnabled()
+
+
+def test_close_leaves_no_wal_files(tmp_path):
+    db = tmp_path / "db" / "library.db"
+    LibraryService(db).close()
+    assert sorted(p.name for p in db.parent.iterdir()) == ["library.db"]

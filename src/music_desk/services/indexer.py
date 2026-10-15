@@ -119,7 +119,7 @@ class Indexer(QObject):
                     report = self.scanner.scan_path(path, cancel, recursive=recursive)
                 else:
                     report = self.scanner.scan_folder(entity, cancel)
-                if report is not None:  # None: a path outside the library (its root removed meanwhile)
+                if report is not None:  # None: the folder or path left the library meanwhile
                     log.info("scan %s %s: %s", kind, entity, report)
                     if kind != "root" and report.folder_id is not None:
                         self.folderUpdated.emit(report.folder_id)

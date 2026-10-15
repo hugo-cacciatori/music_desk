@@ -105,13 +105,22 @@ WMA has no standard track total, so that field is disabled for .wma, with a tool
   - `folder_stats(entry_id, n_tracks, duration, n_with_rg, n_with_lyrics_tag, n_lrclib_found, formats)`,
     recomputed after scans.
   - `search` (FTS5): name, title, artist, albumartist, album, genre, plus lyrics text (from LRCLIB and from tags).
+    Until M6 it holds only the tags' lyrics (column `lyrics`, read by the Lyrics tab for its tag note).
+    - Planned schema v3 (built at M6, §6 "Implementation notes"):
+      - `tokenize='trigram remove_diacritics 1'`, for the substring matching of seek_lyrics' search (§6);
+      - a new column `lrclib` holds the LRCLIB plain text;
+      - this needs SQLite ≥ 3.45, the version bundled with Python 3.13 (3.45.3 checked).
+    - Queries shorter than 3 characters can't use trigram. They fall back to `LIKE` on the worker thread, under
+      the same result cap.
+    - The trigram index costs about 3× the indexed text, which is accepted for the search it gives.
 - One DB writer thread fed by a queue. The UI uses its own read-only connection.
 - As built (M2 task 1, `core/index/`):
   - Schema version 1 is in `PRAGMA user_version`. Migrations run in one transaction, and an index from a newer
     app is refused without being touched.
   - A root's top folder is the `entries` row with `parent_id NULL`, and its `name` is the root's full path. A
     partial unique index allows one per root, because NULLs are distinct in UNIQUE.
-  - `search` uses the `unicode61 remove_diacritics 2` tokenizer, so "Sigur Ros" finds "Sigur Rós".
+  - `search` uses the `unicode61 remove_diacritics 2` tokenizer, so "Sigur Ros" finds "Sigur Rós". (Replaced by
+    trigram with `remove_diacritics 1` in schema v3, at M6.)
   - Connections: `foreign_keys=ON` and `busy_timeout=5000`. The writer adds `journal_mode=WAL` and
     `synchronous=NORMAL`. Readers open with `mode=ro` and `query_only`, and check the schema version.
   - `DbWriter.submit(fn)` runs each job in its own `BEGIN IMMEDIATE` transaction and returns a Future. A failing
@@ -262,19 +271,88 @@ Explorer-like, with no copy, paste, delete or new.
   Each one is a query over the index, shown as a flat list.
 
 ## 6. Library search
-- Ctrl+K searches the whole library, with a scope toggle for "this folder and below". FTS5 prefix matching runs
-  as you type (120 ms debounce, stale queries cancelled, worker thread).
+- Ctrl+K searches the whole library, with a scope toggle for "this folder and below". Matching runs as you type
+  (120 ms debounce, stale queries cancelled, worker thread). Free text matches as seek_lyrics' search did (below).
 - Field filters:
   - `artist:` `album:` `year:` `genre:` `ext:opus`
   - `lyricstag:yes|no|lrc`
   - `lrclib:synced|plain|instrumental|notfound|pending|error`
   - `rg:none`
-  - `"quoted phrase"` searches inside lyrics text.
+  - `"quoted phrase"` keeps spaces and punctuation as typed. The phrase is still matched as a substring, in
+    every free-text column, lyrics included.
 
-  Free text searches the FTS columns.
+  Free text searches the free-text columns (below) as substrings.
 - Results appear as a flat list with a Folder column (up to 5,000 shown, with the total count). Enter or a
   double-click goes to the file's folder with the file selected. Esc returns to the previous folder. Search
   results and smart views can be played (§14).
+
+### Preserved from seek_lyrics' songs.html search (must not be lost)
+songs.html is gone (§17), but its search box was a real feature: type anything, and see every song whose title,
+artist, album or lyrics contain it. Library search must keep that behaviour. It lives inside the one Ctrl+K search
+of the app's normal workflow, not as a separate lyrics page or a second search UI. Anyone planning or changing §6
+checks this subsection first.
+
+**The original** (`tests/reference/seek_lyrics.py`, the page script):
+- haystack = title, artist, album and plain lyrics, lowercased;
+- a song matches when `haystack.includes(query)`: any substring, of any length, mid-word included, case-insensitive;
+- results highlight the match in the title and artist. When only the lyrics match, they also show the first
+  matching lyric line as a snippet, with the match highlighted;
+- "N of M songs", status chips (All, With lyrics, Missing), an artist checkbox filter, and a detail pane with the
+  lyrics (synced or plain) and the Genius/Google links.
+
+**In the app:**
+- **Free text** is that rule: a case-insensitive substring over name, title, artist, albumartist, album, genre,
+  and lyrics (the LRCLIB plain text and the file's own lyrics tag). "ove" finds "glove" and "lovely", and one or
+  two characters work too.
+- **Deliberate differences (§17):**
+  - accents are ignored ("Sigur Ros" finds "Sigur Rós");
+  - every audio file under the roots is searchable, not only the songs a script run saw;
+  - the file name, album artist and genre are searched too.
+- **Results:**
+  - The match is highlighted in the Title and Artist cells.
+  - A **Lyrics** column shows the first matching lyric line, with the match highlighted, when the match is only
+    in the lyrics. It is empty otherwise.
+  - The count reads "N of M tracks".
+- **Filters:**
+  - The status chips become one-click chips under the search box: All, With lyrics (`lrclib:` synced, plain or
+    instrumental) and Missing (the rest).
+  - The artist checkboxes become `artist:` filters (repeatable, ORed), which a click on an artist value in the
+    results can add.
+- **The detail pane is the side panel:** selecting a result shows its lyrics in the Lyrics tab (§8), with the
+  timestamps toggle and the Genius/Google buttons. Nothing is duplicated.
+- **Acceptance (M6 "Done when"):** a parity test re-implements the page script's rule (lowercased `includes` over
+  title, artist, album and plain lyrics). Run on the fixture library with scripted LRCLIB lyrics, it must select
+  every track the app's free-text search finds on those fields, and the reverse, apart from the accent
+  difference.
+
+### Implementation notes (M6)
+Nothing here was needed before M6. The `lyrics` table already keeps every LRCLIB plain text, so the migration can
+fill the index at any time and nothing is lost by waiting.
+- `core/index/schema.py`, MIGRATIONS v3:
+  - Drop and recreate `search` with `tokenize='trigram remove_diacritics 1'` and the columns name, title, artist,
+    albumartist, album, genre, lyrics (the tags' text), lrclib (LRCLIB plain).
+  - Copy the existing rows from a temporary table, keeping their rowids.
+  - Fill `lrclib` from `tracks JOIN lyrics ON key = lyrics_key WHERE status = 'found'`.
+  - Recreate the `entries_search_delete` trigger.
+  - Add a v2 → v3 migration test, following the existing v1 → v2 test.
+- `core/index/lyrics_index.py` `record_lyrics`: `UPDATE search SET lrclib = ? WHERE rowid IN (SELECT entry_id
+  FROM tracks WHERE lyrics_key = ?)`, with the plain text when found, else NULL.
+- `core/index/scanner.py` `_write_tracks`: the search insert also sets `lrclib` from the `lyrics` table for the
+  row's key, so a new copy of an already-found song is searchable at once.
+- `core/index/search.py` (new) `text_search(conn, query, *, limit=5000) -> (ids, total)`:
+  - with 3 or more characters, `search MATCH` with the query quoted as one FTS phrase (inner quotes doubled), so
+    FTS operators and punctuation are literal;
+  - with fewer, `LIKE '%q%'` (escaped) over the same columns;
+  - results in natural folder and name order.
+  The field filters, the scope, the snippet and the UI build on it.
+- The snippet is computed for the shown rows only, from `search.lrclib` or `search.lyrics`: the first line whose
+  accent-folded, casefolded form contains the query.
+- Tests:
+  - substring mid-word; case and accents; a match in LRCLIB lyrics and in tag lyrics;
+  - 1–2 character queries;
+  - FTS syntax and quotes in the query taken literally;
+  - a key going from found to not_found drops its text from the matches;
+  - the parity test above.
 
 ## 7. Side panel and Metadata tab
 The side panel sits on the right; it is resizable and collapsible. Tabs: **Metadata** | **Lyrics** (§8). With a
@@ -462,6 +540,9 @@ not it has a lyrics tag.
     - a trip shows a toast, "LRCLIB unreachable, retrying in 10 min." with Retry now.
   - `LrclibClient` resolves urllib's opener at call time, so the tests' global network guard covers it. UI tests
     build their libraries offline.
+- At M6 (§6 "Implementation notes"), `record_lyrics` also writes the LRCLIB plain text into `search.lrclib` for
+  every track with the key (NULL when the key stops being found), and scanned tracks take it from the `lyrics`
+  table. Until then LRCLIB text isn't in the search index; the `lyrics` table keeps it.
 - When a root is added, a `lyrics_cache.json` at its top (the script's cache) is imported into the DB cache. The
   file itself is left untouched.
 
@@ -574,7 +655,7 @@ the rename step only; as in the script, ReplayGain can't be previewed on names t
 | `RSGAIN_PATH`         | bundled, fixed |
 | `PAUSE_AT_END`        | n/a |
 | seek_lyrics `--offline` / `--embed` | Settings (§9) and "Save to file tags" (§8) |
-| seek_lyrics songs.html | dropped; lyrics are searchable in the app |
+| seek_lyrics songs.html | dropped as a file; its search box is preserved in library search (§6, "Preserved from seek_lyrics") |
 
 **Jobs panel** (bottom drawer): running and finished jobs with progress, logs and reports.
 - Two jobs can't overlap on the same folder tree.
@@ -763,7 +844,10 @@ and `seek_lyrics.py` at the project root, made at M1.
   - opt-in, and files go to the Recycle Bin;
   - .m3u is gone from the default list;
   - the protections and case-by-case keeps of §10 apply, and kept `.lrc` sidecars follow their audio file's rename.
-- No songs.html.
+- No songs.html. Its search behaviour is kept in library search (§6), with these differences:
+  - accents are ignored;
+  - every audio file under the roots is searchable;
+  - the file name, album artist and genre are searched too.
 - Tags (verified by `tests/core/test_tags_parity.py`):
   - Vorbis ReplayGain keys are written in uppercase (`REPLAYGAIN_TRACK_GAIN`); the script writes the lowercase key
     it is given. Vorbis keys are case-insensitive, so readers see no difference.

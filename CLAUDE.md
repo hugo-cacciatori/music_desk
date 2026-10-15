@@ -11,6 +11,11 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, session 7):**
+- **Spec (docs only, no code):** seek_lyrics' songs.html search box (substring over title, artist, album and
+  lyrics) is now an explicit parity requirement of library search (SPEC §6, "Preserved from seek_lyrics"). The
+  index groundwork for it (schema v3 trigram `search` with an `lrclib` column, `record_lyrics` indexing the text,
+  and `core/index/search.py`) is written down in SPEC §6, "Implementation notes (M6)". It waits for M6, since
+  nothing is lost meanwhile.
 - **M4 task 2 is done (the Lyrics tab):**
   - `ui/side_panel/lyrics_tab.py` `LyricsTab(conn, service)` covers every SPEC §8 state (`tab.state`
     constants), from the index only (`lyrics_index.lyrics_info`), and follows `entryReady` and state changes.
@@ -525,7 +530,7 @@ two files alone.
 | 2026-10-15 | v1 editing includes multi-file tag editing, folder renaming and cover editing. The lyrics tag is an ordinary field in the Metadata tab. The Lyrics tab shows only LRCLIB results, or the Genius/Google buttons. |
 | 2026-10-15 | Per-track fields (Title, Track #, Lyrics) are edited one file at a time. They are disabled in multi-selection. |
 | 2026-10-15 | Every track is looked up on LRCLIB, even when it already has a lyrics tag. This deliberately changes the script's tags-first rule. |
-| 2026-10-15 | No songs.html export. |
+| 2026-10-15 | No songs.html export (its search box survives in library search: see the songs.html search row below). |
 | 2026-10-15 | Support as many formats as possible: every format mutagen can tag, and ReplayGain on every format rsgain supports (SPEC §1). |
 | 2026-10-15 | No playback in the app. "Open with default app", plus "Play folder" and "Play selection" through a temporary .m3u8 playlist. A playlist builder is planned as M7. |
 | 2026-10-15 | ReplayGain albums are scanned one at a time (no parallel rsgain), in the background, so the UI stays responsive. |
@@ -561,6 +566,7 @@ two files alone.
 | 2026-10-15 | The repo is on GitHub, public: hugo-cacciatori/music_desk. Push only when Hugo asks. |
 | 2026-10-15 | LyricsService: three tiers (selected track, open folder, background folder by folder), with one lookup per key. Its state lives only in the `lyrics` table, so a restart resumes. A failed key waits 10 minutes, unless it is selected. The breaker pauses 10 minutes, and Retry now ends it. Offline makes no call. Lookups start at the first indexer idle. UI tests build offline libraries, and a global guard blocks urllib's opener in every test. Details in SPEC §9. |
 | 2026-10-15 | Lyrics tab: it reads only the index (the file's lyrics tag comes from the indexed search text), so selecting a track reads no file. Found and instrumental entries show even offline. Retry now looks the one track up again whatever its cache says, and ends the breaker's pause. A lookup error shows over an older cached not_found. Web searches are launched on the shell thread. Details in SPEC §8. |
+| 2026-10-15 | seek_lyrics' songs.html search is a parity requirement of library search: free text is a case-insensitive substring match over title, artist, album and lyrics (LRCLIB and tags), accent-folded. There is one Ctrl+K search, and the Lyrics tab is the detail pane. The plan is a trigram FTS5 index (schema v3, with an `lrclib` column) and a `LIKE` fallback under 3 characters, all built at M6. Details in SPEC §6. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -700,13 +706,16 @@ Done when: the app's `replaygain.log` matches a script run on the same copied al
 cleanup fixture case gets the expected status.
 
 **M6 Polish** (read SPEC §5, §6, §12 and §13)
-- [ ] Library search (FTS5, filters, scope), Play results
+- [ ] Library search (FTS5, filters, scope), Play results, with seek_lyrics search parity: read SPEC §6
+      "Preserved from seek_lyrics" and "Implementation notes (M6)" first
 - [ ] Smart views
 - [ ] Settings dialog
 - [ ] Theme and icons
 - [ ] Inno Setup installer; check the licenses of the FFmpeg libraries built into rsgain
 
-Done when: the installer installs the app, and it runs from Program Files with the bundled rsgain.
+Done when:
+- the installer installs the app, and it runs from Program Files with the bundled rsgain;
+- the seek_lyrics search parity test (SPEC §6) passes.
 
 **M7 Playlists (after v1)** (read SPEC §15)
 - [ ] Settle the design with Hugo (SPEC §15 and Open questions), then break it into tasks here.

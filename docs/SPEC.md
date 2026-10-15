@@ -349,6 +349,15 @@ coverage, cover, a Play button and tool shortcuts.
     Remove applies to every file that can be tagged.
   - A field counts as edited only when its text differs from what was loaded, so blank text stored in a tag
     (e.g. "  ") isn't mistaken for a change.
+- As built (M3 task 5), the folder summary:
+  - It shows for one selected folder, and for the open folder when nothing is selected.
+  - Tracks, duration, formats, ReplayGain coverage and lyrics-tag coverage count the whole subtree. "In this
+    folder" counts its direct subfolders and files.
+  - The cover is the folder image, else the first track's embedded front cover (the first audio file in natural
+    order, searched level by level). It is read and decoded on the worker thread.
+  - Play folder (enabled when the folder has tracks of its own) and Play with subfolders.
+  - LRCLIB coverage appears with M4, and tool shortcuts with M5.
+  - It refreshes when the indexer updates the folder.
 
 ## 8. Lyrics tab
 The tab shows only externally fetched lyrics: what LRCLIB returns for the selected track. It never shows the

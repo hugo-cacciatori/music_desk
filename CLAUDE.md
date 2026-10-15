@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M3 in progress** (tasks 1 to 4 done: the Metadata tab for a single file; TagWriter and path locks; multi-file editing; cover editing):
+- **M3 in progress** (tasks 1 to 5 done: the Metadata tab for a single file; TagWriter and path locks; multi-file editing; cover editing; folder summary):
   - `core/metadata.py`: `read_snapshot(path) -> Snapshot` (fields, stream details, RG values, the cover with its
     source, the ID3 version, `format_line` such as "FLAC 16-bit/44.1 kHz · 4:44 · 32 MB", with bit depth for
     lossless and kbps for lossy), `folder_cover` (folder.jpg, cover.jpg, front.jpg, ignoring case) and
@@ -92,7 +92,23 @@ two files alone.
       `update_file`.
     - Found and fixed: a file whose tag holds blank text (edge.flac's artist is padding) made the tab dirty with
       no edit. A field now counts as changed only when its text differs from what was loaded.
-  - 547 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
+  - Folder summary (task 5):
+    - `queries.folder_summary(conn, id) -> FolderSummary`: `folder_stats` (the subtree), the direct subfolder and
+      file counts, and `first_track` (natural order, walked level by level so a huge root stays cheap).
+    - `metadata.folder_picture(folder, first_track)`: the folder image, else the first track's embedded cover.
+      `TagIO.load_folder_cover` emits `folderCover(token, QImage, source)`.
+    - `ui/side_panel/folder_summary.py` `FolderSummaryView`: name, path, cover with its source, Tracks,
+      Duration, Formats, ReplayGain and Lyrics-tag coverage ("all 12 tracks" or "3 of 12 tracks"), "In this
+      folder" (subfolders and files), and Play folder / Play with subfolders.
+      - LRCLIB coverage isn't shown until M4 fills the lyrics table.
+      - Tool shortcuts are left out until the tools exist (M5).
+    - `SidePanel` is now a QWidget stacking `tabs` (Metadata, Lyrics) and `summary`; its tab texts are on
+      `panel.tabs`. `show_folder(id)`, `refresh_folder()` and `showing_folder`.
+    - MainWindow shows the summary for one selected folder row, and for the open folder when nothing is selected
+      (also right after opening a folder). It refreshes on `folderUpdated` and `scanFinished`, and Play goes to
+      `play_folder`.
+    - Invalid images (the test library's 3-byte `cover.jpg`) give "No cover".
+  - 556 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
     offscreen.
 - **M2 is complete** (its "Done when" holds: measured on a copied 10k-file tree, see the end of this block):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
@@ -323,18 +339,16 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M3's fifth task: the folder summary. Read SPEC §7 (the side panel with a folder selected) first.
-- `ui/side_panel/folder_summary.py`, shown in the panel when one folder is selected (or nothing is selected:
-  then the open folder):
-  - track count, total duration and formats, from `folder_stats` (the whole subtree);
-  - ReplayGain and lyrics coverage (n_with_rg, n_with_lyrics_tag, n_lrclib_found, each against n_tracks);
-  - the cover: the folder image, else the first track's embedded cover, read on TagIO's thread;
-  - a Play button (`MainWindow.play_folder`) and tool shortcuts. The tools arrive in M5, so show them disabled
-    with a "coming later" tooltip, or leave them out until then (pick one and record it).
-- Index data only, read on the UI connection; no file reads except the cover. Refresh on `folderUpdated` and
-  `scanFinished`.
-- Tests: the numbers against `folder_stats` for the fixture library, an empty folder, a subtree, the cover
-  source, Play, and the refresh after a change.
+**Next step:** M3's sixth task: import lyrics from a .lrc sidecar. Read SPEC §7 (the Lyrics field) and §10 (when
+a .lrc counts as a sidecar), first.
+- `Snapshot` gains the same-stem `.lrc` next to the file (name and text), read in `read_snapshot` on the worker
+  thread through `open_shared`. Decode as UTF-8 (with or without BOM), else cp1252; record the choice.
+- Metadata tab, single file: when the Lyrics tag is empty and a sidecar exists, show an "Import from <name>.lrc"
+  link that fills the field (dirty). Saving is the usual Save; the .lrc file itself is never touched.
+- Keep the import within the existing rules: LRC timestamps kept as typed, CRLF normalized.
+- The folder list's lyrics column already shows ".lrc" for sidecar-only tracks (`has_lrc_sidecar`).
+- Tests: the link shows only when the tag is empty, import plus save round trip, the .lrc unchanged (bytes
+  compared), encodings, and a multi-selection (no link: Lyrics is per-track).
 
 Don't start it until Hugo says so.
 
@@ -438,6 +452,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Locks: one shared `PathLocks` (in core, no Qt). Jobs lock folder trees, saves lock single files, and overlaps are refused at once (no waiting) with the owner's name. TagWriter writes serially. A save updates the index for that one file and adjusts the folder totals by deltas. Details in SPEC §7 and §16. |
 | 2026-10-15 | Multi-file editing: only shared fields that were edited or cleared are written. Emptying a "(multiple values)" field by hand leaves it alone, and only the clear button clears it on all files. A batch save reports per-file failures and keeps the edits for a retry. Any job-locked file makes the multi-edit read-only. Details in SPEC §7. |
 | 2026-10-15 | Covers: Replace (picker or a dropped jpg/png) and Remove change only the embedded front cover, and other pictures stay. A change is pending until Save, and Revert drops it. Over 1 MB asks first. With several files, a change applies to all, and the header says whether they share one cover. Folder images are shown, never written. Details in SPEC §7. |
+| 2026-10-15 | Folder summary: shown for one selected folder, or for the open folder when nothing is selected. It is built from the index (subtree totals) plus one cover read on the worker thread: the folder image, else the first track's embedded cover. Tool shortcuts wait for M5, and LRCLIB coverage waits for M4. Details in SPEC §7. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -552,7 +567,7 @@ the index.
 - [x] TagWriter and path locks
 - [x] Multi-file editing (per-track fields disabled)
 - [x] Cover display, replace and remove
-- [ ] Folder summary
+- [x] Folder summary
 - [ ] Import from a .lrc sidecar
 - [ ] Inline rename of files and folders, sidecars included, with Undo; the rename hint after a save
 

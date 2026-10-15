@@ -307,6 +307,17 @@ coverage, cover, a Play button and tool shortcuts.
   "Rename to '03 New Title.flac'?".
 - The ReplayGain tool writes `LUFS Target : <x>` into Comment. Users may edit it, and the next tool run
   overwrites it.
+- As built (M3 task 1):
+  - Reads and saves run on one worker thread. Only the changed fields are written, and an empty field clears
+    its tag. Lyrics that differ only by CRLF line endings count as unchanged.
+  - The format line shows the bit depth for lossless audio and the bitrate for lossy, e.g. "FLAC 16-bit/44.1 kHz
+    · 4:44 · 32 MB" or "MP3 320 kbps/44.1 kHz · 3:12 · 7.4 MB". The header says where the cover comes from
+    (embedded, or the folder image's name).
+  - Raw .aac (no tags) is shown read-only, with a note.
+  - Cancel in the unsaved-edits prompt keeps the selection, the open folder, and the window open.
+  - Every read that isn't followed by a save (the indexer, the side panel, folder images) opens the file with
+    FILE_SHARE_DELETE, so the app never makes a delete or rename in Explorer fail while it reads.
+  - Until TagWriter (the next M3 task), a save rescans the file's folder to update its row.
 
 ## 8. Lyrics tab
 The tab shows only externally fetched lyrics: what LRCLIB returns for the selected track. It never shows the

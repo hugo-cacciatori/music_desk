@@ -11,6 +11,33 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
+- **M3 in progress** (task 1 done: the Metadata tab for a single file):
+  - `core/metadata.py`: `read_snapshot(path) -> Snapshot` (fields, stream details, RG values, the cover with its
+    source, the ID3 version, `format_line` such as "FLAC 16-bit/44.1 kHz · 4:44 · 32 MB", with bit depth for
+    lossless and kbps for lossy), `folder_cover` (folder.jpg, cover.jpg, front.jpg, ignoring case) and
+    `write_fields(path, changes)`, which writes the changed fields only and returns the fresh snapshot.
+  - `services/tag_io.py` `TagIO`: one `tag-io` worker thread for reads and saves, with a token per request (a
+    stale result is ignored). Covers are decoded into a scaled QImage there.
+  - `ui/side_panel/panel.py` `SidePanel` (Metadata tab, plus a Lyrics placeholder) shows messages for nothing
+    selected, a folder, several items or a non-audio file.
+  - `ui/side_panel/metadata_tab.py` `MetadataTab`:
+    - the cover header, editable fields (validated numbers, multi-line lyrics), and read-only details with
+      the Loudness block;
+    - `changes()` holds only the differences; an empty field clears it, and CRLF lyrics count as unchanged;
+    - the dirty marker ("Metadata •"), Ctrl+S, and Esc to revert;
+    - a save error is shown with the fields kept dirty, and raw .aac is read-only with a note;
+    - `can_leave()` asks Save, Discard or Cancel (`ask_leave`, replaced in tests).
+  - MainWindow:
+    - three panes (tree, list, side panel); the panel follows `FileView.selectionChanged`;
+    - Cancel restores the previous selection, and blocks a folder change or closing the window;
+    - after a save, `Indexer.scan_path(folder)` updates the list row;
+    - closing waits for a save in progress.
+  - Found and fixed: reading tags or a folder image held the file open, so Windows refused a delete or rename in
+    Explorer at that moment. `fsops.open_shared` (CreateFileW with FILE_SHARE_DELETE, through `open(…, opener=)`,
+    so mutagen still sees the file name, which it needs for raw AAC) is now used by `TaggedFile(path, shared=True)`
+    for every read that isn't saved: the scanner, the side panel and folder covers.
+  - 495 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
+    offscreen.
 - **M2 is complete** (its "Done when" holds: measured on a copied 10k-file tree, see the end of this block):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
     `folder_stats`, FTS5 `search` with `unicode61 remove_diacritics 2`). `MIGRATIONS[n]` takes v`n` to v`n+1`,
@@ -240,23 +267,19 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M3's first task: the Metadata tab for a single file, every format. Read SPEC §7, §1 and §11, and
-the Ground rules, first.
-- A right-hand side panel (`ui/side_panel/panel.py`), resizable and collapsible, with Metadata and Lyrics tabs.
-  The Lyrics tab is only a placeholder until M4. The panel follows `FileView.selectionChanged`.
-- `ui/side_panel/metadata_tab.py` for one selected audio file:
-  - the editable fields of `tags.Fields`, read through `TaggedFile` on a worker thread (never on the UI thread);
-  - the header: the cover (embedded front cover, else folder.jpg/cover.jpg/front.jpg, else a placeholder), the
-    name and a format line;
-  - the read-only block: path, size, codec details and the Loudness block (the RG values);
-  - a dirty marker; Ctrl+S saves and Esc reverts.
-- Saving: write the changed fields only (`TaggedFile.set_fields` + `save`, which keeps the ID3 version) on a
-  worker thread. This is a first, simple writer; the real TagWriter with path locks is M3's second task. After a
-  save, rescan the folder so the list row updates.
-- Multi-selection, cover editing, the folder summary and the .lrc import are later M3 tasks: show "Select a single
-  file" for now.
-- pytest-qt: load and save round trips for every fixture format, ID3v2.3 kept, Esc revert, the dirty marker,
-  and no tag I/O on the UI thread.
+**Next step:** M3's second task: TagWriter and path locks. Read SPEC §16 and §7 (saving, locked files), and
+§10 (jobs take the same locks), first.
+- `services/path_locks.py`: a thread-safe registry of locked paths (a file, or a folder tree for jobs) with the
+  owner's name. `is_locked(path) -> owner | None`, and `lock(paths, owner)` as a context manager. No Qt is needed;
+  it could live in core.
+- `services/tag_writer.py` `TagWriter`: serial writes (one thread) that refuse a locked path with a plain error.
+  It replaces `TagIO.save`; reads can stay on TagIO's thread.
+- Metadata tab: a file under a lock is shown read-only, with a tooltip naming the job. M5's jobs will take the
+  locks; for now a test takes one directly.
+- Index: after a save, update that file's `tracks` row directly through the DbWriter (read the snapshot that was
+  just written), instead of the `scan_path` used now. The list row then updates without a folder rescan.
+- Tests: a locked path refuses writes, locks on a folder tree cover its files, the read-only state and tooltip,
+  writes stay serial, and the index row updates after a save.
 
 Don't start it until Hugo says so.
 
@@ -356,6 +379,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Browser: the tree and list read the index on the UI's read connection (instant), update in place on indexer signals, and reset only when another folder opens. Folders stay first in both sort directions. Folder rows show their subtree's track count (Title column) and total duration. Layout persists through `QHeaderView.saveState` in settings.json. When the open folder disappears, its nearest surviving ancestor opens. Settings live in `settings.py` (typed, JSON). Details in SPEC §5. |
 | 2026-10-15 | Navigation: the breadcrumb starts at the root path (one segment), and the levels above a root aren't navigable. Back and forward are Alt+←/→ and the mouse buttons; Backspace means Up, and only in the list and the tree. Up selects the folder you came from. A typed path to a file opens its folder and selects it. Details in SPEC §5. |
 | 2026-10-15 | Context menus show only what exists: Rename, Tidy and ReplayGain items arrive with their milestones. Shell hand-offs (default app, Explorer, playlist writing) run on a worker thread, and a failure becomes a toast with an Explorer fallback. Play lists are built from the index, not by reading files. "Open in File Explorer" opens a folder itself, and shows a file selected in its folder. M2 is complete. Details in SPEC §5 and §14. |
+| 2026-10-15 | Metadata tab: tag reads and saves run on one worker thread (TagIO); only changed fields are written; Cancel in the unsaved-edits prompt keeps the selection, the folder and the window. Reads that aren't saved open files with FILE_SHARE_DELETE, so the app never stops a delete or rename in Explorer. The format line shows bit depth only for lossless audio. Details in SPEC §7. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -466,7 +490,7 @@ Done when: a copied 10k+ file tree browses fluidly while it is being indexed, an
 the index.
 
 **M3 Metadata side panel** (read SPEC §1, §7 and §11)
-- [ ] Metadata tab for a single file, every format
+- [x] Metadata tab for a single file, every format
 - [ ] TagWriter and path locks
 - [ ] Multi-file editing (per-track fields disabled)
 - [ ] Cover display, replace and remove

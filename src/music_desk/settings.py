@@ -2,7 +2,8 @@
 
 Unknown keys are ignored and a value of the wrong type falls back to its default, so an old or hand-edited file
 never stops the app. Saving writes a temporary file and replaces the old one, so a crash can't leave half a file.
-The Settings dialog (M6) edits the user-facing fields; the UI state fields are kept by the windows themselves.
+There is no Settings dialog: each preference is set where it is used (a menu, a Tools card); the UI state
+fields are kept by the windows themselves.
 """
 
 import json
@@ -20,13 +21,11 @@ log = logging.getLogger(__name__)
 class Settings:
     # Library
     hide_folders_without_music: bool = False
-    watch_for_changes: bool = True
     # Lyrics
     lyrics_offline: bool = False
     lyrics_auto_save: bool = False
-    # Appearance and performance
+    # Appearance
     theme: str = "system"  # "system", "light" or "dark"
-    tag_workers: int = 4
     # Tools (SPEC §10): the cards' options, as core.rename / core.replaygain options_to_json write them
     rename_options: dict = field(default_factory=dict)
     replaygain_options: dict = field(default_factory=dict)

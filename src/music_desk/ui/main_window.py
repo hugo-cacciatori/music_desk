@@ -40,6 +40,7 @@ from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
 from music_desk.core.index.search import ALL, LIMIT
 from music_desk.core.index.store import path_of
 from music_desk.core.path_locks import LockedError, PathLocks
+from music_desk.licenses import licenses_dir
 from music_desk.services import jobs as jobs_module
 from music_desk.services.jobs import JobList
 from music_desk.services.library import LibraryService
@@ -51,6 +52,7 @@ from music_desk.services.search_service import SearchResults, SearchService
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
+from music_desk.ui.about_dialog import AboutDialog
 from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.file_view import FileView
 from music_desk.ui.jobs_panel import JobsPanel
@@ -104,6 +106,7 @@ class MainWindow(QMainWindow):
         self.folder_path: str | None = None  # to find the nearest surviving folder if this one disappears
         self.history_back: list[int] = []
         self.history_forward: list[int] = []
+        self.rsgain_version: str | None = None  # from the startup self-check (About)
         # Handing files to Windows can stall (a slow drive, a busy shell), so it happens off the UI thread.
         # These three are replaced in tests, which never launch anything.
         self.launch = fsops.open_with_default_app
@@ -264,6 +267,8 @@ class MainWindow(QMainWindow):
         for text, query in FIND_QUERIES:
             lyrics_menu.addAction(text, lambda q=query: self.find(q))
         lyrics_menu.setEnabled(library is not None)
+        help_menu = self.menuBar().addMenu("&Help")
+        help_menu.addAction("&About MusicDesk", self.open_about)
         self.embedder = None
         if library is not None:
             self.embedder = AutoEmbedder(library.db_path, library.lyrics, self.tag_writer, self,
@@ -325,6 +330,7 @@ class MainWindow(QMainWindow):
     # -- rsgain --
 
     def show_rsgain_version(self, version: str | None) -> None:
+        self.rsgain_version = version  # for the About dialog
         self.tools_page.set_rsgain_unavailable(
             None if version else "rsgain couldn't run, so ReplayGain is unavailable. See the log for details.")
         if version:
@@ -333,6 +339,18 @@ class MainWindow(QMainWindow):
         else:
             self.rsgain_label.setText("rsgain unavailable: ReplayGain tools disabled")
             self.rsgain_label.setToolTip("The bundled rsgain.exe could not run. See the log for details.")
+
+    def open_about(self) -> None:
+        """Help › About: versions and licences."""
+        dialog = AboutDialog(self.rsgain_version, self)
+        folder = str(licenses_dir())
+        dialog.licensesRequested.connect(lambda: self._in_shell(
+            lambda: self.show_in_explorer(folder, True), f"File Explorer couldn't open {folder}.", "", True))
+        self.show_about(dialog)
+
+    def show_about(self, dialog: AboutDialog) -> None:
+        """Shows the dialog modally (replaced in tests, which never open a real dialog)."""
+        dialog.exec()
 
     # -- browsing --
 

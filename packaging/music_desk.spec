@@ -11,7 +11,8 @@ a = Analysis(
     pathex=[str(ROOT / "src")],
     binaries=[],
     # paths.resource_path() expects <_MEIPASS>/resources/rsgain when frozen.
-    datas=[(str(ROOT / "resources" / "rsgain"), "resources/rsgain")],
+    datas=[(str(ROOT / "resources" / "rsgain"), "resources/rsgain"),
+           (str(ROOT / "resources" / "licenses"), "resources/licenses")],  # shown by Help > About
     hiddenimports=[],
     hookspath=[],
     runtime_hooks=[],

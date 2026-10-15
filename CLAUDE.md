@@ -11,6 +11,21 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, session 7):**
+- **M4 task 2 is done (the Lyrics tab):**
+  - `ui/side_panel/lyrics_tab.py` `LyricsTab(conn, service)` covers every SPEC §8 state (`tab.state`
+    constants), from the index only (`lyrics_index.lyrics_info`), and follows `entryReady` and state changes.
+  - Found: plain lyrics, a "Show timestamps" toggle for synced ones, "LRCLIB #id · checked <date>", Copy, and a
+    note comparing the file's lyrics tag.
+  - Genius/Google emit `urlRequested`, which `MainWindow.open_url` launches on the shell thread.
+  - Retry now calls the new `LyricsService.retry(entry_id)`: it bypasses a fresh cache entry, ends the breaker's
+    pause, and the tab shows looking up until the result arrives.
+  - `SelectedItem.entry_id` is new. `SidePanel(..., lyrics_service=)` shows one track, or "Select a single
+    track…" for several items.
+  - Also changed: `search_urls` skips a missing artist or title; `store.read_lyrics`; `lyrics_index.track_for_entry`.
+  - The scripted LRCLIB (`ScriptedLrclib`, `found_for`, `unreachable`, `collect`) moved to
+    `tests/core/lrclib_fake.py`. The tests are in `tests/ui/test_lyrics_tab.py`.
+  - 661 tests pass (the slow ones included), 8 are skipped, and ruff is clean. The app starts and exits 0
+    offscreen.
 - **M4 task 1 is done (LyricsService):**
   - `core/index/lyrics_index.py`:
     - `pending_tracks(conn, retry_before, folder_id=, entry_id=, skip=, limit=)`: one track per pending key,
@@ -413,17 +428,15 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M4 task 2: the Lyrics tab, every state (SPEC §8). Read SPEC §8 and §9 (as built), and
-`services/lyrics_service.py`, first.
-- `ui/side_panel/lyrics_tab.py`: one selected track reads its `lyrics_key` entry from the UI read connection and
-  follows `LyricsService.entryReady`:
-  - queued or looking up: a spinner;
-  - found: a timestamps toggle, "LRCLIB #id · checked <date>", and Copy (Save to file tags is task 3);
-  - instrumental, not found, missing tags, error and offline: the Genius/Google buttons (`core.lyrics.search_urls`);
-  - Retry now for not found and errors;
-  - a note when the file's lyrics tag differs.
-- Retry for one key needs a small service addition (drop it from `_handled`/`_errored` and queue it as
-  selected).
+**Next step:** M4 task 3: Save to file tags, and the auto-embed setting (SPEC §8, §9). Read SPEC §8 and §9
+(as built), `ui/side_panel/lyrics_tab.py` and `core.lyrics.embed_lyrics`, first.
+- A "Save to file tags" button in the found state writes `embed_text(entry)` (synced, else plain) through
+  TagWriter. It is disabled when the tag already holds the same text, and asks first (an `ask_*`/`confirm_*`
+  method, replaced in tests) before replacing different lyrics. Then `Indexer.update_file` follows, as for any
+  save, and the tab's note updates.
+- If the Metadata tab has unsaved edits on the same file, it must not be overwritten silently: refuse, or ask.
+- `Settings.lyrics_auto_save`: after a FOUND result, the service has every track with that key saved through
+  TagWriter with `only_if_empty=True`, under the job locks. Job-locked files are skipped.
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
@@ -439,7 +452,7 @@ two files alone.
   `Scanner.update_file`, or a small helper.
 - Tests: mocked HTTP only (`tests/core/lrclib_fake.py`, and the autouse network guard). Priority order,
   deduplication, the breaker pausing and resuming, offline mode, and a restart resuming the pending tracks.
-- **Not yet:** auto-embed (task 3), the lyrics_cache.json import (task 4), and the status bar progress (task 5).
+- **Not yet:** the lyrics_cache.json import (task 4) and the status bar progress (task 5).
 
 **Session protocol:**
 1. Read this file, then the SPEC sections for the current milestone. Pick up the first unchecked task in Progress.
@@ -547,6 +560,7 @@ two files alone.
 | 2026-10-15 | Inline rename: on disk off the UI thread under a path lock, then the index is updated in place (ids kept). Reconcile also matches renames by kind, extension, size and mtime, so outside renames keep ids and tags. Roots can't be renamed. Changing the extension asks first. The hint uses the Rename tool's default masks. Tests may never open a real dialog. Details in SPEC §11. |
 | 2026-10-15 | The repo is on GitHub, public: hugo-cacciatori/music_desk. Push only when Hugo asks. |
 | 2026-10-15 | LyricsService: three tiers (selected track, open folder, background folder by folder), with one lookup per key. Its state lives only in the `lyrics` table, so a restart resumes. A failed key waits 10 minutes, unless it is selected. The breaker pauses 10 minutes, and Retry now ends it. Offline makes no call. Lookups start at the first indexer idle. UI tests build offline libraries, and a global guard blocks urllib's opener in every test. Details in SPEC §9. |
+| 2026-10-15 | Lyrics tab: it reads only the index (the file's lyrics tag comes from the indexed search text), so selecting a track reads no file. Found and instrumental entries show even offline. Retry now looks the one track up again whatever its cache says, and ends the breaker's pause. A lookup error shows over an older cached not_found. Web searches are launched on the shell thread. Details in SPEC §8. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -669,7 +683,7 @@ Done when: every format with a fixture round-trips through the UI, and ID3 versi
 
 **M4 Lyrics** (read SPEC §8 and §9)
 - [x] LyricsService: priority queue, 4 workers, circuit breaker, offline mode
-- [ ] Lyrics tab, every state
+- [x] Lyrics tab, every state
 - [ ] Save to file tags, and the auto-embed setting
 - [ ] `lyrics_cache.json` import
 - [ ] Lyrics tag and LRCLIB columns, status bar progress

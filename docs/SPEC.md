@@ -382,6 +382,30 @@ not it has a lyrics tag.
   (`https://www.google.com/search?q=<artist title>+lyrics`), which open in the default browser. Not-found and
   error states also get "Retry now".
 - **Multi-selection:** "Select a single track".
+- As built (M4 task 2, `ui/side_panel/lyrics_tab.py`):
+  - Data and refresh:
+    - The tab reads everything from the index (`lyrics_index.lyrics_info`: the track rebuilt with the file-name
+      fallback, its key, the cached entry, and the file's lyrics tag as indexed in `search.lyrics`), so it reads no
+      file.
+    - It re-renders on `entryReady` for its key, and when the service's state changes.
+  - States:
+    - looking up (a busy bar);
+    - found (plain lyrics by default; "Show timestamps" shows the synced ones and is disabled without them;
+      "LRCLIB #id · checked <date>"; Copy);
+    - instrumental (the source line);
+    - not found (with the checked date);
+    - missing tags; unreadable tags (no buttons);
+    - lookup error (the message);
+    - offline; unreachable ("Lookups resume at HH:MM"); paused.
+    Found and instrumental entries show even offline.
+  - The tag note says "the same lyrics" (ignoring line endings and edge whitespace, against the synced or the
+    plain text), or that the tag differs.
+  - Buttons:
+    - Genius and Google open in the default browser through the window's shell thread. A search uses the
+      artist and title present (`search_urls` skips a missing part).
+    - Retry now (not found, error, unreachable) calls `LyricsService.retry(entry_id)`: one track is looked up again
+      at once, bypassing a fresh cache entry, and the breaker's pause ends. A lookup error shows over a cached
+      not_found.
 
 ## 9. Lyrics background service
 - Starts by itself once tags are indexed, covers every audio file under the roots, and resumes across restarts
@@ -413,6 +437,7 @@ not it has a lyrics tag.
   retry), `embed_lyrics(path, entry, only_if_empty=)` returning WRITTEN, SAME_TEXT, HAS_OTHER_LYRICS,
   NOTHING_TO_EMBED or NOT_EMBEDDABLE, and `search_urls` (encoded like JS `encodeURIComponent`). Tracks with the
   same key are deduplicated by the service, not by `lookup`.
+- As built (M4 task 2): `LyricsService.retry(entry_id)`, `last_error(key)`, `is_pending(key)`, `resume_at`.
 - As built (M4 task 1):
   - `core/index/lyrics_index.py`:
     - `pending_tracks` lists the tracks whose key has no entry or only a stale not_found, one per key, folder by

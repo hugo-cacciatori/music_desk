@@ -11,6 +11,21 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
+- **M2 in progress** (task 1 done: DB schema, DbWriter, read connection):
+  - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
+    `folder_stats`, FTS5 `search` with `unicode61 remove_diacritics 2`). `MIGRATIONS[n]` takes v`n` to v`n+1`,
+    applied in one transaction and recorded in `PRAGMA user_version`. A newer DB raises `SchemaError`, untouched.
+  - A root's top folder is an `entries` row with `parent_id NULL` and `name` = the root's full path. A partial
+    unique index allows one per root. Siblings are unique ignoring case, and deletes cascade.
+  - `core/index/store.py`:
+    - `DbWriter(path)` is plain Python (no Qt): one thread, one transaction per `submit(fn) -> Future`. A failing
+      job is rolled back alone, and `stop()` flushes the queue.
+    - `connect_read(path)` is read-only (`mode=ro` + `query_only`) and version-checked.
+    - `path_of(conn, id)` uses a recursive CTE.
+    - `LyricsStore(read_conn, writer)` implements `core.lyrics.LyricsCache` over the `lyrics` table with the
+      script's per-status entry shape.
+  - `paths.library_db_path()`. The Qt `services/db_writer.py` wrapper is deferred to the indexer task.
+  - 321 tests pass, 8 are skipped, the 21 `slow` tests pass, and ruff is clean.
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
   `--version` self-check), an empty `MainWindow` whose status bar shows the rsgain version, and empty `services/`
@@ -82,16 +97,14 @@ two files alone.
   - `core/playlists.py`: `PlaylistEntry`, `entry_for`, `folder_tracks(folder, recursive)` (natural order, files
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
-  - 295 tests pass, 8 are skipped (formats without a sample file), the 21 `slow` tests pass, and ruff is clean.
 
-**Next step:** M2's first task: DB schema, DbWriter and the read connection. Read SPEC §2, §4, §16 (and §9 for
-the lyrics cache table the schema must hold), first.
-- `core/index/schema.py`: SQLite in WAL mode with the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
-  `folder_stats`, FTS5 `search`) and a schema version. `lyrics` holds the `core/lyrics` entry shape, so a store
-  over it can implement the `LyricsCache` protocol.
-- `services/db_writer.py`: the single writer thread with a queue; readers use their own read-only connection.
-- Tests: schema creation and migration version, writer ordering, WAL readers seeing committed data.
-- **Not yet:** the scanner, watcher and UI (later M2 tasks).
+**Next step:** M2's second task: roots (picker, drop, remove, offline roots). Read SPEC §3, §2 and §16 first.
+- Core: add, remove and list roots over `DbWriter` + `connect_read`. A folder inside an existing root only
+  navigates there, and adding a parent of existing roots merges them. Offline detection is a root path that
+  doesn't exist; the root stays browsable.
+- UI: "Add folder…", a drop overlay on the main window ("Add to library"; dropped files get a toast offering their
+  folder), and "Remove from library" (index only). pytest-qt tests.
+- **Not yet:** the scanner (task 3). Adding a root inserts only its `roots` row and top entry.
 
 Don't start it until Hugo says so.
 
@@ -184,6 +197,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | ReplayGain core: a cancelled album → STOPPED + warning (later albums CANCELLED, no leveling); a crash is logged as CRASHED, not re-raised; unscannable formats are listed as warnings; an over-long command line isn't run. Details in SPEC §10B. |
 | 2026-10-15 | Lyrics core: the HTTP opener, sleep, jitter and clock are injected; the cache is a `LyricsCache` protocol (dict now, SQLite in M2/M4); `lookup` returns errors without caching; the circuit breaker counts in core and pauses/retries in M4's service. Details in SPEC §9. |
 | 2026-10-15 | Temporary playlists: `play-<YYYYMMDD-HHMMSS>[-n].m3u8`, UTF-8 with CRLF, `#EXTINF` label "Artist - Title", else the title, else the file stem, and -1 seconds when unknown. Pruning keeps the newest 20 by name and touches only `play-*.m3u8`. Details in SPEC §14. |
+| 2026-10-15 | Index: the DbWriter lives in `core/index/store.py` with no Qt (one thread, one transaction per job, futures); the Qt service wrapper comes with the indexer. Root top folders are `entries` rows with `parent_id NULL` named by the full root path. Schema migrations go through `PRAGMA user_version`; a newer DB is refused untouched. Details in SPEC §2. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -282,7 +296,7 @@ Done when: pytest passes, including FLAC/MP3 parity against the reference script
 with a fixture.
 
 **M2 Index and browser** (read SPEC §2, §3, §4, §5, §14 and §16)
-- [ ] DB schema, DbWriter, read connection
+- [x] DB schema, DbWriter, read connection
 - [ ] Roots: picker, drop, remove, offline roots
 - [ ] Scanner phases A and B, incremental, on-screen folder first
 - [ ] Watcher, plus revalidation on open as a fallback

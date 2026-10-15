@@ -106,6 +106,17 @@ WMA has no standard track total, so that field is disabled for .wma, with a tool
     recomputed after scans.
   - `search` (FTS5): name, title, artist, albumartist, album, genre, plus lyrics text (from LRCLIB and from tags).
 - One DB writer thread fed by a queue. The UI uses its own read-only connection.
+- As built (M2 task 1, `core/index/`):
+  - Schema version 1 is in `PRAGMA user_version`. Migrations run in one transaction, and an index from a newer
+    app is refused without being touched.
+  - A root's top folder is the `entries` row with `parent_id NULL`, and its `name` is the root's full path. A
+    partial unique index allows one per root, because NULLs are distinct in UNIQUE.
+  - `search` uses the `unicode61 remove_diacritics 2` tokenizer, so "Sigur Ros" finds "Sigur Rós".
+  - Connections: `foreign_keys=ON` and `busy_timeout=5000`. The writer adds `journal_mode=WAL` and
+    `synchronous=NORMAL`. Readers open with `mode=ro` and `query_only`, and check the schema version.
+  - `DbWriter.submit(fn)` runs each job in its own `BEGIN IMMEDIATE` transaction and returns a Future. A failing
+    job is rolled back alone, and `stop()` finishes the queued jobs before closing.
+  - `LyricsStore` serves the `lyrics` table as the lookup cache, with the script's entry shape per status.
 
 ## 3. Library roots
 - Add folders with "Add folder…" (folder picker), or drop one or more folders anywhere on the window. A drop

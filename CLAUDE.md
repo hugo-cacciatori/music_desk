@@ -10,7 +10,29 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, session 8):**
+**Current state (2026-10-15, end of session 8):**
+- **M5 is complete.** Its "Done when" holds:
+  - the app's replaygain.log, from a job run through the window with the real rsgain, matches the script on a copy
+    of the same album, timestamps masked (`tests/ui/test_jobs_panel.py`, slow);
+  - every cleanup fixture case gets its expected status (`test_rename.py`, `test_rename_tool.py`).
+- **M5 task 4 is done (the jobs panel).** Details are in SPEC §10, "Jobs panel", As built.
+  - `services/jobs.py` `JobList` (`Job`: kind, folder, state, status, progress, reports).
+  - `ui/jobs_panel.py` `JobsPanel` (Open, Stop, Clear finished; `rows()` for tests), in a bottom
+    `QDockWidget` (`jobs_dock`). It is toggled by View › Jobs panel (Ctrl+J) and the status bar's `jobs_button`.
+  - MainWindow:
+    - `_start_job`, `show_job`, `stop_job`, `confirm_quit_with_jobs` (replaced in tests);
+    - `_rename_job` / `_rg_job` track the running job of each tool;
+    - Tidy moves its job from the rename step to the ReplayGain step.
+  - Behaviour changes:
+    - pages of running jobs can be left (`close_tools` no longer refuses);
+    - `run_tool` refuses a second job on a busy tool and shows the running job;
+    - `RenameRunner.running`;
+    - `rg_report.short_result` gives the panel's outcome line.
+  - Tests are in `tests/ui/test_jobs_panel.py`, with a `BlockingScanner` that holds a job running.
+    - Found while writing them: pytest-qt closes the test's widgets before fixture finalizers run. A fixture can't
+      clean up a running job before the window closes, so the test must end it, or pre-answer
+      `confirm_quit_with_jobs`.
+  - 764 tests pass (the slow ones included), 8 are skipped, ruff is clean, and the app exits 0 offscreen.
 - **M5 task 3 is done (the ReplayGain jobs and Tidy).** Details are in SPEC §10, "As built (M5 task 3)".
   - Core (`core/replaygain.py`): `preview()` → `AlbumPreview` (files, unsupported, keyword subfolders,
     `too_long`, `warnings`), and `process_discography(on_album=)`.
@@ -566,23 +588,21 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M5 task 4, the last of M5: the jobs panel, locks and index reconciliation (SPEC §10, "Jobs panel").
-Read SPEC §10 (the "As built" notes of tasks 1–3), `services/rename_job.py`, `services/replaygain_job.py` and the
-`MainWindow` tool methods, first.
-- Today each job lives on its own page in the centre: the rename preview, or the ReplayGain page. The page can't
-  be left while a job runs. The spec's **jobs panel** is a bottom drawer listing running and finished jobs, with
-  progress, logs and reports. It lets a job keep running while you browse. Decide with the spec how the pages and
-  the drawer share the report: probably, leaving a running job's page keeps it in the drawer, and the drawer
-  reopens its page.
-- **Locks:** done (both runners lock the folder tree; TagWriter and inline rename are refused under it). The
-  drawer should show which folder each job locks.
-- **Index reconciliation:** done per job (rename: `apply_renames` + rescans; ReplayGain: a recursive
-  `scan_path`). "The selection is kept" holds for renames (ids kept). Check it after ReplayGain too.
-- Then check M5's "Done when":
-  - the app's replaygain.log matches a script run on the same copied album, timestamps masked (proven at core
-    level in M1 by `test_replaygain_parity.py`; the app's job calls the same core);
-  - every cleanup fixture case gets the expected status (`test_rename.py`, `test_rename_tool.py`).
-  A slow test through the window, comparing with the script's log, would close it.
+**Next step:** M6 task 1: library search (FTS5, filters, scope), Play results, with seek_lyrics' search
+parity. Read SPEC §6 in full first: "Preserved from seek_lyrics" (the behaviour that must not be lost) and
+"Implementation notes (M6)" (the schema v3 trigram `search` with an `lrclib` column, `record_lyrics` and the scanner
+filling it, `core/index/search.py` `text_search`, the snippet, and the tests). Also read SPEC §2 (search,
+schema v3) and §14 (Play results).
+- The groundwork comes first: the schema v3 migration with its test, then the `lrclib` column kept up to date,
+  then `text_search` with the parity test against the script's haystack rule.
+- Then the Ctrl+K UI:
+  - a flat result list with a Folder column (up to 5,000 rows, plus the total);
+  - the field filters and the script's chips (All, With lyrics, Missing) and artist filter;
+  - the snippet column and the highlighted matches;
+  - the scope toggle; Enter goes to the file; Esc returns;
+  - selecting a result shows its lyrics in the Lyrics tab;
+  - Play results.
+- It may be worth splitting into two commits (the index and search core, then the UI).
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
@@ -714,6 +734,7 @@ Read SPEC §10 (the "As built" notes of tasks 1–3), `services/rename_job.py`, 
 | 2026-10-15 | Tools page: it replaces the file list in the centre, with Back; opening another folder returns to the list. Scope: one folder, else the selected music files (Rename only), else the open folder. ReplayGain gets its own validation (rsgain's target range, threshold, margin, lowercase keywords, log name, comment). Card options are saved on every change, and a well-typed invalid saved value is kept for validation to show. Details in SPEC §10. |
 | 2026-10-15 | Rename tool run: the preview page replaces the Tools page. Junk asks "Rename and recycle", "Rename only" or Cancel. The folder tree is locked ("the Rename tool") for the run, and a conflict is refused at once. The result uses the script's summary wording (parity-tested), with "sent to the Recycle Bin" for "deleted". The index follows through in-place renames (ids kept), plus a rescan of folders that lost junk. Details in SPEC §10. |
 | 2026-10-15 | ReplayGain tool: a preview from the file system (album folders, keyword subfolders, skipped formats, a command line too long), then a job holding the folder lock. Live lines are batched; the report shows each album's RunLog as written, plus the discography table. After the job, the index rescans the folder recursively. Tidy is the rename preview, then ReplayGain started automatically after Apply, even with nothing to rename (no ReplayGain preview, as in the script). Details in SPEC §10. |
+| 2026-10-15 | Jobs panel: a bottom dock listing this session's jobs (not saved), with Open, Stop and Clear finished. Jobs go on while you browse, and their pages reopen from the panel. Each tool runs one job at a time: a preview on a busy tool shows the running job instead, since a new preview would otherwise cancel it. Rename and ReplayGain may run together on different folders, with the locks refusing an overlap. Tidy is one job. Quitting with a running job asks, then stops it. M5 is complete. Details in SPEC §10. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -847,7 +868,7 @@ Done when: every tab state is reachable with mocked LRCLIB, and a real run on a 
 - [x] Tools page and cards (Rename, ReplayGain, Tidy), options, validation
 - [x] Rename preview and apply: kept files with reasons, sidecar renames, junk files to the Recycle Bin
 - [x] ReplayGain album and discography jobs (one album at a time), cancel, reports
-- [ ] Jobs panel, locks, index reconciliation
+- [x] Jobs panel, locks, index reconciliation
 
 Done when: the app's `replaygain.log` matches a script run on the same copied album (timestamps masked), and every
 cleanup fixture case gets the expected status.

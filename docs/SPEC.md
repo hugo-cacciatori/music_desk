@@ -818,6 +818,31 @@ the rename step only; as in the script, ReplayGain can't be previewed on names t
 - Two jobs can't overlap on the same folder tree.
 - Files under a running job are locked against tag edits and renames.
 - After a job, the affected folders are reconciled in the index and the selection is kept.
+- As built (M5 task 4: `services/jobs.py` `JobList`, `ui/jobs_panel.py` `JobsPanel`):
+  - **The list:** this session's jobs, newest first (not saved). The columns are Job (Rename, ReplayGain, Tidy),
+    Folder (its tooltip says the folder is locked while the job runs), Status and Started.
+    - Running: "Running (3 of 9): Kid A".
+    - Finished: "Done: 7/12 files were renamed", "Done: 2 albums OK, leveled to -10.40 dB", "Stopped: nothing was
+      leveled; see the report", "Failed: …".
+  - **Where:** a bottom dock ("Jobs"), shown when a job starts. It is toggled by View › Jobs panel (Ctrl+J) and
+    by the status bar's "Jobs: N running" button, which appears once there is a job.
+  - **Buttons:**
+    - Open (or a double-click) shows the job's page: live while it runs, its report once finished. A job keeps
+      its reports, so older runs reopen.
+    - Stop cancels: the rename stops between two files; rsgain is killed and nothing is leveled.
+    - Clear finished.
+  - **Browsing:** a running job's page can be left (Back, opening a folder). The job goes on, and its page is
+    reopened from the panel. Tidy's second step doesn't pull you back to its page if you went browsing.
+  - **One job per tool:** while a Rename runs, Rename and Tidy previews show that job instead (a new preview
+    would cancel it otherwise); while ReplayGain runs, ReplayGain and Tidy do the same. A Rename and a ReplayGain
+    job can run together on different folders; the locks refuse an overlap.
+  - **Tidy** is one job across both steps, keeping both reports.
+  - **Quitting** with a job running asks first (`confirm_quit_with_jobs`), then stops it.
+  - **The selection is kept after ReplayGain:** the job's recursive rescan updates entries in place, and the
+    selected row stays selected, showing its new ReplayGain state (tested).
+  - **M5's "Done when" through the window** (`test_jobs_panel.py`, slow): a ReplayGain job started from the
+    window, with the real rsgain, writes the same tags and the same `replaygain.log` as the frozen script on a
+    copy of the same album (timestamps masked; `compare_trees` from the parity tests).
 
 ## 11. Inline rename
 Applies to files and folders.

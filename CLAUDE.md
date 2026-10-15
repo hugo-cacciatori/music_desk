@@ -638,12 +638,9 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** the last two M6 tasks.
-- **README.md** (now): what MusicDesk does and for whom; its features (browsing, the metadata editor, lyrics from
-  LRCLIB, library search, the Rename / ReplayGain / Tidy tools); install (the setup from GitHub releases; the
-  "only for me" option; SmartScreen warns because the setup isn't signed); where its data lives and what
-  uninstalling keeps; build from source (uv, the commands below, Inno Setup); tests; licence (GPL-3.0-or-later,
-  and the bundled components). Show Hugo the draft before committing it. The repo is public.
+**Next step:** the last M6 task.
+- README.md is written (Hugo approved the draft, 2026-10-15). It names the setup file but links no download:
+  the GitHub repo has no release yet, and publishing one needs Hugo's go.
 - **Retire the root scripts**, once Hugo uses the installed app in their place (it is installed in Program Files
   since 2026-10-15). Tell him the exact delete command first.
 - M6's two "Done when" conditions hold: the installer installs the app, and it runs from Program Files with the
@@ -940,7 +937,7 @@ cleanup fixture case gets the expected status.
 - [x] Settings dialog: dropped (Hugo, 2026-10-15); Help › About with the versions and licences instead
 - [x] Theme and icons: the app icon and the exe's version info; light and dark follow Windows (no theme setting)
 - [x] Inno Setup installer; check the licenses of the FFmpeg libraries built into rsgain
-- [ ] README.md: what the app does, its features, install (the installer), build from source, licence
+- [x] README.md: what the app does, its features, install (the installer), build from source, licence
 - [ ] Retire the root `music_tools.py` and `seek_lyrics.py`, once the installed v1 replaces them for Hugo. Tell
       him the exact delete command first; `tests/reference/` keeps the frozen copies the parity tests use.
 

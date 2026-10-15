@@ -472,3 +472,42 @@ def _apply_rename(item: PlanItem, report: RenameReport) -> None:
         return
     report.sidecars_renamed.append(f"{sidecar.source.name} -> {sidecar.target.name}")
 
+
+# ---------------------------------------------------------------------------
+# Saved options (the Tools page's card defaults, in settings.json)
+# ---------------------------------------------------------------------------
+
+def options_to_json(options: RenameOptions) -> dict:
+    return {
+        "masks": list(options.masks),
+        "replacement": options.replacement,
+        "recursive": options.recursive,
+        "cleanup": options.cleanup,
+        "junk_extensions": sorted(options.junk_extensions),
+        "audio_extensions": sorted(options.audio_extensions),
+    }
+
+
+def options_from_json(data) -> RenameOptions:
+    """Saved options; a missing or mistyped value falls back to its default, so an old or hand-edited settings
+    file never stops the Tools page. Values that are well typed but invalid are kept: validation shows them."""
+    data = data if isinstance(data, dict) else {}
+    default = DEFAULT_OPTIONS
+
+    def strings(key, fallback):
+        value = data.get(key)
+        return value if isinstance(value, list) and all(isinstance(v, str) for v in value) else fallback
+
+    def flag(key, fallback):
+        value = data.get(key)
+        return value if isinstance(value, bool) else fallback
+
+    replacement = data.get("replacement")
+    return RenameOptions(
+        masks=tuple(strings("masks", list(default.masks))),
+        replacement=replacement if isinstance(replacement, str) else default.replacement,
+        recursive=flag("recursive", default.recursive),
+        cleanup=flag("cleanup", default.cleanup),
+        junk_extensions=frozenset(strings("junk_extensions", sorted(default.junk_extensions))),
+        audio_extensions=frozenset(strings("audio_extensions", sorted(default.audio_extensions))),
+    )

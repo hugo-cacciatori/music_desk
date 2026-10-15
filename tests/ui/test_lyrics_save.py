@@ -231,6 +231,24 @@ def test_auto_save_skips_locked_files(qtbot, parts, writer, read, library):
     assert tag_lyrics(album_file(library, "lite/01 First.flac")) is None
 
 
+def test_turning_auto_save_off_cancels_queued_work(qtbot, parts, writer, read, library):
+    """A backfill queued just before auto-save is turned off writes nothing (it raced the Lyrics tab's own save)."""
+    service, tags, _tab, _locks, embedders = parts
+    key = cache_key("Fixture Artist", "First")
+    writer.submit(lambda conn: record_lyrics(conn, key, {"status": FOUND, "source": "lrclib", "lrclib_id": 1,
+                                                         "plain": "la la", "synced": None,
+                                                         "checked": TODAY.isoformat()})).result()
+    embedder = AutoEmbedder(writer.path, service, tags)
+    embedders.append(embedder)
+    written = []
+    tags.lyricsEmbedded.connect(lambda result: written.extend(result.written))
+    embedder.set_enabled(True)
+    embedder.set_enabled(False)
+    embedder._pool.submit(lambda: None).result()  # the queued job has run
+    qtbot.wait(200)
+    assert written == [] and tag_lyrics(album_file(library, "01 First.flac")) is None
+
+
 # -- in the window --
 
 def test_window_lyrics_menu_and_metadata_follow(qtbot, service, library_dir):

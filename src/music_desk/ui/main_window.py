@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QSplitter,
+    QStackedWidget,
     QStyle,
     QToolBar,
     QToolButton,
@@ -46,6 +47,7 @@ from music_desk.ui.file_view import FileView
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
+from music_desk.ui.tools.tools_page import ToolRequest, ToolScope, ToolsPage
 
 log = logging.getLogger(__name__)
 
@@ -119,9 +121,18 @@ class MainWindow(QMainWindow):
                                     lyrics_service=library.lyrics if library is not None else None)
         self.side_panel.lyrics.urlRequested.connect(self.open_url)
         self.side_panel.summary.playRequested.connect(self.play_folder)
+        self.side_panel.summary.toolsRequested.connect(lambda entry_id: self.open_tools([entry_id]))
+        self.tools_page = ToolsPage(self.settings)
+        self.tools_page.backRequested.connect(self.close_tools)
+        self.tools_page.runRequested.connect(self.run_tool)
+        self.tag_io.renameFields.connect(self._tool_example)
+        self._example_token: int | None = None
+        self.center = QStackedWidget()  # the file list, or the Tools page in its place (SPEC §10)
+        self.center.addWidget(self.file_view)
+        self.center.addWidget(self.tools_page)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
-        self.splitter.addWidget(self.file_view)
+        self.splitter.addWidget(self.center)
         self.splitter.addWidget(self.side_panel)
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setCollapsible(1, False)
@@ -210,6 +221,8 @@ class MainWindow(QMainWindow):
     # -- rsgain --
 
     def show_rsgain_version(self, version: str | None) -> None:
+        self.tools_page.set_rsgain_unavailable(
+            None if version else "rsgain couldn't run, so ReplayGain is unavailable. See the log for details.")
         if version:
             self.rsgain_label.setText(version)
             self.rsgain_label.setToolTip("")
@@ -228,6 +241,7 @@ class MainWindow(QMainWindow):
             if self.folder_id is not None:
                 self.sidebar.tree.select_entry(queries.folder_path_ids(self.library.conn, self.folder_id))
             return
+        self.close_tools()  # browsing elsewhere goes back to the file list (the cards keep their options)
         if record and self.folder_id is not None:
             self.history_back.append(self.folder_id)
             self.history_forward.clear()
@@ -277,6 +291,10 @@ class MainWindow(QMainWindow):
         for action in (self.back_action, self.forward_action, self.up_action, self.refresh_action):
             toolbar.addAction(action)
         toolbar.addWidget(self.address_bar)
+        self.tools_action = QAction("Tools", self)
+        self.tools_action.setToolTip("Rename from tags, ReplayGain and Tidy, for the selection or this folder")
+        self.tools_action.triggered.connect(lambda: self.open_tools(self.file_view.selected_ids()))
+        toolbar.addAction(self.tools_action)
         self.addToolBar(toolbar)
 
         # Backspace goes up, but only from the lists (it edits text everywhere else).
@@ -405,6 +423,62 @@ class MainWindow(QMainWindow):
             self._show_selection(self._selected_ids)  # a renamed file reloads under its new name
         self._refresh_location()
         self.side_panel.refresh_folder()
+
+    # -- Tools (SPEC §10) --
+
+    def tool_scope(self, ids: list[int]) -> ToolScope | None:
+        """What the tools act on: one folder (from the list, the tree or the folder summary); else the audio
+        files among the selected items in the open folder (a selection); with nothing selected, the open folder."""
+        if not self._library_open():
+            return None
+        conn = self.library.conn
+        kinds = {i: row[0] for i in ids
+                 if (row := conn.execute("SELECT is_dir FROM entries WHERE id = ?", (i,)).fetchone())}
+        if len(ids) == 1 and kinds.get(ids[0]):
+            folder_id, files = ids[0], ()
+        elif ids:
+            rows = [self.file_view.model.rows[r] for i in ids if (r := self.file_view.model.row_for(i)) is not None]
+            files = tuple(Path(self.folder_path, row.name) for row in rows if row.is_audio)
+            if not files or self.folder_id is None:
+                return None
+            folder_id = self.folder_id
+        elif self.folder_id is not None:
+            folder_id, files = self.folder_id, ()
+        else:
+            return None
+        if not self._folder_exists(folder_id):
+            return None
+        folder = path_of(conn, folder_id)
+        first = files[0] if files else queries.folder_summary(conn, folder_id).first_track
+        return ToolScope(folder, folder_id, files, Path(first) if first else None)
+
+    def open_tools(self, ids: list[int]) -> None:
+        scope = self.tool_scope(ids)
+        if scope is None:
+            self.statusBar().showMessage("Select a folder, or music files, to use the tools.", STATUS_MS)
+            return
+        self.tools_page.set_scope(scope)
+        self._example_token = self.tag_io.read_rename_fields(scope.first_track) if scope.first_track else None
+        self.center.setCurrentWidget(self.tools_page)
+
+    def close_tools(self) -> None:
+        if self.center.currentWidget() is self.tools_page:
+            self.center.setCurrentWidget(self.file_view)
+            self.file_view.view.setFocus()
+
+    @property
+    def showing_tools(self) -> bool:
+        return self.center.currentWidget() is self.tools_page
+
+    def _tool_example(self, token: int, fields: dict | None, extension: str) -> None:
+        if token == self._example_token:
+            self.tools_page.set_example(fields, extension)
+
+    def run_tool(self, request: ToolRequest) -> None:
+        """The previews and jobs come with the next M5 tasks (SPEC §10)."""
+        what = {"rename": "The rename preview", "replaygain": "The ReplayGain preview",
+                "tidy": "The Tidy preview"}[request.tool]
+        self.toast.show_message(f"{what} isn't built yet: it comes with the next M5 tasks.")
 
     def set_lyrics_offline(self, offline: bool) -> None:
         self.settings.lyrics_offline = offline
@@ -578,9 +652,12 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("Open in File Explorer", lambda: self.reveal(ids[0]))
         menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: self.copy_paths(ids))
+        menu.addSeparator()
         if len(ids) == 1:
-            menu.addSeparator()
             menu.addAction("Rename\tF2", lambda: self.file_view.start_rename(ids[0]))
+        tools = menu.addAction("Tools…", lambda: self.open_tools(ids))
+        tools.setEnabled(any(self.file_view.model.rows[r].is_audio for i in ids
+                             if (r := self.file_view.model.row_for(i)) is not None))
         return menu
 
     def add_folder_actions(self, menu: QMenu, entry_id: int, include_open: bool = True, rename=None) -> None:
@@ -595,6 +672,8 @@ class MainWindow(QMainWindow):
         if rename is not None and queries.parent_folder(self.library.conn, entry_id) is not None:
             menu.addAction("Rename\tF2", rename)  # not a library root
         menu.addAction("Rescan", lambda: self.library.indexer.scan_folder(entry_id))
+        menu.addSeparator()
+        menu.addAction("Tools…", lambda: self.open_tools([entry_id]))
 
     # -- inline rename (SPEC §11) --
 

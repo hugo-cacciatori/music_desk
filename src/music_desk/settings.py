@@ -27,6 +27,9 @@ class Settings:
     # Appearance and performance
     theme: str = "system"  # "system", "light" or "dark"
     tag_workers: int = 4
+    # Tools (SPEC §10): the cards' options, as core.rename / core.replaygain options_to_json write them
+    rename_options: dict = field(default_factory=dict)
+    replaygain_options: dict = field(default_factory=dict)
     # UI state
     window_geometry: str = ""  # base64 of QWidget.saveGeometry()
     splitter_state: str = ""

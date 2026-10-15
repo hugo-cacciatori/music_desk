@@ -21,6 +21,7 @@ def _coverage(count: int, total: int) -> str:
 
 class FolderSummaryView(QWidget):
     playRequested = Signal(int, bool)  # folder entry id, with subfolders
+    toolsRequested = Signal(int)  # folder entry id
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -71,9 +72,12 @@ class FolderSummaryView(QWidget):
         self.play_button.clicked.connect(lambda: self._play(False))
         self.play_all_button = QPushButton("Play with subfolders")
         self.play_all_button.clicked.connect(lambda: self._play(True))
+        self.tools_button = QPushButton("Tools…")
+        self.tools_button.clicked.connect(lambda: self.summary and self.toolsRequested.emit(self.summary.id))
         buttons.addWidget(self.play_button)
         buttons.addWidget(self.play_all_button)
         buttons.addStretch(1)
+        buttons.addWidget(self.tools_button)
         layout.addLayout(buttons)
         layout.addStretch(1)
 

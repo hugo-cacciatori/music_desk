@@ -15,6 +15,7 @@ from PySide6.QtGui import QImage
 
 from music_desk.core import metadata
 from music_desk.core.metadata import Snapshot
+from music_desk.core.tags import TaggedFile
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ class TagIO(QObject):
     loadedMany = Signal(object)  # LoadedMany, after a batch read (multi-selection)
     imageRead = Signal(object)  # ImageRead: a picture chosen as the new cover
     folderCover = Signal(int, object, str)  # token, QImage or None, where it comes from
+    renameFields = Signal(int, object, str)  # token, the rename fields (or None), the file's extension
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -94,6 +96,20 @@ class TagIO(QObject):
                 found = None
             image = decode_cover(found[0]) if found else None
             self.folderCover.emit(token, image, found[1] if found and image is not None else "")
+
+        self._submit(run)
+        return token
+
+    def read_rename_fields(self, path: str | Path) -> int:
+        """The fields rename masks use, of one file (the Tools page's live example)."""
+        token = self.next_token()
+
+        def run() -> None:
+            try:
+                fields = TaggedFile(path, shared=True).rename_fields()
+            except Exception:  # noqa: BLE001 - no example then
+                fields = None
+            self.renameFields.emit(token, fields, Path(path).suffix)
 
         self._submit(run)
         return token

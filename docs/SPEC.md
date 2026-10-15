@@ -570,6 +570,27 @@ not it has a lyrics tag.
   - Unsaved Metadata edits aren't at risk: a Metadata save writes only the fields that were edited.
 - When a root is added, a `lyrics_cache.json` at its top (the script's cache) is imported into the DB cache. The
   file itself is left untouched.
+- As built (M4 task 4, `core/index/lyrics_import.py`):
+  - **When:** `LibraryService` runs `import_cache(writer, root path)` on its worker thread for each ADDED or MERGED
+    root, before that root's scan (the scan's folder totals then count the results). It then wakes the lyrics
+    service.
+  - **Reading:** the file is read through `open_shared`, up to 256 MB, as UTF-8 JSON (a BOM is allowed), and
+    never written.
+  - **Entries:** the script's keys are used as-is (casefolded; the same `cache_key` over the same fallbacks).
+    Only the script's shapes are taken: found (needs plain or synced lyrics; `source` defaults to "lrclib"),
+    instrumental, not_found, each with an ISO `checked` date. Errors and anything else are skipped and counted
+    as invalid.
+  - **Merge rule, per key:**
+    - lyrics or instrumental beat not_found, whatever the dates;
+    - otherwise the newer `checked` wins, and a tie keeps the index's entry.
+    So an import never loses a better or newer result. Winners go through `record_lyrics`, so the folder totals
+    follow.
+  - **Status bar:**
+    - "Imported N lyrics lookups from lyrics_cache.json in <root>." (`LibraryService.notice`);
+    - "... had nothing newer than the library's lyrics.";
+    - "... couldn't be imported: <reason>" (`failed`).
+  - Only a root's top folder is looked at, and only when the root is added (as specified). A cache in a subfolder,
+    or added to an existing root later, isn't imported.
 
 ## 10. Tools
 This is the port of music_tools. The tools open from the folder context menu, the toolbar's **Tools** button (acts

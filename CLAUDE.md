@@ -11,6 +11,17 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, session 7):**
+- **M4 task 4 is done (the lyrics_cache.json import):**
+  - `core/index/lyrics_import.py`:
+    - `import_cache(writer, folder) -> ImportReport | None`, with `read_cache` and `merge_cache`;
+    - `better(new, old)` is the merge rule: lyrics or instrumental beat not_found; otherwise the newer `checked`
+      wins, and a tie keeps the index's;
+    - invalid entries are skipped and counted.
+  - `LibraryService._import_lyrics_cache` runs for ADDED/MERGED roots before their scan, then wakes the lyrics
+    service. The new `LibraryService.notice` signal gives the status bar message.
+  - Tests (`tests/core/test_lyrics_import.py`) build the cache with the frozen script's own `scan`, `cache_key`
+    and `save_cache`, so the keys and the format are the script's. They show the imported keys cover every
+    indexed track. 688 tests pass, 8 are skipped, and ruff is clean.
 - **M4 task 3 is done (Save to file tags, and auto-save):**
   - `TagWriter.embed_lyrics(items, only_if_empty=)` → `lyricsEmbedded(LyricsEmbedded)`, around
     `core.lyrics.embed_lyrics`, under the save lock; `on_written` follows each WRITTEN file. It is callable from
@@ -453,18 +464,21 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M4 task 4: the `lyrics_cache.json` import (SPEC §9, last item). Read SPEC §9 and
-`core/index/store.py` (`upsert_lyrics`, `LYRICS_KEYS`), `core/index/lyrics_index.py` (`record_lyrics`) and
-`core/index/roots.py`, first.
-- When a root is added (or merged), a `lyrics_cache.json` at its top is read off the UI thread. It is the
-  script's cache: key = `casefold(artist + "\x1f" + title)`, with entries in the same shape. Its entries go into
-  the `lyrics` table through the writer and `record_lyrics`, so the folder totals follow.
-- The file itself is never touched.
-- Merge rule (to decide and record in SPEC §9):
-  - never replace a newer entry;
-  - a `found` beats `not_found`;
-  - unknown statuses are skipped or kept as-is (`read_lyrics` already tolerates them).
-- Tests use a scripted json from the frozen script's format (`tests/reference/seek_lyrics.py`).
+**Next step:** M4 task 5, the last of M4: the Lyrics tag and LRCLIB columns, and the status bar progress
+(SPEC §5 columns, §9 "Controls"). Read SPEC §9 (as built) and `services/lyrics_service.py` (`progress`,
+`LyricsProgress`, `pause`/`resume`), first.
+- The columns already exist (`ui/file_view.py`: "♪" from `lyrics_tag`, "LRCLIB" from `queries._lrclib_state`)
+  and refresh through `foldersChanged`. Check them against SPEC §5, and add the error state (SPEC §6 lists
+  `lrclib:error`). Errors are only in the service's memory (`last_error`), so decide whether the column shows
+  them.
+- Status bar: a lyrics label next to the indexing label:
+  - "Looking up lyrics: N left" needs a pending count (a cheap count query on the UI connection, throttled);
+  - unreachable, offline and paused states;
+  - a Pause/Resume button;
+  - the existing toast keeps Retry now.
+- Then check M4's "Done when": every tab state reachable with mocked LRCLIB (`tests/ui/test_lyrics_tab.py`),
+  and a real run on a small copied folder. That real run reaches lrclib.net: ask Hugo first, and use a copy of
+  the fixtures, never a real library.
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
@@ -480,7 +494,7 @@ two files alone.
   `Scanner.update_file`, or a small helper.
 - Tests: mocked HTTP only (`tests/core/lrclib_fake.py`, and the autouse network guard). Priority order,
   deduplication, the breaker pausing and resuming, offline mode, and a restart resuming the pending tracks.
-- **Not yet:** the lyrics_cache.json import (task 4) and the status bar progress (task 5).
+- **Not yet:** the status bar progress (task 5).
 
 **Session protocol:**
 1. Read this file, then the SPEC sections for the current milestone. Pick up the first unchecked task in Progress.
@@ -591,6 +605,7 @@ two files alone.
 | 2026-10-15 | Lyrics tab: it reads only the index (the file's lyrics tag comes from the indexed search text), so selecting a track reads no file. Found and instrumental entries show even offline. Retry now looks the one track up again whatever its cache says, and ends the breaker's pause. A lookup error shows over an older cached not_found. Web searches are launched on the shell thread. Details in SPEC §8. |
 | 2026-10-15 | seek_lyrics' songs.html search is a parity requirement of library search: free text is a case-insensitive substring match over title, artist, album and lyrics (LRCLIB and tags), accent-folded. There is one Ctrl+K search, and the Lyrics tab is the detail pane. The plan is a trigram FTS5 index (schema v3, with an `lrclib` column) and a `LIKE` fallback under 3 characters, all built at M6. Details in SPEC §6. |
 | 2026-10-15 | Saving lyrics into tags: one path, `TagWriter.embed_lyrics` (the save lock and index catch-up as any save). Save to file tags asks before replacing, and is refused while the Metadata tab has unsaved edits on the file. Auto-save, like the script's `--embed`, covers every found track, earlier ones included (a backfill at start and when turned on), but only fills empty tags (checked in the file). Locked files are skipped, and each file is tried once per session. Until the Settings dialog, a Lyrics menu holds Offline mode and Auto-save. Details in SPEC §8 and §9. |
+| 2026-10-15 | lyrics_cache.json import: only at a root's top, when the root is added or merged, before its scan. The file is read-only. Merge rule per key: lyrics or instrumental beat not_found; otherwise the newer `checked` wins, and a tie keeps the index's. Entries the script never wrote (errors, malformed ones) are skipped and counted. Details in SPEC §9. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -715,7 +730,7 @@ Done when: every format with a fixture round-trips through the UI, and ID3 versi
 - [x] LyricsService: priority queue, 4 workers, circuit breaker, offline mode
 - [x] Lyrics tab, every state
 - [x] Save to file tags, and the auto-embed setting
-- [ ] `lyrics_cache.json` import
+- [x] `lyrics_cache.json` import
 - [ ] Lyrics tag and LRCLIB columns, status bar progress
 
 Done when: every tab state is reachable with mocked LRCLIB, and a real run on a small copied folder works.

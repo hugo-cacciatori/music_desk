@@ -117,14 +117,46 @@ def read_snapshot(path: str | Path) -> Snapshot:
     )
 
 
+COVER = "cover"  # in a changes dict: new front-cover bytes, or None to remove the embedded front cover
+LARGE_COVER = 1024 * 1024  # bytes: bigger covers get a warning, since every file carries its own copy
+COVER_EXTENSIONS = (".jpg", ".jpeg", ".png")
+JPEG_MAGIC, PNG_MAGIC = bytes([0xFF, 0xD8]), bytes([0x89]) + b"PNG"
+
+
 def write_fields(path: str | Path, changes: dict) -> Snapshot:
-    """Write only the changed fields (None clears one), keeping everything else and the ID3 version, then
-    return the fresh snapshot."""
+    """Write only the changed fields (None clears one) and, under COVER, the embedded front cover (other
+    pictures are kept), keeping everything else and the ID3 version; return the fresh snapshot."""
     if changes:
+        fields = {k: v for k, v in changes.items() if k != COVER}
         tagged = TaggedFile(path)
-        tagged.set_fields(changes)
+        if fields:
+            tagged.set_fields(fields)
+        if COVER in changes:
+            if changes[COVER] is None:
+                tagged.remove_cover()
+            else:
+                tagged.set_cover(changes[COVER])
         tagged.save()
     return read_snapshot(path)
+
+
+def embedded_cover(snapshot: Snapshot) -> bytes | None:
+    """The embedded front cover (not a folder image shown in its place)."""
+    return snapshot.cover if snapshot.cover_source == "embedded" else None
+
+
+def read_image(path: str | Path) -> bytes:
+    """A picture chosen as the new cover. Raises ValueError for something that isn't a jpg or png."""
+    from music_desk.core.fsops import open_shared
+
+    path = Path(path)
+    if path.suffix.lower() not in COVER_EXTENSIONS:
+        raise ValueError(f"{path.name} isn't a JPEG or PNG picture")
+    with open_shared(path) as f:
+        data = f.read()
+    if not (data.startswith(JPEG_MAGIC) or data.startswith(PNG_MAGIC)):
+        raise ValueError(f"{path.name} isn't a valid JPEG or PNG picture")
+    return data
 
 
 def is_audio(path: str | Path) -> bool:

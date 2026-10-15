@@ -12,8 +12,9 @@ Ctrl+S saves and Esc reverts. Reads go through TagIO and writes through TagWrite
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QIntValidator, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QImage, QIntValidator, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -30,9 +31,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from music_desk.core.metadata import Snapshot
+from music_desk.core.metadata import COVER, COVER_EXTENSIONS, LARGE_COVER, Snapshot, embedded_cover
 from music_desk.core.tags import Fields
-from music_desk.services.tag_io import Loaded, LoadedMany, TagIO
+from music_desk.services.tag_io import ImageRead, Loaded, LoadedMany, TagIO
 from music_desk.services.tag_writer import BatchWritten, TagWriter
 
 TEXT_FIELDS = (("title", "Title"), ("artist", "Artist"), ("albumartist", "Album artist"), ("album", "Album"))
@@ -44,6 +45,40 @@ SHARED_FIELDS = ("artist", "albumartist", "album", "track_total", "disc", "disc_
 MULTIPLE = object()  # the files of a multi-selection differ on this field
 MULTIPLE_TEXT = "(multiple values)"
 CLEARED_TEXT = "(cleared on all files)"
+
+
+class CoverLabel(QLabel):
+    """The cover in the header. A jpg or png dropped on it replaces the cover (a drop into the app is fine;
+    only dragging files out is disabled)."""
+
+    pictureDropped = Signal(str)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setAcceptDrops(True)
+
+    @staticmethod
+    def _picture(event) -> str | None:
+        urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
+        if len(urls) == 1 and urls[0].isLocalFile():
+            path = urls[0].toLocalFile()
+            if Path(path).suffix.lower() in COVER_EXTENSIONS:
+                return path
+        return None
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if self.isEnabled() and self._picture(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        path = self._picture(event)
+        if path and self.isEnabled():
+            event.acceptProposedAction()
+            self.pictureDropped.emit(path)
+        else:
+            event.ignore()
 
 
 def _normalize_lyrics(text: str | None) -> str:
@@ -81,8 +116,12 @@ class MetadataTab(QWidget):
         self._save_token: int | None = None
         self._dirty = False
         self._filling = False
-        self._cover_image = None
+        self._cover_image = None  # what the files have now (one file, or the common cover of several)
+        self._cover_change: tuple | None = None  # ("set", bytes, QImage) or ("remove",), until saved
+        self._image_token: int | None = None
+        self._can_edit_cover = False
         io.loaded.connect(self._loaded)
+        io.imageRead.connect(self._image_read)
         io.loadedMany.connect(self._loaded_many)
         writer.written.connect(self._saved)
         writer.batchWritten.connect(self._batch_saved)
@@ -112,10 +151,23 @@ class MetadataTab(QWidget):
         outer.setContentsMargins(8, 8, 8, 8)
 
         header = QHBoxLayout()
-        self.cover = QLabel()
-        self.cover.setFixedSize(96, 96)
+        self.cover = CoverLabel()
+        self.cover.setFixedSize(112, 112)
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cover.setWordWrap(True)
         self.cover.setFrameShape(QFrame.Shape.StyledPanel)
+        self.cover.setToolTip("Drop a JPEG or PNG picture here to replace the cover.")
+        self.cover.pictureDropped.connect(self.replace_cover_from)
+        self.replace_cover_button = QPushButton("Replace…")
+        self.replace_cover_button.clicked.connect(self.replace_cover)
+        self.remove_cover_button = QPushButton("Remove")
+        self.remove_cover_button.clicked.connect(self.remove_cover)
+        cover_box = QVBoxLayout()
+        cover_box.addWidget(self.cover)
+        cover_buttons = QHBoxLayout()
+        cover_buttons.addWidget(self.replace_cover_button)
+        cover_buttons.addWidget(self.remove_cover_button)
+        cover_box.addLayout(cover_buttons)
         names = QVBoxLayout()
         self.name_label = QLabel()
         self.name_label.setWordWrap(True)
@@ -127,7 +179,7 @@ class MetadataTab(QWidget):
         names.addWidget(self.format_label)
         names.addWidget(self.cover_source)
         names.addStretch(1)
-        header.addWidget(self.cover)
+        header.addLayout(cover_box)
         header.addLayout(names, 1)
         outer.addLayout(header)
 
@@ -276,7 +328,7 @@ class MetadataTab(QWidget):
             self.message.setText("None of the selected files could be read.")
             return
         self._unreadable = result.failed
-        self._fill_many(result.snapshots)
+        self._fill_many(result.snapshots, result.cover)
         self.pages.setCurrentIndex(1)
 
     # -- one file --
@@ -297,14 +349,8 @@ class MetadataTab(QWidget):
         self._filling = False
         self.name_label.setText(snapshot.path.name)
         self.format_label.setText(snapshot.format_line)
-        if cover is not None:
-            self.cover.setPixmap(QPixmap.fromImage(cover).scaled(
-                self.cover.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        else:
-            self.cover.setPixmap(QPixmap())
-            self.cover.setText("No cover")
-        self.cover_source.setText({"embedded": "Embedded cover", "": ""}.get(
-            snapshot.cover_source, f"Cover from {snapshot.cover_source}"))
+        self._cover_change = None
+        self._show_cover()
         self.details_title.show()
         self.details_box.show()
         self.error_label.hide()
@@ -338,8 +384,10 @@ class MetadataTab(QWidget):
     def editable_snapshots(self) -> list[Snapshot]:
         return [s for s in self.snapshots if s.editable]
 
-    def _fill_many(self, snapshots: list[Snapshot]) -> None:
+    def _fill_many(self, snapshots: list[Snapshot], cover: QImage | None = None) -> None:
         self.snapshots = snapshots
+        self._cover_image = cover
+        self._cover_change = None
         self._touched.clear()
         self._cleared.clear()
         editable = self.editable_snapshots
@@ -367,9 +415,7 @@ class MetadataTab(QWidget):
             fmt = s.path.suffix.lstrip(".").upper()
             counts[fmt] = counts.get(fmt, 0) + 1
         self.format_label.setText(", ".join(f"{n} {fmt}" for fmt, n in sorted(counts.items())))
-        self.cover.setPixmap(QPixmap())
-        self.cover.setText(f"{len(snapshots)}\nfiles")
-        self.cover_source.setText("")
+        self._show_cover()
         self.details_title.hide()
         self.details_box.hide()
         self.error_label.hide()
@@ -418,6 +464,8 @@ class MetadataTab(QWidget):
         self.lyrics.setEnabled(can_tag and not self.multi)
         self.lyrics.setReadOnly(not editable)
         self.lyrics.setToolTip(tooltip)
+        self._can_edit_cover = editable
+        self._update_cover_buttons()
         notes = self._multi_notes() if self.multi else []
         if not can_tag:
             notes.insert(0, f"{files[0].container} files have no tags, so they can't be edited here."
@@ -440,13 +488,25 @@ class MetadataTab(QWidget):
         fields: Fields = self.snapshot.fields
         changed = {}
         for key, edit in self.edits.items():
+            original = getattr(fields, key)
+            if edit.text() == ("" if original is None else str(original)):
+                continue  # untouched, even when the file holds blank text such as "  "
             value = _parse(key, edit.text())
-            if value != getattr(fields, key):
+            if value != original:
                 changed[key] = value
         lyrics = self.lyrics.toPlainText()
         if lyrics != _normalize_lyrics(fields.lyrics):
             changed["lyrics"] = lyrics if lyrics.strip() else None
+        self._add_cover_change(changed)
         return changed
+
+    def _add_cover_change(self, changed: dict) -> None:
+        if self._cover_change is None:
+            return
+        if self._cover_change[0] == "set":
+            changed[COVER] = self._cover_change[1]
+        elif self._has_embedded_cover():
+            changed[COVER] = None
 
     def _multi_changes(self) -> dict:
         if not self.editable_snapshots:
@@ -463,6 +523,7 @@ class MetadataTab(QWidget):
             if common is not MULTIPLE and value == common:
                 continue
             changed[key] = value
+        self._add_cover_change(changed)
         return changed
 
     def _edited(self, key: str | None = None) -> None:
@@ -487,7 +548,7 @@ class MetadataTab(QWidget):
         if self._save_token is not None:
             return
         if self.multi and self.snapshots:
-            self._fill_many(self.snapshots)
+            self._fill_many(self.snapshots, self._cover_image)
         elif self.snapshot is not None:
             self._fill(self.snapshot, self._cover_image)
 
@@ -533,7 +594,10 @@ class MetadataTab(QWidget):
             self._show_error(f"Saved {len(result.saved)} of {total} files. Not saved:\n{reasons}")
             return
         if self.multi and self.pages.currentIndex() == 1:
-            self._fill_many(self.snapshots)
+            if self._cover_change is not None:  # the common cover changed: read it back
+                self._load_token = self.io.load_many([s.path for s in self.snapshots])
+            else:
+                self._fill_many(self.snapshots, self._cover_image)
 
     def _show_error(self, message: str) -> None:
         """The edits stay (and stay dirty) so the user can retry."""
@@ -542,6 +606,90 @@ class MetadataTab(QWidget):
             self.error_label.show()
         self._set_dirty(self.dirty)
         self.saveFailed.emit(message)
+
+    # -- the cover --
+
+    def _has_embedded_cover(self) -> bool:
+        files = self.editable_snapshots if self.multi else [self.snapshot] if self.snapshot else []
+        return any(embedded_cover(s) is not None for s in files)
+
+    def _show_cover(self) -> None:
+        """The header picture: a pending change first, then what the file(s) have."""
+        image, text, source = None, "No cover", ""
+        if self._cover_change is not None and self._cover_change[0] == "set":
+            image, source = self._cover_change[2], "New cover (not saved yet)"
+        elif self._cover_change is not None:
+            text, source = "Cover removed", "The embedded cover will be removed on save."
+        elif self.multi:
+            covers = {embedded_cover(s) for s in self.editable_snapshots}
+            if self._cover_image is not None:
+                image, source = self._cover_image, "The same embedded cover on every file"
+            elif covers == {None}:
+                text = "No cover"
+            else:
+                text = MULTIPLE_TEXT.replace("values", "covers")
+        elif self.snapshot is not None:
+            image = self._cover_image
+            source = {"embedded": "Embedded cover", "": ""}.get(
+                self.snapshot.cover_source, f"Cover from {self.snapshot.cover_source}")
+        if image is not None:
+            self.cover.setPixmap(QPixmap.fromImage(image).scaled(
+                self.cover.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        else:
+            self.cover.setPixmap(QPixmap())
+            self.cover.setText(text)
+        self.cover_source.setText(source)
+        self._update_cover_buttons()
+
+    def _update_cover_buttons(self) -> None:
+        can = self._can_edit_cover
+        self.cover.setEnabled(can)
+        self.replace_cover_button.setEnabled(can)
+        removing = self._cover_change is not None and self._cover_change[0] == "remove"
+        self.remove_cover_button.setEnabled(
+            can and not removing and (self._has_embedded_cover() or self._cover_change is not None))
+
+    def choose_cover_file(self) -> str:
+        """The picture to use (a separate method so tests can answer it)."""
+        path, _filter = QFileDialog.getOpenFileName(self, "Choose a cover picture", "",
+                                                    "Pictures (*.jpg *.jpeg *.png)")
+        return path
+
+    def confirm_large_cover(self, size: int) -> bool:
+        answer = QMessageBox.question(
+            self, "Large cover",
+            f"This picture is {size / (1024 * 1024):.1f} MB. Every file stores its own copy, so a large cover "
+            "makes each file that much bigger.\n\nUse it anyway?")
+        return answer == QMessageBox.StandardButton.Yes
+
+    def replace_cover(self) -> None:
+        path = self.choose_cover_file()
+        if path:
+            self.replace_cover_from(path)
+
+    def replace_cover_from(self, path: str) -> None:
+        """Read the picture on the worker thread; it becomes a pending change once read."""
+        self.error_label.hide()
+        self._image_token = self.io.read_image(path)
+
+    def _image_read(self, result: ImageRead) -> None:
+        if result.token != self._image_token:
+            return
+        self._image_token = None
+        if result.data is None:
+            self.error_label.setText(f"That picture can't be used: {result.error}")
+            self.error_label.show()
+            return
+        if len(result.data) > LARGE_COVER and not self.confirm_large_cover(len(result.data)):
+            return
+        self._cover_change = ("set", result.data, result.image)
+        self._show_cover()
+        self._edited()
+
+    def remove_cover(self) -> None:
+        self._cover_change = ("remove",)
+        self._show_cover()
+        self._edited()
 
     # -- leaving with unsaved edits --
 

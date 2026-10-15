@@ -34,11 +34,22 @@ class LoadedMany:
     token: int
     snapshots: list[Snapshot]  # in the order asked, unreadable files left out
     failed: list[tuple[str, str]]  # (path, error)
+    cover: QImage | None = None  # the embedded front cover, when every file has the same one
+
+
+@dataclass(frozen=True)
+class ImageRead:
+    token: int
+    path: str
+    data: bytes | None
+    image: QImage | None
+    error: str | None = None
 
 
 class TagIO(QObject):
     loaded = Signal(object)  # Loaded, after a read
     loadedMany = Signal(object)  # LoadedMany, after a batch read (multi-selection)
+    imageRead = Signal(object)  # ImageRead: a picture chosen as the new cover
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -65,7 +76,26 @@ class TagIO(QObject):
                     snapshots.append(metadata.read_snapshot(path))
                 except Exception as e:  # noqa: BLE001 - listed as unreadable
                     failed.append((str(path), f"{type(e).__name__}: {e}"))
-            self.loadedMany.emit(LoadedMany(token, snapshots, failed))
+            covers = {metadata.embedded_cover(s) for s in snapshots}
+            common = covers.pop() if len(covers) == 1 else None
+            self.loadedMany.emit(LoadedMany(token, snapshots, failed, decode_cover(common)))
+
+        self._submit(run)
+        return token
+
+    def read_image(self, path: str | Path) -> int:
+        token = self.next_token()
+
+        def run() -> None:
+            try:
+                data = metadata.read_image(path)
+                image = decode_cover(data)
+                if image is None:
+                    raise ValueError(f"{Path(path).name} couldn't be decoded as a picture")
+            except Exception as e:  # noqa: BLE001 - shown to the user
+                self.imageRead.emit(ImageRead(token, str(path), None, None, str(e)))
+                return
+            self.imageRead.emit(ImageRead(token, str(path), data, image))
 
         self._submit(run)
         return token

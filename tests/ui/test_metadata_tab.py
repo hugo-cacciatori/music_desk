@@ -507,3 +507,179 @@ def test_multi_selection_in_the_window(qtbot, window, service, monkeypatch):
     with qtbot.waitSignal(tab.writer.batchWritten, timeout=10000):
         window.file_view.select_ids([entry(service, "Artist", "Album", "track 1.flac")])
     qtbot.waitUntil(lambda: "Saved the tags of 2 files" in window.statusBar().currentMessage(), timeout=5000)
+
+
+# -- the cover (SPEC §7, cover editing) --
+
+def pictures(path) -> int:
+    """How many pictures the file holds, whatever their type."""
+    import mutagen
+
+    audio = mutagen.File(path)
+    if hasattr(audio, "pictures"):
+        return len(audio.pictures)
+    tags = audio.tags
+    if hasattr(tags, "getall"):
+        return len(tags.getall("APIC"))
+    return 0
+
+
+@pytest.fixture
+def new_cover(tmp_path, fixtures_dir):
+    path = tmp_path / "new cover.png"
+    from PySide6.QtGui import QImage
+
+    image = QImage(64, 64, QImage.Format.Format_RGB32)
+    image.fill(0x3366CC)
+    assert image.save(str(path), "PNG")
+    return path
+
+
+def pick(qtbot, tab, monkeypatch, path):
+    monkeypatch.setattr(tab, "choose_cover_file", lambda: str(path))
+    with qtbot.waitSignal(tab.io.imageRead, timeout=5000):
+        tab.replace_cover_button.click()
+
+
+@pytest.mark.parametrize("name", FORMATS)
+def test_replace_cover_every_format(qtbot, panel, fixture_copy, new_cover, monkeypatch, name):
+    path = fixture_copy(f"formats/{name}")
+    tab = load(qtbot, panel, path)
+    pick(qtbot, tab, monkeypatch, new_cover)
+    assert tab.dirty and tab.cover_source.text() == "New cover (not saved yet)"
+    assert tab.changes() == {"cover": new_cover.read_bytes()}
+    save(qtbot, tab)
+    assert TaggedFile(path).cover().data == new_cover.read_bytes()
+    assert tab.cover_source.text() == "Embedded cover" and not tab.dirty
+
+
+def test_replace_keeps_other_pictures(qtbot, panel, fixture_copy, new_cover, monkeypatch):
+    path = fixture_copy("edge/edge.flac")  # a front and a back cover
+    count = pictures(path)
+    tab = load(qtbot, panel, path)
+    pick(qtbot, tab, monkeypatch, new_cover)
+    save(qtbot, tab)
+    assert pictures(path) == count and TaggedFile(path).cover().data == new_cover.read_bytes()
+
+
+def test_remove_cover(qtbot, panel, fixture_copy):
+    path = fixture_copy("edge/edge.flac")
+    count = pictures(path)
+    tab = load(qtbot, panel, path)
+    assert tab.remove_cover_button.isEnabled()
+    tab.remove_cover_button.click()
+    assert tab.cover.text() == "Cover removed" and tab.changes() == {"cover": None}
+    assert not tab.remove_cover_button.isEnabled()
+    save(qtbot, tab)
+    assert pictures(path) == count - 1  # the back cover stays
+    front = TaggedFile(path).cover()
+    assert front is None or front.data != (fixture_copy("edge/front.jpg")).read_bytes()
+
+
+def test_no_embedded_cover_means_nothing_to_remove(qtbot, panel, fixture_copy, fixtures_dir):
+    path = fixture_copy("formats/tone.mp3")
+    shutil.copy2(fixtures_dir / "cover.jpg", path.parent / "folder.jpg")
+    tab = load(qtbot, panel, path)
+    assert tab.cover_source.text() == "Cover from folder.jpg"  # shown, never written
+    assert not tab.remove_cover_button.isEnabled()
+
+
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # QDragEnterEvent has only the QPoint constructor
+def test_dropping_a_picture(qtbot, panel, fixture_copy, new_cover):
+    from PySide6.QtCore import QMimeData, QPoint, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+
+    tab = load(qtbot, panel, fixture_copy("formats/tone.flac"))
+    keep = []
+
+    def event(cls, path):
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(path))])
+        keep.append(mime)
+        position = QPoint(5, 5) if cls is QDragEnterEvent else QPoint(5, 5).toPointF()
+        return cls(position, Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
+                   Qt.KeyboardModifier.NoModifier)
+
+    text_file = new_cover.with_suffix(".txt")
+    text_file.write_text("x")
+    refused = event(QDragEnterEvent, text_file)
+    tab.cover.dragEnterEvent(refused)
+    assert not refused.isAccepted()
+    accepted = event(QDragEnterEvent, new_cover)
+    tab.cover.dragEnterEvent(accepted)
+    assert accepted.isAccepted()
+    with qtbot.waitSignal(tab.io.imageRead, timeout=5000):
+        tab.cover.dropEvent(event(QDropEvent, new_cover))
+    assert tab.changes() == {"cover": new_cover.read_bytes()}
+
+
+def test_a_broken_picture(qtbot, panel, fixture_copy, tmp_path, monkeypatch):
+    fake = tmp_path / "fake.jpg"
+    fake.write_text("not a picture")
+    tab = load(qtbot, panel, fixture_copy("formats/tone.flac"))
+    pick(qtbot, tab, monkeypatch, fake)
+    assert "can't be used" in tab.error_label.text() and not tab.dirty
+
+
+@pytest.mark.parametrize("accept", [False, True])
+def test_large_cover_warning(qtbot, panel, fixture_copy, fixtures_dir, tmp_path, monkeypatch, accept):
+    big = tmp_path / "big.jpg"
+    big.write_bytes((fixtures_dir / "cover.jpg").read_bytes() + bytes(1024 * 1024 + 10))  # still decodes
+    tab = load(qtbot, panel, fixture_copy("formats/tone.flac"))
+    asked = []
+    monkeypatch.setattr(tab, "confirm_large_cover", lambda size: asked.append(size) or accept)
+    pick(qtbot, tab, monkeypatch, big)
+    assert asked == [big.stat().st_size]
+    assert tab.dirty is accept
+
+
+def test_revert_drops_the_new_cover(qtbot, panel, fixture_copy, new_cover, monkeypatch):
+    tab = load(qtbot, panel, fixture_copy("edge/edge.flac"))
+    pick(qtbot, tab, monkeypatch, new_cover)
+    tab.revert()
+    assert not tab.dirty and tab.cover_source.text() == "Embedded cover"
+
+
+def test_locked_cover(qtbot, panel, locks, fixture_copy):
+    path = fixture_copy("edge/edge.flac")
+    tab = load(qtbot, panel, path)
+    with locks.lock([path], "Tidy album"):
+        qtbot.waitUntil(lambda: not tab.replace_cover_button.isEnabled(), timeout=3000)
+        assert not tab.remove_cover_button.isEnabled() and not tab.cover.isEnabled()
+    qtbot.waitUntil(lambda: tab.replace_cover_button.isEnabled(), timeout=3000)
+
+
+def test_multi_cover(qtbot, panel, album, new_cover, monkeypatch):
+    paths = [album / n for n in MULTI_FILES]
+    tab = load_many(qtbot, panel, paths)
+    assert tab.cover.text() in ("No cover", "(multiple covers)")
+    pick(qtbot, tab, monkeypatch, new_cover)
+    assert tab.changes() == {"cover": new_cover.read_bytes()}
+    save_many(qtbot, tab)
+    qtbot.waitUntil(lambda: tab.cover_source.text() == "The same embedded cover on every file", timeout=10000)
+    assert {TaggedFile(p).cover().data for p in paths} == {new_cover.read_bytes()}
+    first = TaggedFile(paths[0])
+    first.remove_cover()
+    first.save()
+    load_many(qtbot, panel, paths[1:])  # another selection, then back: a fresh read
+    tab = load_many(qtbot, panel, paths)
+    assert tab.cover.text() == "(multiple covers)"
+    tab.remove_cover_button.click()
+    save_many(qtbot, tab)
+    assert all(TaggedFile(p).cover() is None for p in paths)
+
+
+def test_index_follows_cover_changes(qtbot, window, service, new_cover, monkeypatch):
+    window.open_folder(entry(service, "Artist", "Album"))
+    tab = select_file(qtbot, window, "Track 2.flac")
+    track = entry(service, "Artist", "Album", "Track 2.flac")
+    assert service.conn.execute("SELECT has_cover FROM tracks WHERE entry_id = ?", (track,)).fetchone()[0] == 0
+    pick(qtbot, tab, monkeypatch, new_cover)
+    save(qtbot, tab)
+    qtbot.waitUntil(lambda: service.conn.execute("SELECT has_cover FROM tracks WHERE entry_id = ?",
+                                                 (track,)).fetchone()[0] == 1, timeout=10000)
+
+
+def test_blank_text_in_a_file_isnt_an_edit(qtbot, panel, fixture_copy):
+    tab = load(qtbot, panel, fixture_copy("edge/edge.flac"))  # its artist is blank padding
+    assert tab.changes() == {} and not tab.dirty

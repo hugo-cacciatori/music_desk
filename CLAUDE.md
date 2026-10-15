@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M3 in progress** (tasks 1 to 6 done: the Metadata tab for a single file; TagWriter and path locks; multi-file editing; cover editing; folder summary; .lrc import):
+- **M3 is complete** (its "Done when" holds: every fixture format round-trips through the UI, and ID3v2.3 is kept):
   - `core/metadata.py`: `read_snapshot(path) -> Snapshot` (fields, stream details, RG values, the cover with its
     source, the ID3 version, `format_line` such as "FLAC 16-bit/44.1 kHz · 4:44 · 32 MB", with bit depth for
     lossless and kbps for lossy), `folder_cover` (folder.jpg, cover.jpg, front.jpg, ignoring case) and
@@ -116,8 +116,42 @@ two files alone.
       and the file is editable and not locked.
     - The import fills the field (CRLF normalized, edge newlines stripped) and makes the tab dirty. Saving is
       the usual Save; the .lrc bytes are never touched (tested).
-  - 565 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
-    offscreen.
+  - Inline rename (task 7):
+    - `core/inline_rename.py`:
+      - `validate_name(path, new)`: empty, the script's forbidden characters, a trailing space or dot, reserved
+        names, longer than 259 characters, or a clash (case-only renames allowed);
+      - `rename_entry(path, new, locks)` holds a "a rename" lock, renames the .lrc too when exactly one audio
+        file has its stem (and the target is free), and returns a `RenameResult` with steps and warnings;
+      - `undo(result)` goes back sidecar first. A `RenameError` carries the user message.
+    - `Scanner.apply_renames(steps)` updates `entries.name`/`ext` and `search` in place, so ids are kept and a
+      folder's subtree follows. It also refreshes the folder's sidecar flags. A change between audio and
+      non-audio drops the track row or reads the tags, then recomputes the totals.
+      `Indexer.apply_renames(steps)` queues it.
+    - Reconcile now detects renames: a vanished entry and a new one with the same kind, extension, size and mtime
+      (one of each) keep their row, id and tags. Explorer renames therefore no longer re-read tags, and an
+      in-app rename racing a revalidation scan keeps its id.
+    - UI:
+      - the Name cell is editable (a slow click; F2 through a shortcut on the list), and the `RenameDelegate`
+        selects only the stem;
+      - tree folders are editable (F2, slow click), roots aren't;
+      - "Rename\tF2" in the list menus (one file or folder) and in the tree menu (not roots).
+    - `MainWindow.rename_entry(id, name)`:
+      - refuses roots; changing the extension asks first (`confirm_extension_change`); unsaved tag edits ask
+        first;
+      - renames on the shell thread, then `renameDone`/`renameFailed`; the index is updated in place;
+      - a 10 s toast (naming the .lrc) offers Undo;
+      - the open folder's path and breadcrumb follow a folder rename (`_refresh_location`), and the panel
+        reloads a renamed file.
+    - Rename hint: `Snapshot.suggested_name` holds what the default masks give (`metadata.suggested_name`).
+      After a single-file save that changes it, the tab shows 'Rename to "01 New Title.flac"?', which renames
+      through `rename_path`.
+    - `store.consistent_read(conn)`: `folder_summary` now reads one snapshot (it raced a root removal).
+    - Tests: an autouse `no_real_dialogs` fixture in `tests/conftest.py` makes any real QMessageBox/QFileDialog
+      fail the test, instead of waiting for a click (one test had opened the real extension prompt). Tests
+      answer through the `confirm_*`, `ask_*` and `choose_*` methods.
+  - 603 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
+    offscreen. The UI tests open real windows, which flash on screen; running them offscreen
+    (`QT_QPA_PLATFORM=offscreen`) is an option not tried yet, since some tests rely on window focus.
 - **M2 is complete** (its "Done when" holds: measured on a copied 10k-file tree, see the end of this block):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
     `folder_stats`, FTS5 `search` with `unicode61 remove_diacritics 2`). `MIGRATIONS[n]` takes v`n` to v`n+1`,
@@ -347,30 +381,22 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M3's seventh and last task: inline rename of files and folders, with sidecars and Undo, plus the
-rename hint after a save. That completes M3. Read SPEC §11, §10 (sidecars, forbidden characters) and §7 (the
-hint), and Ground rule 1, first.
-- Core, plain Python (`core/fsops.py` or a new `core/inline_rename.py`):
-  - `validate_name(folder, old, new)`:
-    - not empty; none of the script's forbidden characters (reuse `core/rename.py`'s list) or control
-      characters;
-    - no trailing space or dot, no reserved names (CON, PRN, AUX, NUL, COM1–9, LPT1–9), within the path limit;
-    - no clash with a sibling (a case-only rename is allowed: `fsops.is_same_file`).
-  - `rename_entry(path, new_name)`: the file, plus its same-stem `.lrc` when exactly one audio file has that stem
-    (the §10 rule), with a case-only rename through a temporary name. It returns what to undo.
-- Index: update `entries.name` in place, and the sidecar's row, through a writer job (no rescan), then
-  `folderUpdated`. A renamed folder is one row update; paths below follow.
-- UI:
-  - F2, a slow double-click and the context menu ("Rename") in the list, and in the tree for folders. Only the
-    stem is selected; changing the extension asks first.
-  - Blocked on roots and under a job's lock (PathLocks), with a message.
-  - After a rename, a toast naming the sidecar too offers Undo for 10 s.
-- The hint (§7): after a tag save, if the name no longer matches the rename masks, offer "Rename to '03 New
-  Title.flac'?". Use `core/rename.py`'s mask logic for one file.
-- Watch out: the watcher sees the rename too. Make sure the in-place index update and the watcher's rescan agree
-  (no duplicate rows, and the entry id is kept so the selection stays).
-- Tests: validation cases, file + sidecar + Undo, case-only, a folder rename keeping the subtree, blocked on
-  roots and locked paths, the extension prompt, the hint, and the index ids kept.
+**Next step:** M4's first task: LyricsService (priority queue, 4 workers, circuit breaker, offline mode). Read
+SPEC §9 and §8, and `core/lyrics.py`, first.
+- `services/lyrics_service.py`:
+  - one priority queue of tracks (the selected track, then the open folder, then the rest folder by folder) and
+    4 worker threads running `core.lyrics.lookup` with an `LrclibClient`;
+  - the cache is the `lyrics` table (`core.index.store.LyricsStore`, one read connection per worker);
+  - tracks with the same `lyrics_key` are looked up once;
+  - it starts once tags are indexed and resumes across restarts, since its state is the `lyrics` table (tracks
+    whose `lyrics_key` has no fresh entry are pending).
+- Circuit breaker: `core.lyrics.CircuitBreaker`. After 10 failures in a row, pause and retry in 10 minutes, with a
+  "LRCLIB unreachable" status and Retry now. Offline mode (`Settings.lyrics_offline`): no calls at all.
+- Index: after each result, the folder totals (`n_lrclib_found`) and the LRCLIB column follow, by deltas as in
+  `Scanner.update_file`, or a small helper.
+- Tests: mocked HTTP only (`tests/core/lrclib_fake.py`, and the autouse network guard). Priority order,
+  deduplication, the breaker pausing and resuming, offline mode, and a restart resuming the pending tracks.
+- **Not yet:** the Lyrics tab (task 2), auto-embed (task 3), and the lyrics_cache.json import (task 4).
 
 Don't start it until Hugo says so.
 
@@ -476,6 +502,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Covers: Replace (picker or a dropped jpg/png) and Remove change only the embedded front cover, and other pictures stay. A change is pending until Save, and Revert drops it. Over 1 MB asks first. With several files, a change applies to all, and the header says whether they share one cover. Folder images are shown, never written. Details in SPEC §7. |
 | 2026-10-15 | Folder summary: shown for one selected folder, or for the open folder when nothing is selected. It is built from the index (subtree totals) plus one cover read on the worker thread: the folder image, else the first track's embedded cover. Tool shortcuts wait for M5, and LRCLIB coverage waits for M4. Details in SPEC §7. |
 | 2026-10-15 | .lrc import: any same-stem .lrc (ignoring case) is offered while the Lyrics field is empty, for one file. Its text is decoded as UTF-8, else Windows-1252 (never an error). The .lrc file itself is never modified. Details in SPEC §7. |
+| 2026-10-15 | Inline rename: on disk off the UI thread under a path lock, then the index is updated in place (ids kept). Reconcile also matches renames by kind, extension, size and mtime, so outside renames keep ids and tags. Roots can't be renamed. Changing the extension asks first. The hint uses the Rename tool's default masks. Tests may never open a real dialog. Details in SPEC §11. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -592,7 +619,7 @@ the index.
 - [x] Cover display, replace and remove
 - [x] Folder summary
 - [x] Import from a .lrc sidecar
-- [ ] Inline rename of files and folders, sidecars included, with Undo; the rename hint after a save
+- [x] Inline rename of files and folders, sidecars included, with Undo; the rename hint after a save
 
 Done when: every format with a fixture round-trips through the UI, and ID3 versions are preserved.
 

@@ -315,7 +315,8 @@ two files alone.
   and `ui/` packages. `uv run pyinstaller --noconfirm packaging/music_desk.spec` builds `dist/MusicDesk/`
   (about 104 MB); the built exe logs `rsgain 3.6` from its own bundle.
 - **M1 is complete** (its "Done when" holds: full pytest, slow rsgain tests included, passes):
-  - git repo (local, branch `main`, no remote), one commit per finished task. `.gitattributes` keeps
+  - git repo (branch `main`, remote `origin` = github.com/hugo-cacciatori/music_desk, public), one commit per
+    finished task. `.gitattributes` keeps
     `tests/fixtures/generated/` and `tests/reference/` byte-exact (git's autocrlf is on).
   - The scripts are frozen in `tests/reference/` (hashes identical to the root copies).
   - `tests/fixtures/make_fixtures.py` generates 49 deterministic files into `tests/fixtures/generated/`:
@@ -403,7 +404,7 @@ Don't start it until Hugo says so.
 **Session protocol:**
 1. Read this file, then the SPEC sections for the current milestone. Pick up the first unchecked task in Progress.
 2. Hugo's global rule: before running anything destructive (deleting files, etc.), tell him the exact command first.
-3. Commit each finished task on `main` (local repo; don't add a remote or push unless Hugo asks). Don't install
+3. Commit each finished task on `main`. Push to `origin` only when Hugo asks. Don't install
    global tools without asking. Project dependencies go in the
    project's virtual environment.
 4. At the end of a session:
@@ -422,7 +423,8 @@ Don't start it until Hugo says so.
 - ffmpeg is installed at `C:\Program Files\ffmpeg\ffmpeg-master-latest-win64-gpl-shared\bin\ffmpeg.exe`. It is
   only for regenerating test fixtures (SPEC §18). The app never needs it, because rsgain has its decoders built in
   (SPEC §13).
-- git repo initialized 2026-10-15 (branch `main`, no remote).
+- git repo initialized 2026-10-15 (branch `main`). Pushed to the public GitHub repo
+  https://github.com/hugo-cacciatori/music_desk on 2026-10-15 (created with `gh`, logged in as hugo-cacciatori).
 - The venv has mutagen 1.48.1 (newer than the global 1.47.0). Parity tests run the reference scripts inside the
   venv, so both sides use the same mutagen.
 - ffmpeg's build has no libspeex encoder, so there is no Speex fixture.
@@ -503,6 +505,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Folder summary: shown for one selected folder, or for the open folder when nothing is selected. It is built from the index (subtree totals) plus one cover read on the worker thread: the folder image, else the first track's embedded cover. Tool shortcuts wait for M5, and LRCLIB coverage waits for M4. Details in SPEC §7. |
 | 2026-10-15 | .lrc import: any same-stem .lrc (ignoring case) is offered while the Lyrics field is empty, for one file. Its text is decoded as UTF-8, else Windows-1252 (never an error). The .lrc file itself is never modified. Details in SPEC §7. |
 | 2026-10-15 | Inline rename: on disk off the UI thread under a path lock, then the index is updated in place (ids kept). Reconcile also matches renames by kind, extension, size and mtime, so outside renames keep ids and tags. Roots can't be renamed. Changing the extension asks first. The hint uses the Rename tool's default masks. Tests may never open a real dialog. Details in SPEC §11. |
+| 2026-10-15 | The repo is on GitHub, public: hugo-cacciatori/music_desk. Push only when Hugo asks. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack

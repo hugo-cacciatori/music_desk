@@ -173,3 +173,74 @@ def test_the_real_rsgain_through_the_window(qtbot, window, service, library_dir)
     finished = run(qtbot, window, service, album)
     assert [log.result() for log in finished.album_logs] == ["OK"], window.rg_view.text.toPlainText()
     assert rg(album / "01 Loud.flac", ALBUM_GAIN) is not None
+
+
+@pytest.mark.slow
+def test_the_real_rsgain_while_the_library_is_scanned(qtbot, window, service, library_dir, monkeypatch):
+    """Hugo's report (2026-10-15): ReplayGain never completed while the library was still being indexed."""
+    import threading
+
+    from music_desk.core.index.scanner import Scanner
+
+    gate = threading.Event()
+    real = Scanner._reconcile
+
+    def reconcile(self, ctx, ref, path, batch):
+        if threading.current_thread() is service.indexer._thread and not gate.is_set():
+            gate.wait(0.05)
+        return real(self, ctx, ref, path, batch)
+
+    monkeypatch.setattr(Scanner, "_reconcile", reconcile)
+    for n in range(200):
+        (library_dir / "Aaa Many" / f"Folder {n}").mkdir(parents=True)
+    service.indexer.scan_root(service.roots()[0].id)
+    qtbot.waitUntil(lambda: service.indexer.busy, timeout=5000)
+    album = library_dir / "Fixture Artist" / "Album B"
+    open_card(window, service, album)
+    qtbot.waitUntil(lambda: window.rg_view.state in ("result", "error"), timeout=30000)
+    assert service.indexer.busy  # the scan was still running all along
+    finished = window.rg_view.finished
+    gate.set()
+    assert [log.result() for log in finished.album_logs] == ["OK"], window.rg_view.text.toPlainText()
+
+
+@pytest.mark.slow
+def test_the_real_rsgain_while_tags_are_read(qtbot, window, service, library_dir, fixtures_dir, monkeypatch):
+    """The same, in the scan's second phase: hundreds of audio files having their tags read meanwhile."""
+    import time
+
+    from music_desk.core.index import scanner as scanner_module
+
+    real = scanner_module.read_file
+
+    def slow_read(path, size, mtime):
+        time.sleep(0.02)
+        return real(path, size, mtime)
+
+    monkeypatch.setattr(scanner_module, "read_file", slow_read)
+    many = library_dir / "Aaa Many"
+    many.mkdir()
+    for n in range(600):
+        shutil.copy2(fixtures_dir / "formats" / "tone.flac", many / f"{n:03d}.flac")
+    service.indexer.scan_root(service.roots()[0].id)
+    qtbot.waitUntil(lambda: service.indexer.busy, timeout=5000)
+    qtbot.wait(1500)  # well into reading tags
+    album = library_dir / "Fixture Artist" / "Album B"
+    started = time.monotonic()
+    open_card(window, service, album)
+    qtbot.waitUntil(lambda: window.rg_view.state in ("result", "error"), timeout=60000)
+    elapsed = time.monotonic() - started
+    assert service.indexer.busy, "the tag reading should still be running"
+    finished = window.rg_view.finished
+    assert [log.result() for log in finished.album_logs] == ["OK"], window.rg_view.text.toPlainText()
+    assert elapsed < 20, elapsed
+
+
+def test_indexing_pauses_while_replaygain_runs(qtbot, window, service, library_dir, fake):
+    paused = []
+    fake.before = lambda folder: paused.append(service.indexer.paused)
+    run(qtbot, window, service, library_dir / "Fixture Artist" / "Album B")
+    assert paused == [True]  # rsgain had the drive to itself
+    assert not service.indexer.paused  # and indexing resumed after the job
+    window.show_index_progress(type("P", (), {"root_id": -1, "phase": "tags", "tags_done": 1, "tags_total": 2})())
+    assert "paused" not in window.index_label.text()

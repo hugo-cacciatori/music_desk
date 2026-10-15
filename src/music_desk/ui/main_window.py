@@ -74,6 +74,7 @@ FIND_QUERIES = (  # the Lyrics menu's Find entries: (menu text, search query)
     ("Find songs LRCLIB can't look up (no artist or title)", "lrclib:notags"),
 )
 STATUS_MS = 8000
+PAUSED_NOTE = " (paused while ReplayGain runs)"
 
 
 class DropOverlay(QLabel):
@@ -107,6 +108,7 @@ class MainWindow(QMainWindow):
         self.history_back: list[int] = []
         self.history_forward: list[int] = []
         self.rsgain_version: str | None = None  # from the startup self-check (About)
+        self._indexing_paused = False  # while a ReplayGain job runs
         # Handing files to Windows can stall (a slow drive, a busy shell), so it happens off the UI thread.
         # These three are replaced in tests, which never launch anything.
         self.launch = fsops.open_with_default_app
@@ -799,6 +801,7 @@ class MainWindow(QMainWindow):
             self.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
             return False
         self._rg_request = request
+        self._pause_indexing(True)  # rsgain gets the drive to itself; folders you open are still served
         if request.tool == TIDY and self._rename_job is not None:
             self._rg_job, self._rename_job = self._rename_job, None  # the same Tidy job, step 2
             self.jobs.update(self._rg_job, status="ReplayGain")
@@ -813,6 +816,7 @@ class MainWindow(QMainWindow):
     def _rg_finished(self, finished: Finished) -> None:
         if finished.token != self._rg_token:
             return
+        self._pause_indexing(False)
         if self._library_open():
             self.refresh_after_tool(finished.folder)  # new tags and replaygain.log files
         self.rg_view.show_result(finished)
@@ -826,6 +830,20 @@ class MainWindow(QMainWindow):
             albums = len(finished.album_logs)
             what = "stopped" if finished.cancelled else "done"
             self.statusBar().showMessage(f"ReplayGain {what}: {albums} album{'s' if albums != 1 else ''}.", STATUS_MS)
+
+    def _pause_indexing(self, paused: bool) -> None:
+        """Background indexing waits while a ReplayGain job runs. On a hard disk, the two reading at once made
+        rsgain several times slower (Hugo, 2026-10-15: 66 s for an album that takes seconds alone)."""
+        if not self._library_open() or paused == self._indexing_paused:
+            return
+        self._indexing_paused = paused
+        if paused:
+            self.library.indexer.pause()
+        else:
+            self.library.indexer.resume()
+        if self.index_label.isVisible():
+            text = self.index_label.text().removesuffix(PAUSED_NOTE)
+            self.index_label.setText(text + PAUSED_NOTE if paused else text)
 
     def open_log(self, path: str) -> None:
         self._in_shell(lambda: self.launch(path), f"Windows couldn't open {os.path.basename(path)}.",
@@ -1354,7 +1372,7 @@ class MainWindow(QMainWindow):
             text = f"Indexing {name}: totals"
         else:
             text = f"Indexed {name}: {progress.files:,} files"
-        self.index_label.setText(text)
+        self.index_label.setText(text + (PAUSED_NOTE if self._indexing_paused else ""))
         self.index_label.show()
 
     # -- roots --

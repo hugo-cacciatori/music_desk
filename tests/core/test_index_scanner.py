@@ -540,3 +540,35 @@ def test_ambiguous_or_retyped_renames_are_not_matched(writer, read, library, roo
     report = scanner(writer).scan_root(root_id)
     assert (report.added, report.removed) == (3, 3)
     assert indexed_paths(read, library) == disk_paths(library)
+
+
+def test_a_paused_root_scan_waits_but_serves_requested_folders(writer, read, library, root_id):
+    """While a ReplayGain job runs, long scans hold (SPEC §4): no progress until resumed, but a folder the user
+    opens is still reconciled, and the scan completes once resumed."""
+    import threading
+    import time
+
+    for n in range(30):
+        (library / "Many" / f"Folder {n}").mkdir(parents=True)
+    s = scanner(writer)
+    s.pause()
+    result = {}
+    worker = threading.Thread(target=lambda: result.setdefault("report", s.scan_root(root_id)))
+    worker.start()
+    time.sleep(0.5)
+    assert "report" not in result and worker.is_alive()  # held at its first checkpoint
+    top = read.execute("SELECT id FROM entries WHERE parent_id IS NULL").fetchone()[0]
+    (library / "new.txt").write_text("x")
+    s.request_folder(top)  # the user opens the root folder meanwhile
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and read.execute(
+            "SELECT 1 FROM entries WHERE parent_id = ? AND name = 'new.txt'", (top,)).fetchone() is None:
+        time.sleep(0.05)
+    assert read.execute("SELECT 1 FROM entries WHERE parent_id = ? AND name = 'new.txt'", (top,)).fetchone()
+    assert "report" not in result  # still held
+    s.pause()
+    s.resume()
+    assert s.paused  # pauses nest: one more resume is needed
+    s.resume()
+    worker.join(10)
+    assert not worker.is_alive() and result["report"].folders > 30

@@ -80,6 +80,17 @@ class Indexer(QObject):
             else:
                 self._queue_locked(("folder", entry_id), front=True)
 
+    def pause(self) -> None:
+        """Hold long scans while a job needs the drive (Scanner.pause); folders the user asks for still come."""
+        self.scanner.pause()
+
+    def resume(self) -> None:
+        self.scanner.resume()
+
+    @property
+    def paused(self) -> bool:
+        return self.scanner.paused
+
     def request_path(self, path: str | Path, recursive: bool = False) -> None:
         """A refresh the user asked for, by path (after a tool ran on a folder): first in the queue, and during a
         root scan the indexed folders under it are served inside that scan, top down."""

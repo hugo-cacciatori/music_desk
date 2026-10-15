@@ -34,6 +34,7 @@ from music_desk.core.tags import TaggedFile
 
 log = logging.getLogger(__name__)
 
+PAUSE_POLL_S = 0.1  # how often a paused scan looks for folders the user asks for
 RG_KEYS = ("replaygain_track_gain", "replaygain_track_peak", "replaygain_album_gain", "replaygain_album_peak")
 TRACK_COLUMNS = (
     "format", "tag_family", "title", "artist", "albumartist", "album", "track", "track_total", "disc", "disc_total",
@@ -190,6 +191,28 @@ class Scanner:
         self.now = now
         self._priority: deque[int] = deque()
         self._lock = threading.Lock()
+        self._pauses = 0  # pause() calls not yet resumed: a long scan waits, serving only what the user asks for
+
+    def pause(self) -> None:
+        """Hold long scans (a whole root, a subtree) at their next checkpoint, while a ReplayGain job needs the
+        drive: on a hard disk, the two reading at once slowed rsgain several times over. Folders the user asks
+        for are still served meanwhile. Calls nest; each needs its resume()."""
+        with self._lock:
+            self._pauses += 1
+
+    def resume(self) -> None:
+        with self._lock:
+            self._pauses = max(0, self._pauses - 1)
+
+    @property
+    def paused(self) -> bool:
+        with self._lock:
+            return self._pauses > 0
+
+    def _hold_while_paused(self, ctx: "_Context", batch: "_Batch") -> None:
+        while self.paused and not ctx.cancel.cancelled:
+            self._serve_priority(ctx, batch)
+            time.sleep(PAUSE_POLL_S)
 
     def request_folder(self, entry_id: int) -> None:
         with self._lock:
@@ -377,6 +400,7 @@ class Scanner:
         batch = _Batch()
         while queue and not ctx.cancel.cancelled:
             self._serve_priority(ctx, batch)
+            self._hold_while_paused(ctx, batch)
             ref, path = queue[0]
             if ref.id is None:  # inserted by the pending batch
                 self._flush(ctx, batch)
@@ -517,6 +541,7 @@ class Scanner:
                 return
             if where.startswith("e.root_id"):
                 self._serve_priority(ctx, _Batch())
+                self._hold_while_paused(ctx, _Batch())
             chunk = stale[start:start + self.tag_batch]
             paths = [Path(ctx.path_of(parent_id), name) for _id, parent_id, name, _s, _m in chunk]
             results = list(ctx.pool.map(read_file, paths, [r[3] for r in chunk], [r[4] for r in chunk]))

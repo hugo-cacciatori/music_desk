@@ -7,9 +7,10 @@ Result, Album gain, Leveled to, Files changed), then each album's report as writ
 "Open replaygain.log" and "Open in File Explorer".
 """
 
+import time
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -79,6 +80,10 @@ class ReplayGainView(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.state = "idle"  # running, result, error
+        self._album = ""
+        self._album_started = 0.0
+        self._clock = QTimer(self, interval=1000)  # the elapsed time while an album is scanned
+        self._clock.timeout.connect(self._tick)
         self.finished: Finished | None = None
         self.folder: Path | None = None
 
@@ -139,7 +144,11 @@ class ReplayGainView(QWidget):
         self.heading.setText(f"<b>{what}</b> · {self.folder}")
         self.text.clear()
         self.busy.setRange(0, 0)
-        self._show("running", "Running… Files in this folder can't be edited meanwhile.")
+        self._album = "Starting"
+        self._album_started = time.monotonic()
+        self._show("running", "")
+        self._clock.start()
+        self._tick()
 
     def add_lines(self, lines: list[str]) -> None:
         for line in lines:
@@ -151,9 +160,22 @@ class ReplayGainView(QWidget):
         self.busy.setRange(0, total)
         self.busy.setValue(done)
         if label and label != "done":
-            self.message.setText(f"Album {min(done + 1, total)} of {total}: {label}")
+            self._album = f"Album {min(done + 1, total)} of {total}: {label}"
+            self._album_started = time.monotonic()
+            self._tick()
+
+    def _tick(self) -> None:
+        """While an album is scanned: its elapsed time. rsgain prints nothing until the album is done (its output
+        is held back when it goes to a pipe), so without this a long album looked frozen."""
+        if self.state != "running":
+            self._clock.stop()
+            return
+        seconds = int(time.monotonic() - self._album_started)
+        self.message.setText(f"{self._album} · {seconds // 60}:{seconds % 60:02d}. rsgain reports each album when "
+                             "it is done; files in this folder can't be edited meanwhile.")
 
     def show_result(self, finished: Finished) -> None:
+        self._clock.stop()
         self.finished = finished
         self.folder = finished.folder
         if finished.error:

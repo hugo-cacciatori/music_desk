@@ -969,6 +969,16 @@ Done when:
 - [x] Every tool refreshes its whole folder afterwards, and a recursive rename's subfolders reach the index (the
       renames were applied as one batch tied to the first folder)
 
+**ReplayGain slowness fixes** (Hugo's report, 2026-10-15; M7 on hold meanwhile)
+- [x] Background indexing pauses while a ReplayGain job runs (`Scanner.pause/resume`, `Indexer.pause`,
+      `MainWindow._pause_indexing`); requested folders are still served. Cause found: rsgain took 66 s for an
+      album that takes seconds alone, while a fresh index of the same drive was being read.
+- [x] The ReplayGain page shows the album's elapsed time: rsgain holds back its output when it writes into a
+      pipe (all lines arrive at exit), so long albums looked frozen.
+- [x] The ReplayGain card's number fields ignore the mouse wheel (`NoWheelSpinBox`).
+- [ ] Not yet verified on Hugo's machine: rebuild the setup (`uv run python packaging/build_installer.py`),
+      reinstall, and time an album while the index is still being built.
+
 **M7 Playlist builder** (read SPEC §15, designed with Hugo on 2026-10-15; also §5 and §14)
 - [x] Core (`core/playlists.py`, no Qt): the builder's model (entry ids, the natural import order, insert at a
       position, skip duplicates, move, remove, sort by a field), saving and restoring it in the app's data,

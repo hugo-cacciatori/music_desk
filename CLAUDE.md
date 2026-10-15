@@ -10,7 +10,26 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, session 7):**
+**Current state (2026-10-15, end of session 7):**
+- **M4 is complete.** Its "Done when" holds:
+  - every Lyrics tab state is reachable with mocked LRCLIB (`tests/ui/test_lyrics_tab.py`);
+  - a real run on a copied folder works (Hugo's go, 2026-10-15).
+
+  **The real run:**
+  - It used the app's own `LibraryService` and `MainWindow`, offscreen, with the real LRCLIB client, on a scratch
+    copy of `tests/fixtures/generated/album`. The app data was in a scratch `LOCALAPPDATA`.
+  - Two 0.2 s tones were tagged Radiohead "Karma Police" and Queen "Bohemian Rhapsody". At 0 s, LRCLIB's duration
+    filter doesn't apply.
+  - Both came back found with synced lyrics (LRCLIB #36841208 and #36902193). The LRCLIB column showed "synced",
+    and the Lyrics tab showed the lyrics and the source line. The 9 fixture keys came back not_found, as
+    expected.
+  - Three runs, 17–31 s each:
+    - In the first, 3 of the 9 fixture keys ended as lookup errors. The status bar said "Lyrics: 3 to retry later",
+      the intended behaviour. The log file wasn't on for that run, so the cause is unknown; most likely transient
+      LRCLIB failures.
+    - The second and third runs (the third with the log file on) had no errors.
+  - The script is not in the repo (it was in the session's scratchpad). It is easy to recreate from this
+    description if needed.
 - **M4 task 5 is done (the lyrics columns and status bar progress). M4 waits only for its real run** (Next step).
   - `FileRow.lyrics_key`. `queries._lrclib_state` gives "no tags" (no key), blank (unreadable), or the index
     state. `FileListModel.lrclib_status` and `refresh_column` show "offline" or "error" for pending rows from
@@ -474,18 +493,8 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M4's "Done when": a real run on a small copied folder. Every M4 task is done, and every tab state
-is reachable with mocked LRCLIB (`tests/ui/test_lyrics_tab.py`).
-- **Ask Hugo first.** The run reaches lrclib.net, with the User-Agent `MusicDesk/<version> (personal music
-  library app)`.
-- Use a copy of the fixtures (for example `tests/fixtures/generated/album`) in a scratch folder, with
-  `LOCALAPPDATA` pointed at a scratch folder too. Never a real library.
-- Add it as a root, let it index, and check:
-  - lookups happen (the status bar), and the LRCLIB column fills in;
-  - the Lyrics tab shows results.
-  The fixture tracks are tones titled "First", "Second" and so on, so not found is the likely result for most.
-  A copy of a real, well-known song from Hugo would test "found".
-- Then M5 task 1 (Tools page and cards). Read SPEC §10 and §13 first.
+**Next step:** M5 task 1: the Tools page and cards (Rename, ReplayGain, Tidy), options and validation. Read SPEC
+§10 and §13 first, and `core/rename.py` and `core/replaygain.py` (both ported in M1, with parity tests).
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:

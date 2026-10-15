@@ -961,8 +961,8 @@ watcher always runs, with revalidation on open as its fallback, and the scanner 
   mutagen (GPL-2.0-or-later).
 - As built (M6 task 3): the texts are in `resources/licenses/` (bundled as `resources/licenses`, listed in its
   `README.txt` and in `music_desk/licenses.py`; `tests/test_licenses.py` checks that every runtime dependency is
-  covered and every file exists). Still to add before distributing: the LGPL-3.0 text (Qt; the GPL-3.0 text it
-  supplements is there) and FFmpeg's notice. The app's own licence is unsettled: the repo has no LICENSE file,
+  covered and every file exists). The LGPL-3.0 text (Qt) was downloaded from gnu.org with Hugo's
+  go. Still to add before distributing: FFmpeg's notice. The app's own licence is unsettled: the repo has no LICENSE file,
   and mutagen's GPL-2.0-or-later applies to the distributed app.
 
 ## 14. Playback

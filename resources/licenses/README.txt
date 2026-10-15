@@ -1,8 +1,8 @@
 MusicDesk ships with these third-party components. Their licence texts are in this folder.
 
   Python                          PSF License 2.0       python-PSF.txt
-  Qt for Python (PySide6,         LGPL-3.0              GPL-3.0.txt (the LGPL-3.0 text itself is still
-    shiboken6)                                          to be added; it supplements the GPL-3.0)
+  Qt for Python (PySide6,         LGPL-3.0              LGPL-3.0.txt, and GPL-3.0.txt, which the
+    shiboken6)                                          LGPL-3.0 supplements
   mutagen                         GPL-2.0-or-later      mutagen-GPL-2.0.txt
   watchdog                        Apache-2.0            watchdog-Apache-2.0.txt, watchdog-NOTICE.txt
   natsort                         MIT                   natsort-MIT.txt

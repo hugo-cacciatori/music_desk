@@ -17,8 +17,8 @@ two files alone.
   - `music_desk/licenses.py` `COMPONENTS`, with the texts in `resources/licenses/` (bundled by the PyInstaller
     spec);
   - `watch_for_changes` and `tag_workers` removed from `Settings`.
-  Tests: `tests/ui/test_about.py`, `tests/test_licenses.py`, `tests/test_settings.py`. Still missing from
-  `resources/licenses/`: the LGPL-3.0 text and FFmpeg's notice (Next step).
+  Tests: `tests/ui/test_about.py`, `tests/test_licenses.py`, `tests/test_settings.py`. The LGPL-3.0 text was
+  downloaded from gnu.org (Hugo's go). Still missing from `resources/licenses/`: FFmpeg's notice (Next step).
 - **M6 task 2: smart views were dropped** (Hugo's review, Decisions log). In their place, the Lyrics menu has
   three Find entries (`MainWindow.FIND_QUERIES`, `MainWindow.find(query)`): songs LRCLIB didn't find, songs
   without lyrics in their tags, and songs LRCLIB can't look up (the new `lrclib:notags` filter). Tests are in
@@ -631,8 +631,6 @@ two files alone.
 completes M6. Read SPEC §13 first. Settle these with Hugo before building:
 - **The app's own licence.** The repo has no LICENSE file, and mutagen is GPL-2.0-or-later, so the distributed
   app must be under a GPL-compatible licence.
-- **The LGPL-3.0 text** (Qt) for `resources/licenses/`. It isn't on this machine; downloading it from gnu.org
-  needs Hugo's go.
 - **FFmpeg's licence** inside rsgain 3.6 (LGPL or GPL build): check, and add its notice.
 - **The app name and icon** (deferred, Open question 1). "Theme and icons" is mostly the app icon, since Qt
   already follows Windows' light and dark mode. Ask whether the theme task is still needed.

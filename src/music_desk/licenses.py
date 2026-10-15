@@ -27,8 +27,9 @@ class Component:
 
 COMPONENTS: tuple[Component, ...] = (
     Component("Python", "PSF License 2.0", ("python-PSF.txt",), version=platform.python_version()),
-    # Qt for Python is used under the LGPL 3.0; its text still has to be added (see CLAUDE.md, Next step).
-    Component("Qt for Python (PySide6, shiboken6)", "LGPL-3.0", ("GPL-3.0.txt",), "PySide6-Essentials"),
+    # Qt for Python is used under the LGPL 3.0, which supplements the GPL 3.0: both texts are shipped.
+    Component("Qt for Python (PySide6, shiboken6)", "LGPL-3.0", ("LGPL-3.0.txt", "GPL-3.0.txt"),
+              "PySide6-Essentials"),
     Component("mutagen", "GPL-2.0-or-later", ("mutagen-GPL-2.0.txt",), "mutagen"),
     Component("watchdog", "Apache-2.0", ("watchdog-Apache-2.0.txt", "watchdog-NOTICE.txt"), "watchdog"),
     Component("natsort", "MIT", ("natsort-MIT.txt",), "natsort"),

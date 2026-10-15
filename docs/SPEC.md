@@ -767,6 +767,37 @@ happen to which files.
 - `rename.preview_report(plan)` is what apply would report if nothing changes: a test checks it against
   `apply_plan`'s report on the cleanup fixtures.
 
+**As built (M5 task 3): ReplayGain and Tidy** (`services/replaygain_job.py`, `ui/tools/rg_report.py`):
+- **Preview:** `replaygain.preview(folder, options, discography=)` returns `AlbumPreview`s (the folder itself, or
+  `find_album_folders`), each with:
+  - the files rsgain can scan, and the unsupported audio files (listed as skipped);
+  - the keyword subfolders with their file counts;
+  - `too_long` (the rsgain command line would exceed `MAX_COMMAND_LINE`).
+  The page shows them as a table (Album folder, Files, Subfolders, Notes) with "N albums will be processed, one at
+  a time…". Run is enabled when at least one album can be scanned.
+- **Job:** `ReplayGainRunner.run` takes a `PathLocks` lock on the folder tree ("the ReplayGain tool") on the UI
+  thread, so a conflict is refused at once. It runs `process_album` or `process_discography` on a worker thread.
+  - Log lines (rsgain's output and the Reporter's info, warnings and errors) reach the page in batches, at most
+    10 a second.
+  - Per-album progress comes from the Reporter.
+  - Stop cancels: rsgain is killed, the album is reported CANCELLED, and nothing is leveled (the M1 rules).
+- **Report:**
+  - the result line ("Done: N albums OK. Every album was leveled to X dB.", "Done, but N albums need checking",
+    or "Stopped…");
+  - for a discography, the summary table (Album, Result, Album gain, Leveled to, Files changed);
+  - each album's RunLog text, exactly as appended to its replaygain.log, in a monospace view.
+    `process_discography(on_album=)` hands over each album's RunLog.
+  - "Open replaygain.log" (the folder's log; the artist folder's for a discography) and "Open in File Explorer",
+    launched on the shell thread.
+- **Index:** after the job, `Indexer.scan_path(folder, recursive=True)` re-reads the files whose size or mtime
+  changed (the new ReplayGain tags and the comment).
+- **Unsaved Metadata edits** on a file in the folder ask Save, Discard or Cancel before a run (the rename tool
+  does the same).
+- **Tidy:** the Tidy card opens the rename preview, titled "Tidy album, step 1 of 2". Apply ("Apply, then run
+  ReplayGain") is enabled even when there is nothing to rename. After the rename, the ReplayGain job starts on the
+  same folder and scope ("step 2 of 2"), with no separate preview, as in the script. A stopped rename doesn't start
+  ReplayGain.
+
 **C. Tidy album**: runs A, then B on the final names. This is the script run without flags. The preview covers
 the rename step only; as in the script, ReplayGain can't be previewed on names that are about to change.
 

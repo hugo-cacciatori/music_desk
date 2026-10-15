@@ -11,6 +11,27 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, session 8):**
+- **M5 task 3 is done (the ReplayGain jobs and Tidy).** Details are in SPEC §10, "As built (M5 task 3)".
+  - Core (`core/replaygain.py`): `preview()` → `AlbumPreview` (files, unsupported, keyword subfolders,
+    `too_long`, `warnings`), and `process_discography(on_album=)`.
+  - `services/replaygain_job.py` `ReplayGainRunner(locks, scanner=, exe=)`: `preview` and `run` (raises
+    `LockedError` at once), `cancel`, `close`, `running`; the signals `previewed`, `lines` (batched), `progress` and
+    `finished` (`Finished`: album_logs, result, cancelled, error, nothing, log_path).
+  - `ui/tools/rg_report.py` `ReplayGainView`: the previewing, preview, running, result and error states;
+    `shown_rows()` and `summary_rows()` are for tests.
+  - MainWindow:
+    - `preview_replaygain`, `run_replaygain(request, title)`, `open_log`, `_unsaved_edits_under(folder)`
+      (shared with the rename tool);
+    - Tidy chains `preview_rename` → Apply → `run_replaygain` (`RenamePreview.show_planning(tidy=True)`);
+    - the runner is closed on exit (it kills rsgain).
+  - Tests:
+    - `tests/core/rsgain_fake.py` (FakeScanner and VALUES, moved out of `test_replaygain.py`);
+    - preview tests in `test_replaygain.py`;
+    - `tests/ui/test_replaygain_tool.py`: album, discography, Stop, a lock conflict, the report buttons,
+      nothing to do, Tidy (with and without renames), unsaved edits, and a `slow` run of the real rsgain through
+      the window.
+  - Checked visually with real fonts: the preview, and a discography report.
+  - 756 tests pass (the slow ones included), 8 are skipped, ruff is clean, and the app exits 0 offscreen.
 - **M5 task 2 is done (the rename preview and apply).** Details are in SPEC §10, "As built (M5 task 2)".
   - Core (`core/rename.py`):
     - `plan_renames(..., cancel=)` raises `PlanCancelled`;
@@ -36,8 +57,7 @@ two files alone.
     browsing bound once. The pre-M4 code (7e3a183, run from a worktree) measures the same today (3.4 s, about
     50–70 ms), so this is the machine, not a regression. M2's 2.1 s and 45 ms were measured in quieter
     conditions.
-  - The comparison's worktree is still registered in git, at the session scratchpad's `wt-m3`. Removing it needs
-    Hugo's go, with the command first (`git worktree remove <path>`).
+  - The comparison's worktree was removed afterwards (`git worktree remove`, with Hugo's go).
 - **M5 task 1 is done (the Tools page and cards).** Details are in SPEC §10, "As built (M5 task 1)".
   - `ui/tools/`:
     - `tools_page.py`: `ToolsPage`, `ToolScope`, `ToolRequest`;
@@ -546,26 +566,23 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M5 task 3: the ReplayGain album and discography jobs, one album at a time, with cancel and
-reports (SPEC §10 B), and Tidy (§10 C). Read SPEC §10 B and C (with the "As built" notes), `core/replaygain.py`
-(`process_album`, `process_discography`, `find_album_folders`, Reporter, RunLog) and `core/rsgain.py`, first.
-- Preview:
-  - the album folders that will be processed, with their keyword subfolders and file counts;
-  - warnings: no audio, unsupported formats skipped, a command line too long.
-  It can be built from `find_album_folders`, `list_audio_files` and `find_keyword_subfolders`, off the UI thread.
-- **Job:** a worker thread running `process_album` / `process_discography`, which already run one album at a
-  time.
-  - It holds a `PathLocks` lock on the folder (owner "the ReplayGain tool"), like `RenameRunner`.
-  - Live log lines and per-album progress come through a Reporter that emits Qt signals (throttled).
-  - Cancel uses the CancelToken, which kills rsgain.
-- **Report:** the per-album RunLog text, the discography summary table, and "Open replaygain.log" / "Open in File
-  Explorer" (through `MainWindow.launch` / `show_in_explorer`, replaced in tests).
-- **Index:** after the job, the changed files' tags (ReplayGain values, the comment) need re-reading. Use
-  `Indexer.scan_path(folder, recursive=True)`: the size/mtime changes make the scan re-read them.
-- **Tidy:** the rename preview (`RenameRunner`), Apply, then the ReplayGain job on the same scope, chained.
-- Replace the placeholder toast in `MainWindow.run_tool` for "replaygain" and "tidy". The slow tests may use the
-  real rsgain (as the M1 parity tests do).
-- Task 4 (the jobs panel) comes after: until then, the job's progress lives on its own page.
+**Next step:** M5 task 4, the last of M5: the jobs panel, locks and index reconciliation (SPEC §10, "Jobs panel").
+Read SPEC §10 (the "As built" notes of tasks 1–3), `services/rename_job.py`, `services/replaygain_job.py` and the
+`MainWindow` tool methods, first.
+- Today each job lives on its own page in the centre: the rename preview, or the ReplayGain page. The page can't
+  be left while a job runs. The spec's **jobs panel** is a bottom drawer listing running and finished jobs, with
+  progress, logs and reports. It lets a job keep running while you browse. Decide with the spec how the pages and
+  the drawer share the report: probably, leaving a running job's page keeps it in the drawer, and the drawer
+  reopens its page.
+- **Locks:** done (both runners lock the folder tree; TagWriter and inline rename are refused under it). The
+  drawer should show which folder each job locks.
+- **Index reconciliation:** done per job (rename: `apply_renames` + rescans; ReplayGain: a recursive
+  `scan_path`). "The selection is kept" holds for renames (ids kept). Check it after ReplayGain too.
+- Then check M5's "Done when":
+  - the app's replaygain.log matches a script run on the same copied album, timestamps masked (proven at core
+    level in M1 by `test_replaygain_parity.py`; the app's job calls the same core);
+  - every cleanup fixture case gets the expected status (`test_rename.py`, `test_rename_tool.py`).
+  A slow test through the window, comparing with the script's log, would close it.
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
@@ -696,6 +713,7 @@ reports (SPEC §10 B), and Tidy (§10 C). Read SPEC §10 B and C (with the "As b
 | 2026-10-15 | LRCLIB column: "no tags" for tracks that can't be looked up, blank for unreadable files, and "offline" or "error" over "pending" from the service's state. The pending count for the status bar is kept by the lyrics service on its own connection (counted at refills, decremented per result), never on the UI thread. The status bar button is Pause, Resume or Retry now. Details in SPEC §5 and §9. |
 | 2026-10-15 | Tools page: it replaces the file list in the centre, with Back; opening another folder returns to the list. Scope: one folder, else the selected music files (Rename only), else the open folder. ReplayGain gets its own validation (rsgain's target range, threshold, margin, lowercase keywords, log name, comment). Card options are saved on every change, and a well-typed invalid saved value is kept for validation to show. Details in SPEC §10. |
 | 2026-10-15 | Rename tool run: the preview page replaces the Tools page. Junk asks "Rename and recycle", "Rename only" or Cancel. The folder tree is locked ("the Rename tool") for the run, and a conflict is refused at once. The result uses the script's summary wording (parity-tested), with "sent to the Recycle Bin" for "deleted". The index follows through in-place renames (ids kept), plus a rescan of folders that lost junk. Details in SPEC §10. |
+| 2026-10-15 | ReplayGain tool: a preview from the file system (album folders, keyword subfolders, skipped formats, a command line too long), then a job holding the folder lock. Live lines are batched; the report shows each album's RunLog as written, plus the discography table. After the job, the index rescans the folder recursively. Tidy is the rename preview, then ReplayGain started automatically after Apply, even with nothing to rename (no ReplayGain preview, as in the script). Details in SPEC §10. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -828,7 +846,7 @@ Done when: every tab state is reachable with mocked LRCLIB, and a real run on a 
 **M5 Tools** (read SPEC §10 and §13)
 - [x] Tools page and cards (Rename, ReplayGain, Tidy), options, validation
 - [x] Rename preview and apply: kept files with reasons, sidecar renames, junk files to the Recycle Bin
-- [ ] ReplayGain album and discography jobs (one album at a time), cancel, reports
+- [x] ReplayGain album and discography jobs (one album at a time), cancel, reports
 - [ ] Jobs panel, locks, index reconciliation
 
 Done when: the app's `replaygain.log` matches a script run on the same copied album (timestamps masked), and every

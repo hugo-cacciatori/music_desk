@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M2 in progress** (tasks 1 to 5 done: DB schema, DbWriter, read connection; library roots; scanner; watcher; folder tree and file list):
+- **M2 in progress** (tasks 1 to 5 done: DB schema, DbWriter, read connection; library roots; scanner; watcher; folder tree and file list; address bar and history):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
     `folder_stats`, FTS5 `search` with `unicode61 remove_diacritics 2`). `MIGRATIONS[n]` takes v`n` to v`n+1`,
     applied in one transaction and recorded in `PRAGMA user_version`. A newer DB raises `SchemaError`, untouched.
@@ -120,7 +120,28 @@ two files alone.
         provider returns None).
       - `LibraryService.close()` closes the writer last, so no `-wal`/`-shm` files are left behind.
     - Smoke check: `app.main()` starts offscreen, with `LOCALAPPDATA` pointed at a scratch folder, and exits 0.
-  - 416 tests pass, 8 are skipped, the 22 `slow` tests pass (rsgain, plus the 100k scan), and ruff is clean. A
+  - Navigation (task 6):
+    - `ui/address_bar.py` `AddressBar(subfolders)`: a breadcrumb (the root path, then a segment per folder),
+      each segment clickable, with a "›" dropdown of subfolders after it. Clicking the empty part, or Ctrl+L,
+      gives a text path. Enter navigates and Esc returns; quotes around a pasted path are stripped.
+    - MainWindow:
+      - a Navigation toolbar with Back (Alt+←), Forward (Alt+→), Up (Alt+↑), Rescan folder (F5) and the address
+        bar;
+      - Backspace goes up, from the list and the tree only;
+      - the mouse back/forward buttons work through an application event filter;
+      - `open_folder(id, record=True)` keeps the history stacks, and back/forward skip folders that left the
+        index;
+      - Up selects the folder you came from;
+      - `go_to_path` opens an indexed folder, or a file's folder with the file selected; otherwise it shows a
+        message.
+    - New queries: `folder_crumbs`, `parent_folder` and `find_child`.
+    - Found: Qt's standard Back/Forward keys are already Alt+←/→ on Windows (binding them twice made them
+      ambiguous, so they never fired), and they also bind Backspace. The keys are now set explicitly.
+    - Qt makes the tree's first row current when the window opens, so the root folder opens at start when there
+      is no last folder.
+    - Shared UI fixtures moved to `tests/ui/conftest.py` (with `library_dir`, `service` and `window`; a module can
+      override them), plus `tests/ui/browser_helpers.py`.
+  - 431 tests pass, 8 are skipped, the 22 `slow` tests pass (rsgain, plus the 100k scan), and ruff is clean. A
     test run that takes 30 s or more is pytest deleting an old 100k-file temp tree, not a hang.
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
@@ -194,20 +215,26 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M2's sixth task: the address bar, history and keyboard navigation. Read SPEC §5 (address bar,
-navigation) first.
-- `ui/address_bar.py`:
-  - A breadcrumb of the open folder (`MainWindow.folder_path`). Each segment is clickable and has a dropdown of
-    its subfolders (`queries.child_folders`).
-  - Clicking the bar, or Ctrl+L, turns it into a text path. A pasted path navigates if it lies inside a root
-    (`scanner.find_folder`; exact matches only, otherwise a plain message).
-- History: back and forward stacks of entry ids in MainWindow, with Alt+←/→, the mouse back/forward buttons and
-  toolbar buttons. Up is Backspace or Alt+↑. F5 rescans the open folder (`Indexer.scan_folder`). A folder that
-  left the index is skipped in the history.
-- Typing selects by name (QTreeView's keyboardSearch already does it on the Name column; check it). Ctrl/Shift
-  extend the selection (ExtendedSelection is on).
-- pytest-qt tests for each of these.
-- **Not yet:** the context menus and drag-out (task 7).
+**Next step:** M2's seventh and last task: the context menus, with drag-out kept disabled. That completes M2. Read
+SPEC §5 (menus), §14 (playback) and CLAUDE.md Ground rule 1 first.
+- `core/fsops.py` (no Qt):
+  - `open_with_default_app(path)` with `os.startfile`;
+  - `open_in_explorer(path)` with `explorer /select,"<path>"` (a folder opens itself);
+  - all through an injectable runner, so tests never launch anything.
+- Play folder, Play folder and subfolders, and Play selection:
+  - `playlists.folder_tracks` (natural order) or the view's order (`FileView.visible_names` order of the selected
+    ids), then `write_temp_playlist`, then `os.startfile` on it;
+  - when no app is associated with .m3u8 (`OSError`), a message explains how to set one, with "Open in File
+    Explorer" instead.
+- File list menu: Open with default app (also on double-click of an audio file), Play selection, Open in File
+  Explorer, Copy path. Folder menu (list and tree): Open, Play folder, Play folder and subfolders, Open in File
+  Explorer, Rescan, Remove from library (roots only).
+- Menu items for later milestones (Rename F2, Rename from tags, Tidy album, ReplayGain) are not shown until they
+  exist.
+- Drag-out stays disabled. Add a test that starting a drag on the list and the tree produces no drag.
+- Then check M2's "Done when" on a copied tree of 10k+ files: browsing stays fluid while it indexes, and folders
+  reopen instantly from the index. Use the synthetic tree from `test_index_scanner.make_tree`, or a copy Hugo
+  provides; never a real library.
 
 Don't start it until Hugo says so.
 
@@ -305,6 +332,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Scanner: vanished entries are deleted per folder during reconciliation (cascade) instead of by a final `scan_gen` sweep, which also works for one-folder scans; `scan_gen` is still stamped on inserted and updated rows. An unreachable root or unlistable folder never loses its index. Links and junctions aren't followed. `folder_stats` count whole subtrees. Search rows are keyed by entry id (schema v2). Details in SPEC §4. |
 | 2026-10-15 | Watcher: one watchdog observer over the online roots; per-folder coalescing with a 0.5 s debounce and a 5 s cap; jobs carry paths resolved when they run; new or moved-in folders are scanned recursively. Every folder open triggers a revalidation (stale-while-revalidate), which is also the fallback when a root can't be watched. Details in SPEC §4. |
 | 2026-10-15 | Browser: the tree and list read the index on the UI's read connection (instant), update in place on indexer signals, and reset only when another folder opens. Folders stay first in both sort directions. Folder rows show their subtree's track count (Title column) and total duration. Layout persists through `QHeaderView.saveState` in settings.json. When the open folder disappears, its nearest surviving ancestor opens. Settings live in `settings.py` (typed, JSON). Details in SPEC §5. |
+| 2026-10-15 | Navigation: the breadcrumb starts at the root path (one segment), and the levels above a root aren't navigable. Back and forward are Alt+←/→ and the mouse buttons; Backspace means Up, and only in the list and the tree. Up selects the folder you came from. A typed path to a file opens its folder and selects it. Details in SPEC §5. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -408,7 +436,7 @@ with a fixture.
 - [x] Scanner phases A and B, incremental, on-screen folder first
 - [x] Watcher, plus revalidation on open as a fallback
 - [x] Folder tree (lazy, natural order) and file list (columns, sort, persisted layout, Ctrl+F filter)
-- [ ] Address bar, history, keyboard navigation
+- [x] Address bar, history, keyboard navigation
 - [ ] Context menus: Open with default app, Play folder/selection, Open in Explorer, Copy path. Drag-out disabled.
 
 Done when: a copied 10k+ file tree browses fluidly while it is being indexed, and folders reopen instantly from

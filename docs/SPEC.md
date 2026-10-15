@@ -233,6 +233,17 @@ Explorer-like, with no copy, paste, delete or new.
     start.
   - When the open folder leaves the index (deleted or moved outside the app), its nearest surviving ancestor
     opens, as in Explorer.
+- As built (M2 task 6):
+  - The breadcrumb starts with the root path as one segment; the levels above a root aren't navigable. A "›"
+    after each segment drops down its subfolders.
+  - Text mode: click the empty part of the bar, or press Ctrl+L. Quotes around a pasted path are stripped. A
+    path to a file opens its folder and selects the file. A path outside the library, or not indexed, gives a
+    status message.
+  - History: back and forward stacks of folders, which skip folders that left the index. The keys are Alt+←/→
+    and the mouse back/forward buttons. Opening a new folder clears the forward stack.
+  - Up is Alt+↑, the toolbar button, or Backspace (in the list and the tree only, so text fields keep it). It
+    selects the folder you came from. F5 rescans the open folder.
+  - Typing in the list selects by name, Enter opens a folder, and Ctrl/Shift extend the selection.
 - **Smart views (sidebar):**
   - No lyrics in tags.
   - Found on LRCLIB but not in tags: the candidates for "Save to file tags".

@@ -11,6 +11,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from music_desk.core.index import roots
 from music_desk.core.index.roots import AddResult, Root
 from music_desk.core.index.store import DbWriter, connect_read
+from music_desk.services.indexer import Indexer
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class LibraryService(QObject):
         super().__init__(parent)
         self.writer = DbWriter(db_path).start()
         self.conn: sqlite3.Connection = connect_read(db_path)  # the UI thread's read-only connection
+        self.indexer = Indexer(self.writer, self)
         # One file-system worker: probing an unplugged network drive can hang for seconds.
         self._fs = ThreadPoolExecutor(1, thread_name_prefix="library-fs")
         self._timer = QTimer(self)
@@ -34,8 +36,12 @@ class LibraryService(QObject):
         self._timer.start()
         self._closed = False
         self.refresh_online()  # roots unplugged since the last run show as offline at once
+        for root in self.roots():  # the startup rescan; an offline root is skipped by the scanner
+            self.indexer.scan_root(root.id)
 
     def roots(self) -> list[Root]:
+        if self._closed:  # a signal queued before close() may still be delivered
+            return []
         return roots.list_roots(self.conn)
 
     # -- actions (they return at once; results arrive as signals) --
@@ -44,6 +50,7 @@ class LibraryService(QObject):
         return self._run(self._add_all, [str(p) for p in paths])
 
     def remove_root(self, root_id: int) -> Future:
+        self.indexer.cancel_root(root_id)
         return self._run(self._remove, root_id)
 
     def refresh_online(self) -> Future:
@@ -56,6 +63,7 @@ class LibraryService(QObject):
         self._closed = True
         self._timer.stop()
         self._fs.shutdown(wait=True)
+        self.indexer.stop()
         self.writer.stop()
         self.conn.close()
 
@@ -76,7 +84,10 @@ class LibraryService(QObject):
             result = roots.add_root(self.writer, path)
             log.info("add root %s: %s", path, result.status.value)
             results.append(result)
-        if any(r.status in (roots.AddStatus.ADDED, roots.AddStatus.MERGED) for r in results):
+        added = [r for r in results if r.status in (roots.AddStatus.ADDED, roots.AddStatus.MERGED)]
+        for result in added:
+            self.indexer.scan_root(result.root_id)
+        if added:
             self.rootsChanged.emit()
         self.addFinished.emit(results)
 
@@ -89,5 +100,7 @@ class LibraryService(QObject):
         changed = roots.check_online(self.writer, current)
         for root in changed:
             log.info("root %s is %s", root.path, "back online" if root.online else "offline")
+            if root.online:
+                self.indexer.scan_root(root.id)  # catch up with what changed while it was away
         if changed:
             self.rootsChanged.emit()

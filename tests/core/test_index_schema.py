@@ -33,7 +33,7 @@ def add_entry(conn, root, parent, name, is_dir=False) -> int:
 
 
 def test_fresh_database(conn):
-    assert schema.version(conn) == SCHEMA_VERSION == 1
+    assert schema.version(conn) == SCHEMA_VERSION == 2
     names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'index')")}
     assert TABLES <= names
     assert {"entries_parent", "entries_root", "entries_top", "tracks_lyrics_key"} <= names
@@ -114,6 +114,31 @@ def test_paths_are_rebuilt_from_parents(conn):
 
 
 def test_search_ignores_accents(conn):
-    conn.execute("INSERT INTO search (entry_id, name, artist) VALUES (7, 'x.flac', 'Sigur Rós')")
-    assert conn.execute("SELECT entry_id FROM search WHERE search MATCH 'sigur ros'").fetchall() == [(7,)]
-    assert conn.execute("SELECT entry_id FROM search WHERE search MATCH 'artist:rós'").fetchall() == [(7,)]
+    conn.execute("INSERT INTO search (rowid, name, artist) VALUES (7, 'x.flac', 'Sigur Rós')")
+    assert conn.execute("SELECT rowid FROM search WHERE search MATCH 'sigur ros'").fetchall() == [(7,)]
+    assert conn.execute("SELECT rowid FROM search WHERE search MATCH 'artist:rós'").fetchall() == [(7,)]
+
+
+def test_search_rows_leave_with_their_entries(conn):
+    root, top = add_root(conn)
+    folder = add_entry(conn, root, top, "Album", is_dir=True)
+    track = add_entry(conn, root, folder, "01.flac")
+    for entry in (folder, track):
+        conn.execute("INSERT INTO search (rowid, name) VALUES (?, 'x')", (entry,))
+    conn.execute("DELETE FROM entries WHERE id = ?", (folder,))  # the track goes by cascade
+    assert conn.execute("SELECT count(*) FROM search").fetchone()[0] == 0
+
+
+def test_v1_database_is_upgraded(tmp_path, monkeypatch):
+    path = tmp_path / "library.db"
+    conn = sqlite3.connect(path, autocommit=True)
+    with monkeypatch.context() as patch:
+        patch.setattr(schema, "SCHEMA_VERSION", 1)
+        patch.setattr(schema, "MIGRATIONS", schema.MIGRATIONS[:1])
+        migrate(conn)
+    conn.execute("INSERT INTO roots (path, added_at) VALUES ('C:/Music', 'x')")
+    migrate(conn)
+    assert schema.version(conn) == 2
+    assert conn.execute("SELECT count(*) FROM roots").fetchone()[0] == 1
+    conn.execute("INSERT INTO search (rowid, name) VALUES (1, 'x')")
+    conn.close()

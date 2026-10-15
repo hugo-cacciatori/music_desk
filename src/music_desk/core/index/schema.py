@@ -6,7 +6,7 @@ a plain name, so paths are rebuilt from parents and renaming a folder is one row
 
 import sqlite3
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 BUSY_TIMEOUT_MS = 5000
 
@@ -99,6 +99,18 @@ MIGRATIONS: list[str] = [
         entry_id UNINDEXED, name, title, artist, albumartist, album, genre, lyrics,
         tokenize = 'unicode61 remove_diacritics 2'
     );
+    """,
+    # v2: search rows are keyed by rowid = entries.id (an UNINDEXED column can't be deleted from without a full
+    # scan), and leave with their entry, including on cascades.
+    """
+    DROP TABLE search;
+    CREATE VIRTUAL TABLE search USING fts5(
+        name, title, artist, albumartist, album, genre, lyrics,
+        tokenize = 'unicode61 remove_diacritics 2'
+    );
+    CREATE TRIGGER entries_search_delete AFTER DELETE ON entries BEGIN
+        DELETE FROM search WHERE rowid = old.id;
+    END;
     """,
 ]
 

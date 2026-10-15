@@ -5,6 +5,7 @@ from PySide6.QtGui import QAction, QDragEnterEvent, QDragLeaveEvent, QDropEvent,
 from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox, QSplitter, QWidget
 
 from music_desk.core.index.roots import AddResult, AddStatus, Root
+from music_desk.core.index.scanner import ScanProgress
 from music_desk.services.library import LibraryService
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
@@ -36,6 +37,9 @@ class MainWindow(QMainWindow):
         self.library = library
         self.setWindowTitle(APP_TITLE)
         self.resize(1200, 760)
+        self.index_label = QLabel()
+        self.index_label.hide()
+        self.statusBar().addPermanentWidget(self.index_label)
         self.rsgain_label = QLabel("Checking rsgain…")
         self.statusBar().addPermanentWidget(self.rsgain_label)
 
@@ -69,6 +73,9 @@ class MainWindow(QMainWindow):
             library.rootsChanged.connect(self.refresh_roots)
             library.addFinished.connect(self.show_add_results)
             library.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
+            library.indexer.progress.connect(self.show_index_progress)
+            library.indexer.idle.connect(self.index_label.hide)
+            library.indexer.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
             self.refresh_roots()
 
     # -- rsgain --
@@ -80,6 +87,22 @@ class MainWindow(QMainWindow):
         else:
             self.rsgain_label.setText("rsgain unavailable: ReplayGain tools disabled")
             self.rsgain_label.setToolTip("The bundled rsgain.exe could not run. See the log for details.")
+
+    # -- indexing --
+
+    def show_index_progress(self, progress: ScanProgress) -> None:
+        root = next((r for r in self.library.roots() if r.id == progress.root_id), None) if self.library else None
+        name = (os.path.basename(root.path) or root.path) if root else "library"  # a drive root has no basename
+        if progress.phase == "structure":
+            text = f"Indexing {name}: {progress.folders:,} folders, {progress.files:,} files"
+        elif progress.phase == "tags":
+            text = f"Reading tags in {name}: {progress.tags_done:,} / {progress.tags_total:,}"
+        elif progress.phase == "stats":
+            text = f"Indexing {name}: totals"
+        else:
+            text = f"Indexed {name}: {progress.files:,} files"
+        self.index_label.setText(text)
+        self.index_label.show()
 
     # -- roots --
 

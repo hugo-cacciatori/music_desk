@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Protocol
 
 import music_desk
-from music_desk.core.tags import TagError, TaggedFile
+from music_desk.core.tags import Fields, TagError, TaggedFile
 
 FOUND = "found"
 INSTRUMENTAL = "instrumental"
@@ -84,17 +84,21 @@ def parse_from_filename(name):
 
 def read_track(path: str | Path) -> Track:
     tagged = TaggedFile(path)
-    fields = tagged.fields()
+    return track_from_fields(tagged.fields(), tagged.path.name, tagged.stream_info().duration)
+
+
+def track_from_fields(fields: Fields, file_name: str, duration: float | None) -> Track:
+    """The lookup data from already-read tags (the indexer reads each file once)."""
     artist = _text(fields.artist, fields.albumartist)
     title = _text(fields.title)
     if not artist or not title:
-        file_artist, file_title = parse_from_filename(tagged.path.name)
+        file_artist, file_title = parse_from_filename(file_name)
         artist, title = artist or file_artist, title or file_title
     return Track(
         artist=artist,
         title=title,
         album=_text(fields.album),
-        duration=round(tagged.stream_info().duration or 0),
+        duration=round(duration or 0),
         embedded=_text(fields.lyrics),
     )
 

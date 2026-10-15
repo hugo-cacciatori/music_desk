@@ -484,6 +484,18 @@ not it has a lyrics tag.
     - Retry now (not found, error, unreachable) calls `LyricsService.retry(entry_id)`: one track is looked up again
       at once, bypassing a fresh cache entry, and the breaker's pause ends. A lookup error shows over a cached
       not_found.
+- As built (M4 task 3), **Save to file tags** in the found state:
+  - It writes `embed_text(entry)` (synced, else plain) through `TagWriter.embed_lyrics`, which runs
+    `core.lyrics.embed_lyrics` under the save lock, then lets the index catch up.
+  - It is disabled, with the reason as a tooltip, when:
+    - the tag already holds the same text;
+    - the format has no tags (`LyricsInfo.can_tag`);
+    - a job's lock covers the file;
+    - a save is in progress.
+  - It asks (`confirm_replace_lyrics`) before replacing different lyrics.
+  - It is refused, with a message, while the Metadata tab has unsaved edits on that file.
+  - The result shows under the buttons ("Saved to the file's Lyrics tag.", or why not). A Metadata tab showing
+    that file, without unsaved edits, reloads to show the new tag.
 
 ## 9. Lyrics background service
 - Starts by itself once tags are indexed, covers every audio file under the roots, and resumes across restarts
@@ -543,6 +555,19 @@ not it has a lyrics tag.
 - At M6 (§6 "Implementation notes"), `record_lyrics` also writes the LRCLIB plain text into `search.lrclib` for
   every track with the key (NULL when the key stops being found), and scanned tracks take it from the `lyrics`
   table. Until then LRCLIB text isn't in the search index; the `lyrics` table keeps it.
+- As built (M4 task 3), **auto-save** (`services/lyrics_embedder.py` `AutoEmbedder`, owned by the window):
+  - Its toggles, until the Settings dialog (M6), are the **Lyrics** menu's "Offline mode" and "Automatically save
+    found lyrics into tags", saved in settings.json.
+  - When it is on:
+    - every track whose key is found and whose Lyrics tag is empty in the index gets the lyrics (synced first). It
+      covers tracks found earlier too, as the script's `--embed` did for every found song: a backfill runs when
+      the setting turns on, and at start, in batches of 50;
+    - each new FOUND result fills that key's empty tags (`lyrics_index.embed_candidates`).
+  - Writes go through `TagWriter.embed_lyrics(only_if_empty=True)`. The file itself is checked, so a tag the index
+    thought empty is never replaced. Job-locked files are skipped.
+  - Each file is tried once per session; a failure is logged, and tried again at the next start.
+  - The status bar says "Saved LRCLIB lyrics into the tags of N files."
+  - Unsaved Metadata edits aren't at risk: a Metadata save writes only the fields that were edited.
 - When a root is added, a `lyrics_cache.json` at its top (the script's cache) is imported into the DB cache. The
   file itself is left untouched.
 

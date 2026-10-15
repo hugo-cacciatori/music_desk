@@ -11,6 +11,26 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, session 7):**
+- **M4 task 3 is done (Save to file tags, and auto-save):**
+  - `TagWriter.embed_lyrics(items, only_if_empty=)` → `lyricsEmbedded(LyricsEmbedded)`, around
+    `core.lyrics.embed_lyrics`, under the save lock; `on_written` follows each WRITTEN file. It is callable from
+    any thread (tokens are locked).
+  - The Lyrics tab:
+    - a "Save to file tags" button in the found state, disabled with the reason as a tooltip (same text, no
+      tags, a job's lock, saving);
+    - `confirm_replace_lyrics` (replaced in tests) before replacing different lyrics;
+    - `can_write` (set by SidePanel) refuses while the Metadata tab has unsaved edits on that file;
+    - the result shows in `save_status`.
+  - SidePanel reloads a clean Metadata tab after lyrics are written into its file. `LyricsInfo.can_tag` is new.
+  - `services/lyrics_embedder.py` `AutoEmbedder(db_path, lyrics, writer, enabled=, batch=50)`:
+    - a backfill of the found tracks with empty tags (`lyrics_index.embed_candidates`) when it is turned on, and
+      at start;
+    - the key's tracks on each FOUND result;
+    - each file tried once per session.
+  - MainWindow: a **Lyrics** menu (Offline mode, "Automatically save found lyrics into tags") writes `Settings`
+    and drives the service and the embedder. The embedder closes before the TagWriter.
+  - Tests are in `tests/ui/test_lyrics_save.py`. 671 tests pass (the slow ones included), 8 are skipped, and ruff
+    is clean. The app starts and exits 0 offscreen.
 - **Spec (docs only, no code):** seek_lyrics' songs.html search box (substring over title, artist, album and
   lyrics) is now an explicit parity requirement of library search (SPEC §6, "Preserved from seek_lyrics"). The
   index groundwork for it (schema v3 trigram `search` with an `lrclib` column, `record_lyrics` indexing the text,
@@ -433,15 +453,18 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M4 task 3: Save to file tags, and the auto-embed setting (SPEC §8, §9). Read SPEC §8 and §9
-(as built), `ui/side_panel/lyrics_tab.py` and `core.lyrics.embed_lyrics`, first.
-- A "Save to file tags" button in the found state writes `embed_text(entry)` (synced, else plain) through
-  TagWriter. It is disabled when the tag already holds the same text, and asks first (an `ask_*`/`confirm_*`
-  method, replaced in tests) before replacing different lyrics. Then `Indexer.update_file` follows, as for any
-  save, and the tab's note updates.
-- If the Metadata tab has unsaved edits on the same file, it must not be overwritten silently: refuse, or ask.
-- `Settings.lyrics_auto_save`: after a FOUND result, the service has every track with that key saved through
-  TagWriter with `only_if_empty=True`, under the job locks. Job-locked files are skipped.
+**Next step:** M4 task 4: the `lyrics_cache.json` import (SPEC §9, last item). Read SPEC §9 and
+`core/index/store.py` (`upsert_lyrics`, `LYRICS_KEYS`), `core/index/lyrics_index.py` (`record_lyrics`) and
+`core/index/roots.py`, first.
+- When a root is added (or merged), a `lyrics_cache.json` at its top is read off the UI thread. It is the
+  script's cache: key = `casefold(artist + "\x1f" + title)`, with entries in the same shape. Its entries go into
+  the `lyrics` table through the writer and `record_lyrics`, so the folder totals follow.
+- The file itself is never touched.
+- Merge rule (to decide and record in SPEC §9):
+  - never replace a newer entry;
+  - a `found` beats `not_found`;
+  - unknown statuses are skipped or kept as-is (`read_lyrics` already tolerates them).
+- Tests use a scripted json from the frozen script's format (`tests/reference/seek_lyrics.py`).
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
@@ -567,6 +590,7 @@ two files alone.
 | 2026-10-15 | LyricsService: three tiers (selected track, open folder, background folder by folder), with one lookup per key. Its state lives only in the `lyrics` table, so a restart resumes. A failed key waits 10 minutes, unless it is selected. The breaker pauses 10 minutes, and Retry now ends it. Offline makes no call. Lookups start at the first indexer idle. UI tests build offline libraries, and a global guard blocks urllib's opener in every test. Details in SPEC §9. |
 | 2026-10-15 | Lyrics tab: it reads only the index (the file's lyrics tag comes from the indexed search text), so selecting a track reads no file. Found and instrumental entries show even offline. Retry now looks the one track up again whatever its cache says, and ends the breaker's pause. A lookup error shows over an older cached not_found. Web searches are launched on the shell thread. Details in SPEC §8. |
 | 2026-10-15 | seek_lyrics' songs.html search is a parity requirement of library search: free text is a case-insensitive substring match over title, artist, album and lyrics (LRCLIB and tags), accent-folded. There is one Ctrl+K search, and the Lyrics tab is the detail pane. The plan is a trigram FTS5 index (schema v3, with an `lrclib` column) and a `LIKE` fallback under 3 characters, all built at M6. Details in SPEC §6. |
+| 2026-10-15 | Saving lyrics into tags: one path, `TagWriter.embed_lyrics` (the save lock and index catch-up as any save). Save to file tags asks before replacing, and is refused while the Metadata tab has unsaved edits on the file. Auto-save, like the script's `--embed`, covers every found track, earlier ones included (a backfill at start and when turned on), but only fills empty tags (checked in the file). Locked files are skipped, and each file is tried once per session. Until the Settings dialog, a Lyrics menu holds Offline mode and Auto-save. Details in SPEC §8 and §9. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -690,7 +714,7 @@ Done when: every format with a fixture round-trips through the UI, and ID3 versi
 **M4 Lyrics** (read SPEC §8 and §9)
 - [x] LyricsService: priority queue, 4 workers, circuit breaker, offline mode
 - [x] Lyrics tab, every state
-- [ ] Save to file tags, and the auto-embed setting
+- [x] Save to file tags, and the auto-embed setting
 - [ ] `lyrics_cache.json` import
 - [ ] Lyrics tag and LRCLIB columns, status bar progress
 

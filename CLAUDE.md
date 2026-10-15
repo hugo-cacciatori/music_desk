@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M3 in progress** (tasks 1 and 2 done: the Metadata tab for a single file; TagWriter and path locks):
+- **M3 in progress** (tasks 1 to 3 done: the Metadata tab for a single file; TagWriter and path locks; multi-file editing):
   - `core/metadata.py`: `read_snapshot(path) -> Snapshot` (fields, stream details, RG values, the cover with its
     source, the ID3 version, `format_line` such as "FLAC 16-bit/44.1 kHz · 4:44 · 32 MB", with bit depth for
     lossless and kbps for lossy), `folder_cover` (folder.jpg, cover.jpg, front.jpg, ignoring case) and
@@ -54,7 +54,24 @@ two files alone.
     - After a save, `Indexer.update_file(path)` runs `Scanner.update_file`: it re-reads that one file into
       `entries`, `tracks` and `search`, and adjusts `folder_stats` up to the root by the difference (the formats
       list is left to scans). There is no folder rescan, and the list row updates on `folderUpdated`.
-  - 511 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
+  - Multi-file editing (task 3):
+    - `TagIO.load_many(paths)` emits `loadedMany(LoadedMany(token, snapshots, failed))`.
+      `TagWriter.write_many([(path, changes)])` emits `batchWritten(BatchWritten(token, saved, failed))`; a file
+      that fails doesn't stop the others.
+    - `MetadataTab.show_files(paths, skipped)`:
+      - the shared fields (`SHARED_FIELDS`) show the common value, or a "(multiple values)" placeholder;
+      - a clear button per shared field (a trailing QLineEdit action) marks "clear on all";
+      - Title, Track # and Lyrics are disabled ("Edited one file at a time.");
+      - the header shows "N files selected" and the format counts; the details are hidden;
+      - notes list the files left out (no tags, unreadable, non-audio items in the selection).
+    - `_multi_changes()` keeps only the shared fields that were edited or cleared. Emptying a "(multiple values)"
+      field by hand leaves it alone, while emptying a common value clears it.
+    - A partial failure shows "Saved x of n files. Not saved: …" and keeps the edits dirty for a retry. Success
+      reloads the snapshots; the window shows "Saved the tags of N files."
+    - Any file under a job's lock makes the whole multi-edit read-only.
+    - `SidePanel.show_selection`: one item opens the single-file editor; several items edit their audio files
+      together, even one audio file among folders.
+  - 521 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
     offscreen.
 - **M2 is complete** (its "Done when" holds: measured on a copied 10k-file tree, see the end of this block):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
@@ -285,22 +302,20 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M3's third task: multi-file editing, with the per-track fields disabled. Read SPEC §7
-(Multi-selection) first.
-- `SidePanel.show_selection` with several audio files: read every snapshot on TagIO's thread (one request for
-  the batch, with a token), then show the shared fields.
-- Shared fields (Artist, Album artist, Album, Track total, Disc # / total, Year, Genre, Composer, Comment) show
-  the common value, or "(multiple values)" as a placeholder when the files differ. They stay untouched unless
-  edited.
-- A clear button per field separates "clear on all" from "leave alone". Per-track fields (Title, Track #,
-  Lyrics) are disabled.
-- Saving writes the edited fields to every file through TagWriter: one `write` per file, or a batch call. A
-  locked file is refused; report which files were saved and which weren't, and keep the edits dirty if any
-  failed.
-- With mixed selections (folders, non-audio files): edit the audio files only, and say how many there are.
-- Tests: common and differing values, editing one shared field leaves the others untouched on every file, clear
-  on all, a refused file in the batch, and the leave prompt with multiple files.
-- **Not yet:** the cover in multi-selection (the next task, cover editing).
+**Next step:** M3's fourth task: cover display, replace and remove. Read SPEC §7 (cover editing) first.
+- The cover in the header gets Replace… (a file picker for jpg/png) and Remove buttons. Dropping a jpg or png
+  file onto the cover also replaces it; that is a drop *into* the app, so it's allowed, unlike drag-out.
+- The new picture is read on the worker thread. Images over 1 MB get a warning (a confirmation), since they bloat
+  every file.
+- It writes the embedded front cover through `TaggedFile.set_cover` / `remove_cover`, which keep the other
+  pictures. Extend `metadata.write_fields` (or add a writer call) so a cover change goes through TagWriter, with
+  the locks and the one-file index update (`has_cover`).
+- Multi-selection: the cover shows when every file has the same embedded front cover, else "(multiple covers)".
+  A cover change applies to every selected file that can be tagged.
+- The cover is part of the dirty state: Revert restores it, and Save writes it with the fields.
+- A folder image (folder.jpg…) is only shown, never written; Remove only removes the embedded cover.
+- Tests: replace, remove, a drop, the >1 MB warning, other pictures kept (edge.flac has a back cover too), every
+  fixture format, multi apply, and has_cover in the index.
 
 Don't start it until Hugo says so.
 
@@ -402,6 +417,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Context menus show only what exists: Rename, Tidy and ReplayGain items arrive with their milestones. Shell hand-offs (default app, Explorer, playlist writing) run on a worker thread, and a failure becomes a toast with an Explorer fallback. Play lists are built from the index, not by reading files. "Open in File Explorer" opens a folder itself, and shows a file selected in its folder. M2 is complete. Details in SPEC §5 and §14. |
 | 2026-10-15 | Metadata tab: tag reads and saves run on one worker thread (TagIO); only changed fields are written; Cancel in the unsaved-edits prompt keeps the selection, the folder and the window. Reads that aren't saved open files with FILE_SHARE_DELETE, so the app never stops a delete or rename in Explorer. The format line shows bit depth only for lossless audio. Details in SPEC §7. |
 | 2026-10-15 | Locks: one shared `PathLocks` (in core, no Qt). Jobs lock folder trees, saves lock single files, and overlaps are refused at once (no waiting) with the owner's name. TagWriter writes serially. A save updates the index for that one file and adjusts the folder totals by deltas. Details in SPEC §7 and §16. |
+| 2026-10-15 | Multi-file editing: only shared fields that were edited or cleared are written. Emptying a "(multiple values)" field by hand leaves it alone, and only the clear button clears it on all files. A batch save reports per-file failures and keeps the edits for a retry. Any job-locked file makes the multi-edit read-only. Details in SPEC §7. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -514,7 +530,7 @@ the index.
 **M3 Metadata side panel** (read SPEC §1, §7 and §11)
 - [x] Metadata tab for a single file, every format
 - [x] TagWriter and path locks
-- [ ] Multi-file editing (per-track fields disabled)
+- [x] Multi-file editing (per-track fields disabled)
 - [ ] Cover display, replace and remove
 - [ ] Folder summary
 - [ ] Import from a .lrc sidecar

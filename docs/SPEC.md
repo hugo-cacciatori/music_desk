@@ -327,6 +327,16 @@ coverage, cover, a Play button and tool shortcuts.
     tooltip and note.
   - After a save, only that file is re-read into the index. Its folder totals, up to the root, are adjusted by
     the difference, so no folder rescan is needed.
+- As built (M3 task 3):
+  - With several files, only the shared fields that were edited or cleared are written, to every file that can
+    be tagged.
+  - Emptying a "(multiple values)" field by hand leaves it alone. The clear button clears it on all files (the
+    placeholder then says "(cleared on all files)"). Emptying a common value clears it, as with one file.
+  - Several selected items edit their audio files together. Files without tags, unreadable files and non-audio
+    items are left out, with a note.
+  - A failure on some files shows "Saved x of n files. Not saved: …" with the reasons, and keeps the edits for a
+    retry.
+  - When any of the files is under a job's lock, the whole multi-edit is read-only.
 
 ## 8. Lyrics tab
 The tab shows only externally fetched lyrics: what LRCLIB returns for the selected track. It never shows the

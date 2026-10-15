@@ -6,6 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from music_desk.core.formats import TagFamily
 from music_desk.core.index.scanner import adjust_folder_stats
 from music_desk.core.index.store import read_lyrics, upsert_lyrics
 from music_desk.core.lyrics import FOUND, NOT_FOUND, LyricsOptions, Track, track_from_fields
@@ -30,6 +31,7 @@ class LyricsInfo:
     key: str | None  # None: no artist or title, never looked up
     entry: dict | None  # the cached LRCLIB entry, if any
     read_error: str | None
+    can_tag: bool = True  # False for formats without tags (raw .aac): nothing can be saved into them
 
 
 _TRACK_SELECT = """
@@ -98,15 +100,46 @@ def lyrics_info(conn: sqlite3.Connection, entry_id: int) -> LyricsInfo | None:
     """The Lyrics tab's view of one audio file; None when it isn't an indexed track."""
     row = conn.execute(
         """
-        SELECT e.name, t.artist, t.albumartist, t.title, t.album, t.duration, t.lyrics_key, t.read_error, s.lyrics
+        SELECT e.name, t.artist, t.albumartist, t.title, t.album, t.duration, t.lyrics_key, t.read_error, s.lyrics,
+               t.tag_family
         FROM tracks t JOIN entries e ON e.id = t.entry_id LEFT JOIN search s ON s.rowid = t.entry_id
         WHERE t.entry_id = ?
         """, (entry_id,)).fetchone()
     if row is None:
         return None
-    name, artist, albumartist, title, album, duration, key, read_error, embedded = row
+    name, artist, albumartist, title, album, duration, key, read_error, embedded, family = row
     track = _track(name, artist, albumartist, title, album, duration, embedded)
-    return LyricsInfo(entry_id, name, track, key, read_lyrics(conn, key) if key else None, read_error)
+    return LyricsInfo(entry_id, name, track, key, read_lyrics(conn, key) if key else None, read_error,
+                      can_tag=family not in (None, TagFamily.NONE.value))
+
+
+def embed_candidates(conn: sqlite3.Connection, *, key: str | None = None, skip: set[int] | frozenset[int] = frozenset(),
+                     limit: int | None = None) -> list[tuple[int, dict]]:
+    """Tracks whose key is found on LRCLIB and whose lyrics tag is empty in the index: what auto-save fills
+    (SPEC §9). `key` narrows it to one key's tracks; entry ids in `skip` are left out. (entry id, cache entry)."""
+    where, params = "", [FOUND, TagFamily.NONE.value]
+    if key is not None:
+        where, params = " AND t.lyrics_key = ?", [*params, key]
+    rows = conn.execute(
+        f"""
+        SELECT t.entry_id, t.lyrics_key FROM tracks t JOIN lyrics l ON l.key = t.lyrics_key
+        WHERE l.status = ? AND t.has_lyrics_tag = 0 AND t.read_error IS NULL AND t.tag_family IS NOT NULL
+          AND t.tag_family != ?{where}
+        ORDER BY t.entry_id
+        """, params)
+    found, entries = [], {}
+    try:
+        for entry_id, track_key in rows:
+            if entry_id in skip:
+                continue
+            if track_key not in entries:
+                entries[track_key] = read_lyrics(conn, track_key)
+            found.append((entry_id, entries[track_key]))
+            if limit is not None and len(found) >= limit:
+                break
+    finally:
+        rows.close()
+    return found
 
 
 def record_lyrics(conn: sqlite3.Connection, key: str, entry: dict) -> list[int]:

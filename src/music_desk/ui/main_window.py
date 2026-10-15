@@ -35,6 +35,7 @@ from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
 from music_desk.core.index.store import path_of
 from music_desk.core.path_locks import PathLocks
 from music_desk.services.library import LibraryService
+from music_desk.services.lyrics_embedder import AutoEmbedder
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
@@ -131,6 +132,24 @@ class MainWindow(QMainWindow):
         self.hide_empty_action.setChecked(self.settings.hide_folders_without_music)
         self.hide_empty_action.toggled.connect(self.set_hide_folders_without_music)
         view_menu.addAction(self.hide_empty_action)
+        lyrics_menu = self.menuBar().addMenu("&Lyrics")
+        self.offline_action = QAction("&Offline mode (no LRCLIB lookups)", self, checkable=True)
+        self.offline_action.setChecked(self.settings.lyrics_offline)
+        self.offline_action.toggled.connect(self.set_lyrics_offline)
+        self.auto_save_action = QAction("&Automatically save found lyrics into tags", self, checkable=True)
+        self.auto_save_action.setToolTip("Only empty Lyrics tags are filled; existing lyrics are never replaced.")
+        self.auto_save_action.setChecked(self.settings.lyrics_auto_save)
+        self.auto_save_action.toggled.connect(self.set_lyrics_auto_save)
+        lyrics_menu.addAction(self.offline_action)
+        lyrics_menu.addAction(self.auto_save_action)
+        lyrics_menu.setEnabled(library is not None)
+        self.embedder = None
+        if library is not None:
+            self.embedder = AutoEmbedder(library.db_path, library.lyrics, self.tag_writer, self,
+                                         enabled=self.settings.lyrics_auto_save)
+            self.embedder.embedded.connect(
+                lambda n: self.statusBar().showMessage(
+                    f"Saved LRCLIB lyrics into the tags of {n} file{'s' if n != 1 else ''}.", STATUS_MS))
 
         self.overlay = DropOverlay(self)
         self.toast = Toast(self)
@@ -372,6 +391,16 @@ class MainWindow(QMainWindow):
         self._refresh_location()
         self.side_panel.refresh_folder()
 
+    def set_lyrics_offline(self, offline: bool) -> None:
+        self.settings.lyrics_offline = offline
+        if self._library_open():
+            self.library.lyrics.set_offline(offline)
+
+    def set_lyrics_auto_save(self, enabled: bool) -> None:
+        self.settings.lyrics_auto_save = enabled
+        if self.embedder is not None:
+            self.embedder.set_enabled(enabled)
+
     def lyrics_updated(self, folder_ids: list[int]) -> None:
         """LRCLIB results: the open folder's LRCLIB column follows."""
         if not self._library_open() or self.folder_id not in folder_ids:
@@ -464,6 +493,8 @@ class MainWindow(QMainWindow):
         if not self.side_panel.can_leave():
             event.ignore()
             return
+        if self.embedder is not None:
+            self.embedder.close()  # before the writer: it may still hand it a batch
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
         self.save_state()

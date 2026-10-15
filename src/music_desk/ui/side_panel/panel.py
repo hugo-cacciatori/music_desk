@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QStackedWidget, QTabWidget, QVBoxLayout, QWidget
 from music_desk.core.index import queries
 from music_desk.services.lyrics_service import LyricsService
 from music_desk.services.tag_io import TagIO
-from music_desk.services.tag_writer import TagWriter
+from music_desk.services.tag_writer import LyricsEmbedded, TagWriter
 from music_desk.ui.side_panel.folder_summary import FolderSummaryView
 from music_desk.ui.side_panel.lyrics_tab import LyricsTab
 from music_desk.ui.side_panel.metadata_tab import MetadataTab
@@ -33,7 +33,9 @@ class SidePanel(QWidget):
         self._conn = conn or (lambda: None)
         self.tabs = QTabWidget()
         self.metadata = MetadataTab(io, writer)
-        self.lyrics = LyricsTab(self._conn, lyrics_service)
+        self.lyrics = LyricsTab(self._conn, lyrics_service, writer)
+        self.lyrics.can_write = self._can_write_lyrics
+        writer.lyricsEmbedded.connect(self._lyrics_embedded)
         self.tabs.addTab(self.metadata, "Metadata")
         self.tabs.addTab(self.lyrics, "Lyrics")
         self.metadata.dirtyChanged.connect(
@@ -81,6 +83,19 @@ class SidePanel(QWidget):
             self.lyrics.show_message("Select a single track to see its lyrics.")
         else:
             self.lyrics.show_message("Select a track to see its lyrics from LRCLIB.")
+
+    def _can_write_lyrics(self, path: str) -> str | None:
+        """Saving LRCLIB lyrics must not race unsaved edits of the same file in the Metadata tab."""
+        if self.metadata.dirty and (self.metadata.path == Path(path) or Path(path) in map(Path, self.metadata.paths)):
+            return "This file has unsaved edits in the Metadata tab. Save or revert them first."
+        return None
+
+    def _lyrics_embedded(self, result: LyricsEmbedded) -> None:
+        """Lyrics saved into a file the Metadata tab shows (by the Lyrics tab or auto-save): show the new tag."""
+        path = self.metadata.path
+        if path is not None and not self.metadata.dirty and not self.metadata.multi and \
+                any(Path(p) == path for p in result.written):
+            self.metadata.show_file(path)
 
     def can_leave(self) -> bool:
         return self.metadata.can_leave()

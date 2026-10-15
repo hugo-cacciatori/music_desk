@@ -1022,20 +1022,55 @@ v1 plays through the default app; MusicDesk has no player of its own.
     order, through the same path as Play selection.
 
 ## 15. Playlist builder (M7)
-Planned for M7, not in v1. A sketch to refine with Hugo before M7:
-- A PLAYLISTS section in the sidebar: create, rename and delete playlists. They are stored in the DB, so deleting
-  one only deletes app data.
-- Adding tracks:
-  - "Add to playlist ▸" in the context menus, for files, folders (recursive) and search results;
-  - dragging rows from the file list onto a playlist in the sidebar. This is an internal drag, unlike the
-    disabled drag-out.
-- Playlist view:
-  - an ordered list: reorder by drag, remove entries, show duplicates, total duration;
-  - entries are tied to index entry ids, so in-app renames keep them valid, and missing files are flagged.
-- Play a playlist through the default app (§14).
-- Export to `.m3u8` through a Save dialog, and import existing `.m3u`/`.m3u8` files (read-only). Playlists are
-  never junk (§10). Export creates a file, so it becomes a new Ground rules exception when M7 is built.
-- Smart playlists: saved search queries (§6) that refresh automatically.
+Designed with Hugo on 2026-10-15. It replaces the earlier sketch (named playlists in the sidebar, smart playlists,
+import of existing playlists): one playlist in progress, built by dragging music in.
+
+**Opening it**
+- A checkable **Playlist builder** button in the toolbar, and View › Playlist builder (Ctrl+Shift+P), show or
+  hide it.
+- It is a narrow vertical panel (about 300 px, scrolling vertically) between the file list and the side panel.
+  Opening it takes only the file list's spare width. The folder tree, the side panel and every column keep
+  their sizes; if the columns no longer fit, the list scrolls sideways. Closing it gives the space back.
+- It blocks nothing: browsing, the side panel, search, the tools and jobs all go on while it is open.
+
+**Adding music**
+- Drag folders from the folder tree, or folders and songs from the file list or the search results, into the
+  panel.
+- The selection works as in Explorer: Ctrl+click adds one item, Shift+click a range, Ctrl+A everything.
+- A folder brings every song under it, subfolders included, read from the index (no file is read).
+- The order on import is alphabetical, as Explorer shows it: natural order, a folder's files before its
+  subfolders' files. Several dropped items keep the order they had in the view.
+- Songs are inserted where they are dropped, or at the end when dropped on the empty area. A song already in the
+  playlist isn't added again; the status bar says how many were skipped.
+- The drag carries entry ids in an app-only format, never file paths. A drop in File Explorer still does nothing
+  (Ground rule 1).
+
+**Arranging it**
+- Drag rows to move them.
+- Ctrl+↑ and Ctrl+↓ move the selected tracks up or down. Alt+↑ stays "go up a folder".
+- Delete removes the selected tracks from the playlist (the files are untouched). **Clear** empties it after a
+  confirmation.
+- Columns: #, Title, Artist, Album, Album artist, Track, Disc, Year, Genre, Duration, Format, File name and
+  Folder. The header's menu shows or hides any of them, and they can be moved and resized. The default is
+  #, Title, Artist, Duration, for the narrow panel. The layout is remembered.
+- A click on a column header sorts the playlist by that column, and a second click reverses it. Sorting changes
+  the playlist's order itself, since the order is what gets exported.
+- A footer gives the count and the total duration.
+- When the playlist is empty, the panel shows a placeholder: "Drag folders or songs here to build a playlist".
+- A track whose file left the index (deleted or moved outside the app) is dimmed with a tooltip, and is left out
+  of exports and playback. In-app renames keep it valid, since entries are tied to index entry ids.
+
+**Using it**
+- **Export playlist to .m3u8…** opens a Save dialog; the last folder used is remembered.
+  - The file is UTF-8 `.m3u8` with `#EXTM3U` and `#EXTINF` lines, as in §14.
+  - A **Relative paths** checkbox next to the button (remembered) chooses the path style. Relative paths are
+    relative to the saved file, so the playlist keeps working when the music folder moves together with it.
+    Songs on another drive fall back to absolute paths. Unticked, every path is absolute.
+  - Writing this file, wherever the user saves it, is a new Ground rule 1 exception; the Save dialog asks before
+    replacing a file.
+- **Open playlist with default player** plays it through a temporary playlist, as Play selection does (§14):
+  foobar2000, or whatever is associated with `.m3u8`.
+- The playlist is kept across restarts in the app's data (`%LOCALAPPDATA%\MusicDesk`), until it is cleared.
 
 ## 16. Architecture and concurrency
     UI thread (Qt) ◄── queued signals ── services (QObjects in worker threads)
@@ -1159,8 +1194,8 @@ replaced them).
     `FFMPEG` environment variable), and the generated files are committed, so running the tests doesn't need
     ffmpeg.
   - ffmpeg can encode FLAC, Vorbis, Opus, MP3, MP2, WAV, AIFF, AAC and ALAC in M4A, WavPack, TTA and WMA. It can't
-    encode APE, TAK, Musepack, OptimFROG or DSF/DFF, and Speex depends on the build. Those need sample files from
-    Hugo; until then, their tests are skipped with a reason.
+    encode APE, TAK, Musepack, OptimFROG or DSF/DFF, and Speex depends on the build. They have no fixture: getting
+    sample files was dropped (Hugo, 2026-10-15), so they stay supported through mutagen, untested with a real file.
 - Parity: run the reference functions and the ported core on identical copies of FLAC/MP3 fixtures, then compare
   file names, tags and RunLog text with timestamps and durations masked. Other formats get their own expected
   values.

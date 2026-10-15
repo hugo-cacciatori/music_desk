@@ -27,8 +27,9 @@ FIXTURES_BY_EXTENSION = {
 }
 # Same container as a fixture under another extension, so the fixture covers them.
 COVERED_BY_ALIAS = {".aif": ".aiff", ".aifc": ".aiff", ".mp4": ".m4a"}
-# ffmpeg can't encode these (or this build lacks the encoder): they need sample files from Hugo.
-NEEDS_SAMPLE = {".spx", ".ape", ".mpc", ".tak", ".ofr", ".ofs", ".dsf", ".dff"}
+# ffmpeg can't encode these (or this build lacks the encoder), so they have no fixture. They stay supported through
+# mutagen, untested with a real file: getting sample files was dropped (Hugo, 2026-10-15).
+NO_FIXTURE = {".spx", ".ape", ".mpc", ".tak", ".ofr", ".ofs", ".dsf", ".dff"}
 
 TAGGED_FIXTURES = [name for ext, names in FIXTURES_BY_EXTENSION.items() if ext != ".aac" for name in names]
 
@@ -39,7 +40,7 @@ def cover_bytes(fixtures_dir) -> bytes:
 
 
 def test_every_extension_is_accounted_for():
-    assert AUDIO_EXTENSIONS == set(FIXTURES_BY_EXTENSION) | set(COVERED_BY_ALIAS) | NEEDS_SAMPLE
+    assert AUDIO_EXTENSIONS == set(FIXTURES_BY_EXTENSION) | set(COVERED_BY_ALIAS) | NO_FIXTURE
 
 
 def test_extensions_are_unique_and_lowercase():
@@ -53,11 +54,6 @@ def test_format_for_ignores_case_and_rejects_non_audio():
     assert format_for("folder.jpg") is None
     assert format_for("album.cue") is None
     assert ".m4b" not in REPLAYGAIN_EXTENSIONS and ".flac" in REPLAYGAIN_EXTENSIONS
-
-
-@pytest.mark.parametrize("extension", sorted(NEEDS_SAMPLE))
-def test_formats_without_a_fixture(extension):
-    pytest.skip(f"{extension}: needs a sample file from Hugo (CLAUDE.md Open question 3)")
 
 
 @pytest.mark.parametrize("name", [n for names in FIXTURES_BY_EXTENSION.values() for n in names])

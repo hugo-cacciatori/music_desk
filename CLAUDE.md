@@ -645,10 +645,8 @@ two files alone.
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
 **Next step:** M6 is complete, and v0.1.0 is released on GitHub (the setup as a release asset). What is left:
-- **M7, the playlist builder** (SPEC §15): settle its design with Hugo first (where saved playlists go, absolute
-  or relative paths: Open question 3), then break it into tasks in Progress.
-- Open questions 1 and 2 (sample files for the formats ffmpeg can't encode; ReplayGain for the formats rsgain
-  can't handle) wait on Hugo.
+- **M7, the playlist builder**: designed with Hugo (SPEC §15) and broken into tasks in Progress. Start with its
+  first task, the core model.
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
   agree) and pyproject's `version`, run `uv run python packaging/build_installer.py`, then
   `gh release create v<version> dist/installer/MusicDesk-Setup-<version>.exe` (with Hugo's go).
@@ -759,7 +757,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Qt dependency is `PySide6-Essentials==6.12.0`, not the full `PySide6` meta-package: the app only needs QtCore/QtGui/QtWidgets, and Addons (WebEngine etc.) would bloat the build. If a later milestone needs an Addons module, switch back and pin the same version. |
 | 2026-10-15 | PyInstaller enters through `packaging/launcher.py` and bundles `resources/rsgain` as `resources/rsgain` inside `_internal/`. Icon and version info wait for the app name decision. |
 | 2026-10-15 | git repo created (Hugo's go). Local only, one commit per finished task. |
-| 2026-10-15 | Formats ffmpeg can't encode (APE, TAK, Musepack, OptimFROG, DSF/DFF, Speex) get skipped tests until Hugo supplies samples. |
+| 2026-10-15 | Formats ffmpeg can't encode (APE, TAK, Musepack, OptimFROG, DSF/DFF, Speex) get skipped tests until Hugo supplies samples. (Superseded the same day: getting samples was dropped; those formats stay supported through mutagen, untested with a file, and the skipped tests are removed.) |
 | 2026-10-15 | Fixtures are tagged by `make_fixtures.py` with raw per-family mutagen writes, never through app code, so they stay an independent oracle. |
 | 2026-10-15 | `tags.py` deliberate differences from the script (SPEC §17): Vorbis ReplayGain keys written in uppercase, ID3 version kept on save, WMA disc read. Rename text fields are *not* stripped, to match TinyTag 2.0.0 and the script exactly (SPEC §17 wording corrected). |
 | 2026-10-15 | Rename preview = the script's *real* run, simulated in walk order (the script's `--dry-run` could differ). A `.lrc` follows only when exactly one audio file has its stem. Selection runs never recycle junk. Details in SPEC §10. |
@@ -795,6 +793,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Smart views dropped (Hugo): not every track needs lyrics in its tags (LRCLIB's are shown), a rename-mask mismatch depends on each user's masks, missing ReplayGain is overwhelming library-wide (the folder's RG column covers it), and "recently modified" answers no need. A sidebar section would give them weight they don't have. Instead, the Lyrics menu has three Find entries that open library search with a ready-made query: LRCLIB didn't find, no lyrics in the tags, can't be looked up (`lrclib:notags`, new). Details in SPEC §5. |
 | 2026-10-15 | No Settings dialog (Hugo): every preference already lives where it's used (sidebar, View and Lyrics menus, the Tools cards; Qt follows Windows' theme). The unused `watch_for_changes` and `tag_workers` settings are removed (old settings.json files still load). Help › About shows the versions and the third-party licences, whose texts are bundled in `resources/licenses/`. Details in SPEC §12 and §13. |
 | 2026-10-15 | Release decisions (Hugo): an Inno Setup installer, chosen over a portable zip and a one-file exe for a normal Windows install (Start menu, uninstaller, clean updates). The README is written with the installer, once the name, licence and install steps are known. The root scripts are deleted as the last M6 step, once the installed v1 replaces them; `tests/reference/` keeps the frozen copies. |
+| 2026-10-15 | M7 designed with Hugo: one playlist in progress (kept across restarts until cleared), in a narrow vertical panel between the file list and the side panel that takes only the list's spare width and blocks nothing. Built by dragging folders or songs (Explorer-style multi-selection) from the tree, the list or search results; natural order on import, duplicates skipped. Reorder by drag, Ctrl+↑/↓ or a header sort; customisable columns; a placeholder when empty. Export to .m3u8 with relative or absolute paths, chosen at export; open with the default player. Dropped: sample files for the formats ffmpeg can't encode, and ReplayGain for the formats rsgain can't handle. Details in SPEC §15. |
 | 2026-10-15 | Installer as built: all users in Program Files by default (Hugo: install in Program Files), with Inno Setup's "only for me" choice; 64-bit only; licence page; the uninstaller asks before deleting the app data (default No, kept when silent). Inno Setup itself is installed in `C:\Program Files\Inno Setup 6`. Details in SPEC §13. |
 | 2026-10-15 | MusicDesk is licensed GPL-3.0-or-later (Hugo): compatible with mutagen (GPL-2.0-or-later) and Qt (LGPL-3.0). `LICENSE` holds the GPL-3.0 text, `pyproject.toml` declares it, About says it. Details in SPEC §13. |
 | 2026-10-15 | The name stays MusicDesk (Hugo). The icon is drawn by `packaging/make_icon.py` (no image editor, reproducible) and embedded in the exe with a version resource. No theme setting: Qt follows Windows' light and dark (checked). FFmpeg inside rsgain is an LGPL build with Fraunhofer FDK AAC; the LGPL-2.1 text and FDK AAC's notice are shipped. Details in SPEC §13. |
@@ -952,8 +951,25 @@ Done when:
 - the installer installs the app, and it runs from Program Files with the bundled rsgain;
 - the seek_lyrics search parity test (SPEC §6) passes.
 
-**M7 Playlists (after v1)** (read SPEC §15)
-- [ ] Settle the design with Hugo (SPEC §15 and Open questions), then break it into tasks here.
+**M7 Playlist builder** (read SPEC §15, designed with Hugo on 2026-10-15; also §5 and §14)
+- [ ] Core (`core/playlists.py`, no Qt): the builder's model (entry ids, the natural import order, insert at a
+      position, skip duplicates, move, remove, sort by a field), saving and restoring it in the app's data,
+      and the `.m3u8` export with relative or absolute paths (another drive falls back to absolute). Tests.
+- [ ] The panel (`ui/playlist_panel.py`): a narrow vertical column between the file list and the side panel,
+      shown or hidden by the toolbar's checkable "Playlist builder" button and View › Playlist builder
+      (Ctrl+Shift+P). Opening it takes only the file list's width. Columns with a header menu, header-click
+      sort that reorders the playlist, the empty-state placeholder, the footer (count, duration), missing
+      tracks dimmed.
+- [ ] Drag and drop: an internal MIME type carrying entry ids (never file URLs: a test checks it) from the folder
+      tree, the file list and the search results, with their Explorer-style multi-selection. Drop to insert,
+      drag to reorder, Ctrl+↑/↓ to move, Delete to remove, Clear with a confirmation.
+- [ ] Export to .m3u8 (a Save dialog, the remembered Relative paths checkbox and folder) and Open playlist with
+      default player (the §14 temporary playlist). Add the export to Ground rule 1's exceptions.
+- [ ] Docs, README, version 0.2.0 and a release built locally.
+
+Done when: folders dragged from the tree (a multi-selection) land in natural order, can be reordered by drag,
+by keyboard and by a header sort, and export to a relative .m3u8 that a player opens; the playlist survives a
+restart.
 
 ## Conventions
 - Python 3.13, type hints, ruff (line length 120), dataclasses for values, `pathlib` in new code.
@@ -962,11 +978,6 @@ Done when:
 - `logging` writes to `%LOCALAPPDATA%\MusicDesk\logs\app.log`.
 
 ## Open questions
-1. Small sample files for the formats ffmpeg can't encode: APE, TAK, Musepack, OptimFROG, DSF/DFF and Speex.
-   Their tests are skipped until then (decided 2026-10-15). Drop them in `tests/fixtures/samples/`, and a session
-   wires them into the round-trip and rsgain-key tests.
-2. ReplayGain for the formats rsgain can't handle (OptimFROG, TTA, DSF/DFF, M4B)?
-   - It would mean bundling ffmpeg (about 100 MB) to measure loudness, and its results differ slightly from
-     rsgain's.
-   - Default: no. Those files are listed as skipped.
-3. Before M7: where saved playlists go, and whether they use absolute or relative paths.
+None at the end of session 9 (2026-10-15). Getting sample files for the formats ffmpeg can't encode, and
+ReplayGain for the formats rsgain can't handle, were both dropped by Hugo; the playlist questions are answered
+in SPEC §15.

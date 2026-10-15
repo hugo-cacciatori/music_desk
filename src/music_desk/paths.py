@@ -42,3 +42,10 @@ def logs_dir() -> Path:
     path = app_data_dir() / "logs"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def playlists_dir() -> Path:
+    """Temporary playlists for "Play folder" and "Play selection" (SPEC §14)."""
+    path = app_data_dir() / "playlists"
+    path.mkdir(parents=True, exist_ok=True)
+    return path

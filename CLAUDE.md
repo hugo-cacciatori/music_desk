@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M3 in progress** (task 1 done: the Metadata tab for a single file):
+- **M3 in progress** (tasks 1 and 2 done: the Metadata tab for a single file; TagWriter and path locks):
   - `core/metadata.py`: `read_snapshot(path) -> Snapshot` (fields, stream details, RG values, the cover with its
     source, the ID3 version, `format_line` such as "FLAC 16-bit/44.1 kHz · 4:44 · 32 MB", with bit depth for
     lossless and kbps for lossy), `folder_cover` (folder.jpg, cover.jpg, front.jpg, ignoring case) and
@@ -36,7 +36,25 @@ two files alone.
     Explorer at that moment. `fsops.open_shared` (CreateFileW with FILE_SHARE_DELETE, through `open(…, opener=)`,
     so mutagen still sees the file name, which it needs for raw AAC) is now used by `TaggedFile(path, shared=True)`
     for every read that isn't saved: the scanner, the side panel and folder covers.
-  - 495 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
+  - TagWriter and locks (task 2):
+    - `core/path_locks.py` `PathLocks`:
+      - `acquire(paths, owner)` / `release(token)` / `lock(...)` (a context manager) / `owner(path)`;
+      - a folder lock covers its tree, paths compare ignoring case, overlapping locks are refused with
+        `LockedError(path, owner)`;
+      - listeners run after every change, and a broken listener can't break a lock.
+      `LibraryService.locks` is the shared instance; M5's jobs must take it for their folders.
+    - `services/tag_writer.py` `TagWriter(locks, on_written)`:
+      - every tag save goes through it, one at a time on its own thread;
+      - each save holds a short lock on its file (owner "a tag save", which `locked_by` ignores);
+      - a job's lock refuses the save with "<file> is in use by <job>. Try again when it has finished.";
+      - `locksChanged` relays lock changes to the UI.
+      `TagIO` now only reads.
+    - The Metadata tab makes a file under a job's lock read-only, with the tooltip and note "Read-only while
+      <job> is running.", and Save disabled.
+    - After a save, `Indexer.update_file(path)` runs `Scanner.update_file`: it re-reads that one file into
+      `entries`, `tracks` and `search`, and adjusts `folder_stats` up to the root by the difference (the formats
+      list is left to scans). There is no folder rescan, and the list row updates on `folderUpdated`.
+  - 511 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
     offscreen.
 - **M2 is complete** (its "Done when" holds: measured on a copied 10k-file tree, see the end of this block):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
@@ -267,19 +285,22 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M3's second task: TagWriter and path locks. Read SPEC §16 and §7 (saving, locked files), and
-§10 (jobs take the same locks), first.
-- `services/path_locks.py`: a thread-safe registry of locked paths (a file, or a folder tree for jobs) with the
-  owner's name. `is_locked(path) -> owner | None`, and `lock(paths, owner)` as a context manager. No Qt is needed;
-  it could live in core.
-- `services/tag_writer.py` `TagWriter`: serial writes (one thread) that refuse a locked path with a plain error.
-  It replaces `TagIO.save`; reads can stay on TagIO's thread.
-- Metadata tab: a file under a lock is shown read-only, with a tooltip naming the job. M5's jobs will take the
-  locks; for now a test takes one directly.
-- Index: after a save, update that file's `tracks` row directly through the DbWriter (read the snapshot that was
-  just written), instead of the `scan_path` used now. The list row then updates without a folder rescan.
-- Tests: a locked path refuses writes, locks on a folder tree cover its files, the read-only state and tooltip,
-  writes stay serial, and the index row updates after a save.
+**Next step:** M3's third task: multi-file editing, with the per-track fields disabled. Read SPEC §7
+(Multi-selection) first.
+- `SidePanel.show_selection` with several audio files: read every snapshot on TagIO's thread (one request for
+  the batch, with a token), then show the shared fields.
+- Shared fields (Artist, Album artist, Album, Track total, Disc # / total, Year, Genre, Composer, Comment) show
+  the common value, or "(multiple values)" as a placeholder when the files differ. They stay untouched unless
+  edited.
+- A clear button per field separates "clear on all" from "leave alone". Per-track fields (Title, Track #,
+  Lyrics) are disabled.
+- Saving writes the edited fields to every file through TagWriter: one `write` per file, or a batch call. A
+  locked file is refused; report which files were saved and which weren't, and keep the edits dirty if any
+  failed.
+- With mixed selections (folders, non-audio files): edit the audio files only, and say how many there are.
+- Tests: common and differing values, editing one shared field leaves the others untouched on every file, clear
+  on all, a refused file in the batch, and the leave prompt with multiple files.
+- **Not yet:** the cover in multi-selection (the next task, cover editing).
 
 Don't start it until Hugo says so.
 
@@ -380,6 +401,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Navigation: the breadcrumb starts at the root path (one segment), and the levels above a root aren't navigable. Back and forward are Alt+←/→ and the mouse buttons; Backspace means Up, and only in the list and the tree. Up selects the folder you came from. A typed path to a file opens its folder and selects it. Details in SPEC §5. |
 | 2026-10-15 | Context menus show only what exists: Rename, Tidy and ReplayGain items arrive with their milestones. Shell hand-offs (default app, Explorer, playlist writing) run on a worker thread, and a failure becomes a toast with an Explorer fallback. Play lists are built from the index, not by reading files. "Open in File Explorer" opens a folder itself, and shows a file selected in its folder. M2 is complete. Details in SPEC §5 and §14. |
 | 2026-10-15 | Metadata tab: tag reads and saves run on one worker thread (TagIO); only changed fields are written; Cancel in the unsaved-edits prompt keeps the selection, the folder and the window. Reads that aren't saved open files with FILE_SHARE_DELETE, so the app never stops a delete or rename in Explorer. The format line shows bit depth only for lossless audio. Details in SPEC §7. |
+| 2026-10-15 | Locks: one shared `PathLocks` (in core, no Qt). Jobs lock folder trees, saves lock single files, and overlaps are refused at once (no waiting) with the owner's name. TagWriter writes serially. A save updates the index for that one file and adjusts the folder totals by deltas. Details in SPEC §7 and §16. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -491,7 +513,7 @@ the index.
 
 **M3 Metadata side panel** (read SPEC §1, §7 and §11)
 - [x] Metadata tab for a single file, every format
-- [ ] TagWriter and path locks
+- [x] TagWriter and path locks
 - [ ] Multi-file editing (per-track fields disabled)
 - [ ] Cover display, replace and remove
 - [ ] Folder summary

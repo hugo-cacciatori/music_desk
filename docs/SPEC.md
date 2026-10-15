@@ -317,7 +317,16 @@ coverage, cover, a Play button and tool shortcuts.
   - Cancel in the unsaved-edits prompt keeps the selection, the open folder, and the window open.
   - Every read that isn't followed by a save (the indexer, the side panel, folder images) opens the file with
     FILE_SHARE_DELETE, so the app never makes a delete or rename in Explorer fail while it reads.
-  - Until TagWriter (the next M3 task), a save rescans the file's folder to update its row.
+- As built (M3 task 2):
+  - Every tag save goes through TagWriter, one at a time on its own thread. It holds a short lock on the file
+    while writing.
+  - Path locks are one shared registry. A job locks folder trees and a save locks its file; paths compare
+    ignoring case. A lock that overlaps another is refused at once, naming the owner. A save under a job's lock
+    fails with "<file> is in use by <job>. Try again when it has finished."
+  - A file under a job's lock is read-only in the Metadata tab, with "Read-only while <job> is running." as its
+    tooltip and note.
+  - After a save, only that file is re-read into the index. Its folder totals, up to the root, are adjusted by
+    the difference, so no folder rescan is needed.
 
 ## 8. Lyrics tab
 The tab shows only externally fetched lyrics: what LRCLIB returns for the selected track. It never shows the

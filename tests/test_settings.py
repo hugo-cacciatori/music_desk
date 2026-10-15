@@ -8,7 +8,7 @@ from music_desk.settings import Settings
 def test_defaults_when_missing(tmp_path):
     settings = Settings.load(tmp_path / "settings.json")
     assert settings == Settings()
-    assert settings.theme == "system" and not settings.lyrics_offline and settings.expanded_folders == []
+    assert not settings.hide_folders_without_music and not settings.lyrics_offline and settings.expanded_folders == []
 
 
 def test_round_trip(tmp_path):
@@ -24,17 +24,18 @@ def test_round_trip(tmp_path):
 
 def test_bad_values_fall_back(tmp_path):
     path = tmp_path / "settings.json"
-    path.write_text(json.dumps({"hide_folders_without_music": "yes", "theme": "dark", "lyrics_offline": 1,
+    path.write_text(json.dumps({"hide_folders_without_music": "yes", "last_folder": "C:/Music", "lyrics_offline": 1,
                                 "expanded_folders": "C:/x", "unknown": 3}))
     settings = Settings.load(path)
-    assert (settings.hide_folders_without_music, settings.theme, settings.lyrics_offline,
-            settings.expanded_folders) == (False, "dark", False, [])
+    assert (settings.hide_folders_without_music, settings.last_folder, settings.lyrics_offline,
+            settings.expanded_folders) == (False, "C:/Music", False, [])
 
 
 def test_removed_settings_are_ignored(tmp_path):
-    """Settings files from before the Settings dialog was dropped still load (their two extra keys are unknown)."""
+    """Settings files from before the Settings dialog was dropped still load (their extra keys are unknown)."""
     path = tmp_path / "settings.json"
-    path.write_text(json.dumps({"watch_for_changes": False, "tag_workers": 8, "lyrics_auto_save": True}))
+    path.write_text(json.dumps({"watch_for_changes": False, "tag_workers": 8, "theme": "dark",
+                                "lyrics_auto_save": True}))
     settings = Settings.load(path)
     assert settings.lyrics_auto_save and not hasattr(settings, "tag_workers")
 

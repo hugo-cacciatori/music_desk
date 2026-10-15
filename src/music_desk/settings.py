@@ -24,8 +24,6 @@ class Settings:
     # Lyrics
     lyrics_offline: bool = False
     lyrics_auto_save: bool = False
-    # Appearance
-    theme: str = "system"  # "system", "light" or "dark"
     # Tools (SPEC §10): the cards' options, as core.rename / core.replaygain options_to_json write them
     rename_options: dict = field(default_factory=dict)
     replaygain_options: dict = field(default_factory=dict)

@@ -2,12 +2,13 @@ import logging
 import sys
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from music_desk import __version__
 from music_desk.core.rsgain import rsgain_version
 from music_desk.logging_setup import setup_logging
-from music_desk.paths import app_data_dir, library_db_path, rsgain_path
+from music_desk.paths import app_data_dir, icon_path, library_db_path, rsgain_path
 from music_desk.services.library import LibraryService
 from music_desk.settings import Settings
 from music_desk.ui.main_window import APP_TITLE, MainWindow
@@ -37,15 +38,27 @@ class RsgainCheck(QRunnable):
         self.signals.finished.emit(version)
 
 
+def set_app_user_model_id() -> None:
+    """Windows groups taskbar buttons by this id: without it, a run from source shows Python's icon."""
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(f"MusicDesk.MusicDesk.{__version__}")
+    except (AttributeError, OSError):
+        pass  # not Windows, or an older shell: only the taskbar grouping differs
+
+
 def main() -> int:
     setup_logging()
     log.info("%s %s starting (Python %s, frozen=%s)", APP_TITLE, __version__, sys.version.split()[0],
              getattr(sys, "frozen", False))
     log.info("App data: %s", app_data_dir())
 
+    set_app_user_model_id()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_TITLE)
     app.setApplicationVersion(__version__)
+    app.setWindowIcon(QIcon(str(icon_path())))
 
     settings = Settings.load()
     try:

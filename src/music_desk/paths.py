@@ -25,6 +25,11 @@ def resource_path(*parts: str) -> Path:
     return resources_root().joinpath(*parts)
 
 
+def icon_path() -> Path:
+    """The app icon (drawn by packaging/make_icon.py), for the windows; the exe embeds the same file."""
+    return resource_path("icons", "music_desk.ico")
+
+
 def rsgain_path() -> Path:
     """The bundled rsgain. Never configurable (Ground rule 5)."""
     return resource_path("rsgain", "rsgain.exe")

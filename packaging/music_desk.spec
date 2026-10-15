@@ -1,6 +1,7 @@
 # PyInstaller spec: one-folder, windowed build with the bundled rsgain.
 # Build from the project root:  uv run pyinstaller packaging/music_desk.spec
-# Icon and version info come later (app name and icon are deferred, see CLAUDE.md Open questions).
+# The icon is drawn by packaging/make_icon.py; the version info is packaging/version_info.txt (keep its version in
+# step with music_desk.__version__: tests/test_packaging.py checks it).
 
 from pathlib import Path
 
@@ -12,7 +13,8 @@ a = Analysis(
     binaries=[],
     # paths.resource_path() expects <_MEIPASS>/resources/rsgain when frozen.
     datas=[(str(ROOT / "resources" / "rsgain"), "resources/rsgain"),
-           (str(ROOT / "resources" / "licenses"), "resources/licenses")],  # shown by Help > About
+           (str(ROOT / "resources" / "licenses"), "resources/licenses"),  # shown by Help > About
+           (str(ROOT / "resources" / "icons"), "resources/icons")],
     hiddenimports=[],
     hookspath=[],
     runtime_hooks=[],
@@ -31,6 +33,8 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
+    icon=str(ROOT / "resources" / "icons" / "music_desk.ico"),
+    version=str(ROOT / "packaging" / "version_info.txt"),
 )
 coll = COLLECT(
     exe,

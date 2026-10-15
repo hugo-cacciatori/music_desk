@@ -8,11 +8,13 @@ import logging
 import os
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
 from music_desk.core import metadata
+from music_desk.core.metadata import Snapshot
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services.tag_io import Loaded, decode_cover
 
@@ -21,8 +23,18 @@ log = logging.getLogger(__name__)
 SAVE_OWNER = "a tag save"
 
 
+@dataclass(frozen=True)
+class BatchWritten:
+    """The result of write_many: the files saved (fresh snapshots) and the ones that weren't, with why."""
+
+    token: int
+    saved: list[Snapshot]
+    failed: list[tuple[str, str]]  # (path, message)
+
+
 class TagWriter(QObject):
     written = Signal(object)  # Loaded: the fresh snapshot, or an error
+    batchWritten = Signal(object)  # BatchWritten
     locksChanged = Signal()  # a job took or released a lock: locked files turn read-only, or editable again
 
     def __init__(self, locks: PathLocks, on_written: Callable[[str], None] | None = None,
@@ -51,25 +63,48 @@ class TagWriter(QObject):
         self._pool.submit(self._write, token, str(path), dict(changes))
         return token
 
+    def write_many(self, items: list[tuple[str | Path, dict]]) -> int:
+        """Queue writes to several files (multi-file editing); one `batchWritten` reports them all. A file that
+        fails (locked, read-only…) doesn't stop the others."""
+        self._token += 1
+        token = self._token
+        if self._closed:
+            self.batchWritten.emit(BatchWritten(token, [], [(str(p), "The app is closing.") for p, _c in items]))
+            return token
+        self._pool.submit(self._write_many, token, [(str(p), dict(c)) for p, c in items])
+        return token
+
     def _write(self, token: int, path: str, changes: dict) -> None:
+        snapshot, error = self._write_one(path, changes)
+        cover = decode_cover(snapshot.cover) if snapshot else None
+        self.written.emit(Loaded(token, snapshot, cover, error))
+
+    def _write_many(self, token: int, items: list[tuple[str, dict]]) -> None:
+        saved, failed = [], []
+        for path, changes in items:
+            snapshot, error = self._write_one(path, changes)
+            if snapshot is None:
+                failed.append((path, error))
+            else:
+                saved.append(snapshot)
+        self.batchWritten.emit(BatchWritten(token, saved, failed))
+
+    def _write_one(self, path: str, changes: dict) -> tuple[Snapshot | None, str | None]:
         name = os.path.basename(path)
         try:
             with self.locks.lock([path], SAVE_OWNER):
                 snapshot = metadata.write_fields(path, changes)
         except LockedError as e:
-            self.written.emit(Loaded(token, None, None,
-                                     f"{name} is in use by {e.owner}. Try again when it has finished."))
-            return
+            return None, f"{name} is in use by {e.owner}. Try again when it has finished."
         except Exception as e:  # noqa: BLE001 - shown to the user; the fields stay dirty
             log.warning("saving tags of %s failed: %s", path, e)
-            self.written.emit(Loaded(token, None, None, f"{type(e).__name__}: {e}"))
-            return
+            return None, f"{name}: {type(e).__name__}: {e}"
         log.info("saved %s to %s", ", ".join(sorted(changes)) or "nothing", path)
         try:
             self.on_written(path)
         except Exception:  # noqa: BLE001 - the file is saved; the index catches up at the next scan
             log.exception("index update after saving %s failed", path)
-        self.written.emit(Loaded(token, snapshot, decode_cover(snapshot.cover)))
+        return snapshot, None
 
     def close(self) -> None:
         """Finish the writes already queued, then stop."""

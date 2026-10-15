@@ -1,7 +1,12 @@
-"""The Metadata tab for one audio file (SPEC §7): the editable fields, a header with the cover and a format line,
-and the read-only details and loudness values. Ctrl+S saves the changed fields only; Esc reverts.
+"""The Metadata tab (SPEC §7): one audio file, or several at once.
 
-Reads and writes go through TagIO on its worker thread; this widget only shows results.
+- One file: the editable fields, a header with the cover and a format line, and the read-only details and
+  loudness values. Saving writes the changed fields only.
+- Several files: the shared fields show their common value, or "(multiple values)" when the files differ, and
+  are left alone unless edited. A clear button per field tells "clear on all" apart from "leave alone". The
+  per-track fields (Title, Track #, Lyrics) are edited one file at a time and are disabled.
+
+Ctrl+S saves and Esc reverts. Reads go through TagIO and writes through TagWriter, both off the UI thread.
 """
 
 from pathlib import Path
@@ -20,27 +25,41 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QStackedWidget,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
 
 from music_desk.core.metadata import Snapshot
 from music_desk.core.tags import Fields
-from music_desk.services.tag_io import Loaded, TagIO
-from music_desk.services.tag_writer import TagWriter
+from music_desk.services.tag_io import Loaded, LoadedMany, TagIO
+from music_desk.services.tag_writer import BatchWritten, TagWriter
 
 TEXT_FIELDS = (("title", "Title"), ("artist", "Artist"), ("albumartist", "Album artist"), ("album", "Album"))
 LATER_TEXT_FIELDS = (("year", "Year"), ("genre", "Genre"), ("composer", "Composer"), ("comment", "Comment"))
 NUMBER_FIELDS = ("track", "track_total", "disc", "disc_total")
+PER_TRACK_FIELDS = ("title", "track")  # and the lyrics: one file at a time (SPEC §7)
+SHARED_FIELDS = ("artist", "albumartist", "album", "track_total", "disc", "disc_total", "year", "genre", "composer",
+                 "comment")
+MULTIPLE = object()  # the files of a multi-selection differ on this field
+MULTIPLE_TEXT = "(multiple values)"
+CLEARED_TEXT = "(cleared on all files)"
 
 
 def _normalize_lyrics(text: str | None) -> str:
     return (text or "").replace("\r\n", "\n").replace("\r", "\n")
 
 
+def _parse(key: str, text: str):
+    if not text.strip():
+        return None
+    return int(text) if key in NUMBER_FIELDS else text
+
+
 class MetadataTab(QWidget):
     dirtyChanged = Signal(bool)
-    fileSaved = Signal(str)  # path: its folder's index rows need a refresh
+    fileSaved = Signal(str)  # one file saved
+    filesSaved = Signal(int)  # a multi-file save: how many files were saved
     saveFailed = Signal(str)
 
     def __init__(self, io: TagIO, writer: TagWriter, parent: QWidget | None = None) -> None:
@@ -48,15 +67,25 @@ class MetadataTab(QWidget):
         self.io = io
         self.writer = writer
         self.locked_by: str | None = None
-        self.path: Path | None = None
-        self.snapshot: Snapshot | None = None
+        self.path: Path | None = None  # one file
+        self.paths: list[Path] = []  # several files
+        self.snapshot: Snapshot | None = None  # one file
+        self.snapshots: list[Snapshot] = []  # several files (readable ones)
+        self.multi = False
+        self._common: dict[str, object] = {}
+        self._touched: set[str] = set()
+        self._cleared: set[str] = set()
+        self._unreadable: list[tuple[str, str]] = []
+        self._skipped = 0  # selected items left out of a multi-edit (folders, non-audio files)
         self._load_token: int | None = None
         self._save_token: int | None = None
         self._dirty = False
         self._filling = False
         self._cover_image = None
         io.loaded.connect(self._loaded)
+        io.loadedMany.connect(self._loaded_many)
         writer.written.connect(self._saved)
+        writer.batchWritten.connect(self._batch_saved)
         writer.locksChanged.connect(self._update_lock)
 
         self.pages = QStackedWidget()
@@ -109,6 +138,7 @@ class MetadataTab(QWidget):
 
         form = QFormLayout()
         self.edits: dict[str, QLineEdit] = {}
+        self.clear_actions = {}
         for key, label in TEXT_FIELDS:
             form.addRow(label, self._line(key))
         form.addRow("Track # / total", self._pair("track", "track_total"))
@@ -116,9 +146,8 @@ class MetadataTab(QWidget):
         for key, label in LATER_TEXT_FIELDS:
             form.addRow(label, self._line(key))
         self.lyrics = QPlainTextEdit()
-        self.lyrics.setPlaceholderText("No lyrics in the tags. LRC timestamps are kept as typed.")
         self.lyrics.setMinimumHeight(120)
-        self.lyrics.textChanged.connect(self._edited)
+        self.lyrics.textChanged.connect(lambda: self._edited("lyrics"))
         form.addRow("Lyrics", self.lyrics)
         outer.addLayout(form)
 
@@ -151,11 +180,12 @@ class MetadataTab(QWidget):
             details.addWidget(value, row, 1)
             self.details[key] = value
         details.setColumnStretch(1, 1)
-        box = QFrame()
-        box.setFrameShape(QFrame.Shape.StyledPanel)
-        box.setLayout(details)
-        outer.addWidget(QLabel("Details (read-only; the loudness values are managed by the ReplayGain tool)"))
-        outer.addWidget(box)
+        self.details_box = QFrame()
+        self.details_box.setFrameShape(QFrame.Shape.StyledPanel)
+        self.details_box.setLayout(details)
+        self.details_title = QLabel("Details (read-only; the loudness values are managed by the ReplayGain tool)")
+        outer.addWidget(self.details_title)
+        outer.addWidget(self.details_box)
         outer.addStretch(1)
 
         scroll = QScrollArea()
@@ -166,8 +196,15 @@ class MetadataTab(QWidget):
 
     def _line(self, key: str) -> QLineEdit:
         edit = QLineEdit()
-        edit.textEdited.connect(self._edited)
+        edit.textEdited.connect(lambda _text, k=key: self._edited(k))
         self.edits[key] = edit
+        if key in SHARED_FIELDS:
+            action = edit.addAction(self.style().standardIcon(QStyle.StandardPixmap.SP_LineEditClearButton),
+                                    QLineEdit.ActionPosition.TrailingPosition)
+            action.setToolTip("Clear this field on all the selected files")
+            action.triggered.connect(lambda _checked=False, k=key: self.clear_on_all(k))
+            action.setVisible(False)
+            self.clear_actions[key] = action
         return edit
 
     def _pair(self, number: str, total: str) -> QWidget:
@@ -177,7 +214,7 @@ class MetadataTab(QWidget):
         for key in (number, total):
             edit = self._line(key)
             edit.setValidator(QIntValidator(0, 9999, edit))
-            edit.setMaximumWidth(70)
+            edit.setMaximumWidth(90)
             layout.addWidget(edit)
             if key == number:
                 layout.addWidget(QLabel("/"))
@@ -190,22 +227,36 @@ class MetadataTab(QWidget):
     def dirty(self) -> bool:
         return self._dirty
 
+    @property
+    def saving(self) -> bool:
+        return self._save_token is not None
+
     def show_message(self, text: str) -> None:
-        """No single audio file to edit (nothing selected, a folder, several files, or not audio)."""
-        self.path = None
-        self.snapshot = None
+        """Nothing to edit (nothing selected, a folder, or not audio)."""
+        self.path, self.snapshot, self.paths, self.snapshots, self.multi = None, None, [], [], False
         self._load_token = None
         self.message.setText(text)
         self.pages.setCurrentWidget(self.message)
         self._set_dirty(False)
 
     def show_file(self, path: str | Path) -> None:
-        self.path = Path(path)
+        self.path, self.paths, self.snapshots, self.multi = Path(path), [], [], False
         self.snapshot = None
         self.message.setText(f"Reading the tags of {self.path.name}…")
         self.pages.setCurrentWidget(self.message)
         self._set_dirty(False)
         self._load_token = self.io.load(self.path)
+
+    def show_files(self, paths: list[str | Path], skipped: int = 0) -> None:
+        """Several audio files; `skipped` other selected items (folders, non-audio files) are left out."""
+        self.path, self.snapshot, self.multi = None, None, True
+        self.paths = [Path(p) for p in paths]
+        self.snapshots = []
+        self._skipped = skipped
+        self.message.setText(f"Reading the tags of {len(self.paths)} files…")
+        self.pages.setCurrentWidget(self.message)
+        self._set_dirty(False)
+        self._load_token = self.io.load_many(self.paths)
 
     def _loaded(self, result: Loaded) -> None:
         if result.token != self._load_token:
@@ -217,6 +268,19 @@ class MetadataTab(QWidget):
         self._fill(result.snapshot, result.cover)
         self.pages.setCurrentIndex(1)
 
+    def _loaded_many(self, result: LoadedMany) -> None:
+        if result.token != self._load_token:
+            return
+        self._load_token = None
+        if not result.snapshots:
+            self.message.setText("None of the selected files could be read.")
+            return
+        self._unreadable = result.failed
+        self._fill_many(result.snapshots)
+        self.pages.setCurrentIndex(1)
+
+    # -- one file --
+
     def _fill(self, snapshot: Snapshot, cover) -> None:
         self.snapshot = snapshot
         self._cover_image = cover
@@ -225,7 +289,11 @@ class MetadataTab(QWidget):
         for key, edit in self.edits.items():
             value = getattr(fields, key)
             edit.setText("" if value is None else str(value))
+            edit.setPlaceholderText("")
+        for action in self.clear_actions.values():
+            action.setVisible(False)
         self.lyrics.setPlainText(_normalize_lyrics(fields.lyrics))
+        self.lyrics.setPlaceholderText("No lyrics in the tags. LRC timestamps are kept as typed.")
         self._filling = False
         self.name_label.setText(snapshot.path.name)
         self.format_label.setText(snapshot.format_line)
@@ -237,28 +305,12 @@ class MetadataTab(QWidget):
             self.cover.setText("No cover")
         self.cover_source.setText({"embedded": "Embedded cover", "": ""}.get(
             snapshot.cover_source, f"Cover from {snapshot.cover_source}"))
+        self.details_title.show()
+        self.details_box.show()
         self.error_label.hide()
         self._fill_details(snapshot)
         self._set_dirty(False)
         self._update_lock()
-
-    def _update_lock(self) -> None:
-        """Files under a running job's lock are read-only, with the job named (SPEC §7)."""
-        if self.snapshot is None:
-            return
-        self.locked_by = self.writer.locked_by(self.snapshot.path)
-        editable = self.snapshot.editable and self.locked_by is None
-        tooltip = f"Read-only while {self.locked_by} is running." if self.locked_by else ""
-        for edit in [*self.edits.values(), self.lyrics]:
-            edit.setReadOnly(not editable)
-            edit.setEnabled(self.snapshot.editable)
-            edit.setToolTip(tooltip)
-        if not self.snapshot.editable:
-            self.note.setText(f"{self.snapshot.container} files have no tags, so they can't be edited here.")
-        elif self.locked_by:
-            self.note.setText(f"Read-only while {self.locked_by} is running.")
-        self.note.setVisible(not editable)
-        self._set_dirty(self.dirty)
 
     def _fill_details(self, s: Snapshot) -> None:
         def rg(gain_key: str, peak_key: str) -> str:
@@ -280,20 +332,115 @@ class MetadataTab(QWidget):
         for key, value in values.items():
             self.details[key].setText(value)
 
+    # -- several files --
+
+    @property
+    def editable_snapshots(self) -> list[Snapshot]:
+        return [s for s in self.snapshots if s.editable]
+
+    def _fill_many(self, snapshots: list[Snapshot]) -> None:
+        self.snapshots = snapshots
+        self._touched.clear()
+        self._cleared.clear()
+        editable = self.editable_snapshots
+        self._common = {}
+        for key in SHARED_FIELDS:
+            values = {getattr(s.fields, key) for s in editable}
+            self._common[key] = values.pop() if len(values) == 1 else MULTIPLE
+        self._filling = True
+        for key, edit in self.edits.items():
+            if key in SHARED_FIELDS:
+                common = self._common[key]
+                edit.setText("" if common is MULTIPLE or common is None else str(common))
+                edit.setPlaceholderText(MULTIPLE_TEXT if common is MULTIPLE else "")
+                self.clear_actions[key].setVisible(True)
+            else:
+                edit.setText("")
+                edit.setPlaceholderText("(one file at a time)")
+        self.lyrics.setPlainText("")
+        self.lyrics.setPlaceholderText("Lyrics are edited one file at a time.")
+        self._filling = False
+
+        self.name_label.setText(f"{len(snapshots)} files selected")
+        counts: dict[str, int] = {}
+        for s in snapshots:
+            fmt = s.path.suffix.lstrip(".").upper()
+            counts[fmt] = counts.get(fmt, 0) + 1
+        self.format_label.setText(", ".join(f"{n} {fmt}" for fmt, n in sorted(counts.items())))
+        self.cover.setPixmap(QPixmap())
+        self.cover.setText(f"{len(snapshots)}\nfiles")
+        self.cover_source.setText("")
+        self.details_title.hide()
+        self.details_box.hide()
+        self.error_label.hide()
+        self._set_dirty(False)
+        self._update_lock()
+
+    def clear_on_all(self, key: str) -> None:
+        """The clear button: this field will be removed from every selected file."""
+        edit = self.edits[key]
+        edit.clear()
+        edit.setPlaceholderText(CLEARED_TEXT)
+        self._cleared.add(key)
+        self._touched.add(key)
+        self._edited()
+
+    def _multi_notes(self) -> list[str]:
+        notes = []
+        not_editable = [s for s in self.snapshots if not s.editable]
+        if not_editable:
+            notes.append(f"{len(not_editable)} of these files have no tags and are left out.")
+        if self._unreadable:
+            notes.append(f"{len(self._unreadable)} files couldn't be read and are left out.")
+        if self._skipped:
+            notes.append(f"{self._skipped} other selected items aren't audio files and are left out.")
+        return notes
+
+    # -- read-only states --
+
+    def _update_lock(self) -> None:
+        """Files under a running job's lock are read-only, with the job named (SPEC §7)."""
+        files = [self.snapshot] if self.snapshot is not None else self.snapshots
+        if not files:
+            return
+        owners = [owner for owner in (self.writer.locked_by(s.path) for s in files) if owner]
+        self.locked_by = owners[0] if owners else None
+        can_tag = any(s.editable for s in files)
+        editable = can_tag and self.locked_by is None
+        tooltip = f"Read-only while {self.locked_by} is running." if self.locked_by else ""
+        for key, edit in self.edits.items():
+            per_track_in_multi = self.multi and key in PER_TRACK_FIELDS
+            edit.setEnabled(can_tag and not per_track_in_multi)
+            edit.setReadOnly(not editable)
+            edit.setToolTip("Edited one file at a time." if per_track_in_multi else tooltip)
+            if key in self.clear_actions:
+                self.clear_actions[key].setEnabled(editable)
+        self.lyrics.setEnabled(can_tag and not self.multi)
+        self.lyrics.setReadOnly(not editable)
+        self.lyrics.setToolTip(tooltip)
+        notes = self._multi_notes() if self.multi else []
+        if not can_tag:
+            notes.insert(0, f"{files[0].container} files have no tags, so they can't be edited here."
+                         if not self.multi else "None of these files can be tagged.")
+        elif self.locked_by:
+            notes.insert(0, f"Read-only while {self.locked_by} is running.")
+        self.note.setText("\n".join(notes))
+        self.note.setVisible(bool(notes))
+        self._set_dirty(self.dirty)
+
     # -- editing --
 
     def changes(self) -> dict:
-        """The fields that differ from the file: only these are written (None clears a field)."""
+        """The fields to write: for one file, those that differ from it; for several, the shared fields that
+        were edited or cleared (a "(multiple values)" field left empty stays untouched). None clears a field."""
+        if self.multi:
+            return self._multi_changes()
         if self.snapshot is None or not self.snapshot.editable:
             return {}
         fields: Fields = self.snapshot.fields
         changed = {}
         for key, edit in self.edits.items():
-            text = edit.text()
-            if key in NUMBER_FIELDS:
-                value = int(text) if text.strip() else None
-            else:
-                value = text if text.strip() else None
+            value = _parse(key, edit.text())
             if value != getattr(fields, key):
                 changed[key] = value
         lyrics = self.lyrics.toPlainText()
@@ -301,9 +448,33 @@ class MetadataTab(QWidget):
             changed["lyrics"] = lyrics if lyrics.strip() else None
         return changed
 
-    def _edited(self, *_args) -> None:
-        if not self._filling:
-            self._set_dirty(bool(self.changes()))
+    def _multi_changes(self) -> dict:
+        if not self.editable_snapshots:
+            return {}
+        changed = {}
+        for key in SHARED_FIELDS:
+            if key not in self._touched:
+                continue
+            text = self.edits[key].text()
+            common = self._common[key]
+            if not text.strip() and key not in self._cleared and common is MULTIPLE:
+                continue  # emptied a "(multiple values)" field without the clear button: leave it alone
+            value = _parse(key, text)
+            if common is not MULTIPLE and value == common:
+                continue
+            changed[key] = value
+        return changed
+
+    def _edited(self, key: str | None = None) -> None:
+        if self._filling:
+            return
+        if key is not None and self.multi:
+            self._touched.add(key)
+            if self.edits[key].text():
+                self._cleared.discard(key)
+                common = self._common.get(key)
+                self.edits[key].setPlaceholderText(MULTIPLE_TEXT if common is MULTIPLE else "")
+        self._set_dirty(bool(self.changes()))
 
     def _set_dirty(self, dirty: bool) -> None:
         if dirty != self._dirty:
@@ -313,15 +484,24 @@ class MetadataTab(QWidget):
         self.revert_button.setEnabled(dirty)
 
     def revert(self) -> None:
-        if self.snapshot is not None and self._save_token is None:
+        if self._save_token is not None:
+            return
+        if self.multi and self.snapshots:
+            self._fill_many(self.snapshots)
+        elif self.snapshot is not None:
             self._fill(self.snapshot, self._cover_image)
 
     def save(self) -> None:
         changes = self.changes()
-        if not changes or self.path is None or self._save_token is not None:
+        if not changes or self._save_token is not None:
             return
         self.error_label.hide()
-        self._save_token = self.writer.write(self.path, changes)
+        if self.multi:
+            self._save_token = self.writer.write_many([(s.path, changes) for s in self.editable_snapshots])
+        elif self.path is not None:
+            self._save_token = self.writer.write(self.path, changes)
+        else:
+            return
         self.save_button.setEnabled(False)
         self.save_button.setText("Saving…")
 
@@ -331,26 +511,43 @@ class MetadataTab(QWidget):
         self._save_token = None
         self.save_button.setText("Save")
         if result.snapshot is None:
-            message = f"The tags couldn't be saved: {result.error}"
-            if self.snapshot is not None:
-                self.error_label.setText(message)
-                self.error_label.show()
-            self._set_dirty(self.dirty)  # the fields stay dirty
-            self.saveFailed.emit(message)
+            self._show_error(f"The tags couldn't be saved: {result.error}")
             return
-        if self.path == result.snapshot.path and self.pages.currentIndex() == 1:
+        if not self.multi and self.path == result.snapshot.path and self.pages.currentIndex() == 1:
             self._fill(result.snapshot, result.cover)
         self.fileSaved.emit(str(result.snapshot.path))
 
-    @property
-    def saving(self) -> bool:
-        return self._save_token is not None
+    def _batch_saved(self, result: BatchWritten) -> None:
+        if result.token != self._save_token:
+            return
+        self._save_token = None
+        self.save_button.setText("Save")
+        fresh = {s.path: s for s in result.saved}
+        if self.multi:
+            self.snapshots = [fresh.get(s.path, s) for s in self.snapshots]
+        if result.saved:
+            self.filesSaved.emit(len(result.saved))
+        if result.failed:
+            total = len(result.saved) + len(result.failed)
+            reasons = "\n".join(message for _path, message in result.failed)
+            self._show_error(f"Saved {len(result.saved)} of {total} files. Not saved:\n{reasons}")
+            return
+        if self.multi and self.pages.currentIndex() == 1:
+            self._fill_many(self.snapshots)
+
+    def _show_error(self, message: str) -> None:
+        """The edits stay (and stay dirty) so the user can retry."""
+        if self.pages.currentIndex() == 1:
+            self.error_label.setText(message)
+            self.error_label.show()
+        self._set_dirty(self.dirty)
+        self.saveFailed.emit(message)
 
     # -- leaving with unsaved edits --
 
     def ask_leave(self) -> str:
         """'save', 'discard' or 'cancel' (a separate method so tests can answer it)."""
-        name = self.path.name if self.path else "this file"
+        name = self.path.name if self.path else f"these {len(self.snapshots)} files" if self.multi else "this file"
         box = QMessageBox(QMessageBox.Icon.Question, "Unsaved changes",
                           f"Save the tag changes to {name}?", parent=self)
         save = box.addButton("Save", QMessageBox.ButtonRole.AcceptRole)
@@ -371,4 +568,3 @@ class MetadataTab(QWidget):
             self.save()  # the write goes on in the background; a failure is reported by saveFailed
         self._set_dirty(False)
         return True
-

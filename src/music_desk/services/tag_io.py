@@ -29,8 +29,16 @@ class Loaded:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class LoadedMany:
+    token: int
+    snapshots: list[Snapshot]  # in the order asked, unreadable files left out
+    failed: list[tuple[str, str]]  # (path, error)
+
+
 class TagIO(QObject):
     loaded = Signal(object)  # Loaded, after a read
+    loadedMany = Signal(object)  # LoadedMany, after a batch read (multi-selection)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -45,6 +53,21 @@ class TagIO(QObject):
     def load(self, path: str | Path) -> int:
         token = self.next_token()
         self._submit(lambda: self.loaded.emit(self._read(token, Path(path))))
+        return token
+
+    def load_many(self, paths: list[str | Path]) -> int:
+        token = self.next_token()
+
+        def run() -> None:
+            snapshots, failed = [], []
+            for path in paths:
+                try:
+                    snapshots.append(metadata.read_snapshot(path))
+                except Exception as e:  # noqa: BLE001 - listed as unreadable
+                    failed.append((str(path), f"{type(e).__name__}: {e}"))
+            self.loadedMany.emit(LoadedMany(token, snapshots, failed))
+
+        self._submit(run)
         return token
 
     def close(self) -> None:

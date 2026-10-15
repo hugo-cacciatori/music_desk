@@ -138,6 +138,8 @@ class MainWindow(QMainWindow):
         self.sidebar.folder_menu_provider = self.add_folder_actions
         self.file_view.selectionChanged.connect(self._selection_changed)
         self.side_panel.metadata.fileSaved.connect(self._file_saved)
+        self.side_panel.metadata.filesSaved.connect(
+            lambda count: self.statusBar().showMessage(f"Saved the tags of {count} files.", STATUS_MS))
         self.side_panel.metadata.saveFailed.connect(lambda message: self.toast.show_message(message))
         self.shellFailed.connect(self._shell_failed)
         QApplication.instance().installEventFilter(self)  # the mouse back/forward buttons, anywhere in the window

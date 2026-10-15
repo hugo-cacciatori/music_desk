@@ -168,9 +168,8 @@ def test_selection_messages(panel, tmp_path):
     assert "Select a file" in panel.metadata.message.text()
     panel.show_selection([SelectedItem(tmp_path, True, False)])
     assert "folder" in panel.metadata.message.text()
-    panel.show_selection([SelectedItem(tmp_path / "a.flac", False, True), SelectedItem(tmp_path / "b.flac", False,
-                                                                                         True)])
-    assert "2 items selected" in panel.metadata.message.text()
+    panel.show_selection([SelectedItem(tmp_path / "a.txt", False, False), SelectedItem(tmp_path, True, False)])
+    assert "2 items selected, none of them audio files" in panel.metadata.message.text()
     panel.show_selection([SelectedItem(tmp_path / "notes.txt", False, False)])
     assert "isn't an audio file" in panel.metadata.message.text()
 
@@ -347,3 +346,164 @@ def test_a_job_lock_reaches_the_window(qtbot, window, service):
     with service.locks.lock([window.folder_path], "ReplayGain (album)"):
         qtbot.waitUntil(lambda: tab.edits["title"].isReadOnly(), timeout=3000)
     qtbot.waitUntil(lambda: not tab.edits["title"].isReadOnly(), timeout=3000)
+
+
+# -- several files (SPEC §7, Multi-selection) --
+
+MULTI_ALBUM = "album/Fixture Artist - Fixture Album"
+MULTI_FILES = ("01 First.flac", "track2.flac", "lowercase_rg.mp3")
+
+
+@pytest.fixture
+def album(fixture_copy):
+    folder = fixture_copy(MULTI_ALBUM)
+    tagged = TaggedFile(folder / "track2.flac")  # make some fields differ
+    tagged.set_fields({"genre": "Jazz", "comment": "second"})
+    tagged.save()
+    return folder
+
+
+def load_many(qtbot, panel, paths, items=None):
+    tab = panel.metadata
+    with qtbot.waitSignal(tab.io.loadedMany, timeout=10000):
+        panel.show_selection(items or [SelectedItem(p, False, True) for p in paths])
+    qtbot.waitUntil(lambda: bool(tab.snapshots), timeout=5000)
+    return tab
+
+
+def type_into(tab, key, text):
+    tab.edits[key].setText(text)
+    tab.edits[key].textEdited.emit(text)
+
+
+def save_many(qtbot, tab):
+    with qtbot.waitSignal(tab.writer.batchWritten, timeout=10000):
+        tab.save()
+
+
+def test_shared_and_differing_values(qtbot, panel, album):
+    tab = load_many(qtbot, panel, [album / n for n in MULTI_FILES])
+    assert tab.multi and tab.name_label.text() == "3 files selected"
+    assert tab.format_label.text() == "2 FLAC, 1 MP3"
+    assert tab.edits["artist"].text() == "Fixture Artist" and tab.edits["artist"].placeholderText() == ""
+    assert tab.edits["genre"].text() == "" and tab.edits["genre"].placeholderText() == "(multiple values)"
+    for key in ("title", "track"):
+        assert not tab.edits[key].isEnabled() and tab.edits[key].toolTip() == "Edited one file at a time."
+    assert not tab.lyrics.isEnabled()
+    assert all(tab.clear_actions[k].isVisible() for k in ("artist", "genre", "comment"))
+    assert not tab.details_box.isVisibleTo(tab) and tab.changes() == {} and not tab.dirty
+
+
+def test_editing_one_shared_field_leaves_the_rest(qtbot, panel, album):
+    paths = [album / n for n in MULTI_FILES]
+    before = {p: TaggedFile(p).fields() for p in paths}
+    tab = load_many(qtbot, panel, paths)
+    type_into(tab, "album", "Renamed Album")
+    assert tab.changes() == {"album": "Renamed Album"} and tab.dirty
+    save_many(qtbot, tab)
+    for path in paths:
+        after = TaggedFile(path).fields()
+        assert after.album == "Renamed Album"
+        for field in FIELD_NAMES:
+            if field != "album":
+                assert getattr(after, field) == getattr(before[path], field), (path.name, field)
+    assert not tab.dirty and tab.edits["album"].text() == "Renamed Album"
+    assert tab.edits["genre"].placeholderText() == "(multiple values)"  # reloaded, still different
+
+
+def test_clear_on_all_versus_leave_alone(qtbot, panel, album):
+    paths = [album / n for n in MULTI_FILES]
+    tab = load_many(qtbot, panel, paths)
+    type_into(tab, "genre", "")  # a "(multiple values)" field emptied by hand: left alone
+    assert tab.changes() == {}
+    tab.clear_actions["comment"].trigger()  # the clear button: removed from every file
+    assert tab.edits["comment"].placeholderText() == "(cleared on all files)"
+    type_into(tab, "year", "")  # a common value deleted: cleared, as in single-file editing
+    assert tab.changes() == {"comment": None, "year": None}
+    save_many(qtbot, tab)
+    for path in paths:
+        fields = TaggedFile(path).fields()
+        assert fields.comment is None and fields.year is None
+    assert TaggedFile(album / "track2.flac").fields().genre == "Jazz"
+
+
+def test_typing_after_clear_sets_the_value(qtbot, panel, album):
+    tab = load_many(qtbot, panel, [album / n for n in MULTI_FILES])
+    tab.clear_actions["genre"].trigger()
+    type_into(tab, "genre", "Rock")
+    assert tab.changes() == {"genre": "Rock"}
+    assert tab.edits["genre"].placeholderText() == "(multiple values)"
+
+
+def test_numbers_in_multi(qtbot, panel, album):
+    paths = [album / n for n in MULTI_FILES]
+    tab = load_many(qtbot, panel, paths)
+    type_into(tab, "disc", "2")
+    type_into(tab, "disc_total", "2")
+    save_many(qtbot, tab)
+    assert {(TaggedFile(p).fields().disc, TaggedFile(p).fields().disc_total) for p in paths} == {(2, 2)}
+    assert {TaggedFile(p).fields().track for p in paths} != {None}  # per-track numbers kept
+
+
+def test_a_locked_file_in_the_batch(qtbot, panel, locks, album):
+    paths = [album / n for n in MULTI_FILES]
+    tab = load_many(qtbot, panel, paths)
+    type_into(tab, "genre", "Blues")
+    token = locks.acquire([paths[1]], "a tag save")  # a short save lock: the panel stays editable
+    try:
+        with qtbot.waitSignal(tab.saveFailed, timeout=10000):
+            tab.save()
+    finally:
+        locks.release(token)
+    assert "Saved 2 of 3 files. Not saved:" in tab.error_label.text() and "track2.flac" in tab.error_label.text()
+    assert tab.dirty and tab.edits["genre"].text() == "Blues"
+    assert [TaggedFile(p).fields().genre for p in paths] == ["Blues", "Jazz", "Blues"]
+    save_many(qtbot, tab)  # retry: now every file has it
+    assert {TaggedFile(p).fields().genre for p in paths} == {"Blues"} and not tab.dirty
+
+
+def test_a_job_lock_makes_the_multi_edit_read_only(qtbot, panel, locks, album):
+    tab = load_many(qtbot, panel, [album / n for n in MULTI_FILES])
+    with locks.lock([album], "ReplayGain (album)"):
+        qtbot.waitUntil(lambda: tab.edits["artist"].isReadOnly(), timeout=3000)
+        assert not tab.clear_actions["artist"].isEnabled()
+        assert "Read-only while ReplayGain (album) is running." in tab.note.text()
+    qtbot.waitUntil(lambda: not tab.edits["artist"].isReadOnly(), timeout=3000)
+
+
+def test_mixed_selection_edits_the_audio_files(qtbot, panel, album, fixture_copy):
+    aac = fixture_copy("formats/tone.aac")
+    items = [SelectedItem(album / "01 First.flac", False, True), SelectedItem(aac, False, True),
+             SelectedItem(album / "lite", True, False), SelectedItem(album / "notes.txt", False, False)]
+    tab = load_many(qtbot, panel, None, items)
+    assert [s.path.name for s in tab.snapshots] == ["01 First.flac", "tone.aac"]
+    assert "1 of these files have no tags" in tab.note.text()
+    assert "2 other selected items aren't audio files" in tab.note.text()
+    type_into(tab, "genre", "Folk")
+    save_many(qtbot, tab)
+    assert TaggedFile(album / "01 First.flac").fields().genre == "Folk"
+
+
+def test_revert_in_multi(qtbot, panel, album):
+    tab = load_many(qtbot, panel, [album / n for n in MULTI_FILES])
+    type_into(tab, "artist", "Someone")
+    tab.clear_actions["comment"].trigger()
+    tab.revert()
+    assert not tab.dirty and tab.edits["artist"].text() == "Fixture Artist"
+    assert tab.edits["comment"].placeholderText() == "(multiple values)"
+
+
+def test_multi_selection_in_the_window(qtbot, window, service, monkeypatch):
+    window.open_folder(entry(service, "Artist", "Album"))
+    ids = [entry(service, "Artist", "Album", n) for n in ("Track 2.flac", "Track 3.mp3")]
+    window.file_view.select_ids(ids)
+    tab = window.side_panel.metadata
+    qtbot.waitUntil(lambda: tab.multi and len(tab.snapshots) == 2, timeout=10000)
+    monkeypatch.setattr(tab, "ask_leave", lambda: "cancel")
+    type_into(tab, "genre", "Ambient")
+    window.file_view.select_ids([entry(service, "Artist", "Album", "track 1.flac")])
+    assert window.file_view.selected_ids() == ids and tab.dirty  # Cancel kept the two files
+    monkeypatch.setattr(tab, "ask_leave", lambda: "save")
+    with qtbot.waitSignal(tab.writer.batchWritten, timeout=10000):
+        window.file_view.select_ids([entry(service, "Artist", "Album", "track 1.flac")])
+    qtbot.waitUntil(lambda: "Saved the tags of 2 files" in window.statusBar().currentMessage(), timeout=5000)

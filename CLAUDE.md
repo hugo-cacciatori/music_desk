@@ -627,8 +627,9 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** the remaining M6 tasks, "Theme and icons" and the Inno Setup installer (SPEC §13). The installer
-completes M6. Read SPEC §13 first. Settle these with Hugo before building:
+**Next step:** the remaining M6 tasks, in order: "Theme and icons", the Inno Setup installer (SPEC §13), the
+README, then retiring the root scripts once the installed v1 is in use. Read SPEC §13 first. Settle these with
+Hugo before building:
 - **The app's own licence.** The repo has no LICENSE file, and mutagen is GPL-2.0-or-later, so the distributed
   app must be under a GPL-compatible licence.
 - **FFmpeg's licence** inside rsgain 3.6 (LGPL or GPL build): check, and add its notice.
@@ -774,7 +775,8 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Library search as built: unquoted text is one substring (the page's rule), quoted phrases are more, all ANDed; filters are repeatable and ORed per field. Tracks only, natural folder order, cut at 5,000. Short parts use LIKE (ASCII keeps accents, a known limit). The query field lives in the toolbar; the results page replaces the file list, Esc returns, Enter goes to the file. Opening the search shows the Lyrics tab. Results re-run when the index changes, in place for the same query. Sort keys are computed on the worker, and the results model sorts itself (no proxy) to stay under the 50 ms stall target. The seek_lyrics parity test passes. Details in SPEC §6. |
 | 2026-10-15 | Smart views dropped (Hugo): not every track needs lyrics in its tags (LRCLIB's are shown), a rename-mask mismatch depends on each user's masks, missing ReplayGain is overwhelming library-wide (the folder's RG column covers it), and "recently modified" answers no need. A sidebar section would give them weight they don't have. Instead, the Lyrics menu has three Find entries that open library search with a ready-made query: LRCLIB didn't find, no lyrics in the tags, can't be looked up (`lrclib:notags`, new). Details in SPEC §5. |
 | 2026-10-15 | No Settings dialog (Hugo): every preference already lives where it's used (sidebar, View and Lyrics menus, the Tools cards; Qt follows Windows' theme). The unused `watch_for_changes` and `tag_workers` settings are removed (old settings.json files still load). Help › About shows the versions and the third-party licences, whose texts are bundled in `resources/licenses/`. Details in SPEC §12 and §13. |
-| deferred   | App name and icon. Retiring the original scripts. |
+| 2026-10-15 | Release decisions (Hugo): an Inno Setup installer, chosen over a portable zip and a one-file exe for a normal Windows install (Start menu, uninstaller, clean updates). The README is written with the installer, once the name, licence and install steps are known. The root scripts are deleted as the last M6 step, once the installed v1 replaces them; `tests/reference/` keeps the frozen copies. |
+| deferred   | App name and icon. |
 
 ## Stack
 | Concern        | Choice |
@@ -919,6 +921,9 @@ cleanup fixture case gets the expected status.
 - [x] Settings dialog: dropped (Hugo, 2026-10-15); Help › About with the versions and licences instead
 - [ ] Theme and icons
 - [ ] Inno Setup installer; check the licenses of the FFmpeg libraries built into rsgain
+- [ ] README.md: what the app does, its features, install (the installer), build from source, licence
+- [ ] Retire the root `music_tools.py` and `seek_lyrics.py`, once the installed v1 replaces them for Hugo. Tell
+      him the exact delete command first; `tests/reference/` keeps the frozen copies the parity tests use.
 
 Done when:
 - the installer installs the app, and it runs from Program Files with the bundled rsgain;
@@ -934,8 +939,10 @@ Done when:
 - `logging` writes to `%LOCALAPPDATA%\MusicDesk\logs\app.log`.
 
 ## Open questions
-1. App name and icon: deferred by Hugo. "MusicDesk" is the working name until then.
-2. Retiring the root `music_tools.py` and `seek_lyrics.py`: deferred by Hugo. They stay, and the app never deletes them.
+1. App name and icon: deferred by Hugo. "MusicDesk" is the working name until then. The installer, its Start
+   menu shortcut and the README need them.
+2. The app's own licence: the repo has no LICENSE file, and mutagen is GPL-2.0-or-later, so the distributed app
+   must be under a GPL-compatible licence. Needed before the installer and the README.
 3. Small sample files for the formats ffmpeg can't encode: APE, TAK, Musepack, OptimFROG, DSF/DFF and Speex.
    Their tests are skipped until then (decided 2026-10-15). Drop them in `tests/fixtures/samples/`, and a session
    wires them into the round-trip and rsgain-key tests.

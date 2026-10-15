@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from music_desk.core.metadata import Snapshot
 from music_desk.core.tags import Fields
 from music_desk.services.tag_io import Loaded, TagIO
+from music_desk.services.tag_writer import TagWriter
 
 TEXT_FIELDS = (("title", "Title"), ("artist", "Artist"), ("albumartist", "Album artist"), ("album", "Album"))
 LATER_TEXT_FIELDS = (("year", "Year"), ("genre", "Genre"), ("composer", "Composer"), ("comment", "Comment"))
@@ -42,9 +43,11 @@ class MetadataTab(QWidget):
     fileSaved = Signal(str)  # path: its folder's index rows need a refresh
     saveFailed = Signal(str)
 
-    def __init__(self, io: TagIO, parent: QWidget | None = None) -> None:
+    def __init__(self, io: TagIO, writer: TagWriter, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.io = io
+        self.writer = writer
+        self.locked_by: str | None = None
         self.path: Path | None = None
         self.snapshot: Snapshot | None = None
         self._load_token: int | None = None
@@ -53,7 +56,8 @@ class MetadataTab(QWidget):
         self._filling = False
         self._cover_image = None
         io.loaded.connect(self._loaded)
-        io.saved.connect(self._saved)
+        writer.written.connect(self._saved)
+        writer.locksChanged.connect(self._update_lock)
 
         self.pages = QStackedWidget()
         self.message = QLabel()
@@ -221,9 +225,7 @@ class MetadataTab(QWidget):
         for key, edit in self.edits.items():
             value = getattr(fields, key)
             edit.setText("" if value is None else str(value))
-            edit.setEnabled(snapshot.editable)
         self.lyrics.setPlainText(_normalize_lyrics(fields.lyrics))
-        self.lyrics.setEnabled(snapshot.editable)
         self._filling = False
         self.name_label.setText(snapshot.path.name)
         self.format_label.setText(snapshot.format_line)
@@ -235,11 +237,28 @@ class MetadataTab(QWidget):
             self.cover.setText("No cover")
         self.cover_source.setText({"embedded": "Embedded cover", "": ""}.get(
             snapshot.cover_source, f"Cover from {snapshot.cover_source}"))
-        self.note.setVisible(not snapshot.editable)
-        self.note.setText(f"{snapshot.container} files have no tags, so they can't be edited here.")
         self.error_label.hide()
         self._fill_details(snapshot)
         self._set_dirty(False)
+        self._update_lock()
+
+    def _update_lock(self) -> None:
+        """Files under a running job's lock are read-only, with the job named (SPEC §7)."""
+        if self.snapshot is None:
+            return
+        self.locked_by = self.writer.locked_by(self.snapshot.path)
+        editable = self.snapshot.editable and self.locked_by is None
+        tooltip = f"Read-only while {self.locked_by} is running." if self.locked_by else ""
+        for edit in [*self.edits.values(), self.lyrics]:
+            edit.setReadOnly(not editable)
+            edit.setEnabled(self.snapshot.editable)
+            edit.setToolTip(tooltip)
+        if not self.snapshot.editable:
+            self.note.setText(f"{self.snapshot.container} files have no tags, so they can't be edited here.")
+        elif self.locked_by:
+            self.note.setText(f"Read-only while {self.locked_by} is running.")
+        self.note.setVisible(not editable)
+        self._set_dirty(self.dirty)
 
     def _fill_details(self, s: Snapshot) -> None:
         def rg(gain_key: str, peak_key: str) -> str:
@@ -290,7 +309,7 @@ class MetadataTab(QWidget):
         if dirty != self._dirty:
             self._dirty = dirty
             self.dirtyChanged.emit(dirty)
-        self.save_button.setEnabled(dirty and self._save_token is None)
+        self.save_button.setEnabled(dirty and self._save_token is None and self.locked_by is None)
         self.revert_button.setEnabled(dirty)
 
     def revert(self) -> None:
@@ -302,7 +321,7 @@ class MetadataTab(QWidget):
         if not changes or self.path is None or self._save_token is not None:
             return
         self.error_label.hide()
-        self._save_token = self.io.save(self.path, changes)
+        self._save_token = self.writer.write(self.path, changes)
         self.save_button.setEnabled(False)
         self.save_button.setText("Saving…")
 

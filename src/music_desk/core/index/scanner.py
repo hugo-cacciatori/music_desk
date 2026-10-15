@@ -253,6 +253,43 @@ class Scanner:
         entry_id, exact = found
         return self.scan_folder(entry_id, cancel, recursive=recursive or not exact)
 
+    def update_file(self, path: str | Path) -> ScanReport | None:
+        """Re-read one file the app just changed (a tag save) into the index: its entry, tracks and search rows,
+        and its folders' totals adjusted by the difference, without rescanning anything else. A file the index
+        doesn't know yet makes its folder be scanned instead. None if outside every root."""
+        path = Path(path)
+        conn = connect_read(self.writer.path)
+        try:
+            found = find_folder(conn, path.parent)
+            if found is None:
+                return None
+            folder_id, exact = found
+            row = conn.execute("SELECT id, root_id FROM entries WHERE parent_id = ? AND name = ? COLLATE NOCASE",
+                               (folder_id, path.name)).fetchone() if exact else None
+        finally:
+            conn.close()
+        if row is None:
+            return self.scan_folder(folder_id, recursive=not exact)
+        entry_id, root_id = row
+        try:
+            stat = path.stat()
+        except OSError:
+            return self.scan_folder(folder_id)  # it went away meanwhile
+        track, lyrics = read_file(path, stat.st_size, stat.st_mtime)
+        entry = (entry_id, folder_id, path.name, stat.st_size, stat.st_mtime)
+
+        def write(conn: sqlite3.Connection) -> None:
+            before = _stats_values(conn, entry_id)
+            conn.execute("UPDATE entries SET name = ?, size = ?, mtime = ? WHERE id = ?",
+                         (path.name, stat.st_size, stat.st_mtime, entry_id))
+            _write_tracks(conn, [entry], [(track, lyrics)])
+            _adjust_folder_stats(conn, folder_id, before, _stats_values(conn, entry_id))
+
+        self.writer.submit(write).result()
+        report = ScanReport(root_id, files=1, updated=1, tags_read=1, folder_id=folder_id)
+        report.tag_errors = int(track["read_error"] is not None)
+        return report
+
     @staticmethod
     def _next_gen(conn: sqlite3.Connection, root_id: int) -> int:
         return (conn.execute("SELECT max(scan_gen) FROM entries WHERE root_id = ?", (root_id,)).fetchone()[0]
@@ -483,6 +520,33 @@ def _update_sidecars(conn: sqlite3.Connection, root_id: int) -> None:
         )
         FROM entries e WHERE e.id = tracks.entry_id AND e.root_id = ?
         """, (root_id,))
+
+
+def _stats_values(conn: sqlite3.Connection, entry_id: int) -> tuple:
+    """What one file adds to its folders' totals: (tracks, duration, with RG, with lyrics tag, LRCLIB found)."""
+    row = conn.execute(
+        """
+        SELECT t.read_error IS NULL, t.duration, t.rg_track_gain IS NOT NULL, t.has_lyrics_tag, l.status = ?
+        FROM tracks t LEFT JOIN lyrics l ON l.key = t.lyrics_key WHERE t.entry_id = ?
+        """, (FOUND, entry_id)).fetchone()
+    if row is None or not row[0]:
+        return (0, 0.0, 0, 0, 0)
+    return (1, row[1] or 0.0, int(bool(row[2])), int(bool(row[3])), int(bool(row[4])))
+
+
+def _adjust_folder_stats(conn: sqlite3.Connection, folder_id: int, before: tuple, after: tuple) -> None:
+    """Apply one file's change to its folder and every folder above it (the formats list is left to scans)."""
+    delta = tuple(a - b for a, b in zip(after, before, strict=True))
+    if not any(delta):
+        return
+    folder = folder_id
+    while folder is not None:
+        conn.execute("INSERT OR IGNORE INTO folder_stats (entry_id) VALUES (?)", (folder,))
+        conn.execute(
+            "UPDATE folder_stats SET n_tracks = n_tracks + ?, duration = duration + ?, n_with_rg = n_with_rg + ?, "
+            "n_with_lyrics_tag = n_with_lyrics_tag + ?, n_lrclib_found = n_lrclib_found + ? WHERE entry_id = ?",
+            (*delta, folder))
+        folder = conn.execute("SELECT parent_id FROM entries WHERE id = ?", (folder,)).fetchone()[0]
 
 
 def _update_folder_stats(conn: sqlite3.Connection, root_id: int) -> None:

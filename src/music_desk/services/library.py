@@ -11,6 +11,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from music_desk.core.index import roots
 from music_desk.core.index.roots import AddResult, Root
 from music_desk.core.index.store import DbWriter, connect_read
+from music_desk.core.path_locks import PathLocks
 from music_desk.services.indexer import Indexer
 from music_desk.services.watcher import Watcher
 
@@ -31,6 +32,7 @@ class LibraryService(QObject):
         self.writer = DbWriter(db_path).start()
         self.conn: sqlite3.Connection = connect_read(db_path)  # the UI thread's read-only connection
         self.indexer = Indexer(self.writer, self)
+        self.locks = PathLocks()  # shared by jobs and the tag writer (SPEC §16)
         self.watcher = Watcher(self.indexer.scan_path, self, **(watcher_options or {}))
         self.watcher.unwatched.connect(
             lambda _root_id, reason: self.failed.emit(

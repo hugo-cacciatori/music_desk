@@ -418,3 +418,45 @@ def test_scan_folder_of_a_vanished_entry(writer, read, library, root_id):
 
 def test_scan_of_a_removed_root(writer):
     assert scanner(writer).scan_root(999) is None
+
+
+# -- one file after a tag save --
+
+def test_update_file_rereads_one_file(writer, read, library, root_id):
+    from music_desk.core.tags import TaggedFile
+
+    scanner(writer).scan_root(root_id)
+    path = library / "Formats" / "tone.flac"
+    formats = entry_id(read, library, "Formats")
+    stats_before = read.execute("SELECT n_tracks, n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
+                                (formats,)).fetchone()
+    top = list_roots(read)[0].top_entry_id
+    top_before = read.execute("SELECT n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?", (top,)).fetchone()[0]
+
+    tagged = TaggedFile(path)
+    tagged.set_fields({"title": "Retitled", "lyrics": "la la"})
+    tagged.save()
+    report = scanner(writer).update_file(path)
+    assert report.folder_id == formats and report.tags_read == 1
+
+    row = track(read, library, "Formats/tone.flac")
+    assert row["title"] == "Retitled" and row["has_lyrics_tag"] == 1
+    assert row["read_size"] == path.stat().st_size
+    stats = read.execute("SELECT n_tracks, n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
+                         (formats,)).fetchone()
+    assert tuple(stats) == (stats_before[0], stats_before[1] + 1)  # adjusted by the difference only
+    assert read.execute("SELECT n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
+                        (top,)).fetchone()[0] == top_before + 1  # up to the root
+    hits = [r[0] for r in read.execute("SELECT rowid FROM search WHERE search MATCH 'Retitled'")]
+    assert hits == [entry_id(read, library, "Formats/tone.flac")]
+    assert scanner(writer).scan_root(root_id).tags_read == 0  # the index is already up to date
+
+
+def test_update_file_of_an_unknown_file_scans_its_folder(writer, read, library, root_id, fixtures_dir):
+    scanner(writer).scan_root(root_id)
+    new = library / "Formats" / "new.opus"
+    shutil.copy2(fixtures_dir / "formats" / "tone.opus", new)
+    report = scanner(writer).update_file(new)
+    assert report.folder_id == entry_id(read, library, "Formats")
+    assert track(read, library, "Formats/new.opus")["format"] == "OPUS"
+    assert scanner(writer).update_file(library.parent / "elsewhere" / "x.flac") is None

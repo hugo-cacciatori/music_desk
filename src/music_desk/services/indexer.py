@@ -32,7 +32,8 @@ class Indexer(QObject):
         super().__init__(parent)
         self.scanner = Scanner(writer, workers=workers, on_progress=self._on_progress,
                                on_folder=self.folderUpdated.emit)
-        self._jobs: deque[tuple[str, object]] = deque()  # ("root", id), ("folder", id), ("path", (path, rec))
+        # ("root", id), ("folder", id), ("path", (path, recursive)), ("file", path)
+        self._jobs: deque[tuple[str, object]] = deque()
         self._condition = threading.Condition()
         self._current: tuple[str, object] | None = None
         self._cancel = CancelToken()
@@ -53,6 +54,10 @@ class Indexer(QObject):
     def scan_path(self, path: str, recursive: bool = False) -> None:
         """Bring a folder up to date by path, resolved when the job runs (the watcher's changes)."""
         self._queue(("path", (path, recursive)))
+
+    def update_file(self, path: str) -> None:
+        """Re-read one file the app just wrote (a tag save) into the index, without a folder rescan."""
+        self._queue(("file", path))
 
     def request_folder(self, entry_id: int) -> None:
         """Bring a folder up to date first: inside the running root scan, or on its own when idle."""
@@ -117,6 +122,8 @@ class Indexer(QObject):
                 elif kind == "path":
                     path, recursive = entity
                     report = self.scanner.scan_path(path, cancel, recursive=recursive)
+                elif kind == "file":
+                    report = self.scanner.update_file(entity)
                 else:
                     report = self.scanner.scan_folder(entity, cancel)
                 if report is not None:  # None: the folder or path left the library meanwhile

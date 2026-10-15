@@ -11,8 +11,10 @@ from mutagen.id3 import ID3
 from PySide6.QtCore import Qt
 
 from music_desk.core import metadata
+from music_desk.core.path_locks import PathLocks
 from music_desk.core.tags import FIELD_NAMES, TaggedFile
 from music_desk.services.tag_io import TagIO
+from music_desk.services.tag_writer import TagWriter
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 
 FORMATS = ["tone.flac", "tone.ogg", "tone.oga", "tone.opus", "tone.mp3", "tone.mp2", "tone.wav", "tone.aiff",
@@ -28,12 +30,19 @@ def raw_keys(path) -> set[str]:
 
 
 @pytest.fixture
-def panel(qtbot):
+def locks():
+    return PathLocks()
+
+
+@pytest.fixture
+def panel(qtbot, locks):
     io = TagIO()
-    panel = SidePanel(io)
+    writer = TagWriter(locks)
+    panel = SidePanel(io, writer)
     qtbot.addWidget(panel)
     panel.show()
     yield panel
+    writer.close()
     io.close()
 
 
@@ -48,6 +57,7 @@ def load(qtbot, panel, path):
 def save(qtbot, tab):
     with qtbot.waitSignal(tab.fileSaved, timeout=10000):
         tab.save()
+    qtbot.waitUntil(lambda: not tab.saving, timeout=5000)
 
 
 @pytest.mark.parametrize("name", FORMATS)
@@ -261,3 +271,79 @@ def test_cancel_keeps_the_folder(window, service, monkeypatch, qtbot):
     tab.edits["title"].textEdited.emit("Edited")
     window.open_folder(entry(service, "Other"))
     assert window.folder_id == album and tab.dirty
+
+
+# -- TagWriter and locks --
+
+def test_a_locked_file_is_read_only(qtbot, panel, locks, fixture_copy):
+    path = fixture_copy("formats/tone.flac")
+    tab = load(qtbot, panel, path)
+    token = locks.acquire([path.parent], "ReplayGain (album)")
+    qtbot.waitUntil(lambda: tab.locked_by == "ReplayGain (album)", timeout=3000)
+    assert tab.edits["title"].isReadOnly() and tab.lyrics.isReadOnly()
+    assert tab.edits["title"].toolTip() == "Read-only while ReplayGain (album) is running."
+    assert tab.note.isVisibleTo(tab) and not tab.save_button.isEnabled()
+    locks.release(token)
+    qtbot.waitUntil(lambda: tab.locked_by is None, timeout=3000)
+    assert not tab.edits["title"].isReadOnly() and not tab.note.isVisibleTo(tab)
+
+
+def test_a_locked_write_is_refused(qtbot, locks, fixture_copy):
+    path = fixture_copy("formats/tone.flac")
+    writer = TagWriter(locks)
+    try:
+        with locks.lock([path.parent], "Tidy album"), qtbot.waitSignal(writer.written, timeout=5000) as blocker:
+            writer.write(path, {"title": "Nope"})
+        result = blocker.args[0]
+        assert result.snapshot is None and "in use by Tidy album" in result.error
+        assert TaggedFile(path).fields().title == "Tone tone.flac"
+    finally:
+        writer.close()
+
+
+def test_writes_are_serial_and_in_order(qtbot, locks, fixture_copy):
+    path = fixture_copy("formats/tone.flac")
+    written = []
+    writer = TagWriter(locks, on_written=written.append)
+    try:
+        threads = []
+        writer.written.connect(lambda r: threads.append(r.token))
+        for n in range(5):
+            writer.write(path, {"title": f"Take {n}"})
+        qtbot.waitUntil(lambda: len(threads) == 5, timeout=10000)
+        assert threads == [1, 2, 3, 4, 5]
+        assert TaggedFile(path).fields().title == "Take 4"
+        assert written == [str(path)] * 5
+        assert locks.held() == []  # each save held its file only while writing
+    finally:
+        writer.close()
+
+
+def test_saving_updates_the_index_without_a_rescan(qtbot, window, service, monkeypatch):
+    def no_rescan(*_args, **_kwargs):
+        raise AssertionError("a save shouldn't rescan the folder")
+
+    window.open_folder(entry(service, "Artist", "Album"))
+    album = entry(service, "Artist", "Album")
+    lyrics_before = service.conn.execute("SELECT n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
+                                         (album,)).fetchone()[0]
+    tab = select_file(qtbot, window, "Track 3.mp3")
+    monkeypatch.setattr(service.indexer, "scan_path", no_rescan)
+    monkeypatch.setattr(service.indexer.scanner, "scan_folder", no_rescan)
+    tab.edits["title"].setText("Third")
+    tab.edits["title"].textEdited.emit("Third")
+    tab.lyrics.setPlainText("words")
+    save(qtbot, tab)
+    row = column(window, "name").index("Track 3.mp3")
+    qtbot.waitUntil(lambda: column(window, "title")[row] == "Third", timeout=10000)
+    qtbot.waitUntil(lambda: column(window, "lyrics")[row] == "✓", timeout=10000)
+    assert service.conn.execute("SELECT n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
+                                (album,)).fetchone()[0] == lyrics_before + 1
+
+
+def test_a_job_lock_reaches_the_window(qtbot, window, service):
+    window.open_folder(entry(service, "Artist", "Album"))
+    tab = select_file(qtbot, window, "Track 2.flac")
+    with service.locks.lock([window.folder_path], "ReplayGain (album)"):
+        qtbot.waitUntil(lambda: tab.edits["title"].isReadOnly(), timeout=3000)
+    qtbot.waitUntil(lambda: not tab.edits["title"].isReadOnly(), timeout=3000)

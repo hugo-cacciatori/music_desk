@@ -1,10 +1,8 @@
-"""Tag reads and writes for the side panel, on one worker thread (Ground rule 2: no tag I/O on the UI thread).
+"""Tag reads for the side panel, on a worker thread (Ground rule 2: no tag I/O on the UI thread). Writes go
+through TagWriter.
 
-One thread keeps reads and writes of the same file in order. Every request carries a token; the panel ignores
-results for a token it no longer waits for (the selection moved on). Covers are decoded into QImage here too,
-so the UI thread never decodes a large picture.
-
-This is the simple writer of M3's first task; the TagWriter with per-path locks (SPEC §16) replaces it next.
+Every request carries a token; the panel ignores results for a token it no longer waits for (the selection moved
+on). Covers are decoded into QImage here too, so the UI thread never decodes a large picture.
 """
 
 import logging
@@ -33,7 +31,6 @@ class Loaded:
 
 class TagIO(QObject):
     loaded = Signal(object)  # Loaded, after a read
-    saved = Signal(object)  # Loaded, after a write (snapshot None and error set on failure)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -50,26 +47,10 @@ class TagIO(QObject):
         self._submit(lambda: self.loaded.emit(self._read(token, Path(path))))
         return token
 
-    def save(self, path: str | Path, changes: dict) -> int:
-        token = self.next_token()
-
-        def run() -> None:
-            try:
-                snapshot = metadata.write_fields(path, changes)
-            except Exception as e:  # noqa: BLE001 - shown to the user; the fields stay dirty
-                log.warning("saving tags of %s failed: %s", path, e)
-                self.saved.emit(Loaded(token, None, None, f"{type(e).__name__}: {e}"))
-                return
-            log.info("saved %s to %s", ", ".join(sorted(changes)) or "nothing", path)
-            self.saved.emit(Loaded(token, snapshot, _decode(snapshot.cover)))
-
-        self._submit(run)
-        return token
-
     def close(self) -> None:
         if not self._closed:
             self._closed = True
-            self._pool.shutdown(wait=True)  # a write in progress finishes
+            self._pool.shutdown(wait=True)
 
     def _submit(self, fn) -> Future | None:
         if self._closed:
@@ -82,10 +63,10 @@ class TagIO(QObject):
             snapshot = metadata.read_snapshot(path)
         except Exception as e:  # noqa: BLE001 - an unreadable file is shown as such
             return Loaded(token, None, None, f"{type(e).__name__}: {e}")
-        return Loaded(token, snapshot, _decode(snapshot.cover))
+        return Loaded(token, snapshot, decode_cover(snapshot.cover))
 
 
-def _decode(data: bytes | None) -> QImage | None:
+def decode_cover(data: bytes | None) -> QImage | None:
     if not data:
         return None
     image = QImage()

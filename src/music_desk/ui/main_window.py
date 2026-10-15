@@ -32,8 +32,10 @@ from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
 from music_desk.core.index.store import path_of
+from music_desk.core.path_locks import PathLocks
 from music_desk.services.library import LibraryService
 from music_desk.services.tag_io import TagIO
+from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
 from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.file_view import FileView
@@ -94,7 +96,11 @@ class MainWindow(QMainWindow):
         self.sidebar.model.only_music = self.settings.hide_folders_without_music
         self.file_view = FileView(conn)
         self.tag_io = TagIO(self)
-        self.side_panel = SidePanel(self.tag_io)
+        self.tag_writer = TagWriter(
+            library.locks if library is not None else PathLocks(),
+            on_written=lambda path: self.library.indexer.update_file(path) if self._library_open() else None,
+            parent=self)
+        self.side_panel = SidePanel(self.tag_io, self.tag_writer)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.file_view)
@@ -324,9 +330,7 @@ class MainWindow(QMainWindow):
         self.side_panel.show_selection(items)
 
     def _file_saved(self, path: str) -> None:
-        """Tags changed on disk: bring the file's folder up to date in the index (and so in the list)."""
-        if self._library_open():
-            self.library.indexer.scan_path(os.path.dirname(path))
+        """The index already caught up through TagWriter.on_written; the list row follows on folderUpdated."""
         self.statusBar().showMessage(f"Saved the tags of {os.path.basename(path)}.", STATUS_MS)
 
     def folder_updated(self, entry_id: int) -> None:
@@ -407,7 +411,8 @@ class MainWindow(QMainWindow):
         if not self.side_panel.can_leave():
             event.ignore()
             return
-        self.tag_io.close()  # a save in progress finishes first
+        self.tag_writer.close()  # the queued saves finish first
+        self.tag_io.close()
         self.save_state()
         QApplication.instance().removeEventFilter(self)
         self._shell.shutdown(wait=False)

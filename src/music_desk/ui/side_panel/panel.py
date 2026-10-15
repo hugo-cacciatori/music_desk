@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QTabWidget, QWidget
 
 from music_desk.services.tag_io import TagIO
+from music_desk.services.tag_writer import TagWriter
 from music_desk.ui.side_panel.metadata_tab import MetadataTab
 
 
@@ -18,9 +19,9 @@ class SelectedItem:
 
 
 class SidePanel(QTabWidget):
-    def __init__(self, io: TagIO, parent: QWidget | None = None) -> None:
+    def __init__(self, io: TagIO, writer: TagWriter, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.metadata = MetadataTab(io)
+        self.metadata = MetadataTab(io, writer)
         self.lyrics = QLabel("Lyrics from LRCLIB will appear here.")
         self.lyrics.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lyrics.setWordWrap(True)

@@ -103,7 +103,9 @@ class MainWindow(QMainWindow):
             library.locks if library is not None else PathLocks(),
             on_written=lambda path: self.library.indexer.update_file(path) if self._library_open() else None,
             parent=self)
-        self.side_panel = SidePanel(self.tag_io, self.tag_writer, conn)
+        self.side_panel = SidePanel(self.tag_io, self.tag_writer, conn,
+                                    lyrics_service=library.lyrics if library is not None else None)
+        self.side_panel.lyrics.urlRequested.connect(self.open_url)
         self.side_panel.summary.playRequested.connect(self.play_folder)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
@@ -341,7 +343,7 @@ class MainWindow(QMainWindow):
             row = self.file_view.model.row_for(entry_id)
             if row is not None and self.folder_path:
                 r = self.file_view.model.rows[row]
-                items.append(SelectedItem(Path(self.folder_path, r.name), r.is_dir, r.is_audio))
+                items.append(SelectedItem(Path(self.folder_path, r.name), r.is_dir, r.is_audio, entry_id))
                 if r.is_dir:
                     folder_ids.append(entry_id)
                 elif r.is_audio:
@@ -600,6 +602,10 @@ class MainWindow(QMainWindow):
             self._in_shell(lambda p=path: self.launch(p),
                            f"Windows couldn't open {os.path.basename(path)}: no app is set for this file type, "
                            "or the file isn't reachable.", path, False)
+
+    def open_url(self, url: str) -> None:
+        """A web search from the Lyrics tab, in the default browser."""
+        self._in_shell(lambda: self.launch(url), "Windows couldn't open the web browser.", "", False)
 
     def reveal(self, entry_id: int) -> None:
         if not self._library_open() or not self._folder_exists(entry_id):

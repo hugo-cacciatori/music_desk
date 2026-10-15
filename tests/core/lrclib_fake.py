@@ -2,7 +2,9 @@
 
 import io
 import json
+import threading
 import urllib.error
+import urllib.parse
 
 
 def http_error(code: int, retry_after: str | None = None) -> urllib.error.HTTPError:
@@ -49,3 +51,56 @@ class SleepRecorder:
 
 def no_jitter(_low, _high) -> float:
     return 0.0
+
+
+class ScriptedLrclib:
+    """A thread-safe scripted LRCLIB: `answer(endpoint, params)` returns the JSON or raises."""
+
+    def __init__(self, answer=None) -> None:
+        self.answer = answer or found_for({"First"})
+        self.requests: list[tuple[str, dict]] = []
+        self._lock = threading.Lock()
+
+    def __call__(self, request, timeout=None):
+        url = request.full_url
+        endpoint = url.split("?", 1)[0].rsplit("/", 1)[1]
+        params = {k: v[0] for k, v in urllib.parse.parse_qs(url.split("?", 1)[1]).items()}
+        with self._lock:
+            self.requests.append((endpoint, params))
+        return io.BytesIO(json.dumps(self.answer(endpoint, params)).encode())
+
+    def titles(self) -> list[str]:
+        """Track titles in the order they were first asked for."""
+        with self._lock:
+            seen = []
+            for _endpoint, params in self.requests:
+                if params["track_name"] not in seen:
+                    seen.append(params["track_name"])
+            return seen
+
+    def gets(self, title: str) -> int:
+        with self._lock:
+            return sum(1 for endpoint, p in self.requests if endpoint == "get" and p["track_name"] == title)
+
+
+def found_for(titles: set[str]):
+    def answer(endpoint, params):
+        if endpoint == "get" and params["track_name"] in titles:
+            return {"id": 1, "artistName": params["artist_name"], "trackName": params["track_name"],
+                    "duration": 1, "instrumental": False, "plainLyrics": "la la", "syncedLyrics": None}
+        if endpoint == "get":
+            raise http_error(404)
+        return []
+    return answer
+
+
+def unreachable(_endpoint, _params):
+    raise urllib.error.URLError("no route")
+
+
+def collect(signal) -> list:
+    """The signal's emissions, as argument tuples. (qtbot.waitSignal can race with a worker thread that emits
+    while the blocker is being set up.)"""
+    received = []
+    signal.connect(lambda *args: received.append(args))
+    return received

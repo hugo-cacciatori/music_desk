@@ -21,7 +21,13 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from music_desk.core.index.lyrics_index import PendingTrack, pending_tracks, record_lyrics, retry_before
+from music_desk.core.index.lyrics_index import (
+    PendingTrack,
+    pending_tracks,
+    record_lyrics,
+    retry_before,
+    track_for_entry,
+)
 from music_desk.core.index.store import DbWriter, LyricsStore, connect_read
 from music_desk.core.lyrics import ERROR, NOT_LOOKED_UP, CircuitBreaker, LrclibClient, lookup
 
@@ -57,9 +63,10 @@ class _Cache:
         self._store = store
         self._writer = writer
         self.folders: list[int] = []
+        self.bypass = False  # Retry now: look the key up again whatever the cache holds
 
     def get(self, key: str) -> dict | None:
-        return self._store.get(key)
+        return None if self.bypass else self._store.get(key)
 
     def put(self, key: str, entry: dict) -> None:
         self.folders = self._writer.submit(lambda conn: record_lyrics(conn, key, entry)).result()
@@ -89,8 +96,11 @@ class LyricsService(QObject):
         self._in_flight: set[str] = set()
         self._handled: set[str] = set()  # looked up this session (the index has their entry)
         self._errored: dict[str, float] = {}  # key -> monotonic time of the next try
+        self._last_error: dict[str, str] = {}  # key -> the message of its last failed lookup
+        self._forced: set[str] = set()  # keys to look up again whatever the cache holds
         self._breaker = CircuitBreaker(self._client.options.max_consecutive_failures)
         self._paused_until: float | None = None  # monotonic
+        self._resume_at = 0.0  # time.time() at which the breaker's pause ends
         self._offline = offline
         self._user_paused = False
         self._started = False
@@ -128,6 +138,29 @@ class LyricsService(QObject):
         """The open folder's tracks go next (replacing the previously open folder's)."""
         self._request("folder", folder_id)
 
+    def retry(self, entry_id: int) -> None:
+        """Look one track up again now, whatever its cache entry says (the Lyrics tab's Retry now). It also ends
+        the circuit breaker's pause: the user asked for a try."""
+        self._end_pause()
+        self._request("retry", entry_id)
+
+    def last_error(self, key: str) -> str | None:
+        """Why the key's last lookup this session failed, until one succeeds."""
+        with self._cond:
+            return self._last_error.get(key)
+
+    def is_pending(self, key: str) -> bool:
+        """Queued or being looked up."""
+        with self._cond:
+            return key in self._in_flight or key in self._forced or any(
+                item.key == key for queue in self._tiers for item in queue)
+
+    @property
+    def resume_at(self) -> float:
+        """time.time() at which the circuit breaker's pause ends (meaningful in the unreachable state)."""
+        with self._cond:
+            return self._resume_at
+
     def set_offline(self, offline: bool) -> None:
         with self._cond:
             self._offline = offline
@@ -148,10 +181,14 @@ class LyricsService(QObject):
     def retry_now(self) -> None:
         """End the circuit breaker's pause and give the keys that failed another try."""
         with self._cond:
+            self._errored.clear()
+        self._end_pause()
+
+    def _end_pause(self) -> None:
+        with self._cond:
             was_paused = self._paused_until is not None
             self._paused_until = None
             self._breaker.reset()
-            self._errored.clear()
             self._exhausted = False
             self._cond.notify_all()
         if was_paused:
@@ -194,6 +231,9 @@ class LyricsService(QObject):
                 if item is None:
                     return
                 cache.folders = []
+                with self._cond:
+                    cache.bypass = item.key in self._forced
+                    self._forced.discard(item.key)
                 try:
                     entry = lookup(item.track, cache, self._client, offline=False, today=self._today())
                 except Exception as e:  # noqa: BLE001 - e.g. the writer stopped during shutdown
@@ -270,7 +310,9 @@ class LyricsService(QObject):
     def _resolve(self, conn, kind: str, entry_id: int) -> None:
         before = retry_before(self._today(), self._client.options)
         try:
-            if kind == "track":
+            if kind == "retry":
+                items = [item for item in [track_for_entry(conn, entry_id)] if item is not None]
+            elif kind == "track":
                 items = pending_tracks(conn, before, entry_id=entry_id)
             else:
                 items = pending_tracks(conn, before, folder_id=entry_id)
@@ -278,7 +320,13 @@ class LyricsService(QObject):
             log.exception("lyrics: could not read the %s %s", kind, entry_id)
             return
         with self._cond:
-            if kind == "track":
+            if kind == "retry":
+                for item in items:
+                    self._handled.discard(item.key)
+                    self._errored.pop(item.key, None)
+                    self._forced.add(item.key)
+                self._tiers[SELECTED].extendleft(items)
+            elif kind == "track":
                 self._tiers[SELECTED].extendleft(items)
             else:
                 self._tiers[OPEN_FOLDER] = deque(items)
@@ -314,13 +362,16 @@ class LyricsService(QObject):
             if status == ERROR:
                 self._errors += 1
                 self._errored[item.key] = time.monotonic() + self._pause_seconds
+                self._last_error[item.key] = entry.get("error") or "unknown error"
                 log.info("lyrics lookup failed for %r: %s", item.key, entry.get("error"))
             elif status != NOT_LOOKED_UP:
                 self._handled.add(item.key)
                 self._errored.pop(item.key, None)
+                self._last_error.pop(item.key, None)
             self._breaker.record(entry)
             if self._breaker.tripped and self._paused_until is None and not self._stopping:
                 self._paused_until = time.monotonic() + self._pause_seconds
+                self._resume_at = time.time() + self._pause_seconds
                 tripped = True
         if self._stopping:
             return
@@ -329,7 +380,7 @@ class LyricsService(QObject):
             self.foldersChanged.emit(folders)
         if tripped:
             log.warning("LRCLIB unreachable: %d failures in a row, pausing lookups", self._breaker.consecutive)
-            self.unreachable.emit(time.time() + self._pause_seconds)
+            self.unreachable.emit(self._resume_at)
         self._emit_progress(force=tripped)
 
     # -- progress --

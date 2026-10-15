@@ -186,17 +186,22 @@ class LyricsStore:
         self._writer = writer
 
     def get(self, key: str) -> dict | None:
-        row = self._conn.execute(f"SELECT {', '.join(LYRICS_COLUMNS)} FROM lyrics WHERE key = ?", (key,)).fetchone()
-        if row is None:
-            return None
-        values = dict(zip(LYRICS_COLUMNS, tuple(row), strict=True))
-        keys = LYRICS_KEYS.get(values["status"])
-        if keys is None:  # an unexpected status (e.g. an imported entry): keep what is set
-            return {k: v for k, v in values.items() if v is not None}
-        return {k: values[k] for k in keys}
+        return read_lyrics(self._conn, key)
 
     def put(self, key: str, entry: dict) -> Future:
         return self._writer.submit(lambda conn: upsert_lyrics(conn, key, entry))
+
+
+def read_lyrics(conn: sqlite3.Connection, key: str) -> dict | None:
+    """One cache entry, in the script's shape for its status."""
+    row = conn.execute(f"SELECT {', '.join(LYRICS_COLUMNS)} FROM lyrics WHERE key = ?", (key,)).fetchone()
+    if row is None:
+        return None
+    values = dict(zip(LYRICS_COLUMNS, tuple(row), strict=True))
+    keys = LYRICS_KEYS.get(values["status"])
+    if keys is None:  # an unexpected status (e.g. an imported entry): keep what is set
+        return {k: v for k, v in values.items() if v is not None}
+    return {k: values[k] for k in keys}
 
 
 def upsert_lyrics(conn: sqlite3.Connection, key: str, entry: dict) -> None:

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from music_desk.core.index.scanner import adjust_folder_stats
-from music_desk.core.index.store import upsert_lyrics
+from music_desk.core.index.store import read_lyrics, upsert_lyrics
 from music_desk.core.lyrics import FOUND, NOT_FOUND, LyricsOptions, Track, track_from_fields
 from music_desk.core.tags import Fields
 
@@ -18,6 +18,31 @@ class PendingTrack:
     folder_id: int
     key: str  # tracks.lyrics_key: one lookup serves every track with this key
     track: Track
+
+
+@dataclass(frozen=True)
+class LyricsInfo:
+    """What the Lyrics tab shows for one track, all from the index (no file read on the UI thread)."""
+
+    entry_id: int
+    name: str
+    track: Track  # with the file-name fallback; `embedded` is the file's lyrics tag as last indexed
+    key: str | None  # None: no artist or title, never looked up
+    entry: dict | None  # the cached LRCLIB entry, if any
+    read_error: str | None
+
+
+_TRACK_SELECT = """
+    SELECT t.entry_id, e.parent_id, e.name, t.artist, t.albumartist, t.title, t.album, t.duration, t.lyrics_key
+    FROM tracks t
+    JOIN entries e ON e.id = t.entry_id
+"""
+
+
+def _track(name, artist, albumartist, title, album, duration, embedded=None) -> Track:
+    """Rebuilt as the scanner built it, so the "Artist - Title" file-name fallback gives the same key."""
+    fields = Fields(title=title, artist=artist, albumartist=albumartist, album=album, lyrics=embedded)
+    return track_from_fields(fields, name, duration)
 
 
 def retry_before(today: date, options: LyricsOptions | None = None) -> str:
@@ -39,10 +64,7 @@ def pending_tracks(conn: sqlite3.Connection, retry_before: str, *, folder_id: in
     if entry_id is not None:
         where, params = f"{where} AND e.id = ?", [*params, entry_id]
     rows = conn.execute(
-        f"""
-        SELECT t.entry_id, e.parent_id, e.name, t.artist, t.albumartist, t.title, t.album, t.duration, t.lyrics_key
-        FROM tracks t
-        JOIN entries e ON e.id = t.entry_id
+        f"""{_TRACK_SELECT}
         LEFT JOIN lyrics l ON l.key = t.lyrics_key
         WHERE t.lyrics_key IS NOT NULL AND t.read_error IS NULL
           AND (l.key IS NULL OR (l.status = ? AND l.checked < ?)){where}
@@ -54,14 +76,37 @@ def pending_tracks(conn: sqlite3.Connection, retry_before: str, *, folder_id: in
             if key in seen:
                 continue
             seen.add(key)
-            # rebuilt as the scanner built it, so the "Artist - Title" file-name fallback gives the same key
-            fields = Fields(title=title, artist=artist, albumartist=albumartist, album=album)
-            pending.append(PendingTrack(entry, folder, key, track_from_fields(fields, name, duration)))
+            pending.append(PendingTrack(entry, folder, key, _track(name, artist, albumartist, title, album, duration)))
             if limit is not None and len(pending) >= limit:
                 break
     finally:
         rows.close()
     return pending
+
+
+def track_for_entry(conn: sqlite3.Connection, entry_id: int) -> PendingTrack | None:
+    """One track to look up again, whatever its cache entry says (Retry now). None without a key."""
+    row = conn.execute(f"{_TRACK_SELECT} WHERE t.entry_id = ? AND t.lyrics_key IS NOT NULL AND t.read_error IS NULL",
+                       (entry_id,)).fetchone()
+    if row is None:
+        return None
+    entry, folder, name, artist, albumartist, title, album, duration, key = row
+    return PendingTrack(entry, folder, key, _track(name, artist, albumartist, title, album, duration))
+
+
+def lyrics_info(conn: sqlite3.Connection, entry_id: int) -> LyricsInfo | None:
+    """The Lyrics tab's view of one audio file; None when it isn't an indexed track."""
+    row = conn.execute(
+        """
+        SELECT e.name, t.artist, t.albumartist, t.title, t.album, t.duration, t.lyrics_key, t.read_error, s.lyrics
+        FROM tracks t JOIN entries e ON e.id = t.entry_id LEFT JOIN search s ON s.rowid = t.entry_id
+        WHERE t.entry_id = ?
+        """, (entry_id,)).fetchone()
+    if row is None:
+        return None
+    name, artist, albumartist, title, album, duration, key, read_error, embedded = row
+    track = _track(name, artist, albumartist, title, album, duration, embedded)
+    return LyricsInfo(entry_id, name, track, key, read_lyrics(conn, key) if key else None, read_error)
 
 
 def record_lyrics(conn: sqlite3.Connection, key: str, entry: dict) -> list[int]:

@@ -336,5 +336,5 @@ def embed_lyrics(path: str | Path, entry: dict, *, only_if_empty: bool) -> Embed
 
 def search_urls(artist: str | None, title: str | None) -> tuple[str, str]:
     """The Genius and Google search links of the script's page (encoded like JS encodeURIComponent)."""
-    query = urllib.parse.quote(f"{artist} {title}", safe="-_.!~*'()")
+    query = urllib.parse.quote(" ".join(part for part in (artist, title) if part), safe="-_.!~*'()")
     return f"https://genius.com/search?q={query}", f"https://www.google.com/search?q={query}+lyrics"

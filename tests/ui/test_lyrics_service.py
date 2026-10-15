@@ -1,17 +1,13 @@
 """The lyrics service: priority, deduplication, the circuit breaker, offline mode, resuming across restarts, and its
 wiring into the library and the window (SPEC §9). LRCLIB is scripted; no test reaches the network."""
 
-import io
-import json
 import shutil
-import threading
 import time
-import urllib.error
-import urllib.parse
 from datetime import date
 
 import pytest
-from lrclib_fake import SleepRecorder, http_error, no_jitter
+from lrclib_fake import ScriptedLrclib as Lrclib
+from lrclib_fake import SleepRecorder, collect, found_for, no_jitter, unreachable
 
 from music_desk.core.index.lyrics_index import pending_tracks, retry_before
 from music_desk.core.index.roots import add_root
@@ -26,59 +22,6 @@ TODAY = date(2026, 10, 15)
 ALBUM = "Fixture Artist - Fixture Album"
 # the album fixture's keys: "First" (3 tracks) and "Second" (2 tracks) are shared
 TITLES = {"First", "Second", "Disc Two", "Five: A/B?", "Bonus", "Fourth", "missing_title", "Loose", "Sixth"}
-
-
-class Lrclib:
-    """A thread-safe scripted LRCLIB: `answer(endpoint, params)` returns the JSON or raises."""
-
-    def __init__(self, answer=None) -> None:
-        self.answer = answer or found_for({"First"})
-        self.requests: list[tuple[str, dict]] = []
-        self._lock = threading.Lock()
-
-    def __call__(self, request, timeout=None):
-        url = request.full_url
-        endpoint = url.split("?", 1)[0].rsplit("/", 1)[1]
-        params = {k: v[0] for k, v in urllib.parse.parse_qs(url.split("?", 1)[1]).items()}
-        with self._lock:
-            self.requests.append((endpoint, params))
-        return io.BytesIO(json.dumps(self.answer(endpoint, params)).encode())
-
-    def titles(self) -> list[str]:
-        """Track titles in the order they were first asked for."""
-        with self._lock:
-            seen = []
-            for _endpoint, params in self.requests:
-                if params["track_name"] not in seen:
-                    seen.append(params["track_name"])
-            return seen
-
-    def gets(self, title: str) -> int:
-        with self._lock:
-            return sum(1 for endpoint, p in self.requests if endpoint == "get" and p["track_name"] == title)
-
-
-def found_for(titles: set[str]):
-    def answer(endpoint, params):
-        if endpoint == "get" and params["track_name"] in titles:
-            return {"id": 1, "artistName": params["artist_name"], "trackName": params["track_name"],
-                    "duration": 1, "instrumental": False, "plainLyrics": "la la", "syncedLyrics": None}
-        if endpoint == "get":
-            raise http_error(404)
-        return []
-    return answer
-
-
-def collect(signal) -> list:
-    """The signal's emissions, as argument tuples. (qtbot.waitSignal can race with a worker thread that emits
-    while the blocker is being set up.)"""
-    received = []
-    signal.connect(lambda *args: received.append(args))
-    return received
-
-
-def unreachable(_endpoint, _params):
-    raise urllib.error.URLError("no route")
 
 
 @pytest.fixture

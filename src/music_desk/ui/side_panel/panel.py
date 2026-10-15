@@ -5,14 +5,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
-from PySide6.QtWidgets import QLabel, QStackedWidget, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QStackedWidget, QTabWidget, QVBoxLayout, QWidget
 
 from music_desk.core.index import queries
+from music_desk.services.lyrics_service import LyricsService
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.ui.side_panel.folder_summary import FolderSummaryView
+from music_desk.ui.side_panel.lyrics_tab import LyricsTab
 from music_desk.ui.side_panel.metadata_tab import MetadataTab
 
 
@@ -21,19 +22,18 @@ class SelectedItem:
     path: Path
     is_dir: bool
     is_audio: bool
+    entry_id: int | None = None  # the index entry (the Lyrics tab reads the track from the index)
 
 
 class SidePanel(QWidget):
     def __init__(self, io: TagIO, writer: TagWriter, conn: Callable[[], sqlite3.Connection | None] | None = None,
-                 parent: QWidget | None = None) -> None:
+                 parent: QWidget | None = None, *, lyrics_service: LyricsService | None = None) -> None:
         super().__init__(parent)
         self.io = io
         self._conn = conn or (lambda: None)
         self.tabs = QTabWidget()
         self.metadata = MetadataTab(io, writer)
-        self.lyrics = QLabel("Lyrics from LRCLIB will appear here.")
-        self.lyrics.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lyrics.setWordWrap(True)
+        self.lyrics = LyricsTab(self._conn, lyrics_service)
         self.tabs.addTab(self.metadata, "Metadata")
         self.tabs.addTab(self.lyrics, "Lyrics")
         self.metadata.dirtyChanged.connect(
@@ -55,6 +55,7 @@ class SidePanel(QWidget):
     def show_selection(self, items: list[SelectedItem]) -> None:
         self.stack.setCurrentWidget(self.tabs)
         audio = [item.path for item in items if item.is_audio and not item.is_dir]
+        self._show_lyrics(items)
         if not items:
             self.metadata.show_message("Select a file to see its tags.")
         elif not audio and len(items) == 1 and items[0].is_dir:
@@ -69,6 +70,17 @@ class SidePanel(QWidget):
         elif self.metadata.paths != audio or not self.metadata.multi:
             # several items: the audio files among them are edited together (one audio file too, with a note)
             self.metadata.show_files(audio, skipped=len(items) - len(audio))
+
+    def _show_lyrics(self, items: list[SelectedItem]) -> None:
+        tracks = [item for item in items if item.is_audio and not item.is_dir]
+        if len(items) == 1 and tracks and tracks[0].entry_id is not None:
+            self.lyrics.show_track(tracks[0].entry_id)
+        elif len(items) == 1 and tracks:
+            self.lyrics.show_message("This file isn't in the library index yet.")
+        elif len(items) > 1:
+            self.lyrics.show_message("Select a single track to see its lyrics.")
+        else:
+            self.lyrics.show_message("Select a track to see its lyrics from LRCLIB.")
 
     def can_leave(self) -> bool:
         return self.metadata.can_leave()
@@ -89,6 +101,7 @@ class SidePanel(QWidget):
             self.show_selection([])
             return
         self.metadata.show_message("Select a file to see its tags.")
+        self.lyrics.show_message("Select a track to see its lyrics from LRCLIB.")
         previous = self.summary.summary
         self.summary.show_summary(summary)
         self.stack.setCurrentWidget(self.summary)

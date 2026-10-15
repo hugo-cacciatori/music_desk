@@ -210,8 +210,8 @@ def test_no_app_for_playlists(qtbot, window, service, library_dir, tmp_path, exp
 
 def test_rescan_from_the_menu(window, service, monkeypatch):
     scanned = []
-    monkeypatch.setattr(service.indexer, "scan_folder", scanned.append)
     window.open_folder(entry(service, "Artist"))
+    monkeypatch.setattr(service.indexer, "request_folder", scanned.append)  # first in the queue
     action(window.list_menu([entry(service, "Artist", "Album")]), "Rescan").trigger()
     assert scanned == [entry(service, "Artist", "Album")]
 

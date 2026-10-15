@@ -644,7 +644,7 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M6 is complete, and v0.1.0 is released on GitHub (the setup as a release asset). What is left:
+**Next step:** M6 is complete, v0.1.0 is released on GitHub, and the tweaks before M7 are done. What is left:
 - **M7, the playlist builder**: designed with Hugo (SPEC §15) and broken into tasks in Progress. Start with its
   first task, the core model.
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
@@ -793,6 +793,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Smart views dropped (Hugo): not every track needs lyrics in its tags (LRCLIB's are shown), a rename-mask mismatch depends on each user's masks, missing ReplayGain is overwhelming library-wide (the folder's RG column covers it), and "recently modified" answers no need. A sidebar section would give them weight they don't have. Instead, the Lyrics menu has three Find entries that open library search with a ready-made query: LRCLIB didn't find, no lyrics in the tags, can't be looked up (`lrclib:notags`, new). Details in SPEC §5. |
 | 2026-10-15 | No Settings dialog (Hugo): every preference already lives where it's used (sidebar, View and Lyrics menus, the Tools cards; Qt follows Windows' theme). The unused `watch_for_changes` and `tag_workers` settings are removed (old settings.json files still load). Help › About shows the versions and the third-party licences, whose texts are bundled in `resources/licenses/`. Details in SPEC §12 and §13. |
 | 2026-10-15 | Release decisions (Hugo): an Inno Setup installer, chosen over a portable zip and a one-file exe for a normal Windows install (Start menu, uninstaller, clean updates). The README is written with the installer, once the name, licence and install steps are known. The root scripts are deleted as the last M6 step, once the installed v1 replaces them; `tests/reference/` keeps the frozen copies. |
+| 2026-10-15 | Tweaks before M7 (Hugo): ReplayGain has no preview (Run starts it; the report lists what was skipped), user-triggered refreshes jump the indexer's queue and are served inside a running scan, and every tool refreshes its whole folder afterwards. Details in SPEC §4 and §10. |
 | 2026-10-15 | M7 designed with Hugo: one playlist in progress (kept across restarts until cleared), in a narrow vertical panel between the file list and the side panel that takes only the list's spare width and blocks nothing. Built by dragging folders or songs (Explorer-style multi-selection) from the tree, the list or search results; natural order on import, duplicates skipped. Reorder by drag, Ctrl+↑/↓ or a header sort; customisable columns; a placeholder when empty. Export to .m3u8 with relative or absolute paths, chosen at export; open with the default player. Dropped: sample files for the formats ffmpeg can't encode, and ReplayGain for the formats rsgain can't handle. Details in SPEC §15. |
 | 2026-10-15 | Installer as built: all users in Program Files by default (Hugo: install in Program Files), with Inno Setup's "only for me" choice; 64-bit only; licence page; the uninstaller asks before deleting the app data (default No, kept when silent). Inno Setup itself is installed in `C:\Program Files\Inno Setup 6`. Details in SPEC §13. |
 | 2026-10-15 | MusicDesk is licensed GPL-3.0-or-later (Hugo): compatible with mutagen (GPL-2.0-or-later) and Qt (LGPL-3.0). `LICENSE` holds the GPL-3.0 text, `pyproject.toml` declares it, About says it. Details in SPEC §13. |
@@ -950,6 +951,15 @@ cleanup fixture case gets the expected status.
 Done when:
 - the installer installs the app, and it runs from Program Files with the bundled rsgain;
 - the seek_lyrics search parity test (SPEC §6) passes.
+
+**Tweaks and fixes before M7** (Hugo's report, 2026-10-15)
+- [x] ReplayGain: the card's **Run ReplayGain** starts the job at once, with no preview page (the preview code
+      is removed: `replaygain.preview`, `AlbumPreview`, `ReplayGainRunner.preview`, the page's preview table)
+- [x] Refreshes come first: F5, Rescan, a tool's results, renames and tag saves jump the indexer's queue and are
+      served inside a running root scan (`Indexer.request_path`, `MainWindow.refresh_after_tool`); they used to
+      wait behind the startup rescan, so F5 didn't show a new `replaygain.log`
+- [x] Every tool refreshes its whole folder afterwards, and a recursive rename's subfolders reach the index (the
+      renames were applied as one batch tied to the first folder)
 
 **M7 Playlist builder** (read SPEC §15, designed with Hugo on 2026-10-15; also §5 and §14)
 - [ ] Core (`core/playlists.py`, no Qt): the builder's model (entry ids, the natural import order, insert at a

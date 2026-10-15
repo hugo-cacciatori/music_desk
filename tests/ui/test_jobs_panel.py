@@ -56,9 +56,7 @@ def folder_id(service, path) -> int:
 def start_replaygain(qtbot, window, service, folder):
     window.open_folder(folder_id(service, folder))
     window.open_tools([])
-    window.tools_page.request(REPLAYGAIN)
-    qtbot.waitUntil(lambda: window.rg_view.state == "preview", timeout=10000)
-    window.rg_view.run_button.click()
+    window.tools_page.request(REPLAYGAIN)  # Run: the job starts at once
 
 
 def test_a_job_runs_on_while_browsing(qtbot, window, service, library_dir, scanner):

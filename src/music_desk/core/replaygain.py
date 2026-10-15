@@ -8,7 +8,6 @@ through core/tags.py, a Reporter instead of print, cancellation, and a crash is 
 import logging
 import math
 import os
-import subprocess
 import time
 import traceback
 from collections.abc import Callable
@@ -582,48 +581,6 @@ def process_discography(root: str | Path, options: ReplayGainOptions = DEFAULT_O
     write_discography_summary(root, options, start, time.monotonic() - start_clock, albums, target, cancelled)
     reporter.progress(len(album_folders), len(album_folders), "done")
     return DiscographyResult(albums, target, cancelled)
-
-
-@dataclass
-class AlbumPreview:
-    """What a ReplayGain run would process in one album folder (the Tools page's preview)."""
-
-    folder: Path
-    name: str  # relative to the run's folder
-    files: list[str]  # names rsgain can scan
-    unsupported: list[str]  # other audio files: listed as skipped
-    subfolders: list[tuple[str, int]]  # keyword subfolders (lite, bonus, CD2...) and their scannable files
-    too_long: bool = False  # the rsgain command line would be too long for one call
-
-    @property
-    def warnings(self) -> list[str]:
-        notes = []
-        if self.unsupported:
-            notes.append(f"{plural(len(self.unsupported), 'file')} skipped, format not supported by rsgain: "
-                         + ", ".join(self.unsupported))
-        if self.too_long:
-            notes.append("too many files for one rsgain call: this album can't be scanned")
-        return notes
-
-
-def preview(root: str | Path, options: ReplayGainOptions = DEFAULT_OPTIONS, *, discography: bool = False,
-            exe: Path | None = None) -> list[AlbumPreview]:
-    """The albums a run would process (nothing is changed): the folder itself, or every album under it."""
-    root = Path(root)
-    exe = exe or paths.rsgain_path()
-    folders = find_album_folders(root, options) if discography else [root]
-    albums = []
-    for folder in folders:
-        files, unsupported = list_audio_files(folder)
-        if not discography and not files and not unsupported:
-            continue
-        subfolders = [(name, len(list_audio_files(folder / name)[0]))
-                      for name in sorted(find_keyword_subfolders(folder, options))]
-        command = rsgain.scan_command(exe, files, options.target_text)
-        too_long = bool(files) and len(subprocess.list2cmdline(command)) > rsgain.MAX_COMMAND_LINE
-        name = os.path.relpath(folder, root) if folder != root else f"{root.name} (this folder)"
-        albums.append(AlbumPreview(folder, name, files, unsupported, subfolders, too_long))
-    return albums
 
 
 def discography_summary_text(root: Path, options: ReplayGainOptions, start: datetime, duration: float,

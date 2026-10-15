@@ -69,7 +69,7 @@ class ToolsPage(QWidget):
         self.rename_card.changed.connect(self._save_rename)
         self.replaygain_card.changed.connect(self._save_replaygain)
         self.rename_card.previewRequested.connect(lambda: self.request(RENAME))
-        self.replaygain_card.previewRequested.connect(lambda: self.request(REPLAYGAIN))
+        self.replaygain_card.runRequested.connect(lambda: self.request(REPLAYGAIN))
         self.tidy_card.previewRequested.connect(lambda: self.request(TIDY))
 
         cards = QWidget()
@@ -113,7 +113,7 @@ class ToolsPage(QWidget):
             return
         if tool == RENAME and self.rename_card.valid:
             self.runRequested.emit(ToolRequest(RENAME, self.scope, rename_options=self.rename_options()))
-        elif tool == REPLAYGAIN and self.replaygain_card.preview_button.isEnabled():
+        elif tool == REPLAYGAIN and self.replaygain_card.run_button.isEnabled():
             self.runRequested.emit(ToolRequest(
                 REPLAYGAIN, self.scope, replaygain_options=self.replaygain_card.options(),
                 discography=self.replaygain_card.scope == "discography"))

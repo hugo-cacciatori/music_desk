@@ -258,36 +258,6 @@ def test_discography_with_no_album(tmp_path):
 
 # -- the preview (the Tools page) --
 
-def test_preview_of_one_album(album_a, fixtures_dir):
-    from music_desk.core.replaygain import preview
-
-    shutil.copy2(fixtures_dir / "formats" / "tone.tta", album_a / "04 Tone.tta")
-    (album_a / "notes.txt").write_text("x")
-    [album] = preview(album_a, exe=EXE)
-    assert album.name == "Album A (this folder)"
-    assert sorted(album.files) == ["01 Tone.flac", "02 Spike.flac", "03 Spike.mp3"]
-    assert album.unsupported == ["04 Tone.tta"]
-    assert album.subfolders == [("CD2", 1), ("bonus", 1), ("lite", 2)]
-    assert album.warnings == ["1 file skipped, format not supported by rsgain: 04 Tone.tta"]
-    assert not (album_a / "replaygain.log").exists()  # a preview changes nothing
-
-
-def test_preview_of_a_discography(artist):
-    from music_desk.core.replaygain import preview
-
-    albums = preview(artist, discography=True, exe=EXE)
-    assert [a.name for a in albums] == ["Album A", "Album B"]  # keyword subfolders go with their album
-    assert preview(artist / "Album B" / "Scans", exe=EXE) == []
-
-
-def test_preview_flags_a_command_line_too_long(album_a, monkeypatch):
-    from music_desk.core import replaygain, rsgain
-
-    monkeypatch.setattr(rsgain, "MAX_COMMAND_LINE", 50)
-    [album] = replaygain.preview(album_a, exe=EXE)
-    assert album.too_long and album.warnings == ["too many files for one rsgain call: this album can't be scanned"]
-
-
 def test_discography_reports_each_album_as_it_goes(artist):
     seen = []
     process_discography(artist, scanner=FakeScanner(), exe=EXE, now=lambda: NOW, on_album=seen.append)

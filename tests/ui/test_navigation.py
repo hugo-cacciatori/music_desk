@@ -167,9 +167,9 @@ def test_typing_selects_by_name_and_enter_opens(qtbot, window, service):
 
 def test_f5_rescans_the_open_folder(qtbot, window, service, monkeypatch):
     scanned = []
-    monkeypatch.setattr(service.indexer, "scan_folder", scanned.append)
     album = entry(service, "Artist", "Album")
     window.open_folder(album)
+    monkeypatch.setattr(service.indexer, "request_folder", scanned.append)  # first in the queue
     window.activateWindow()
     qtbot.keyClick(window, Qt.Key.Key_F5)
     assert scanned == [album]

@@ -161,3 +161,28 @@ def test_tags_are_untouched_by_a_rename(qtbot, window, service, library_dir, rec
     preview(qtbot, window, service, album)
     apply(qtbot, window)
     assert TaggedFile(album / "02 Second.flac").fields() == before
+
+
+def test_renames_in_subfolders_reach_the_index(qtbot, window, service, library_dir, recycled):
+    """A recursive rename touches several folders: each folder's renames are applied in place (ids kept), not
+    only the first folder's. The watcher is off, so only the tool's own refresh can bring them in."""
+    album = library_dir / "Artist" / ALBUM
+    lite = album / "lite"
+    service.watcher.sync({})
+    (lite / "02 Second.flac").rename(lite / "second.flac")
+    service.indexer.request_path(str(lite))
+    qtbot.waitUntil(lambda: service.conn.execute(
+        "SELECT 1 FROM entries WHERE parent_id = ? AND name = 'second.flac'", (folder_id(service, lite),)
+    ).fetchone() is not None, timeout=10000)
+    sub_id = service.conn.execute("SELECT id FROM entries WHERE parent_id = ? AND name = 'second.flac'",
+                                  (folder_id(service, lite),)).fetchone()[0]
+    top_id = service.conn.execute("SELECT id FROM entries WHERE parent_id = ? AND name = 'track2.flac'",
+                                  (folder_id(service, album),)).fetchone()[0]
+    preview(qtbot, window, service, album)
+    report = apply(qtbot, window)
+    assert (lite / "02 Second.flac").exists() and (album / "02 Second.flac").exists() and report.renamed
+
+    def name(entry_id):
+        row = service.conn.execute("SELECT name FROM entries WHERE id = ?", (entry_id,)).fetchone()
+        return row[0] if row else None
+    qtbot.waitUntil(lambda: name(sub_id) == "02 Second.flac" and name(top_id) == "02 Second.flac", timeout=10000)

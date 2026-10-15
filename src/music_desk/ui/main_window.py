@@ -47,7 +47,7 @@ from music_desk.services.library import LibraryService
 from music_desk.services.lyrics_embedder import AutoEmbedder
 from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
 from music_desk.services.rename_job import Applied, Planned, RenameRunner
-from music_desk.services.replaygain_job import Finished, Previewed, ReplayGainRunner
+from music_desk.services.replaygain_job import Finished, ReplayGainRunner
 from music_desk.services.search_service import SearchResults, SearchService
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
@@ -168,13 +168,11 @@ class MainWindow(QMainWindow):
         self.rg_view = ReplayGainView()
         self.rg_view.backRequested.connect(lambda: self.center.setCurrentWidget(self.tools_page))
         self.rg_view.doneRequested.connect(self.close_tools)
-        self.rg_view.runRequested.connect(self.run_replaygain)
         self.rg_view.cancelRequested.connect(lambda: self.rg_runner.cancel())
         self.rg_view.openLogRequested.connect(self.open_log)
         self.rg_view.revealRequested.connect(lambda path: self._in_shell(
             lambda: self.show_in_explorer(path, True), f"File Explorer couldn't show {path}.", "", True))
         self.rg_runner = ReplayGainRunner(library.locks if library is not None else PathLocks(), self)
-        self.rg_runner.previewed.connect(self._rg_previewed)
         self.rg_runner.lines.connect(self.rg_view.add_lines)
         self.rg_runner.progress.connect(self.rg_view.set_progress)
         self.rg_runner.progress.connect(self._rg_progress)
@@ -473,10 +471,16 @@ class MainWindow(QMainWindow):
             self.open_folder(parent)
             self.file_view.select_ids([child])  # as Explorer does: the folder you came from is selected
 
+    def refresh_after_tool(self, folder: Path) -> None:
+        """A tool changed files under `folder`: the index catches up on the whole subtree first, even during a
+        long background scan, and the list follows as each folder is served."""
+        if self._library_open():
+            self.library.indexer.request_path(str(folder), recursive=True)
+
     def rescan_folder(self) -> None:
         """F5: reconcile the open folder with the disk now."""
         if self._library_open() and self.folder_id is not None:
-            self.library.indexer.scan_folder(self.folder_id)
+            self.library.indexer.request_folder(self.folder_id)  # first, even during a long background scan
             self.statusBar().showMessage("Rescanning this folder…", 2000)
 
     def go_to_path(self, text: str) -> None:
@@ -752,8 +756,8 @@ class MainWindow(QMainWindow):
             self.tools_page.set_example(fields, extension)
 
     def run_tool(self, request: ToolRequest) -> None:
-        """A card's Preview: the rename preview, the ReplayGain preview, or Tidy's rename preview. A tool runs one
-        job at a time: while its job runs, the preview shows that job instead."""
+        """A card's button: the rename preview, the ReplayGain job (no preview), or Tidy's rename preview. A tool
+        runs one job at a time: while its job runs, its page shows that job instead."""
         busy = None
         if request.tool in (RENAME, TIDY) and self._rename_job is not None:
             busy = self._rename_job
@@ -768,7 +772,7 @@ class MainWindow(QMainWindow):
         if request.tool == RENAME:
             self.preview_rename(request)
         elif request.tool == REPLAYGAIN:
-            self.preview_replaygain(request)
+            self.run_replaygain(request)  # no preview: it only writes tags and the logs (Hugo, 2026-10-15)
         elif request.tool == TIDY:
             self.preview_rename(request)  # Tidy: the rename step is previewed; ReplayGain follows Apply
 
@@ -781,23 +785,8 @@ class MainWindow(QMainWindow):
 
     # -- the ReplayGain tool (SPEC §10 B) --
 
-    def preview_replaygain(self, request: ToolRequest) -> None:
-        self._rg_request = request
-        self.rg_view.show_previewing(request.scope.folder, request.discography)
-        self.center.setCurrentWidget(self.rg_view)
-        self._rg_token = self.rg_runner.preview(request.scope.folder, request.replaygain_options,
-                                                request.discography)
-
-    def _rg_previewed(self, result: Previewed) -> None:
-        if result.token != self._rg_token:
-            return
-        if result.albums is None:
-            self.rg_view.show_error(f"The preview failed: {result.error}")
-        else:
-            self.rg_view.show_preview(result.albums)
-
     def run_replaygain(self, request: ToolRequest | None = None, title: str | None = None) -> bool:
-        """Start the job for the previewed request (or Tidy's). False when it didn't start."""
+        """Start the ReplayGain job (the card's Run, or Tidy's second step). False when it didn't start."""
         request = request or self._rg_request
         if request is None or not self._library_open():
             return False
@@ -816,7 +805,7 @@ class MainWindow(QMainWindow):
         else:
             self._rg_job = self._start_job(jobs_module.REPLAYGAIN, folder)
         follow = self.center.currentWidget() in (self.rg_view, self.rename_preview, self.tools_page)
-        self.rg_view.show_running(folder, title)
+        self.rg_view.show_running(folder, title, request.discography)
         if follow:  # Tidy's step 2 doesn't pull you back if you went browsing meanwhile
             self.center.setCurrentWidget(self.rg_view)
         return True
@@ -825,7 +814,7 @@ class MainWindow(QMainWindow):
         if finished.token != self._rg_token:
             return
         if self._library_open():
-            self.library.indexer.scan_path(str(finished.folder), recursive=True)  # new tags: re-read changed files
+            self.refresh_after_tool(finished.folder)  # new tags and replaygain.log files
         self.rg_view.show_result(finished)
         if self._rg_job is not None:
             self.jobs.report(self._rg_job, "replaygain", finished)
@@ -909,10 +898,13 @@ class MainWindow(QMainWindow):
         if job is not None:
             self.jobs.report(job, "rename", report)
         if self._library_open():
-            if report.steps:
-                self.library.indexer.apply_renames(report.steps)  # in place: ids, tags and selection kept
-            for folder in {path.parent for path in report.recycled}:
-                self.library.indexer.scan_path(str(folder))
+            by_folder: dict[Path, list] = {}
+            for step in report.steps:  # the index applies renames one folder at a time
+                by_folder.setdefault(Path(step[0]).parent, []).append(step)
+            for steps in by_folder.values():
+                self.library.indexer.apply_renames(steps)  # in place: ids, tags and selection kept
+            if self._rename_request is not None:  # then the whole scope: recycled junk, sidecars, anything else
+                self.refresh_after_tool(self._rename_request.scope.folder)
         self.rename_preview.show_report(report)
         count = len(report.renamed)
         self.statusBar().showMessage(f"Renamed {count} file{'s' if count != 1 else ''}.", STATUS_MS)
@@ -1192,7 +1184,7 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         if rename is not None and queries.parent_folder(self.library.conn, entry_id) is not None:
             menu.addAction("Rename\tF2", rename)  # not a library root
-        menu.addAction("Rescan", lambda: self.library.indexer.scan_folder(entry_id))
+        menu.addAction("Rescan", lambda: self.library.indexer.request_folder(entry_id))
         menu.addSeparator()
         menu.addAction("Tools…", lambda: self.open_tools([entry_id]))
 

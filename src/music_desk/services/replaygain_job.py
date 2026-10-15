@@ -18,19 +18,12 @@ from PySide6.QtCore import QObject, Signal
 from music_desk.core import replaygain, rsgain
 from music_desk.core.cancel import CancelToken
 from music_desk.core.path_locks import PathLocks
-from music_desk.core.replaygain import AlbumPreview, DiscographyResult, ReplayGainOptions, RunLog
+from music_desk.core.replaygain import DiscographyResult, ReplayGainOptions, RunLog
 
 log = logging.getLogger(__name__)
 
 OWNER = "the ReplayGain tool"
 LINE_INTERVAL = 0.1  # seconds between batches of log lines
-
-
-@dataclass(frozen=True)
-class Previewed:
-    token: int
-    albums: list[AlbumPreview] | None
-    error: str | None = None
 
 
 @dataclass
@@ -89,7 +82,6 @@ class _SignalReporter:
 
 
 class ReplayGainRunner(QObject):
-    previewed = Signal(object)  # Previewed
     lines = Signal(object)  # list[str]: log lines, batched
     progress = Signal(int, int, str)  # albums done, albums in all, the album now running
     finished = Signal(object)  # Finished
@@ -105,22 +97,6 @@ class ReplayGainRunner(QObject):
         self._cancel = CancelToken()
         self._closed = False
         self.running = False
-
-    def preview(self, folder: str | Path, options: ReplayGainOptions, discography: bool) -> int:
-        self._token += 1
-        token = self._token
-
-        def run() -> None:
-            try:
-                albums = replaygain.preview(folder, options, discography=discography, exe=self.exe)
-            except Exception as e:  # noqa: BLE001 - shown in the preview
-                log.exception("ReplayGain preview of %s failed", folder)
-                self.previewed.emit(Previewed(token, None, f"{type(e).__name__}: {e}"))
-                return
-            self.previewed.emit(Previewed(token, albums))
-
-        self._submit(run)
-        return token
 
     def run(self, folder: str | Path, options: ReplayGainOptions, discography: bool) -> int:
         """Start the job under a lock on the folder tree. Raises LockedError at once if a job holds it."""

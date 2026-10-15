@@ -50,7 +50,7 @@ each format, and a row is downgraded (for example to read-only) if mutagen can't
 | .aac              | raw ADTS (no tag standard)      | AAC                  | stream info only    | ✗ |
 
 - Every extension in the table counts as audio everywhere: browsing, columns, indexing, lyrics and the Rename tool.
-  When the ReplayGain tool meets a format rsgain doesn't support, its preview lists those files as
+  When the ReplayGain tool meets a format rsgain doesn't support, its report lists those files as
   "skipped: format not supported by rsgain".
 - `core/tags.py` has one adapter per tag family: Vorbis, ID3, MP4, APEv2, ASF. Keys always match ignoring case.
 - Opus: keep rsgain's default `-o d`, which writes standard REPLAYGAIN_* tags and clears the header gain, so the
@@ -178,6 +178,11 @@ Indexing runs in the background.
   - One Indexer thread runs one scan at a time from a queue, with a 4-thread tag-reader pool. The on-screen folder
     is served inside a running scan through `request_folder`. Progress is throttled to 10 updates a second.
   - Every root is rescanned at startup and when it comes back online.
+  - Fixed before M7 (2026-10-15): whatever the user asks for comes first, not only the folder on screen. F5 and
+    Rescan (`request_folder`), a tool's results (`request_path`, recursive over the tool's folder), renames and
+    tag saves jump the queue, and during a running root scan their folders are served inside it. Before, they
+    waited behind the startup rescan of every root, which can take minutes on a large library, so F5 seemed to
+    do nothing (`tests/ui/test_refresh.py` holds a root scan running to check it).
 - As built (M2 task 4, `services/watcher.py`):
   - There is one watchdog observer. LibraryService keeps its watches equal to the online roots.
   - Events are coalesced per folder, and flushed after 0.5 s without events or at the latest after 5 s, so a
@@ -735,8 +740,9 @@ happen to which files.
     - album-data subfolder keywords: lite, bonus, cd2, disc 2, cd 2;
     - track-data keywords: lite; excluded keywords: bonus;
     - log file name: replaygain.log; comment text: "LUFS Target : {target}".
-- Preview: the album folders that will be processed, with their keyword subfolders and file counts, plus warnings
-  (no audio, unsupported formats skipped, or a command line too long for one rsgain call).
+- No preview (Hugo, 2026-10-15): the card's **Run ReplayGain** starts the job at once, as the script did. It only
+  writes tags and the logs, and the report lists what was skipped (no audio, unsupported formats, a command line
+  too long for one rsgain call). Tidy previews its rename step only.
 - Run:
   - A background job that processes **one album at a time**, with one rsgain process at below-normal priority, so
     neither the UI nor Windows bogs down.
@@ -784,8 +790,8 @@ happen to which files.
     range, a threshold in (0, 1], a margin of 0–6 dB, non-empty lowercase keywords (folder names are compared in
     lowercase), a valid log file name, and a comment that only uses `{target}`.
   - Tidy: needs both cards valid.
-  - A Preview button stays disabled until its card is valid, and while rsgain is unavailable (the startup
-    self-check).
+  - A card's button (Rename's Preview, ReplayGain's Run, Tidy's Preview rename) stays disabled until its card is
+    valid; the ReplayGain and Tidy buttons also while rsgain is unavailable (the startup self-check).
 - **Saved options.** Each change is saved to `Settings.rename_options` / `replaygain_options` (JSON through
   `options_to_json` / `options_from_json`). A mistyped saved value falls back to its default; a well-typed invalid
   value is kept for validation to show. "Reset to defaults" is per card.
@@ -815,18 +821,14 @@ happen to which files.
   app's sections: kept, .lrc files that followed, files skipped because they changed since the preview, and
   warnings.
 - **The index:** `RenameReport.steps` (every rename, sidecars included, in order) goes to `Indexer.apply_renames`
-  (ids, tags and the selection are kept). `RenameReport.recycled` folders are rescanned (one level).
+  (ids, tags and the selection are kept), one folder at a time, so a recursive rename's subfolders follow too.
+  Then the whole scope is refreshed (`MainWindow.refresh_after_tool`), recycled junk included.
 - `rename.preview_report(plan)` is what apply would report if nothing changes: a test checks it against
   `apply_plan`'s report on the cleanup fixtures.
 
 **As built (M5 task 3): ReplayGain and Tidy** (`services/replaygain_job.py`, `ui/tools/rg_report.py`):
-- **Preview:** `replaygain.preview(folder, options, discography=)` returns `AlbumPreview`s (the folder itself, or
-  `find_album_folders`), each with:
-  - the files rsgain can scan, and the unsupported audio files (listed as skipped);
-  - the keyword subfolders with their file counts;
-  - `too_long` (the rsgain command line would exceed `MAX_COMMAND_LINE`).
-  The page shows them as a table (Album folder, Files, Subfolders, Notes) with "N albums will be processed, one at
-  a time…". Run is enabled when at least one album can be scanned.
+- **Preview:** removed in the tweaks before M7 (2026-10-15), with `replaygain.preview`, `AlbumPreview` and the
+  page's preview table. The card's Run starts the job; a folder with nothing to scan ends as "Nothing was done".
 - **Job:** `ReplayGainRunner.run` takes a `PathLocks` lock on the folder tree ("the ReplayGain tool") on the UI
   thread, so a conflict is refused at once. It runs `process_album` or `process_discography` on a worker thread.
   - Log lines (rsgain's output and the Reporter's info, warnings and errors) reach the page in batches, at most

@@ -90,15 +90,15 @@ def test_rename_card_for_a_selection(page):
 
 def test_replaygain_card_defaults_and_validation(page):
     card = page.replaygain_card
-    assert card.options() == replaygain.DEFAULT_OPTIONS and card.preview_button.isEnabled()
+    assert card.options() == replaygain.DEFAULT_OPTIONS and card.run_button.isEnabled()
     card.subfolders.setText("lite, Bonus")
     card.subfolders.textEdited.emit(card.subfolders.text())
-    assert not card.preview_button.isEnabled()
+    assert not card.run_button.isEnabled()
     assert "'Bonus' must be lowercase" in card.problems.text()
     assert not page.tidy_card.preview_button.isEnabled()
     assert page.tidy_card.problems.text() == "• The ReplayGain card's options need fixing."
     card.reset()
-    assert card.preview_button.isEnabled() and page.tidy_card.preview_button.isEnabled()
+    assert card.run_button.isEnabled() and page.tidy_card.preview_button.isEnabled()
 
 
 def test_replaygain_card_target_stays_in_rsgains_range(page):
@@ -112,15 +112,15 @@ def test_replaygain_scope_and_unavailable_rsgain(page):
     card.scope_group.buttons()[1].setChecked(True)
     assert card.scope == "discography" and card.scope_note.text().startswith("Discography:")
     page.set_rsgain_unavailable("rsgain couldn't run, so ReplayGain is unavailable.")
-    assert not card.preview_button.isEnabled() and not page.tidy_card.preview_button.isEnabled()
+    assert not card.run_button.isEnabled() and not page.tidy_card.preview_button.isEnabled()
     assert "rsgain couldn't run" in card.scope_note.text()
     page.set_rsgain_unavailable(None)
-    assert card.preview_button.isEnabled()
+    assert card.run_button.isEnabled()
 
 
 def test_replaygain_and_tidy_need_a_folder(page):
     page.set_scope(ToolScope(Path("C:/lib/Album"), 1, (Path("C:/lib/Album/a.flac"),)))
-    assert not page.replaygain_card.preview_button.isEnabled()
+    assert not page.replaygain_card.run_button.isEnabled()
     assert not page.tidy_card.preview_button.isEnabled()
     assert page.rename_card.preview_button.isEnabled()
     assert page.replaygain_card.scope_note.text().startswith("ReplayGain works on album folders.")
@@ -133,7 +133,7 @@ def test_requests_carry_the_checked_options(page):
     page.replaygain_card.log_file.setText("rg.log")
     page.replaygain_card.log_file.textEdited.emit("rg.log")
     page.rename_card.preview_button.click()
-    page.replaygain_card.preview_button.click()
+    page.replaygain_card.run_button.click()
     page.tidy_card.scope_group.buttons()[1].setChecked(True)
     page.tidy_card.preview_button.click()
     assert [r.tool for r in received] == [RENAME, REPLAYGAIN, TIDY]
@@ -225,6 +225,6 @@ def test_opening_another_folder_returns_to_the_list(window, service, library_dir
 
 def test_rsgain_unavailable_disables_replaygain(window):
     window.show_rsgain_version(None)
-    assert not window.tools_page.replaygain_card.preview_button.isEnabled()
+    assert not window.tools_page.replaygain_card.run_button.isEnabled()
     window.show_rsgain_version("rsgain 3.6")
-    assert window.tools_page.replaygain_card.preview_button.isEnabled()
+    assert window.tools_page.replaygain_card.run_button.isEnabled()

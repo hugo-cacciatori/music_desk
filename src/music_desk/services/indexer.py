@@ -1,20 +1,23 @@
 """The indexer service: runs core.index.scanner on its own thread, one scan at a time (SPEC §4, §16).
 
-Scans are queued (a root already waiting isn't queued twice). The folder on screen can jump the queue with
-`request_folder`: it is served inside a running scan, or scanned on its own when the indexer is idle. Progress
-reaches the UI as queued signals, at most 10 per second.
+Scans are queued (a root already waiting isn't queued twice). What the user asks for jumps the queue: the
+folder on screen (`request_folder`), a refresh after a tool (`request_path`), a rename or a tag save. During a
+running root scan, the folders concerned are served inside it, so the user never waits for a long rescan (the
+startup rescan of every root can take minutes on a large library). Progress reaches the UI as queued signals, at
+most 10 per second.
 """
 
 import logging
 import threading
 import time
 from collections import deque
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
 from music_desk.core.cancel import CancelToken
-from music_desk.core.index.scanner import Scanner, ScanProgress
-from music_desk.core.index.store import DbWriter
+from music_desk.core.index.scanner import Scanner, ScanProgress, find_folder
+from music_desk.core.index.store import DbWriter, connect_read
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +33,7 @@ class Indexer(QObject):
 
     def __init__(self, writer: DbWriter, parent: QObject | None = None, *, workers: int = 4) -> None:
         super().__init__(parent)
+        self._db_path = writer.path
         self.scanner = Scanner(writer, workers=workers, on_progress=self._on_progress,
                                on_folder=self.folderUpdated.emit)
         # ("root", id), ("folder", id), ("path", (path, recursive)), ("file", path), ("renamed", steps)
@@ -56,12 +60,17 @@ class Indexer(QObject):
         self._queue(("path", (path, recursive)))
 
     def update_file(self, path: str) -> None:
-        """Re-read one file the app just wrote (a tag save) into the index, without a folder rescan."""
-        self._queue(("file", path))
+        """Re-read one file the app just wrote (a tag save) into the index, without a folder rescan. First in the
+        queue; during a root scan, its folder is served inside it (the changed file's tags are re-read)."""
+        self._serve_in_root_scan(self._folders_under(Path(path).parent, recursive=False))
+        self._queue(("file", path), front=True)
 
     def apply_renames(self, steps: list[tuple]) -> None:
-        """Renames the app just made: updated in place in the index (ids kept), ahead of the watcher's rescan."""
-        self._queue(("renamed", tuple(steps)))
+        """Renames the app just made: updated in place in the index (ids kept), ahead of the watcher's rescan.
+        During a root scan, the folder is reconciled inside it (which matches renames, keeping ids)."""
+        if steps:
+            self._serve_in_root_scan(self._folders_under(Path(steps[0][0]).parent, recursive=False))
+        self._queue(("renamed", tuple(steps)), front=True)
 
     def request_folder(self, entry_id: int) -> None:
         """Bring a folder up to date first: inside the running root scan, or on its own when idle."""
@@ -70,6 +79,40 @@ class Indexer(QObject):
                 self.scanner.request_folder(entry_id)
             else:
                 self._queue_locked(("folder", entry_id), front=True)
+
+    def request_path(self, path: str | Path, recursive: bool = False) -> None:
+        """A refresh the user asked for, by path (after a tool ran on a folder): first in the queue, and during a
+        root scan the indexed folders under it are served inside that scan, top down."""
+        self._serve_in_root_scan(self._folders_under(Path(path), recursive))
+        self._queue(("path", (str(path), recursive)), front=True)
+
+    def _folders_under(self, path: Path, recursive: bool) -> list[int]:
+        """The indexed folder at `path` (and its indexed subfolders, top down), from the index. [] if not indexed."""
+        conn = connect_read(self._db_path)
+        try:
+            found = find_folder(conn, path)
+            if found is None or not found[1]:
+                return []
+            if not recursive:
+                return [found[0]]
+            rows = conn.execute(
+                """
+                WITH RECURSIVE sub(id, depth) AS (
+                    SELECT ?, 0
+                    UNION ALL
+                    SELECT e.id, sub.depth + 1 FROM entries e JOIN sub ON e.parent_id = sub.id WHERE e.is_dir = 1
+                )
+                SELECT id FROM sub ORDER BY depth
+                """, (found[0],)).fetchall()
+            return [row[0] for row in rows]
+        finally:
+            conn.close()
+
+    def _serve_in_root_scan(self, folder_ids: list[int]) -> None:
+        with self._condition:
+            if self._current and self._current[0] == "root":
+                for folder_id in folder_ids:
+                    self.scanner.request_folder(folder_id)
 
     def cancel_root(self, root_id: int) -> None:
         """Drop a root's queued scans and stop its running one (before the root is removed)."""
@@ -93,9 +136,9 @@ class Indexer(QObject):
 
     # -- the thread --
 
-    def _queue(self, job: tuple[str, int]) -> None:
+    def _queue(self, job: tuple[str, object], front: bool = False) -> None:
         with self._condition:
-            self._queue_locked(job)
+            self._queue_locked(job, front)
 
     def _queue_locked(self, job: tuple[str, int], front: bool = False) -> None:
         if self._stopping or (job == self._current and job[0] == "root"):

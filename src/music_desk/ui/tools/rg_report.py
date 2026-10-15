@@ -1,9 +1,10 @@
-"""The ReplayGain tool's page (SPEC §10 B): the preview, the running job, and the report.
+"""The ReplayGain tool's page (SPEC §10 B): the running job, and the report. There is no preview: the card's Run
+starts the job, which only writes tags and the logs, and the report lists what was skipped (unsupported formats,
+a command line too long).
 
-Preview: the album folders that will be processed, with their keyword subfolders and file counts, and warnings
-(unsupported formats skipped, a command line too long). Running: per-album progress and live log lines, with
-Stop. Report: for a discography the summary table (Album, Result, Album gain, Leveled to, Files changed), then each
-album's report as written to its replaygain.log, with "Open replaygain.log" and "Open in File Explorer".
+Running: per-album progress and live log lines, with Stop. Report: for a discography the summary table (Album,
+Result, Album gain, Leveled to, Files changed), then each album's report as written to its replaygain.log, with
+"Open replaygain.log" and "Open in File Explorer".
 """
 
 from pathlib import Path
@@ -24,10 +25,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from music_desk.core.replaygain import AlbumPreview, format_gain, plural
+from music_desk.core.replaygain import format_gain, plural
 from music_desk.services.replaygain_job import Finished
 
-PREVIEW_COLUMNS = ("Album folder", "Files", "Subfolders", "Notes")
 SUMMARY_COLUMNS = ("Album", "Result", "Album gain", "Leveled to", "Files changed")
 
 
@@ -71,7 +71,6 @@ def short_result(finished: Finished) -> str:
 
 class ReplayGainView(QWidget):
     backRequested = Signal()
-    runRequested = Signal()
     cancelRequested = Signal()
     doneRequested = Signal()
     openLogRequested = Signal(str)  # a replaygain.log
@@ -79,8 +78,7 @@ class ReplayGainView(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.state = "idle"  # previewing, preview, running, result, error
-        self.albums: list[AlbumPreview] = []
+        self.state = "idle"  # running, result, error
         self.finished: Finished | None = None
         self.folder: Path | None = None
 
@@ -101,7 +99,6 @@ class ReplayGainView(QWidget):
         status.addWidget(self.busy)
         status.addWidget(self.message, 1)
 
-        self.albums_table = table(PREVIEW_COLUMNS)
         self.summary_table = table(SUMMARY_COLUMNS)
         self.text = QPlainTextEdit()  # live log lines, then the reports
         self.text.setReadOnly(True)
@@ -111,8 +108,6 @@ class ReplayGainView(QWidget):
         mono.setStyleHint(QFont.StyleHint.Monospace)
         self.text.setFont(mono)  # the RunLog tables line up in columns
 
-        self.run_button = QPushButton("Run")
-        self.run_button.clicked.connect(self.runRequested)
         self.stop_button = QPushButton("Stop")
         self.stop_button.clicked.connect(self.cancelRequested)
         self.open_log_button = QPushButton("Open replaygain.log")
@@ -122,7 +117,7 @@ class ReplayGainView(QWidget):
         self.done_button = QPushButton("Done")
         self.done_button.clicked.connect(self.doneRequested)
         buttons = QHBoxLayout()
-        for button in (self.run_button, self.stop_button, self.open_log_button, self.reveal_button):
+        for button in (self.stop_button, self.open_log_button, self.reveal_button):
             buttons.addWidget(button)
         buttons.addStretch(1)
         buttons.addWidget(self.done_button)
@@ -130,7 +125,6 @@ class ReplayGainView(QWidget):
         layout = QVBoxLayout(self)
         layout.addLayout(header)
         layout.addLayout(status)
-        layout.addWidget(self.albums_table, 1)
         layout.addWidget(self.summary_table)
         layout.addWidget(self.text, 2)
         layout.addLayout(buttons)
@@ -138,34 +132,11 @@ class ReplayGainView(QWidget):
 
     # -- states --
 
-    def show_previewing(self, folder: Path, discography: bool, title: str = "ReplayGain") -> None:
-        self.folder = folder
-        self.heading.setText(f"<b>{title}</b> · {'Discography' if discography else 'This album'} · {folder}")
-        self.albums_table.setRowCount(0)
-        self._show("previewing", "Looking for album folders…")
-
-    def show_preview(self, albums: list[AlbumPreview]) -> None:
-        self.albums = albums
-        rows = []
-        for album in albums:
-            subfolders = ", ".join(f"{name} ({count})" for name, count in album.subfolders) or "–"
-            notes = "; ".join(album.warnings) or ("no audio file rsgain can scan" if not album.files else "")
-            rows.append((album.name, str(len(album.files)), subfolders, notes))
-        fill(self.albums_table, rows)
-        runnable = [a for a in albums if a.files and not a.too_long]
-        if not albums or not any(a.files for a in albums):
-            message = "Nothing to do: no audio file rsgain can scan here."
-        else:
-            message = (f"{plural(len(runnable), 'album')} will be processed, one at a time. Tags are written and "
-                       f"a report is appended to each album's replaygain.log. Nothing has changed yet.")
-        self._show("preview", message)
-        self.run_button.setEnabled(bool(runnable))
-
-    def show_running(self, folder: Path | None = None, title: str | None = None) -> None:
+    def show_running(self, folder: Path | None = None, title: str | None = None, discography: bool = False) -> None:
         if folder is not None:
             self.folder = folder
-        if title is not None:
-            self.heading.setText(f"<b>{title}</b> · {self.folder}")
+        what = title or f"ReplayGain · {'Discography' if discography else 'This album'}"
+        self.heading.setText(f"<b>{what}</b> · {self.folder}")
         self.text.clear()
         self.busy.setRange(0, 0)
         self._show("running", "Running… Files in this folder can't be edited meanwhile.")
@@ -218,14 +189,10 @@ class ReplayGainView(QWidget):
     def _show(self, state: str, message: str) -> None:
         self.state = state
         self.message.setText(message)
-        self.busy.setVisible(state in ("previewing", "running"))
-        if state == "previewing":
-            self.busy.setRange(0, 0)
-        self.albums_table.setVisible(state == "preview")
+        self.busy.setVisible(state == "running")
         has_summary = state == "result" and self.finished is not None and self.finished.result is not None
         self.summary_table.setVisible(has_summary)
         self.text.setVisible(state in ("running", "result"))
-        self.run_button.setVisible(state == "preview")
         self.stop_button.setVisible(state == "running")
         self.open_log_button.setVisible(state == "result" and self.finished is not None and not self.finished.nothing)
         self.reveal_button.setVisible(state in ("result", "error"))
@@ -235,11 +202,6 @@ class ReplayGainView(QWidget):
     def _open_log(self) -> None:
         if self.finished is not None:
             self.openLogRequested.emit(str(self.finished.log_path))
-
-    def shown_rows(self) -> list[tuple[str, ...]]:
-        """The preview table (tests)."""
-        return [tuple(self.albums_table.item(r, c).text() for c in range(len(PREVIEW_COLUMNS)))
-                for r in range(self.albums_table.rowCount())]
 
     def summary_rows(self) -> list[tuple[str, ...]]:
         return [tuple(self.summary_table.item(r, c).text() for c in range(len(SUMMARY_COLUMNS)))

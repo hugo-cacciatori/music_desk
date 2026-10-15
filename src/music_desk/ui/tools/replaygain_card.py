@@ -1,7 +1,8 @@
 """The ReplayGain and Tidy cards of the Tools page (SPEC §10 B and C): options, scope and validation.
 
-The cards only collect options and validate them (core.replaygain.validate); Preview stays disabled until they
-pass, and while rsgain is unavailable. The preview and the job come from the window.
+The cards only collect options and validate them (core.replaygain.validate). Run (ReplayGain) and Preview rename
+(Tidy) stay disabled until they pass, and while rsgain is unavailable. The job and the preview come from the
+window.
 """
 
 from PySide6.QtCore import Signal
@@ -69,7 +70,7 @@ def checked_scope(group: QButtonGroup) -> str:
 
 class ReplayGainCard(Card):
     changed = Signal()
-    previewRequested = Signal()
+    runRequested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("ReplayGain", DESCRIPTION, parent)
@@ -127,11 +128,11 @@ class ReplayGainCard(Card):
         self.body.addWidget(self.advanced_toggle(advanced))
         self.body.addWidget(advanced)
 
-        self.preview_button = QPushButton("Preview…")
-        self.preview_button.clicked.connect(self.previewRequested)
+        self.run_button = QPushButton("Run ReplayGain")  # no preview: it starts the job
+        self.run_button.clicked.connect(self.runRequested)
         self.reset_button = QPushButton("Reset to defaults")
         self.reset_button.clicked.connect(self.reset)
-        self.buttons.addWidget(self.preview_button)
+        self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)
         self.buttons.addWidget(self.reset_button)
         self.set_options(replaygain.DEFAULT_OPTIONS)
@@ -193,7 +194,7 @@ class ReplayGainCard(Card):
             notes.append(self.unavailable)
         self.scope_note.setText("\n".join(notes))
         self.scope_note.setVisible(bool(notes))
-        self.preview_button.setEnabled(not problems and not self.unavailable and not self.selection)
+        self.run_button.setEnabled(not problems and not self.unavailable and not self.selection)
         self.changed.emit()
 
 

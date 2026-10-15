@@ -50,6 +50,7 @@ class TagIO(QObject):
     loaded = Signal(object)  # Loaded, after a read
     loadedMany = Signal(object)  # LoadedMany, after a batch read (multi-selection)
     imageRead = Signal(object)  # ImageRead: a picture chosen as the new cover
+    folderCover = Signal(int, object, str)  # token, QImage or None, where it comes from
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -79,6 +80,20 @@ class TagIO(QObject):
             covers = {metadata.embedded_cover(s) for s in snapshots}
             common = covers.pop() if len(covers) == 1 else None
             self.loadedMany.emit(LoadedMany(token, snapshots, failed, decode_cover(common)))
+
+        self._submit(run)
+        return token
+
+    def load_folder_cover(self, folder: str | Path, first_track: str | Path | None) -> int:
+        token = self.next_token()
+
+        def run() -> None:
+            try:
+                found = metadata.folder_picture(folder, first_track)
+            except Exception:  # noqa: BLE001 - no cover is shown then
+                found = None
+            image = decode_cover(found[0]) if found else None
+            self.folderCover.emit(token, image, found[1] if found and image is not None else "")
 
         self._submit(run)
         return token

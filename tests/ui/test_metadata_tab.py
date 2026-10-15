@@ -74,7 +74,7 @@ def test_round_trip(qtbot, panel, fixture_copy, name):
     tab.edits["title"].setText("New Title")
     tab.edits["title"].textEdited.emit("New Title")
     tab.lyrics.setPlainText("[00:01.00]First line\nSecond line")
-    assert tab.dirty and panel.tabText(0) == "Metadata •"
+    assert tab.dirty and panel.tabs.tabText(0) == "Metadata •"
     assert tab.changes() == {"title": "New Title", "lyrics": "[00:01.00]First line\nSecond line"}
     save(qtbot, tab)
 
@@ -83,7 +83,7 @@ def test_round_trip(qtbot, panel, fixture_copy, name):
     for field in FIELD_NAMES:
         if field not in ("title", "lyrics"):
             assert getattr(after, field) == getattr(before_fields, field), field
-    assert not tab.dirty and panel.tabText(0) == "Metadata"
+    assert not tab.dirty and panel.tabs.tabText(0) == "Metadata"
     assert tab.edits["title"].text() == "New Title"  # the tab shows the saved file
     assert raw_keys(path) >= before_keys  # no other tag lost
 

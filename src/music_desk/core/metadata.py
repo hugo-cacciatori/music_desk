@@ -140,6 +140,21 @@ def write_fields(path: str | Path, changes: dict) -> Snapshot:
     return read_snapshot(path)
 
 
+def folder_picture(folder: str | Path, first_track: str | Path | None) -> tuple[bytes, str] | None:
+    """The folder summary's cover: the folder image, else the first track's embedded front cover."""
+    found = folder_cover(Path(folder))
+    if found is not None:
+        return found
+    if first_track is not None:
+        try:
+            cover = TaggedFile(first_track, shared=True).cover()
+        except (OSError, ValueError):
+            return None
+        if cover is not None:
+            return cover.data, Path(first_track).name
+    return None
+
+
 def embedded_cover(snapshot: Snapshot) -> bytes | None:
     """The embedded front cover (not a folder image shown in its place)."""
     return snapshot.cover if snapshot.cover_source == "embedded" else None

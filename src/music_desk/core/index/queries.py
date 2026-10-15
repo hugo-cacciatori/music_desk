@@ -186,3 +186,54 @@ def playlist_for_folder(conn: sqlite3.Connection, folder_id: int, recursive: boo
 
     visit(folder_id)
     return _entries(conn, ids)
+
+
+@dataclass(frozen=True)
+class FolderSummary:
+    """What the side panel shows for a folder (SPEC §7), from the index only."""
+
+    id: int
+    path: Path
+    n_tracks: int  # the whole subtree
+    duration: float
+    formats: str | None
+    n_with_rg: int
+    n_with_lyrics_tag: int
+    n_lrclib_found: int
+    n_subfolders: int  # direct
+    n_files: int  # direct
+    first_track: Path | None  # for the cover when there is no folder image
+
+
+def first_track(conn: sqlite3.Connection, folder_id: int) -> Path | None:
+    """The first audio file in natural order: the folder's own, else level by level below it (a breadth-first
+    walk that stops at the first level with audio, so a huge root stays cheap)."""
+    level = [folder_id]
+    while level:
+        marks = ", ".join("?" * len(level))
+        rows = conn.execute(
+            f"SELECT e.id, e.parent_id, e.name, e.is_dir, t.entry_id IS NOT NULL FROM entries e "
+            f"LEFT JOIN tracks t ON t.entry_id = e.id WHERE e.parent_id IN ({marks})", level).fetchall()
+        order = {folder: n for n, folder in enumerate(level)}
+        tracks = sorted((r for r in rows if r[4]), key=lambda r: (order[r[1]], natural_key(r[2])))
+        if tracks:
+            return path_of(conn, tracks[0][0])
+        subfolders = sorted((r for r in rows if r[3]), key=lambda r: (order[r[1]], natural_key(r[2])))
+        level = [r[0] for r in subfolders]
+    return None
+
+
+def folder_summary(conn: sqlite3.Connection, folder_id: int) -> FolderSummary | None:
+    if conn.execute("SELECT 1 FROM entries WHERE id = ? AND is_dir = 1", (folder_id,)).fetchone() is None:
+        return None
+    stats = conn.execute(
+        "SELECT n_tracks, duration, formats, n_with_rg, n_with_lyrics_tag, n_lrclib_found FROM folder_stats "
+        "WHERE entry_id = ?", (folder_id,)).fetchone() or (0, 0.0, None, 0, 0, 0)
+    subfolders, files = conn.execute(
+        "SELECT coalesce(sum(is_dir), 0), coalesce(sum(1 - is_dir), 0) FROM entries WHERE parent_id = ?",
+        (folder_id,)).fetchone()
+    return FolderSummary(
+        id=folder_id, path=path_of(conn, folder_id), n_tracks=stats[0] or 0, duration=stats[1] or 0.0,
+        formats=stats[2], n_with_rg=stats[3] or 0, n_with_lyrics_tag=stats[4] or 0, n_lrclib_found=stats[5] or 0,
+        n_subfolders=subfolders, n_files=files, first_track=first_track(conn, folder_id),
+    )

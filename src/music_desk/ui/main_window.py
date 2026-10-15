@@ -100,7 +100,8 @@ class MainWindow(QMainWindow):
             library.locks if library is not None else PathLocks(),
             on_written=lambda path: self.library.indexer.update_file(path) if self._library_open() else None,
             parent=self)
-        self.side_panel = SidePanel(self.tag_io, self.tag_writer)
+        self.side_panel = SidePanel(self.tag_io, self.tag_writer, conn)
+        self.side_panel.summary.playRequested.connect(self.play_folder)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.file_view)
@@ -323,13 +324,20 @@ class MainWindow(QMainWindow):
 
     def _show_selection(self, ids: list[int]) -> None:
         self._selected_ids = ids
-        items = []
+        items, folder_ids = [], []
         for entry_id in ids:
             row = self.file_view.model.row_for(entry_id)
             if row is not None and self.folder_path:
                 r = self.file_view.model.rows[row]
                 items.append(SelectedItem(Path(self.folder_path, r.name), r.is_dir, r.is_audio))
-        self.side_panel.show_selection(items)
+                if r.is_dir:
+                    folder_ids.append(entry_id)
+        if len(items) == 1 and folder_ids:
+            self.side_panel.show_folder(folder_ids[0])  # one folder selected: its summary
+        elif not items and self.folder_id is not None:
+            self.side_panel.show_folder(self.folder_id)  # nothing selected: the open folder's summary
+        else:
+            self.side_panel.show_selection(items)
 
     def _file_saved(self, path: str) -> None:
         """The index already caught up through TagWriter.on_written; the list row follows on folderUpdated."""
@@ -342,6 +350,7 @@ class MainWindow(QMainWindow):
         self.sidebar.model.refresh(entry_id)
         if entry_id == self.folder_id:
             self.file_view.refresh()
+        self.side_panel.refresh_folder()
 
     def scan_finished(self, _report: ScanReport) -> None:
         if not self._library_open():
@@ -350,6 +359,7 @@ class MainWindow(QMainWindow):
         self.sidebar.model.refresh_loaded()
         if self.folder_id is not None:
             self.file_view.refresh()
+        self.side_panel.refresh_folder()
 
     def _keep_open_folder(self) -> None:
         """If the open folder left the index (deleted or moved outside the app), open its nearest surviving

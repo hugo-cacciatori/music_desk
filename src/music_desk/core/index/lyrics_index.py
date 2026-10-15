@@ -86,6 +86,16 @@ def pending_tracks(conn: sqlite3.Connection, retry_before: str, *, folder_id: in
     return pending
 
 
+def pending_count(conn: sqlite3.Connection, retry_before: str) -> int:
+    """How many keys still need a lookup (pending_tracks' rule, counted)."""
+    return conn.execute(
+        """
+        SELECT count(DISTINCT t.lyrics_key) FROM tracks t LEFT JOIN lyrics l ON l.key = t.lyrics_key
+        WHERE t.lyrics_key IS NOT NULL AND t.read_error IS NULL
+          AND (l.key IS NULL OR (l.status = ? AND l.checked < ?))
+        """, (NOT_FOUND, retry_before)).fetchone()[0]
+
+
 def track_for_entry(conn: sqlite3.Connection, entry_id: int) -> PendingTrack | None:
     """One track to look up again, whatever its cache entry says (Retry now). None without a key."""
     row = conn.execute(f"{_TRACK_SELECT} WHERE t.entry_id = ? AND t.lyrics_key IS NOT NULL AND t.read_error IS NULL",

@@ -5,7 +5,8 @@ from datetime import date
 
 import pytest
 
-from music_desk.core.index.lyrics_index import pending_tracks, record_lyrics, retry_before
+from music_desk.core.index import queries
+from music_desk.core.index.lyrics_index import pending_count, pending_tracks, record_lyrics, retry_before
 from music_desk.core.index.roots import add_root
 from music_desk.core.index.scanner import Scanner
 from music_desk.core.index.store import DbWriter, LyricsStore, connect_read, path_of
@@ -128,3 +129,18 @@ def test_record_lyrics_stores_the_entry_and_follows_the_totals(writer, read, lib
 def test_record_lyrics_for_a_key_no_track_has(writer, read, library):
     assert put(writer, "nobody\x1fnothing", FOUND_ENTRY) == []
     assert LyricsStore(read, writer).get("nobody\x1fnothing") == FOUND_ENTRY
+
+
+def test_pending_count_matches_the_pending_tracks(writer, read, library):
+    assert pending_count(read, BEFORE) == len(pending_tracks(read, BEFORE))
+    put(writer, FIRST, FOUND_ENTRY)
+    assert pending_count(read, BEFORE) == len(pending_tracks(read, BEFORE))
+
+
+def test_the_lrclib_column_states(writer, read, library):
+    put(writer, FIRST, FOUND_ENTRY)
+    loose = {row.name: row.lrclib for row in queries.folder_listing(read, folder(read, library, "Loose"))}
+    assert loose == {"Some Band - Song.aac": "pending", "untitled.aac": "no tags", "broken.flac": ""}
+    album_id = folder(read, library, f"Fixture Artist/{ALBUM}")
+    album = {row.name: row.lrclib for row in queries.folder_listing(read, album_id)}
+    assert album["01 First.flac"] == "plain" and album["track2.flac"] == "pending" and album["lite"] is None

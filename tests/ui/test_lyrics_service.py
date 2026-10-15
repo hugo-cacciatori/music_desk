@@ -264,3 +264,23 @@ def test_adding_a_root_imports_its_lyrics_cache(qtbot, tmp_path, library, refere
         assert service.conn.execute("SELECT count(*) FROM lyrics").fetchone()[0] == len(cache)
     finally:
         service.close()
+
+
+def test_progress_counts_the_keys_left(qtbot, make, read):
+    service = make(Lrclib(), workers=1)
+    progress = collect(service.progress)
+    service.start()
+    qtbot.waitUntil(lambda: not pending(read) and service.state == IDLE, timeout=10000)
+    counts = [p[0].pending for p in progress if p[0].pending is not None]
+    assert counts[0] == len(TITLES)
+    qtbot.waitUntil(lambda: service.progress and progress[-1][0].pending == 0, timeout=5000)
+
+
+def test_status_for_a_pending_key(qtbot, make, read):
+    service = make(Lrclib(unreachable), LyricsOptions(max_attempts=1), workers=1)
+    key = cache_key("Fixture Artist", "First")
+    assert service.status_for(key) is None
+    service.start()
+    qtbot.waitUntil(lambda: service.status_for(key) == "error", timeout=5000)
+    service.set_offline(True)
+    assert service.status_for(key) == "offline"

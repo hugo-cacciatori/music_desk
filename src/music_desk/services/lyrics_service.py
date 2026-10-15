@@ -23,6 +23,7 @@ from PySide6.QtCore import QObject, Signal
 
 from music_desk.core.index.lyrics_index import (
     PendingTrack,
+    pending_count,
     pending_tracks,
     record_lyrics,
     retry_before,
@@ -53,6 +54,7 @@ class LyricsProgress:
     done: int  # lookups finished this session (errors included)
     errors: int  # of those, errors
     in_flight: int
+    pending: int | None = None  # keys still to look up (errors included), once counted; None before the first count
 
 
 class _Cache:
@@ -108,6 +110,7 @@ class LyricsService(QObject):
         self._exhausted = False  # the background has nothing left until wake()
         self._stopping = False
         self._done = self._errors = 0
+        self._pending: int | None = None  # counted at each background refill, then decremented per result
         self._last_progress = 0.0
         self._last_state = ""
         count = workers or self._client.options.lookup_threads
@@ -160,6 +163,14 @@ class LyricsService(QObject):
         """time.time() at which the circuit breaker's pause ends (meaningful in the unreachable state)."""
         with self._cond:
             return self._resume_at
+
+    def status_for(self, key: str) -> str | None:
+        """What the LRCLIB column shows for a key without an entry: "offline", "error" (its last lookup failed),
+        or None (pending)."""
+        with self._cond:
+            if self._offline:
+                return "offline"
+            return "error" if key in self._last_error else None
 
     def set_offline(self, offline: bool) -> None:
         with self._cond:
@@ -339,19 +350,21 @@ class LyricsService(QObject):
             self._errored = {k: t for k, t in self._errored.items() if t > now}
             skip = self._in_flight | self._handled | set(self._errored)
             skip |= {item.key for queue in self._tiers for item in queue}
+        before = retry_before(self._today(), self._client.options)
         try:
-            items = pending_tracks(conn, retry_before(self._today(), self._client.options), skip=skip,
-                                   limit=self._batch)
+            items = pending_tracks(conn, before, skip=skip, limit=self._batch)
+            total = pending_count(conn, before)
         except Exception:  # noqa: BLE001 - tried again on the next wake()
             log.exception("lyrics: could not read the pending tracks")
-            items = []
+            items, total = [], None
         with self._cond:
+            if total is not None:
+                self._pending = total
             self._refilling = False
             self._tiers[BACKGROUND].extend(items)
             self._exhausted = not items
             self._cond.notify_all()
-        if not items:
-            self._emit_progress(force=True)
+        self._emit_progress(force=True)
 
     def _finish(self, item: PendingTrack, entry: dict, folders: list[int]) -> None:
         tripped = False
@@ -365,6 +378,8 @@ class LyricsService(QObject):
                 self._last_error[item.key] = entry.get("error") or "unknown error"
                 log.info("lyrics lookup failed for %r: %s", item.key, entry.get("error"))
             elif status != NOT_LOOKED_UP:
+                if self._pending and item.key not in self._handled:
+                    self._pending -= 1
                 self._handled.add(item.key)
                 self._errored.pop(item.key, None)
                 self._last_error.pop(item.key, None)
@@ -392,13 +407,14 @@ class LyricsService(QObject):
             return PAUSED
         if self._paused_until is not None:
             return UNREACHABLE
-        if self._in_flight or any(self._tiers) or (self._started and not self._exhausted):
+        if self._in_flight or any(self._tiers) or self._requests or (self._started and not self._exhausted):
             return RUNNING
         return IDLE
 
     def _emit_progress(self, force: bool = False) -> None:
         with self._cond:
-            progress = LyricsProgress(self._state_locked(), self._done, self._errors, len(self._in_flight))
+            progress = LyricsProgress(self._state_locked(), self._done, self._errors, len(self._in_flight),
+                                      self._pending)
         now = time.monotonic()
         if not force and progress.state == self._last_state and now - self._last_progress < PROGRESS_INTERVAL:
             return

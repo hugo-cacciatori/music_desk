@@ -116,6 +116,8 @@ class FileListModel(QAbstractTableModel):
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], parent=None) -> None:
         super().__init__(parent)
         self._conn = conn
+        # The lyrics service's word on a pending key ("error", "offline"), or None. Set by the window.
+        self.lrclib_status: Callable[[str], str | None] = lambda _key: None
         self.folder_id: int | None = None
         self.rows: list[FileRow] = []
         self.keys: list[tuple] = []  # precomputed sort keys, per row and column
@@ -162,6 +164,12 @@ class FileListModel(QAbstractTableModel):
                 self.keys.append(self._keys(row))
             self.endInsertRows()
 
+    def refresh_column(self, key: str) -> None:
+        """A column whose text depends on something outside the rows (the LRCLIB column on the service's state)."""
+        if self.rows:
+            column = COLUMN_INDEX[key]
+            self.dataChanged.emit(self.index(0, column), self.index(len(self.rows) - 1, column))
+
     @staticmethod
     def _keys(row: FileRow) -> tuple:
         return tuple(column.sort_key(row) for column in COLUMNS)
@@ -188,6 +196,8 @@ class FileListModel(QAbstractTableModel):
         row = self.rows[index.row()]
         column = COLUMNS[index.column()]
         if role == Qt.ItemDataRole.DisplayRole:
+            if column.key == "lrclib" and row.lrclib == "pending" and row.lyrics_key:
+                return self.lrclib_status(row.lyrics_key) or "pending"
             return column.text(row)
         if role == Qt.ItemDataRole.EditRole and index.column() == 0:
             return row.name

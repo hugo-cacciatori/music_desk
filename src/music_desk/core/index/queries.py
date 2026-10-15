@@ -41,9 +41,12 @@ class FileRow:
     bitrate: int | None = None
     rg: str | None = None  # "full", "partial", "none" (audio only)
     lyrics_tag: str | None = None  # "tag", "lrc", "none" (audio only)
-    lrclib: str | None = None  # "synced", "plain", "instrumental", "not found", "pending" (audio only)
+    # "synced", "plain", "instrumental", "not found", "pending", "no tags", "" when unreadable (audio only); the
+    # window shows "error" or "offline" in place of "pending" from the lyrics service's state
+    lrclib: str | None = None
     read_error: str | None = None
     n_tracks: int | None = None  # folders: tracks in the subtree
+    lyrics_key: str | None = None
 
 
 def child_folders(conn: sqlite3.Connection, parent_id: int, *, only_music: bool = False) -> list[FolderRow]:
@@ -67,7 +70,11 @@ def _rg_state(gains: tuple) -> str:
     return "full" if present == len(gains) else "partial" if present else "none"
 
 
-def _lrclib_state(status: str | None, synced: str | None) -> str:
+def _lrclib_state(status: str | None, synced: str | None, key: str | None = "", read_error: str | None = None) -> str:
+    if read_error:
+        return ""  # the tags can't be read: nothing to look up (the row's tooltip says why)
+    if key is None:
+        return "no tags"  # no artist or title, even from the file name: never looked up
     if status == FOUND:
         return "synced" if synced else "plain"
     if status == INSTRUMENTAL:
@@ -84,7 +91,7 @@ def folder_listing(conn: sqlite3.Connection, folder_id: int) -> list[FileRow]:
         SELECT e.id, e.name, e.is_dir, e.ext, e.size, e.mtime,
                t.entry_id IS NOT NULL, t.track, t.title, t.artist, t.album, t.date, coalesce(t.duration, s.duration),
                t.format, t.bitrate, t.rg_track_gain, t.rg_track_peak, t.rg_album_gain, t.rg_album_peak,
-               t.has_lyrics_tag, t.has_lrc_sidecar, l.status, l.synced, t.read_error, s.n_tracks
+               t.has_lyrics_tag, t.has_lrc_sidecar, l.status, l.synced, t.read_error, s.n_tracks, t.lyrics_key
         FROM entries e
         LEFT JOIN tracks t ON t.entry_id = e.id
         LEFT JOIN lyrics l ON l.key = t.lyrics_key
@@ -100,8 +107,8 @@ def folder_listing(conn: sqlite3.Connection, folder_id: int) -> list[FileRow]:
             bitrate=r[14],
             rg=_rg_state(r[15:19]) if is_audio else None,
             lyrics_tag=("tag" if r[19] else "lrc" if r[20] else "none") if is_audio else None,
-            lrclib=_lrclib_state(r[21], r[22]) if is_audio else None,
-            read_error=r[23], n_tracks=r[24] if r[2] else None,
+            lrclib=_lrclib_state(r[21], r[22], r[25], r[23]) if is_audio else None,
+            read_error=r[23], n_tracks=r[24] if r[2] else None, lyrics_key=r[25],
         ))
     return listing
 

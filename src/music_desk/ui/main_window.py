@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStyle,
     QToolBar,
+    QToolButton,
     QWidget,
 )
 
@@ -36,6 +37,7 @@ from music_desk.core.index.store import path_of
 from music_desk.core.path_locks import PathLocks
 from music_desk.services.library import LibraryService
 from music_desk.services.lyrics_embedder import AutoEmbedder
+from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
@@ -92,6 +94,15 @@ class MainWindow(QMainWindow):
         self.index_label = QLabel()
         self.index_label.hide()
         self.statusBar().addPermanentWidget(self.index_label)
+        self.lyrics_label = QLabel()
+        self.lyrics_label.hide()
+        self.lyrics_button = QToolButton()
+        self.lyrics_button.setAutoRaise(True)
+        self.lyrics_button.clicked.connect(self._lyrics_button_clicked)
+        self.lyrics_button.hide()
+        self.statusBar().addPermanentWidget(self.lyrics_label)
+        self.statusBar().addPermanentWidget(self.lyrics_button)
+        self._lyrics_state = ""
         self.rsgain_label = QLabel("Checking rsgain…")
         self.statusBar().addPermanentWidget(self.rsgain_label)
 
@@ -190,6 +201,9 @@ class MainWindow(QMainWindow):
             library.indexer.scanFinished.connect(self.scan_finished)
             library.lyrics.foldersChanged.connect(self.lyrics_updated)
             library.lyrics.unreachable.connect(self.lrclib_unreachable)
+            library.lyrics.progress.connect(self.show_lyrics_progress)
+            library.lyrics.entryReady.connect(self._lyrics_entry)
+            self.file_view.model.lrclib_status = library.lyrics.status_for
             self.refresh_roots()
             self._reopen_last_folder()
 
@@ -408,6 +422,46 @@ class MainWindow(QMainWindow):
             return
         self.file_view.refresh()
         self.side_panel.refresh_folder()
+
+    def show_lyrics_progress(self, progress: LyricsProgress) -> None:
+        """The status bar's lyrics label and its button: Pause, Resume or Retry now (SPEC §9 Controls)."""
+        if not self._library_open():
+            return
+        if progress.state != self._lyrics_state:  # offline on or off: the LRCLIB column's pending rows change
+            self._lyrics_state = progress.state
+            self.file_view.model.refresh_column("lrclib")
+        left = f"{progress.pending:,} to look up" if progress.pending is not None else "starting"
+        button = None
+        if progress.state == OFFLINE:
+            text = "Lyrics: offline mode"
+        elif progress.state == PAUSED:
+            text, button = f"Lyrics paused: {left}", "Resume"
+        elif progress.state == UNREACHABLE:
+            resume = time.strftime("%H:%M", time.localtime(self.library.lyrics.resume_at))
+            text, button = f"LRCLIB unreachable, retrying at {resume}", "Retry now"
+        elif progress.state == RUNNING:
+            text, button = f"Looking up lyrics: {left}", "Pause"
+        elif progress.pending:
+            text = f"Lyrics: {progress.pending:,} to retry later"
+        else:
+            text = ""
+        self.lyrics_label.setText(text)
+        self.lyrics_label.setVisible(bool(text))
+        self.lyrics_button.setText(button or "")
+        self.lyrics_button.setVisible(button is not None)
+
+    def _lyrics_button_clicked(self) -> None:
+        if not self._library_open():
+            return
+        lyrics = self.library.lyrics
+        action = {"Pause": lyrics.pause, "Resume": lyrics.resume, "Retry now": lyrics.retry_now}.get(
+            self.lyrics_button.text())
+        if action:
+            action()
+
+    def _lyrics_entry(self, _key: str, entry: dict) -> None:
+        if entry.get("status") == "error" and self._library_open():
+            self.file_view.model.refresh_column("lrclib")  # the failed key's rows show "error"
 
     def lrclib_unreachable(self, resume_at: float) -> None:
         minutes = max(1, round((resume_at - time.time()) / 60))

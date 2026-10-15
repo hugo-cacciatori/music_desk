@@ -337,6 +337,18 @@ coverage, cover, a Play button and tool shortcuts.
   - A failure on some files shows "Saved x of n files. Not saved: …" with the reasons, and keeps the edits for a
     retry.
   - When any of the files is under a job's lock, the whole multi-edit is read-only.
+- As built (M3 task 4):
+  - Replace… takes a JPEG or PNG from a file picker, or one dropped onto the cover (a drop into the app, which is
+    allowed). The picture is checked by its signature and decoded on the worker thread. Over 1 MB, a
+    confirmation explains that every file carries its own copy.
+  - A new or removed cover is pending until Save ("New cover (not saved yet)" or "Cover removed"), and Revert
+    drops it.
+  - Only the embedded front cover is written or removed; other pictures stay. A folder image is shown when there
+    is no embedded cover, never written, and Remove is then disabled.
+  - Several files: the header shows their common embedded cover, "(multiple covers)", or "No cover". Replace or
+    Remove applies to every file that can be tagged.
+  - A field counts as edited only when its text differs from what was loaded, so blank text stored in a tag
+    (e.g. "  ") isn't mistaken for a change.
 
 ## 8. Lyrics tab
 The tab shows only externally fetched lyrics: what LRCLIB returns for the selected track. It never shows the

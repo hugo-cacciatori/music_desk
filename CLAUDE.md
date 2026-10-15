@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M3 in progress** (tasks 1 to 3 done: the Metadata tab for a single file; TagWriter and path locks; multi-file editing):
+- **M3 in progress** (tasks 1 to 4 done: the Metadata tab for a single file; TagWriter and path locks; multi-file editing; cover editing):
   - `core/metadata.py`: `read_snapshot(path) -> Snapshot` (fields, stream details, RG values, the cover with its
     source, the ID3 version, `format_line` such as "FLAC 16-bit/44.1 kHz · 4:44 · 32 MB", with bit depth for
     lossless and kbps for lossy), `folder_cover` (folder.jpg, cover.jpg, front.jpg, ignoring case) and
@@ -71,7 +71,28 @@ two files alone.
     - Any file under a job's lock makes the whole multi-edit read-only.
     - `SidePanel.show_selection`: one item opens the single-file editor; several items edit their audio files
       together, even one audio file among folders.
-  - 521 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
+  - Cover editing (task 4):
+    - `metadata.write_fields` takes `changes["cover"]` (`metadata.COVER`): bytes set the embedded front cover,
+      and None removes it. Other pictures are kept.
+    - Also added: `embedded_cover(snapshot)` and `read_image(path)` (.jpg/.jpeg/.png only, checked by
+      signature, read through `open_shared`).
+    - `TagIO.read_image(path)` emits `imageRead(ImageRead)` with the bytes and the decoded QImage.
+      `LoadedMany.cover` is the common embedded cover, decoded when every file has the same one.
+    - In the tab:
+      - `CoverLabel` accepts a dropped jpg/png (a drop into the app);
+      - Replace… (`choose_cover_file`, replaced in tests) and Remove;
+      - a cover over 1 MB asks first (`confirm_large_cover`);
+      - the pending change is part of the dirty state, shown as "New cover (not saved yet)" or "Cover removed";
+        Revert drops it;
+      - Remove is enabled only when an embedded cover exists. A folder image is shown, never written.
+    - Several files: the header shows "The same embedded cover on every file", "(multiple covers)" or "No
+      cover"; a replace or remove applies to every file that can be tagged, and the common cover is read back
+      after the save.
+    - Job locks disable the cover buttons and the drop. `has_cover` follows in the index through
+      `update_file`.
+    - Found and fixed: a file whose tag holds blank text (edge.flac's artist is padding) made the tab dirty with
+      no edit. A field now counts as changed only when its text differs from what was loaded.
+  - 547 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
     offscreen.
 - **M2 is complete** (its "Done when" holds: measured on a copied 10k-file tree, see the end of this block):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
@@ -302,20 +323,18 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M3's fourth task: cover display, replace and remove. Read SPEC §7 (cover editing) first.
-- The cover in the header gets Replace… (a file picker for jpg/png) and Remove buttons. Dropping a jpg or png
-  file onto the cover also replaces it; that is a drop *into* the app, so it's allowed, unlike drag-out.
-- The new picture is read on the worker thread. Images over 1 MB get a warning (a confirmation), since they bloat
-  every file.
-- It writes the embedded front cover through `TaggedFile.set_cover` / `remove_cover`, which keep the other
-  pictures. Extend `metadata.write_fields` (or add a writer call) so a cover change goes through TagWriter, with
-  the locks and the one-file index update (`has_cover`).
-- Multi-selection: the cover shows when every file has the same embedded front cover, else "(multiple covers)".
-  A cover change applies to every selected file that can be tagged.
-- The cover is part of the dirty state: Revert restores it, and Save writes it with the fields.
-- A folder image (folder.jpg…) is only shown, never written; Remove only removes the embedded cover.
-- Tests: replace, remove, a drop, the >1 MB warning, other pictures kept (edge.flac has a back cover too), every
-  fixture format, multi apply, and has_cover in the index.
+**Next step:** M3's fifth task: the folder summary. Read SPEC §7 (the side panel with a folder selected) first.
+- `ui/side_panel/folder_summary.py`, shown in the panel when one folder is selected (or nothing is selected:
+  then the open folder):
+  - track count, total duration and formats, from `folder_stats` (the whole subtree);
+  - ReplayGain and lyrics coverage (n_with_rg, n_with_lyrics_tag, n_lrclib_found, each against n_tracks);
+  - the cover: the folder image, else the first track's embedded cover, read on TagIO's thread;
+  - a Play button (`MainWindow.play_folder`) and tool shortcuts. The tools arrive in M5, so show them disabled
+    with a "coming later" tooltip, or leave them out until then (pick one and record it).
+- Index data only, read on the UI connection; no file reads except the cover. Refresh on `folderUpdated` and
+  `scanFinished`.
+- Tests: the numbers against `folder_stats` for the fixture library, an empty folder, a subtree, the cover
+  source, Play, and the refresh after a change.
 
 Don't start it until Hugo says so.
 
@@ -418,6 +437,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Metadata tab: tag reads and saves run on one worker thread (TagIO); only changed fields are written; Cancel in the unsaved-edits prompt keeps the selection, the folder and the window. Reads that aren't saved open files with FILE_SHARE_DELETE, so the app never stops a delete or rename in Explorer. The format line shows bit depth only for lossless audio. Details in SPEC §7. |
 | 2026-10-15 | Locks: one shared `PathLocks` (in core, no Qt). Jobs lock folder trees, saves lock single files, and overlaps are refused at once (no waiting) with the owner's name. TagWriter writes serially. A save updates the index for that one file and adjusts the folder totals by deltas. Details in SPEC §7 and §16. |
 | 2026-10-15 | Multi-file editing: only shared fields that were edited or cleared are written. Emptying a "(multiple values)" field by hand leaves it alone, and only the clear button clears it on all files. A batch save reports per-file failures and keeps the edits for a retry. Any job-locked file makes the multi-edit read-only. Details in SPEC §7. |
+| 2026-10-15 | Covers: Replace (picker or a dropped jpg/png) and Remove change only the embedded front cover, and other pictures stay. A change is pending until Save, and Revert drops it. Over 1 MB asks first. With several files, a change applies to all, and the header says whether they share one cover. Folder images are shown, never written. Details in SPEC §7. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -531,7 +551,7 @@ the index.
 - [x] Metadata tab for a single file, every format
 - [x] TagWriter and path locks
 - [x] Multi-file editing (per-track fields disabled)
-- [ ] Cover display, replace and remove
+- [x] Cover display, replace and remove
 - [ ] Folder summary
 - [ ] Import from a .lrc sidecar
 - [ ] Inline rename of files and folders, sidecars included, with Undo; the rename hint after a save

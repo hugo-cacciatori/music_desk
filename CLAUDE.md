@@ -11,6 +11,11 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 9):**
+- **M6 task 4 is done (theme and icons).** `packaging/make_icon.py` draws `resources/icons/music_desk.ico` (9 sizes)
+  and `.png`; `paths.icon_path()`; `app.py` sets the window icon and the Windows AppUserModelID (so a run from
+  source shows the app's icon in the taskbar); the PyInstaller spec embeds the icon and `packaging/version_info.txt`
+  and bundles `resources/icons`. The unused `theme` setting is removed. FFmpeg's licence is checked (LGPL, plus
+  Fraunhofer FDK AAC, whose notice is pending) and `FFmpeg-LGPL-2.1.txt` is shipped. Tests: `tests/test_packaging.py`.
 - **M6 task 3: the Settings dialog was dropped** (Hugo's review, Decisions log). In its place:
   - Help › About MusicDesk (`ui/about_dialog.py` `AboutDialog`; `MainWindow.open_about`, and `show_about`,
     which tests replace);
@@ -627,14 +632,14 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** the remaining M6 tasks, in order: "Theme and icons", the Inno Setup installer (SPEC §13), the
-README, then retiring the root scripts once the installed v1 is in use. Read SPEC §13 first. Settle these with
+**Next step:** the remaining M6 tasks, in order: the Inno Setup installer (SPEC §13), the README, then retiring
+the root scripts once the installed v1 is in use. Read SPEC §13 first. Settle these with
 Hugo before building:
 - **The app's own licence.** The repo has no LICENSE file, and mutagen is GPL-2.0-or-later, so the distributed
   app must be under a GPL-compatible licence.
-- **FFmpeg's licence** inside rsgain 3.6 (LGPL or GPL build): check, and add its notice.
-- **The app name and icon** (deferred, Open question 1). "Theme and icons" is mostly the app icon, since Qt
-  already follows Windows' light and dark mode. Ask whether the theme task is still needed.
+- **The Fraunhofer FDK AAC licence** (inside rsgain, SPEC §13): its text (the `NOTICE` file of
+  github.com/mstorsjo/fdk-aac) isn't on this machine; downloading it needs Hugo's go.
+- The name stays **MusicDesk** (Hugo, 2026-10-15); the icon exists (M6 task 4).
 
 **Done in session 9 (the original M6 task 1 brief, kept for reference):** the schema v3 migration and the
 `lrclib` column, `text_search` with the parity test, then the Ctrl+K UI (results with a Folder column, up to
@@ -776,7 +781,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Smart views dropped (Hugo): not every track needs lyrics in its tags (LRCLIB's are shown), a rename-mask mismatch depends on each user's masks, missing ReplayGain is overwhelming library-wide (the folder's RG column covers it), and "recently modified" answers no need. A sidebar section would give them weight they don't have. Instead, the Lyrics menu has three Find entries that open library search with a ready-made query: LRCLIB didn't find, no lyrics in the tags, can't be looked up (`lrclib:notags`, new). Details in SPEC §5. |
 | 2026-10-15 | No Settings dialog (Hugo): every preference already lives where it's used (sidebar, View and Lyrics menus, the Tools cards; Qt follows Windows' theme). The unused `watch_for_changes` and `tag_workers` settings are removed (old settings.json files still load). Help › About shows the versions and the third-party licences, whose texts are bundled in `resources/licenses/`. Details in SPEC §12 and §13. |
 | 2026-10-15 | Release decisions (Hugo): an Inno Setup installer, chosen over a portable zip and a one-file exe for a normal Windows install (Start menu, uninstaller, clean updates). The README is written with the installer, once the name, licence and install steps are known. The root scripts are deleted as the last M6 step, once the installed v1 replaces them; `tests/reference/` keeps the frozen copies. |
-| deferred   | App name and icon. |
+| 2026-10-15 | The name stays MusicDesk (Hugo). The icon is drawn by `packaging/make_icon.py` (no image editor, reproducible) and embedded in the exe with a version resource. No theme setting: Qt follows Windows' light and dark (checked). FFmpeg inside rsgain is an LGPL build with Fraunhofer FDK AAC; the LGPL-2.1 text is shipped, FDK AAC's notice is pending. Details in SPEC §13. |
 
 ## Stack
 | Concern        | Choice |
@@ -919,7 +924,7 @@ cleanup fixture case gets the expected status.
       "Preserved from seek_lyrics" and "Implementation notes (M6)" first
 - [x] Smart views: dropped (Hugo, 2026-10-15); three Find entries in the Lyrics menu instead
 - [x] Settings dialog: dropped (Hugo, 2026-10-15); Help › About with the versions and licences instead
-- [ ] Theme and icons
+- [x] Theme and icons: the app icon and the exe's version info; light and dark follow Windows (no theme setting)
 - [ ] Inno Setup installer; check the licenses of the FFmpeg libraries built into rsgain
 - [ ] README.md: what the app does, its features, install (the installer), build from source, licence
 - [ ] Retire the root `music_tools.py` and `seek_lyrics.py`, once the installed v1 replaces them for Hugo. Tell
@@ -939,15 +944,13 @@ Done when:
 - `logging` writes to `%LOCALAPPDATA%\MusicDesk\logs\app.log`.
 
 ## Open questions
-1. App name and icon: deferred by Hugo. "MusicDesk" is the working name until then. The installer, its Start
-   menu shortcut and the README need them.
-2. The app's own licence: the repo has no LICENSE file, and mutagen is GPL-2.0-or-later, so the distributed app
+1. The app's own licence: the repo has no LICENSE file, and mutagen is GPL-2.0-or-later, so the distributed app
    must be under a GPL-compatible licence. Needed before the installer and the README.
-3. Small sample files for the formats ffmpeg can't encode: APE, TAK, Musepack, OptimFROG, DSF/DFF and Speex.
+2. Small sample files for the formats ffmpeg can't encode: APE, TAK, Musepack, OptimFROG, DSF/DFF and Speex.
    Their tests are skipped until then (decided 2026-10-15). Drop them in `tests/fixtures/samples/`, and a session
    wires them into the round-trip and rsgain-key tests.
-4. ReplayGain for the formats rsgain can't handle (OptimFROG, TTA, DSF/DFF, M4B)?
+3. ReplayGain for the formats rsgain can't handle (OptimFROG, TTA, DSF/DFF, M4B)?
    - It would mean bundling ffmpeg (about 100 MB) to measure loudness, and its results differ slightly from
      rsgain's.
    - Default: no. Those files are listed as skipped.
-5. Before M7: where saved playlists go, and whether they use absolute or relative paths.
+4. Before M7: where saved playlists go, and whether they use absolute or relative paths.

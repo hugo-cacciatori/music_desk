@@ -953,7 +953,11 @@ watcher always runs, with revalidation on open as its fallback, and the scanner 
     one call.
   - rsgain prints ANSI colour codes, which are stripped as in the script's `strip_ansi`.
 - Startup self-check: if `rsgain --version` fails, the ReplayGain tools are disabled with an explanation.
-- PyInstaller one-folder `--windowed` build with icon and version info. An Inno Setup installer puts it in
+- PyInstaller one-folder `--windowed` build with icon and version info (as built at M6 task 4:
+  `resources/icons/music_desk.ico`, drawn by `packaging/make_icon.py` (a blue rounded square with two white beamed
+  notes, 16 to 256 px), is the exe's icon and every window's; `packaging/version_info.txt` is the exe's version
+  resource, kept equal to `music_desk.__version__` by `tests/test_packaging.py`). Light and dark follow Windows
+  through Qt (checked with screenshots); there is no theme setting. An Inno Setup installer puts it in
   `%ProgramFiles%\MusicDesk` with a Start menu shortcut. Uninstalling keeps `%LOCALAPPDATA%` data unless the user
   ticks the option.
 - Licenses to ship: rsgain (BSD-2-Clause), CRCpp, and the FFmpeg libraries built into rsgain. Those are LGPL or
@@ -961,9 +965,17 @@ watcher always runs, with revalidation on open as its fallback, and the scanner 
   mutagen (GPL-2.0-or-later).
 - As built (M6 task 3): the texts are in `resources/licenses/` (bundled as `resources/licenses`, listed in its
   `README.txt` and in `music_desk/licenses.py`; `tests/test_licenses.py` checks that every runtime dependency is
-  covered and every file exists). The LGPL-3.0 text (Qt) was downloaded from gnu.org with Hugo's
-  go. Still to add before distributing: FFmpeg's notice. The app's own licence is unsettled: the repo has no LICENSE file,
-  and mutagen's GPL-2.0-or-later applies to the distributed app.
+  covered and every file exists). The LGPL-3.0 text (Qt) was downloaded from gnu.org with Hugo's go.
+- **FFmpeg inside rsgain** (checked at M6 task 4): rsgain 3.6's Windows build takes FFmpeg 7.1 from vcpkg with
+  the avcodec, avformat, swresample and fdk-aac features, without "gpl" (rsgain's `vcpkg.json` at tag v3.6), so
+  FFmpeg is LGPL-2.1-or-later. The exe embeds no configuration string; the `libfdk_aac` strings in it confirm the
+  FDK AAC part. `FFmpeg-LGPL-2.1.txt` is shipped, and the README points to FFmpeg's and rsgain's source.
+  - Still to add: the **Fraunhofer FDK AAC** licence (the `NOTICE` file of github.com/mstorsjo/fdk-aac).
+  - That licence isn't GPL-compatible. It is shipped inside rsgain.exe, a separate program the app runs, not
+    linked into the app, which is the usual "aggregate" reading. Keep it in mind when choosing the app's
+    licence.
+- The app's own licence is unsettled: the repo has no LICENSE file, and mutagen's GPL-2.0-or-later applies to
+  the distributed app.
 
 ## 14. Playback
 v1 plays through the default app; MusicDesk has no player of its own.

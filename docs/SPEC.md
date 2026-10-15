@@ -740,6 +740,33 @@ happen to which files.
 - **The run:** a Rename request carries the ReplayGain card's log file name as `protected_names`, so the
   configured log is never junk. Until M5 tasks 2–3, a Preview shows a toast saying it isn't built yet.
 
+**As built (M5 task 2): Rename preview and apply** (`services/rename_job.py`, `ui/tools/rename_preview.py`):
+- **Running.** `RenameRunner` runs `plan_renames` (now cancellable: `PlanCancelled`) and `apply_plan` on one
+  worker thread. A newer preview cancels an older one still reading tags. A selection plans without subfolders or
+  junk.
+- **The preview page** replaces the Tools page in the centre ("← Back to Tools" cancels a preview in progress):
+  - the summary line in the script's dry-run wording;
+  - a table (Folder, Name, New name, Status, Details), sorted by folder then name, with a status filter that
+    shows the counts. The statuses are rename, fallback mask (missing: …), unchanged, missing tags (missing: …),
+    name taken, unreadable, and kept (with the reason); a rename's details say when its .lrc follows;
+  - below the table: the junk files ("would be sent to the Recycle Bin as junk (you confirm first)"), the
+    sidecars that follow, and the warnings;
+  - Apply is enabled only when something would change.
+- **Apply:**
+  - Unsaved Metadata edits on a file in the folder ask first (`can_leave`).
+  - With junk in the plan, `MainWindow.ask_recycle(names)` lists them, with three choices: "Rename and recycle",
+    "Rename only" (the junk items are dropped from the plan) or Cancel.
+  - The run holds a `PathLocks` lock on the folder tree (owner "the Rename tool"), taken on the UI thread, so a
+    conflicting job is refused at once with a toast. Stop cancels between two files.
+- **The result** uses the script's summary sections and wording (`rename.summary_sections`; a parity test checks
+  the titles against the script's `print_summary`), with "sent to the Recycle Bin" instead of "deleted", plus the
+  app's sections: kept, .lrc files that followed, files skipped because they changed since the preview, and
+  warnings.
+- **The index:** `RenameReport.steps` (every rename, sidecars included, in order) goes to `Indexer.apply_renames`
+  (ids, tags and the selection are kept). `RenameReport.recycled` folders are rescanned (one level).
+- `rename.preview_report(plan)` is what apply would report if nothing changes: a test checks it against
+  `apply_plan`'s report on the cleanup fixtures.
+
 **C. Tidy album**: runs A, then B on the final names. This is the script run without flags. The preview covers
 the rename step only; as in the script, ReplayGain can't be previewed on names that are about to change.
 

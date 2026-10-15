@@ -11,6 +11,33 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, session 8):**
+- **M5 task 2 is done (the rename preview and apply).** Details are in SPEC §10, "As built (M5 task 2)".
+  - Core (`core/rename.py`):
+    - `plan_renames(..., cancel=)` raises `PlanCancelled`;
+    - `RenameReport.steps` / `recycled`, `preview_report(plan)`, `count_files`;
+    - `summary_sections(report, dry_run)`: the script's wording (parity-tested), plus the app's sections.
+  - `services/rename_job.py` `RenameRunner(locks, recycle=)`: `plan`, `apply` (raises `LockedError` at once),
+    `cancel`, `close`, and the `planned` / `applied` signals. Tests replace `recycle`; the real Recycle Bin is
+    never used.
+  - `ui/tools/rename_preview.py` `RenamePreview`: the planning, preview, applying, result and error states;
+    `visible_rows()` is for tests.
+  - MainWindow:
+    - `preview_rename`, `apply_rename`, `ask_recycle` (replaced in tests);
+    - the index catches up through `apply_renames(report.steps)` and a rescan of the recycled files' folders;
+    - `center` has a third page; `close_tools` won't leave a running rename; the runner is closed on exit.
+  - Tests:
+    - `tests/core/test_rename_preview.py`, and a summary-wording parity test in `test_rename_parity.py`;
+    - `tests/ui/test_rename_tool.py` (preview, filter, apply, junk choices, the lock during the run, a lock
+      conflict, changed-since-preview, a selection, back and unsaved edits, tags untouched).
+  - Checked visually: the preview and result pages, with real fonts.
+  - 743 tests pass, 8 are skipped, and ruff is clean.
+  - **Responsiveness on this machine (2026-10-15):** `tests/ui/test_responsiveness.py` now measures about
+    3.5 s of indexing and stalls of about 50–80 ms, with rare outliers (160 ms, 233 ms) that failed its 150 ms
+    browsing bound once. The pre-M4 code (7e3a183, run from a worktree) measures the same today (3.4 s, about
+    50–70 ms), so this is the machine, not a regression. M2's 2.1 s and 45 ms were measured in quieter
+    conditions.
+  - The comparison's worktree is still registered in git, at the session scratchpad's `wt-m3`. Removing it needs
+    Hugo's go, with the command first (`git worktree remove <path>`).
 - **M5 task 1 is done (the Tools page and cards).** Details are in SPEC §10, "As built (M5 task 1)".
   - `ui/tools/`:
     - `tools_page.py`: `ToolsPage`, `ToolScope`, `ToolRequest`;
@@ -519,18 +546,26 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M5 task 2: the rename preview and apply (SPEC §10 A "Preview" and "Apply"). Read SPEC §10 A
-(with "As built (M5 task 1)"), `core/rename.py` (`plan_renames`, `apply_plan`, `RenamePlan`, `RenameReport`),
-`ui/tools/tools_page.py` (`ToolRequest`) and `MainWindow.run_tool`, first.
-- `ui/tools/rename_preview.py`: the "Old name → New name" table with a status per row, a status filter, junk and
-  sidecars listed separately, and counts matching the script's summary.
-- `plan_renames` runs off the UI thread (it reads tags). Apply re-checks each item.
-- Junk goes to the Recycle Bin only after a dialog that lists the files (a `confirm_*` method, replaced in tests).
-- The result summary has the script's sections.
-- Jobs take `LibraryService.locks` for their folder. After a run, the index is updated (`Indexer.apply_renames`,
-  or a folder rescan).
-- A selection run renames only the selected files and their sidecars (`plan_renames(selection=)`), never junk.
-- Replace the placeholder toast in `MainWindow.run_tool` for "rename".
+**Next step:** M5 task 3: the ReplayGain album and discography jobs, one album at a time, with cancel and
+reports (SPEC §10 B), and Tidy (§10 C). Read SPEC §10 B and C (with the "As built" notes), `core/replaygain.py`
+(`process_album`, `process_discography`, `find_album_folders`, Reporter, RunLog) and `core/rsgain.py`, first.
+- Preview:
+  - the album folders that will be processed, with their keyword subfolders and file counts;
+  - warnings: no audio, unsupported formats skipped, a command line too long.
+  It can be built from `find_album_folders`, `list_audio_files` and `find_keyword_subfolders`, off the UI thread.
+- **Job:** a worker thread running `process_album` / `process_discography`, which already run one album at a
+  time.
+  - It holds a `PathLocks` lock on the folder (owner "the ReplayGain tool"), like `RenameRunner`.
+  - Live log lines and per-album progress come through a Reporter that emits Qt signals (throttled).
+  - Cancel uses the CancelToken, which kills rsgain.
+- **Report:** the per-album RunLog text, the discography summary table, and "Open replaygain.log" / "Open in File
+  Explorer" (through `MainWindow.launch` / `show_in_explorer`, replaced in tests).
+- **Index:** after the job, the changed files' tags (ReplayGain values, the comment) need re-reading. Use
+  `Indexer.scan_path(folder, recursive=True)`: the size/mtime changes make the scan re-read them.
+- **Tidy:** the rename preview (`RenameRunner`), Apply, then the ReplayGain job on the same scope, chained.
+- Replace the placeholder toast in `MainWindow.run_tool` for "replaygain" and "tidy". The slow tests may use the
+  real rsgain (as the M1 parity tests do).
+- Task 4 (the jobs panel) comes after: until then, the job's progress lives on its own page.
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
@@ -660,6 +695,7 @@ two files alone.
 | 2026-10-15 | lyrics_cache.json import: only at a root's top, when the root is added or merged, before its scan. The file is read-only. Merge rule per key: lyrics or instrumental beat not_found; otherwise the newer `checked` wins, and a tie keeps the index's. Entries the script never wrote (errors, malformed ones) are skipped and counted. Details in SPEC §9. |
 | 2026-10-15 | LRCLIB column: "no tags" for tracks that can't be looked up, blank for unreadable files, and "offline" or "error" over "pending" from the service's state. The pending count for the status bar is kept by the lyrics service on its own connection (counted at refills, decremented per result), never on the UI thread. The status bar button is Pause, Resume or Retry now. Details in SPEC §5 and §9. |
 | 2026-10-15 | Tools page: it replaces the file list in the centre, with Back; opening another folder returns to the list. Scope: one folder, else the selected music files (Rename only), else the open folder. ReplayGain gets its own validation (rsgain's target range, threshold, margin, lowercase keywords, log name, comment). Card options are saved on every change, and a well-typed invalid saved value is kept for validation to show. Details in SPEC §10. |
+| 2026-10-15 | Rename tool run: the preview page replaces the Tools page. Junk asks "Rename and recycle", "Rename only" or Cancel. The folder tree is locked ("the Rename tool") for the run, and a conflict is refused at once. The result uses the script's summary wording (parity-tested), with "sent to the Recycle Bin" for "deleted". The index follows through in-place renames (ids kept), plus a rescan of folders that lost junk. Details in SPEC §10. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -791,7 +827,7 @@ Done when: every tab state is reachable with mocked LRCLIB, and a real run on a 
 
 **M5 Tools** (read SPEC §10 and §13)
 - [x] Tools page and cards (Rename, ReplayGain, Tidy), options, validation
-- [ ] Rename preview and apply: kept files with reasons, sidecar renames, junk files to the Recycle Bin
+- [x] Rename preview and apply: kept files with reasons, sidecar renames, junk files to the Recycle Bin
 - [ ] ReplayGain album and discography jobs (one album at a time), cancel, reports
 - [ ] Jobs panel, locks, index reconciliation
 

@@ -235,7 +235,13 @@ Explorer-like, with no copy, paste, delete or new.
     selection stays put. The list is reset only when another folder opens.
   - Folders stay first in both sort directions. Ties sort by name, using natural keys precomputed per row.
   - A folder row shows its subtree's track count in the Title column, and the subtree's total duration.
-  - The LRCLIB column shows "pending" until M4.
+  - The LRCLIB column (as built at M4):
+    - from the index: synced, plain, instrumental, not found, pending;
+    - "no tags" for a track without artist or title (never looked up; the script's "no tags" badge);
+    - blank for a file whose tags can't be read (its tooltip gives the error).
+    - A pending row shows "offline" in offline mode, or "error" when its key's last lookup this session failed
+      (`LyricsService.status_for`, through `FileListModel.lrclib_status`). The column repaints when the service's
+      state changes or a lookup fails. Sorting uses the index state.
   - Bitrate and Modified are hidden by default. The header menu shows or hides columns and can reset them.
   - The layout (column order, sizes, hidden columns, sort) is saved as the header state in settings.json, with
     the window geometry, the splitter, the expanded folders (by path) and the last open folder, which reopens at
@@ -518,6 +524,17 @@ not it has a lyrics tag.
 - Priority order: the selected track, then the visible folder, then the rest folder by folder.
 - Controls:
   - Status bar progress with pause and resume.
+    - As built (M4 task 5): a lyrics label and a button next to the indexing label:
+      - "Looking up lyrics: N to look up" [Pause];
+      - "Lyrics paused: N to look up" [Resume];
+      - "LRCLIB unreachable, retrying at HH:MM" [Retry now];
+      - "Lyrics: offline mode";
+      - "Lyrics: N to retry later" (only failed keys are left);
+      - hidden when nothing is left.
+    - N is the count of pending keys. The service counts it on its own connection at each background refill
+      (`lyrics_index.pending_count`), and it goes down with each result. The UI thread never counts.
+      `LyricsProgress.pending` carries it.
+    - Pause is for this session only (not saved).
   - Settings: **Offline mode** (`--offline`: no LRCLIB calls), and **Automatically save found lyrics into tags**
     (`--embed`, off by default). Auto-save only fills an empty lyrics tag and never replaces one. Writes go
     through TagWriter.

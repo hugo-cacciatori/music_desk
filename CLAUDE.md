@@ -11,6 +11,16 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, session 7):**
+- **M4 task 5 is done (the lyrics columns and status bar progress). M4 waits only for its real run** (Next step).
+  - `FileRow.lyrics_key`. `queries._lrclib_state` gives "no tags" (no key), blank (unreadable), or the index
+    state. `FileListModel.lrclib_status` and `refresh_column` show "offline" or "error" for pending rows from
+    `LyricsService.status_for(key)`.
+  - `LyricsProgress.pending`: the service counts pending keys at each refill (`lyrics_index.pending_count`) and
+    decrements per result.
+  - The status bar's `lyrics_label` and `lyrics_button` (Pause, Resume, Retry now) are driven by
+    `MainWindow.show_lyrics_progress`.
+  - Tests are in `tests/ui/test_lyrics_status.py`, plus additions to the core and service tests. 694 tests pass, 8
+    are skipped, ruff is clean, and the app exits 0 offscreen.
 - **M4 task 4 is done (the lyrics_cache.json import):**
   - `core/index/lyrics_import.py`:
     - `import_cache(writer, folder) -> ImportReport | None`, with `read_cache` and `merge_cache`;
@@ -464,21 +474,18 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M4 task 5, the last of M4: the Lyrics tag and LRCLIB columns, and the status bar progress
-(SPEC §5 columns, §9 "Controls"). Read SPEC §9 (as built) and `services/lyrics_service.py` (`progress`,
-`LyricsProgress`, `pause`/`resume`), first.
-- The columns already exist (`ui/file_view.py`: "♪" from `lyrics_tag`, "LRCLIB" from `queries._lrclib_state`)
-  and refresh through `foldersChanged`. Check them against SPEC §5, and add the error state (SPEC §6 lists
-  `lrclib:error`). Errors are only in the service's memory (`last_error`), so decide whether the column shows
-  them.
-- Status bar: a lyrics label next to the indexing label:
-  - "Looking up lyrics: N left" needs a pending count (a cheap count query on the UI connection, throttled);
-  - unreachable, offline and paused states;
-  - a Pause/Resume button;
-  - the existing toast keeps Retry now.
-- Then check M4's "Done when": every tab state reachable with mocked LRCLIB (`tests/ui/test_lyrics_tab.py`),
-  and a real run on a small copied folder. That real run reaches lrclib.net: ask Hugo first, and use a copy of
-  the fixtures, never a real library.
+**Next step:** M4's "Done when": a real run on a small copied folder. Every M4 task is done, and every tab state
+is reachable with mocked LRCLIB (`tests/ui/test_lyrics_tab.py`).
+- **Ask Hugo first.** The run reaches lrclib.net, with the User-Agent `MusicDesk/<version> (personal music
+  library app)`.
+- Use a copy of the fixtures (for example `tests/fixtures/generated/album`) in a scratch folder, with
+  `LOCALAPPDATA` pointed at a scratch folder too. Never a real library.
+- Add it as a root, let it index, and check:
+  - lookups happen (the status bar), and the LRCLIB column fills in;
+  - the Lyrics tab shows results.
+  The fixture tracks are tones titled "First", "Second" and so on, so not found is the likely result for most.
+  A copy of a real, well-known song from Hugo would test "found".
+- Then M5 task 1 (Tools page and cards). Read SPEC §10 and §13 first.
 
 **Done in session 7 (the original task 1 brief, kept for reference):**
 - `services/lyrics_service.py`:
@@ -494,7 +501,7 @@ two files alone.
   `Scanner.update_file`, or a small helper.
 - Tests: mocked HTTP only (`tests/core/lrclib_fake.py`, and the autouse network guard). Priority order,
   deduplication, the breaker pausing and resuming, offline mode, and a restart resuming the pending tracks.
-- **Not yet:** the status bar progress (task 5).
+- All five M4 tasks are done; only the real run of "Done when" is left.
 
 **Session protocol:**
 1. Read this file, then the SPEC sections for the current milestone. Pick up the first unchecked task in Progress.
@@ -606,6 +613,7 @@ two files alone.
 | 2026-10-15 | seek_lyrics' songs.html search is a parity requirement of library search: free text is a case-insensitive substring match over title, artist, album and lyrics (LRCLIB and tags), accent-folded. There is one Ctrl+K search, and the Lyrics tab is the detail pane. The plan is a trigram FTS5 index (schema v3, with an `lrclib` column) and a `LIKE` fallback under 3 characters, all built at M6. Details in SPEC §6. |
 | 2026-10-15 | Saving lyrics into tags: one path, `TagWriter.embed_lyrics` (the save lock and index catch-up as any save). Save to file tags asks before replacing, and is refused while the Metadata tab has unsaved edits on the file. Auto-save, like the script's `--embed`, covers every found track, earlier ones included (a backfill at start and when turned on), but only fills empty tags (checked in the file). Locked files are skipped, and each file is tried once per session. Until the Settings dialog, a Lyrics menu holds Offline mode and Auto-save. Details in SPEC §8 and §9. |
 | 2026-10-15 | lyrics_cache.json import: only at a root's top, when the root is added or merged, before its scan. The file is read-only. Merge rule per key: lyrics or instrumental beat not_found; otherwise the newer `checked` wins, and a tie keeps the index's. Entries the script never wrote (errors, malformed ones) are skipped and counted. Details in SPEC §9. |
+| 2026-10-15 | LRCLIB column: "no tags" for tracks that can't be looked up, blank for unreadable files, and "offline" or "error" over "pending" from the service's state. The pending count for the status bar is kept by the lyrics service on its own connection (counted at refills, decremented per result), never on the UI thread. The status bar button is Pause, Resume or Retry now. Details in SPEC §5 and §9. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -731,7 +739,7 @@ Done when: every format with a fixture round-trips through the UI, and ID3 versi
 - [x] Lyrics tab, every state
 - [x] Save to file tags, and the auto-embed setting
 - [x] `lyrics_cache.json` import
-- [ ] Lyrics tag and LRCLIB columns, status bar progress
+- [x] Lyrics tag and LRCLIB columns, status bar progress
 
 Done when: every tab state is reachable with mocked LRCLIB, and a real run on a small copied folder works.
 

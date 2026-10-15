@@ -10,13 +10,13 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-15, end of session 5):**
+**Current state (2026-10-15, end of session 6):**
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
   `--version` self-check), an empty `MainWindow` whose status bar shows the rsgain version, and empty `services/`
   and `ui/` packages. `uv run pyinstaller --noconfirm packaging/music_desk.spec` builds `dist/MusicDesk/`
   (about 104 MB); the built exe logs `rsgain 3.6` from its own bundle.
-- **M1 in progress** (references, fixtures, formats, tags, rename and ReplayGain done; lyrics and playlists left):
+- **M1 is complete** (its "Done when" holds: full pytest, slow rsgain tests included, passes):
   - git repo (local, branch `main`, no remote), one commit per finished task. `.gitattributes` keeps
     `tests/fixtures/generated/` and `tests/reference/` byte-exact (git's autocrlf is on).
   - The scripts are frozen in `tests/reference/` (hashes identical to the root copies).
@@ -26,7 +26,7 @@ two files alone.
     without a lyrics tag, replaygain.log, folder.jpg, .m3u, .nfo/.sfv/.txt), `edge/` (FLAC/MP3/M4A with "03/12",
     full dates, padded/blank text, legacy keys, back+front covers, an iTunNORM COMM and a TXXX "comment"), and
     `cover.jpg`. `tests/conftest.py` has `fixtures_dir`, `fixture_copy` (copies into `tmp_path`) and
-    `reference_music_tools` (the frozen script imported as a module).
+    `reference_music_tools` / `reference_seek_lyrics` (the frozen scripts imported as modules).
   - `core/formats.py` holds the SPEC §1 table (`FORMATS`, `format_for`, `open_audio`, `AUDIO_EXTENSIONS`,
     `REPLAYGAIN_EXTENSIONS`). Every format with a fixture round-trips title, lyrics and cover through mutagen with
     no downgrade needed; ID3v2.3 is preserved.
@@ -67,16 +67,31 @@ two files alone.
     - Album B: a loud FLAC, an ID3v2.3 MP3, and a `Scans/` folder without audio.
 
     59 fixture files in all. `tests/tagdump.py` is shared by the parity tests.
-  - 200 tests pass, 8 are skipped (formats without a sample file), the 21 `slow` tests pass, and ruff is clean.
+  - `core/lyrics.py` (port of seek_lyrics' lookup logic):
+    - `LyricsOptions` (the script's constants; User-Agent `MusicDesk/<version> (personal music library app)`).
+    - `read_track(path) -> Track` (artist, title, album, duration, embedded) through `TaggedFile`, with the
+      script's albumartist and file-name fallbacks.
+    - `LrclibClient(options, urlopen=, sleep=, jitter=)`.`get()` keeps the script's retries line for line.
+      `fetch_lyrics(track, client, today)` returns the script's cache entry shape.
+    - `LyricsCache` protocol + `DictCache`, `is_fresh` (30-day not_found rule), and
+      `lookup(track, cache, client, offline=, today=)` (errors returned, never cached; a lyrics tag doesn't skip).
+    - `CircuitBreaker` only counts failures in a row; M4's LyricsService adds the 10-minute pause.
+    - `embed_lyrics(path, entry, only_if_empty=) -> EmbedResult`, and `search_urls()` for the Genius/Google buttons.
+    - Tests use `tests/core/lrclib_fake.py` (scripted urlopen); an autouse guard fails any real network call.
+      Parity: helpers, `fetch_lyrics` (URLs, sleeps, entries) and `read_song` match the frozen script.
+  - `core/playlists.py`: `PlaylistEntry`, `entry_for`, `folder_tracks(folder, recursive)` (natural order, files
+    then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
+    `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
+  - 295 tests pass, 8 are skipped (formats without a sample file), the 21 `slow` tests pass, and ruff is clean.
 
-**Next step:** `core/lyrics.py` (next unchecked M1 task), then `core/playlists.py`, which completes M1. Read SPEC §8,
-§9, §14 and §17, and `tests/reference/seek_lyrics.py`, first.
-- **Port:** the LRCLIB client (`/api/get`, then `/api/search` with the ±3 s and normalized-artist match), the
-  retries, the statuses, the cache key and entry shape, the file-name fallback, and the LRC timestamp strip.
-- **Tags:** artist, title and album through `TaggedFile.fields()`, and the embed through `set_fields({"lyrics": ...})`.
-- **Changes from the script:** every track is looked up, and auto-embed fills only empty tags.
-- **Tests:** mocked HTTP only; tests never call the real API.
-- **Not yet:** the SQLite cache store waits for M2's index. For now, keep the cache an interface backed by a dict.
+**Next step:** M2's first task: DB schema, DbWriter and the read connection. Read SPEC §2, §4, §16 (and §9 for
+the lyrics cache table the schema must hold), first.
+- `core/index/schema.py`: SQLite in WAL mode with the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
+  `folder_stats`, FTS5 `search`) and a schema version. `lyrics` holds the `core/lyrics` entry shape, so a store
+  over it can implement the `LyricsCache` protocol.
+- `services/db_writer.py`: the single writer thread with a queue; readers use their own read-only connection.
+- Tests: schema creation and migration version, writer ordering, WAL readers seeing committed data.
+- **Not yet:** the scanner, watcher and UI (later M2 tasks).
 
 Don't start it until Hugo says so.
 
@@ -167,6 +182,8 @@ Don't start it until Hugo says so.
 | 2026-10-15 | `tags.py` deliberate differences from the script (SPEC §17): Vorbis ReplayGain keys written in uppercase, ID3 version kept on save, WMA disc read. Rename text fields are *not* stripped, to match TinyTag 2.0.0 and the script exactly (SPEC §17 wording corrected). |
 | 2026-10-15 | Rename preview = the script's *real* run, simulated in walk order (the script's `--dry-run` could differ). A `.lrc` follows only when exactly one audio file has its stem. Selection runs never recycle junk. Details in SPEC §10. |
 | 2026-10-15 | ReplayGain core: a cancelled album → STOPPED + warning (later albums CANCELLED, no leveling); a crash is logged as CRASHED, not re-raised; unscannable formats are listed as warnings; an over-long command line isn't run. Details in SPEC §10B. |
+| 2026-10-15 | Lyrics core: the HTTP opener, sleep, jitter and clock are injected; the cache is a `LyricsCache` protocol (dict now, SQLite in M2/M4); `lookup` returns errors without caching; the circuit breaker counts in core and pauses/retries in M4's service. Details in SPEC §9. |
+| 2026-10-15 | Temporary playlists: `play-<YYYYMMDD-HHMMSS>[-n].m3u8`, UTF-8 with CRLF, `#EXTINF` label "Artist - Title", else the title, else the file stem, and -1 seconds when unknown. Pruning keeps the newest 20 by name and touches only `play-*.m3u8`. Details in SPEC §14. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -258,8 +275,8 @@ Done when: the built exe in `dist/` starts, shows a window, and reports the rsga
 - [x] `core/rename.py`: plan, apply, validate, junk protections, .cue and .lrc handling, sidecar renames, plus
       parity tests
 - [x] `core/rsgain.py` + `core/replaygain.py`: parity tests on RunLog text, plus slow tests with the real rsgain
-- [ ] `core/lyrics.py`: LRCLIB client and lookups, mocked HTTP tests
-- [ ] `core/playlists.py`: temporary .m3u8 writer
+- [x] `core/lyrics.py`: LRCLIB client and lookups, mocked HTTP tests
+- [x] `core/playlists.py`: temporary .m3u8 writer
 
 Done when: pytest passes, including FLAC/MP3 parity against the reference scripts and round trips for every format
 with a fixture.

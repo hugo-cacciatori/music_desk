@@ -270,6 +270,12 @@ not it has a lyrics tag.
   - Settings: **Offline mode** (`--offline`: no LRCLIB calls), and **Automatically save found lyrics into tags**
     (`--embed`, off by default). Auto-save only fills an empty lyrics tag and never replaces one. Writes go
     through TagWriter.
+- As built in core (M1, `core/lyrics.py`): `read_track`, `LrclibClient` (injectable opener, sleep and jitter),
+  `fetch_lyrics`, `lookup(track, cache, client, offline=, today=)` over a `LyricsCache` protocol (a dict until the
+  `lyrics` table exists), `is_fresh`, `CircuitBreaker` (counting only; the service owns the pause and the timed
+  retry), `embed_lyrics(path, entry, only_if_empty=)` returning WRITTEN, SAME_TEXT, HAS_OTHER_LYRICS,
+  NOTHING_TO_EMBED or NOT_EMBEDDABLE, and `search_urls` (encoded like JS `encodeURIComponent`). Tracks with the
+  same key are deduplicated by the service, not by `lookup`.
 - When a root is added, a `lyrics_cache.json` at its top (the script's cache) is imported into the DB cache. The
   file itself is left untouched.
 
@@ -441,6 +447,10 @@ v1 plays through the default app; MusicDesk has no player of its own.
   - Order: "Play folder" uses the folder's natural file order, followed by its subfolders' files in natural order.
     Play selection and Play results use the current view's sort order.
   - The last 20 temporary playlists are kept. Older ones are removed; these are the app's own files.
+  - As built (M1, `core/playlists.py`): files are named `play-<YYYYMMDD-HHMMSS>[-n].m3u8`, written as UTF-8 with
+    CRLF line endings. The `#EXTINF` label is "Artist - Title", else the title, else the file stem; the duration is
+    rounded seconds, or -1 when unknown. Pruning keeps the newest 20 by name and only ever touches `play-*.m3u8`
+    in that folder. `folder_tracks(folder, recursive)` gives the Play folder order.
   - If no app is associated with .m3u8, a message explains how to set one in Windows, and offers "Open in File
     Explorer" instead.
 

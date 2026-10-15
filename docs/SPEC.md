@@ -244,6 +244,12 @@ Explorer-like, with no copy, paste, delete or new.
   - Up is Alt+↑, the toolbar button, or Backspace (in the list and the tree only, so text fields keep it). It
     selects the folder you came from. F5 rescans the open folder.
   - Typing in the list selects by name, Enter opens a folder, and Ctrl/Shift extend the selection.
+- As built (M2 task 7):
+  - The context menus show only actions that exist so far. Rename (F2), Rename from tags…, Tidy album… and
+    ReplayGain… arrive with M3 and M5.
+  - A right-click on the list background gives the open folder's menu, without Open.
+  - Double-click or Enter on a file opens it with its default app, whatever the type.
+  - "Open in File Explorer" opens a folder itself, and shows a file selected in its folder.
 - **Smart views (sidebar):**
   - No lyrics in tags.
   - Found on LRCLIB but not in tags: the candidates for "Save to file tags".
@@ -526,6 +532,12 @@ v1 plays through the default app; MusicDesk has no player of its own.
     in that folder. `folder_tracks(folder, recursive)` gives the Play folder order.
   - If no app is associated with .m3u8, a message explains how to set one in Windows, and offers "Open in File
     Explorer" instead.
+  - As built (M2 task 7):
+    - The play lists come from the index (paths, durations, artist and title), so no file is read on the UI
+      thread.
+    - Writing the playlist and calling `os.startfile` run on a worker thread.
+    - The fallback opens the played folder, or shows the first selected file in Explorer.
+    - "Play folder" with no audio files says so in the status bar.
 
 ## 15. Playlist builder (M7)
 Planned for M7, not in v1. A sketch to refine with Hugo before M7:

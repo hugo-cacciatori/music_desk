@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M2 in progress** (tasks 1 to 5 done: DB schema, DbWriter, read connection; library roots; scanner; watcher; folder tree and file list; address bar and history):
+- **M2 is complete** (its "Done when" holds: measured on a copied 10k-file tree, see the end of this block):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
     `folder_stats`, FTS5 `search` with `unicode61 remove_diacritics 2`). `MIGRATIONS[n]` takes v`n` to v`n+1`,
     applied in one transaction and recorded in `PRAGMA user_version`. A newer DB raises `SchemaError`, untouched.
@@ -141,7 +141,32 @@ two files alone.
       is no last folder.
     - Shared UI fixtures moved to `tests/ui/conftest.py` (with `library_dir`, `service` and `window`; a module can
       override them), plus `tests/ui/browser_helpers.py`.
-  - 431 tests pass, 8 are skipped, the 22 `slow` tests pass (rsgain, plus the 100k scan), and ruff is clean. A
+  - Context menus (task 7):
+    - `core/fsops.py`: `open_with_default_app(path, launcher=os.startfile)`, `explorer_command(path, is_dir)`
+      (a folder opens itself; a file uses `explorer /select,"…"`) and `open_in_explorer(path, is_dir, run=)`.
+    - `queries.playlist_for_folder(conn, id, recursive)` (natural order, files then subfolders) and
+      `playlist_for_ids(conn, ids)`. Both read the index only, so no file is read on the UI thread.
+    - `MainWindow.list_menu(ids)`:
+      - files: Open (one file), Play selection, Open in File Explorer, Copy path(s);
+      - a folder: Open, Play folder, Play folder and subfolders, Open in File Explorer, Copy path, Rescan;
+      - the background: the open folder's menu, without Open.
+      The tree uses the same folder actions, through `Sidebar.folder_menu_provider`, plus Remove from library
+      (roots only) and Add folder…. Double-click or Enter on a file opens it with the default app.
+    - Launching (`os.startfile`, Explorer, writing the playlist) runs on a `shell` worker thread. An `OSError`
+      shows a toast: for playlists, how to set a .m3u8 app in Windows, with "Open in File Explorer" on the
+      folder or the first file instead.
+    - `MainWindow.launch`, `show_in_explorer` and `playlist_dir` are replaced in tests, which never launch
+      anything. The real Explorer command line hasn't been run (that would open Explorer).
+    - `FileView.selected_ids()` returns the view's order. A right-click on an unselected row selects it.
+    - Drag-out stays disabled: no drag flags, `NoDragDrop`, and a test covers it.
+  - M2 "Done when", measured by `tests/ui/test_responsiveness.py` (`slow`) on a 500-folder copy with 10,000
+    files and 1,000 tracks:
+    - indexing takes 2.1 s while 56 folders are opened meanwhile, the worst open 6 ms;
+    - the worst event-loop stall is 45 ms while indexing and 47 ms while browsing the indexed tree (the target
+      is 50 ms);
+    - reopening an indexed folder takes 3 ms (median), 4 ms at worst.
+  - 446 tests pass, 8 are skipped, the 23 `slow` tests pass (rsgain, the 100k scan and the responsiveness
+    check), and ruff is clean. A
     test run that takes 30 s or more is pytest deleting an old 100k-file temp tree, not a hang.
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
@@ -215,26 +240,23 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M2's seventh and last task: the context menus, with drag-out kept disabled. That completes M2. Read
-SPEC §5 (menus), §14 (playback) and CLAUDE.md Ground rule 1 first.
-- `core/fsops.py` (no Qt):
-  - `open_with_default_app(path)` with `os.startfile`;
-  - `open_in_explorer(path)` with `explorer /select,"<path>"` (a folder opens itself);
-  - all through an injectable runner, so tests never launch anything.
-- Play folder, Play folder and subfolders, and Play selection:
-  - `playlists.folder_tracks` (natural order) or the view's order (`FileView.visible_names` order of the selected
-    ids), then `write_temp_playlist`, then `os.startfile` on it;
-  - when no app is associated with .m3u8 (`OSError`), a message explains how to set one, with "Open in File
-    Explorer" instead.
-- File list menu: Open with default app (also on double-click of an audio file), Play selection, Open in File
-  Explorer, Copy path. Folder menu (list and tree): Open, Play folder, Play folder and subfolders, Open in File
-  Explorer, Rescan, Remove from library (roots only).
-- Menu items for later milestones (Rename F2, Rename from tags, Tidy album, ReplayGain) are not shown until they
-  exist.
-- Drag-out stays disabled. Add a test that starting a drag on the list and the tree produces no drag.
-- Then check M2's "Done when" on a copied tree of 10k+ files: browsing stays fluid while it indexes, and folders
-  reopen instantly from the index. Use the synthetic tree from `test_index_scanner.make_tree`, or a copy Hugo
-  provides; never a real library.
+**Next step:** M3's first task: the Metadata tab for a single file, every format. Read SPEC §7, §1 and §11, and
+the Ground rules, first.
+- A right-hand side panel (`ui/side_panel/panel.py`), resizable and collapsible, with Metadata and Lyrics tabs.
+  The Lyrics tab is only a placeholder until M4. The panel follows `FileView.selectionChanged`.
+- `ui/side_panel/metadata_tab.py` for one selected audio file:
+  - the editable fields of `tags.Fields`, read through `TaggedFile` on a worker thread (never on the UI thread);
+  - the header: the cover (embedded front cover, else folder.jpg/cover.jpg/front.jpg, else a placeholder), the
+    name and a format line;
+  - the read-only block: path, size, codec details and the Loudness block (the RG values);
+  - a dirty marker; Ctrl+S saves and Esc reverts.
+- Saving: write the changed fields only (`TaggedFile.set_fields` + `save`, which keeps the ID3 version) on a
+  worker thread. This is a first, simple writer; the real TagWriter with path locks is M3's second task. After a
+  save, rescan the folder so the list row updates.
+- Multi-selection, cover editing, the folder summary and the .lrc import are later M3 tasks: show "Select a single
+  file" for now.
+- pytest-qt: load and save round trips for every fixture format, ID3v2.3 kept, Esc revert, the dirty marker,
+  and no tag I/O on the UI thread.
 
 Don't start it until Hugo says so.
 
@@ -333,6 +355,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Watcher: one watchdog observer over the online roots; per-folder coalescing with a 0.5 s debounce and a 5 s cap; jobs carry paths resolved when they run; new or moved-in folders are scanned recursively. Every folder open triggers a revalidation (stale-while-revalidate), which is also the fallback when a root can't be watched. Details in SPEC §4. |
 | 2026-10-15 | Browser: the tree and list read the index on the UI's read connection (instant), update in place on indexer signals, and reset only when another folder opens. Folders stay first in both sort directions. Folder rows show their subtree's track count (Title column) and total duration. Layout persists through `QHeaderView.saveState` in settings.json. When the open folder disappears, its nearest surviving ancestor opens. Settings live in `settings.py` (typed, JSON). Details in SPEC §5. |
 | 2026-10-15 | Navigation: the breadcrumb starts at the root path (one segment), and the levels above a root aren't navigable. Back and forward are Alt+←/→ and the mouse buttons; Backspace means Up, and only in the list and the tree. Up selects the folder you came from. A typed path to a file opens its folder and selects it. Details in SPEC §5. |
+| 2026-10-15 | Context menus show only what exists: Rename, Tidy and ReplayGain items arrive with their milestones. Shell hand-offs (default app, Explorer, playlist writing) run on a worker thread, and a failure becomes a toast with an Explorer fallback. Play lists are built from the index, not by reading files. "Open in File Explorer" opens a folder itself, and shows a file selected in its folder. M2 is complete. Details in SPEC §5 and §14. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -437,7 +460,7 @@ with a fixture.
 - [x] Watcher, plus revalidation on open as a fallback
 - [x] Folder tree (lazy, natural order) and file list (columns, sort, persisted layout, Ctrl+F filter)
 - [x] Address bar, history, keyboard navigation
-- [ ] Context menus: Open with default app, Play folder/selection, Open in Explorer, Copy path. Drag-out disabled.
+- [x] Context menus: Open with default app, Play folder/selection, Open in Explorer, Copy path. Drag-out disabled.
 
 Done when: a copied 10k+ file tree browses fluidly while it is being indexed, and folders reopen instantly from
 the index.

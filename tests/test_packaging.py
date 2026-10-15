@@ -31,3 +31,18 @@ def test_version_info_matches_the_app_version():
 def test_the_spec_uses_them():
     spec = (ROOT / "packaging" / "music_desk.spec").read_text(encoding="utf-8")
     assert "music_desk.ico" in spec and "version_info.txt" in spec and '"resources/icons"' in spec
+
+
+def test_installer_script():
+    """The installer's fixed points (SPEC §13): the AppId never changes, Program Files by default with an
+    "only for me" choice, the licence page, the icon, the files from the PyInstaller folder, and an uninstaller
+    that keeps the app's data unless asked (and always in a silent uninstall)."""
+    iss = (ROOT / "packaging" / "installer.iss").read_text(encoding="utf-8")
+    assert "AppId={{AF5F6B62-C2F8-41D7-8FBE-124F1D693BF9}" in iss
+    assert r"DefaultDirName={autopf}\{#AppName}" in iss and "PrivilegesRequiredOverridesAllowed=dialog" in iss
+    assert "ArchitecturesInstallIn64BitMode=x64compatible" in iss
+    assert r"LicenseFile=..\LICENSE" in iss and r"SetupIconFile=..\resources\icons\music_desk.ico" in iss
+    assert r'Source: "..\dist\MusicDesk\*"' in iss and "recursesubdirs" in iss
+    assert r"{localappdata}\{#AppName}" in iss and "not UninstallSilent" in iss and "MB_DEFBUTTON2" in iss
+    for path in ("LICENSE", "resources/icons/music_desk.ico"):
+        assert (ROOT / path).is_file()

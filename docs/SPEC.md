@@ -960,6 +960,22 @@ watcher always runs, with revalidation on open as its fallback, and the scanner 
   through Qt (checked with screenshots); there is no theme setting. An Inno Setup installer puts it in
   `%ProgramFiles%\MusicDesk` with a Start menu shortcut. Uninstalling keeps `%LOCALAPPDATA%` data unless the user
   ticks the option.
+- As built (M6 task 5), the installer (`packaging/installer.iss`, built with `packaging/build_installer.py`):
+  - `dist/installer/MusicDesk-Setup-<version>.exe` (about 33 MB) installs `dist/MusicDesk/` for all users in
+    `C:\Program Files\MusicDesk` (admin). Its first page also offers "only for me", in
+    `%LOCALAPPDATA%\Programs\MusicDesk` without admin. It is 64-bit only.
+  - Pages: the licence (`LICENSE`, GPL-3.0), then the folder. It creates a Start menu shortcut and, if ticked, a
+    desktop one; "Launch MusicDesk" is offered at the end. A running MusicDesk is closed through the Restart
+    Manager.
+  - The AppId (`AF5F6B62-…`) is fixed, so a newer setup upgrades in place.
+  - The uninstaller removes the app's files and shortcuts, then asks whether to delete `%LOCALAPPDATA%\MusicDesk`
+    (index, settings, logs). No is the default; a silent uninstall keeps it, and music folders are never touched.
+  - Checked on this machine: a per-user install, run and silent uninstall in a scratch folder (files and shortcut
+    gone, data kept), and an all-users install in Program Files, whose exe ran with its bundled rsgain
+    (`rsgain self-check OK … C:\Program Files\MusicDesk\_internal\resources\rsgain\rsgain.exe`). That install was left
+    in place for Hugo.
+  - `tests/test_packaging.py` checks the script's fixed points (AppId, folders, licence, icon, files, the
+    uninstaller's data rule).
 - Licenses to ship: rsgain (BSD-2-Clause), CRCpp, and the FFmpeg libraries built into rsgain. Those are LGPL or
   GPL depending on how they were built, so check before distributing the installer. Also Qt/PySide6 (LGPL) and
   mutagen (GPL-2.0-or-later).

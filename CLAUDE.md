@@ -11,6 +11,10 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 9):**
+- **M6 task 5 is done (the installer).** `packaging/installer.iss` and `packaging/build_installer.py`; details in
+  SPEC §13, "As built (M6 task 5)". Both M6 "Done when" conditions hold. MusicDesk 0.1.0 is installed for all
+  users in `C:\Program Files\MusicDesk` on Hugo's machine (Start menu shortcut). Left in M6: the README and
+  retiring the root scripts.
 - **The app's licence is GPL-3.0-or-later** (`LICENSE`, `pyproject.toml`, About). Every bundled third-party notice
   is shipped in `resources/licenses/` (the FDK AAC NOTICE was downloaded with Hugo's go).
 - **M6 task 4 is done (theme and icons).** `packaging/make_icon.py` draws `resources/icons/music_desk.ico` (9 sizes)
@@ -634,15 +638,16 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** the remaining M6 tasks, in order: the Inno Setup installer (SPEC §13), the README, then retiring
-the root scripts once the installed v1 is in use. Read SPEC §13 first. The name (MusicDesk), the icon, the
-version resource, the app's licence and every third-party notice are ready. For the installer:
-- Inno Setup isn't installed. It is a global dev tool (`winget install JRSoftware.InnoSetup`), so ask Hugo first.
-- Ask Hugo: install for all users in Program Files (needs admin) or per user (no admin); the SPEC says Program
-  Files.
-- `packaging/installer.iss` builds from `dist/MusicDesk/`: a Start menu shortcut, the icon, the version, the
-  licence page (`LICENSE`), and an uninstaller that keeps `%LOCALAPPDATA%\MusicDesk` unless the user ticks it.
-- M6 "Done when": the installer installs the app, and it runs from Program Files with the bundled rsgain.
+**Next step:** the last two M6 tasks.
+- **README.md** (now): what MusicDesk does and for whom; its features (browsing, the metadata editor, lyrics from
+  LRCLIB, library search, the Rename / ReplayGain / Tidy tools); install (the setup from GitHub releases; the
+  "only for me" option; SmartScreen warns because the setup isn't signed); where its data lives and what
+  uninstalling keeps; build from source (uv, the commands below, Inno Setup); tests; licence (GPL-3.0-or-later,
+  and the bundled components). Show Hugo the draft before committing it. The repo is public.
+- **Retire the root scripts**, once Hugo uses the installed app in their place (it is installed in Program Files
+  since 2026-10-15). Tell him the exact delete command first.
+- M6's two "Done when" conditions hold: the installer installs the app, and it runs from Program Files with the
+  bundled rsgain; the seek_lyrics search parity test passes.
 
 **Done in session 9 (the original M6 task 1 brief, kept for reference):** the schema v3 migration and the
 `lrclib` column, `text_search` with the parity test, then the Ctrl+K UI (results with a Folder column, up to
@@ -684,6 +689,8 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 - uv 0.13.1 installed with winget (2026-10-15). Its alias is
   `%LOCALAPPDATA%\Microsoft\WinGet\Links\uv.exe`; a shell started before the install may not have it on PATH,
   so use that full path there. The project venv is `.venv/` (Python 3.13.1, pinned in `.python-version`).
+- Inno Setup 6.7.3 is installed at `C:\Program Files\Inno Setup 6\` (winget, Hugo's go, 2026-10-15), for the
+  installer build only.
 - ffmpeg is installed at `C:\Program Files\ffmpeg\ffmpeg-master-latest-win64-gpl-shared\bin\ffmpeg.exe`. It is
   only for regenerating test fixtures (SPEC §18). The app never needs it, because rsgain has its decoders built in
   (SPEC §13).
@@ -784,6 +791,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Smart views dropped (Hugo): not every track needs lyrics in its tags (LRCLIB's are shown), a rename-mask mismatch depends on each user's masks, missing ReplayGain is overwhelming library-wide (the folder's RG column covers it), and "recently modified" answers no need. A sidebar section would give them weight they don't have. Instead, the Lyrics menu has three Find entries that open library search with a ready-made query: LRCLIB didn't find, no lyrics in the tags, can't be looked up (`lrclib:notags`, new). Details in SPEC §5. |
 | 2026-10-15 | No Settings dialog (Hugo): every preference already lives where it's used (sidebar, View and Lyrics menus, the Tools cards; Qt follows Windows' theme). The unused `watch_for_changes` and `tag_workers` settings are removed (old settings.json files still load). Help › About shows the versions and the third-party licences, whose texts are bundled in `resources/licenses/`. Details in SPEC §12 and §13. |
 | 2026-10-15 | Release decisions (Hugo): an Inno Setup installer, chosen over a portable zip and a one-file exe for a normal Windows install (Start menu, uninstaller, clean updates). The README is written with the installer, once the name, licence and install steps are known. The root scripts are deleted as the last M6 step, once the installed v1 replaces them; `tests/reference/` keeps the frozen copies. |
+| 2026-10-15 | Installer as built: all users in Program Files by default (Hugo: install in Program Files), with Inno Setup's "only for me" choice; 64-bit only; licence page; the uninstaller asks before deleting the app data (default No, kept when silent). Inno Setup itself is installed in `C:\Program Files\Inno Setup 6`. Details in SPEC §13. |
 | 2026-10-15 | MusicDesk is licensed GPL-3.0-or-later (Hugo): compatible with mutagen (GPL-2.0-or-later) and Qt (LGPL-3.0). `LICENSE` holds the GPL-3.0 text, `pyproject.toml` declares it, About says it. Details in SPEC §13. |
 | 2026-10-15 | The name stays MusicDesk (Hugo). The icon is drawn by `packaging/make_icon.py` (no image editor, reproducible) and embedded in the exe with a version resource. No theme setting: Qt follows Windows' light and dark (checked). FFmpeg inside rsgain is an LGPL build with Fraunhofer FDK AAC; the LGPL-2.1 text and FDK AAC's notice are shipped. Details in SPEC §13. |
 
@@ -816,6 +824,8 @@ Commands (from the project root):
     uv run pytest                 # add -m "not slow" to skip rsgain integration tests
     uv run ruff check .
     uv run pyinstaller --noconfirm packaging/music_desk.spec    # -> dist/MusicDesk/MusicDesk.exe
+    uv run python packaging/build_installer.py                  # both builds -> dist/installer/MusicDesk-Setup-<v>.exe
+    uv run python packaging/make_icon.py                        # redraw resources/icons/ after changing the icon
 
 ## Project layout
     music_desk/             C:\Code\music_desk
@@ -929,7 +939,7 @@ cleanup fixture case gets the expected status.
 - [x] Smart views: dropped (Hugo, 2026-10-15); three Find entries in the Lyrics menu instead
 - [x] Settings dialog: dropped (Hugo, 2026-10-15); Help › About with the versions and licences instead
 - [x] Theme and icons: the app icon and the exe's version info; light and dark follow Windows (no theme setting)
-- [ ] Inno Setup installer; check the licenses of the FFmpeg libraries built into rsgain
+- [x] Inno Setup installer; check the licenses of the FFmpeg libraries built into rsgain
 - [ ] README.md: what the app does, its features, install (the installer), build from source, licence
 - [ ] Retire the root `music_tools.py` and `seek_lyrics.py`, once the installed v1 replaces them for Hugo. Tell
       him the exact delete command first; `tests/reference/` keeps the frozen copies the parity tests use.

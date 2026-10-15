@@ -164,6 +164,20 @@ Indexing runs in the background.
   - One Indexer thread runs one scan at a time from a queue, with a 4-thread tag-reader pool. The on-screen folder
     is served inside a running scan through `request_folder`. Progress is throttled to 10 updates a second.
   - Every root is rescanned at startup and when it comes back online.
+- As built (M2 task 4, `services/watcher.py`):
+  - There is one watchdog observer. LibraryService keeps its watches equal to the online roots.
+  - Events are coalesced per folder, and flushed after 0.5 s without events or at the latest after 5 s, so a
+    long copy shows up while it runs. A folder already covered by a recursive scan in the same flush is
+    dropped.
+  - A file event reconciles its folder, one level. A created or moved-in folder also gets a recursive scan, and
+    the source folder of a move is reconciled too.
+  - Paths are resolved to index entries when the job runs, so a path that isn't indexed yet scans its nearest
+    indexed ancestor's subtree.
+  - A root that can't be watched gets a status message, and relies on revalidation on open
+    (`LibraryService.folder_opened`, called on every folder open).
+  - Watching doesn't lock folders: they can still be renamed in Explorer. An outside rename is seen as a delete
+    plus a create, so that subtree's tags are read again. Renames made in the app will update the index
+    directly (§11).
 
 ## 5. Browser
 Explorer-like, with no copy, paste, delete or new.

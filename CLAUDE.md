@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M2 in progress** (tasks 1 to 3 done: DB schema, DbWriter, read connection; library roots; scanner):
+- **M2 in progress** (tasks 1 to 4 done: DB schema, DbWriter, read connection; library roots; scanner; watcher):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
     `folder_stats`, FTS5 `search` with `unicode61 remove_diacritics 2`). `MIGRATIONS[n]` takes v`n` to v`n+1`,
     applied in one transaction and recorded in `PRAGMA user_version`. A newer DB raises `SchemaError`, untouched.
@@ -65,7 +65,28 @@ two files alone.
     queued signal may arrive after close).
   - The status bar shows "Indexing <root>: N folders, M files" and then "Reading tags in <root>: x / y", and hides
     the label when the indexer is idle.
-  - 378 tests pass, 8 are skipped, the 22 `slow` tests pass (rsgain, plus the 100k scan), and ruff is clean. A UI
+  - Watcher (task 4):
+    - `services/watcher.py` `Watcher(on_flush, debounce=0.5, max_delay=5, observer_factory=Observer)`: one
+      watchdog observer, and `sync({root_id: path})` watches exactly the online roots.
+    - Events are coalesced per folder and flushed after 0.5 s of quiet, or at the latest after 5 s.
+    - A file event reconciles its folder (one level). A created or moved-in folder also gets a recursive scan,
+      and the moved-from parent is reconciled too.
+    - A watch that fails emits `unwatched(root_id, reason)`, which LibraryService shows as "Live updates are
+      off…".
+    - Scanner additions:
+      - `scan_folder(entry_id, recursive=)`.
+      - `scan_path(path, recursive=)`: resolved at run time with `find_folder`; a path not yet indexed scans its
+        nearest indexed ancestor's subtree.
+      - `ScanReport.folder_id`. `on_folder` now fires only for folders served from the priority queue.
+    - `Indexer.scan_path(path, recursive)` jobs; `folderUpdated` is emitted for every folder and path job.
+    - `LibraryService`:
+      - owns the watcher, and re-syncs it after adds, removals and online changes (on its worker thread, with
+        its own read connection);
+      - `folder_opened(entry_id)` is the revalidation on open, which the browser (task 5) must call on every
+        folder open.
+    - Checked: watching locks nothing. Folders under a watched root, and the root itself, can still be renamed.
+      An outside folder rename is seen as a delete plus a create, so that subtree's tags are read again.
+  - 391 tests pass, 8 are skipped, the 22 `slow` tests pass (rsgain, plus the 100k scan), and ruff is clean. A
     test run that takes 30 s or more is pytest deleting an old 100k-file temp tree, not a hang.
 - The spec is complete and approved (`docs/SPEC.md`).
 - **M0 is complete.** `src/music_desk/` has `paths.py`, `logging_setup.py`, `core/rsgain.py` (only the
@@ -139,18 +160,21 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M2's fourth task: the watcher, plus revalidation on open as a fallback. Read SPEC §4 (live updates)
-and §16 first.
-- `services/watcher.py`: watchdog observers on the online roots. Events are debounced (500 ms) and coalesced per
-  folder, then `Indexer.scan_folder(parent)` runs. A created folder is scanned as a new subtree; a moved or
-  deleted folder reconciles both parents.
-- Roots are watched when added or back online, and unwatched when removed or offline. A watcher that fails (a
-  network share, some removable drives) is logged, and that root falls back to revalidation on open: the browser
-  calls `Indexer.request_folder` when a folder is opened (the API exists; the browser comes in task 5).
-- `scan_folder` reconciles one level only. A new subfolder found that way needs its own subtree scan, so add a
-  recursive variant or queue `scan_folder` for new subfolders.
-- Tests: pytest-qt with real file changes in tmp_path (create, modify, delete, rename, folder moves), waiting on
-  `folderUpdated`, plus a debounce test (many events lead to one scan).
+**Next step:** M2's fifth task: the folder tree (lazy, natural order) and the file list (columns, sort, persisted
+layout, Ctrl+F filter). Read SPEC §5, §16 (models), §2 (columns come from `entries`, `tracks`, `folder_stats` and
+`lyrics`) and §12 (settings), first.
+- `ui/folder_tree.py`: `FolderTreeModel` (QAbstractItemModel) with roots at the top, folders only, loaded lazily
+  through `canFetchMore`/`fetchMore` on `LibraryService.conn`. Use `fsops.natural_key`. Offline roots are dimmed.
+  The expanded state is remembered.
+- `ui/file_view.py`: `FileListModel` (QAbstractTableModel) plus a proxy with precomputed natural-sort keys.
+  Folders come first, and non-audio files are dimmed. Columns: SPEC §5 (LRCLIB shows "pending" until M4).
+- Incremental updates on `Indexer.folderUpdated` and `scanFinished`: `dataChanged`/`rowsInserted`/`rowsRemoved`,
+  never a model reset. Opening a folder calls `LibraryService.folder_opened` (revalidation).
+- Persisted layout (column order, sizes, hidden columns, sort): this needs `settings.py` (typed, JSON in
+  `%LOCALAPPDATA%\MusicDesk\settings.json`, SPEC §12), so write a minimal one now.
+- pytest-qt: lazy loading, sort order ("Track 2" before "Track 10"), filter, an update without a reset (the
+  selection is kept), and the layout round trip.
+- **Not yet:** the address bar and history (task 6), and the context menus (task 7).
 
 Don't start it until Hugo says so.
 
@@ -246,6 +270,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Index: the DbWriter lives in `core/index/store.py` with no Qt (one thread, one transaction per job, futures); the Qt service wrapper comes with the indexer. Root top folders are `entries` rows with `parent_id NULL` named by the full root path. Schema migrations go through `PRAGMA user_version`; a newer DB is refused untouched. Details in SPEC §2. |
 | 2026-10-15 | Roots: never nested; adding a parent merges the roots inside it, keeping their index; a folder inside a root returns INSIDE_ROOT (the app will navigate there once the browser exists). Removing a root asks for confirmation (it costs a rescan). Offline = the root folder isn't reachable, checked at start and every 30 s off the UI thread. Dropped files get a toast offering their folder. Details in SPEC §3. |
 | 2026-10-15 | Scanner: vanished entries are deleted per folder during reconciliation (cascade) instead of by a final `scan_gen` sweep, which also works for one-folder scans; `scan_gen` is still stamped on inserted and updated rows. An unreachable root or unlistable folder never loses its index. Links and junctions aren't followed. `folder_stats` count whole subtrees. Search rows are keyed by entry id (schema v2). Details in SPEC §4. |
+| 2026-10-15 | Watcher: one watchdog observer over the online roots; per-folder coalescing with a 0.5 s debounce and a 5 s cap; jobs carry paths resolved when they run; new or moved-in folders are scanned recursively. Every folder open triggers a revalidation (stale-while-revalidate), which is also the fallback when a root can't be watched. Details in SPEC §4. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -347,7 +372,7 @@ with a fixture.
 - [x] DB schema, DbWriter, read connection
 - [x] Roots: picker, drop, remove, offline roots
 - [x] Scanner phases A and B, incremental, on-screen folder first
-- [ ] Watcher, plus revalidation on open as a fallback
+- [x] Watcher, plus revalidation on open as a fallback
 - [ ] Folder tree (lazy, natural order) and file list (columns, sort, persisted layout, Ctrl+F filter)
 - [ ] Address bar, history, keyboard navigation
 - [ ] Context menus: Open with default app, Play folder/selection, Open in Explorer, Copy path. Drag-out disabled.

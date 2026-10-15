@@ -95,10 +95,10 @@ def test_playlist_queries_read_the_index(service, library_dir):
 def test_file_menu(window, service):
     window.open_folder(entry(service, "Artist", "Album"))
     one = window.list_menu([entry(service, "Artist", "Album", "Track 2.flac")])
-    assert texts(one) == ["Open", "Play selection", "Open in File Explorer", "Copy path"]
+    assert texts(one) == ["Open", "Play selection", "Open in File Explorer", "Copy path", "Rename	F2"]
     two = window.list_menu([entry(service, "Artist", "Album", "Track 2.flac"),
                             entry(service, "Artist", "Album", "cover.jpg")])
-    assert texts(two)[-1] == "Copy paths"
+    assert texts(two)[-1] == "Copy paths"  # no Rename for several files
     assert not action(two, "Open").isEnabled() and action(two, "Play selection").isEnabled()
     images = window.list_menu([entry(service, "Artist", "Album", "cover.jpg")])
     assert not action(images, "Play selection").isEnabled()
@@ -108,12 +108,12 @@ def test_folder_menus(window, service):
     window.open_folder(entry(service, "Artist"))
     folder = window.list_menu([entry(service, "Artist", "Album")])
     assert texts(folder) == ["Open", "Play folder", "Play folder and subfolders", "Open in File Explorer",
-                             "Copy path", "Rescan"]
+                             "Copy path", "Rename	F2", "Rescan"]
     background = window.list_menu([])
     assert texts(background) == ["Play folder", "Play folder and subfolders", "Open in File Explorer",
                                  "Copy path", "Rescan"]
     tree = window.sidebar.context_menu_for(window.sidebar.tree.currentIndex())
-    assert texts(tree)[:6] == texts(folder) and "Remove from library" not in texts(tree)  # not a root
+    assert texts(tree)[:7] == texts(folder) and "Remove from library" not in texts(tree)  # not a root
     for absent in ("Rename", "Delete", "Cut", "Copy", "Paste", "New folder"):
         assert absent not in texts(folder) + texts(tree)
     assert texts(window.sidebar.context_menu_for(QModelIndex())) == ["Add folder…"]

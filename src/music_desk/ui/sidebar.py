@@ -15,6 +15,7 @@ class Sidebar(QWidget):
     addFolderRequested = Signal()
     removeRequested = Signal(object)  # Root
     folderSelected = Signal(int)  # entry id
+    renameRequested = Signal(int, str)
 
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], expanded: list[str] | None = None,
                  parent: QWidget | None = None) -> None:
@@ -26,6 +27,7 @@ class Sidebar(QWidget):
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._context_menu)
         self.tree.folderSelected.connect(self.folderSelected)
+        self.model.renameRequested.connect(self.renameRequested)
         self.empty_hint = QLabel("Add a music folder, or drop one on the window.")
         self.empty_hint.setWordWrap(True)
         self.add_button = QPushButton("Add folder…")

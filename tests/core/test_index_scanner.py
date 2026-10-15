@@ -460,3 +460,83 @@ def test_update_file_of_an_unknown_file_scans_its_folder(writer, read, library, 
     assert report.folder_id == entry_id(read, library, "Formats")
     assert track(read, library, "Formats/new.opus")["format"] == "OPUS"
     assert scanner(writer).update_file(library.parent / "elsewhere" / "x.flac") is None
+
+
+# -- renames made by the app --
+
+def test_apply_renames_keeps_ids(writer, read, library, root_id):
+    from music_desk.core.inline_rename import rename_entry
+
+    scanner(writer).scan_root(root_id)
+    folder = library / "Fixture Artist" / "Lrc"
+    flac_id = entry_id(read, library, "Fixture Artist/Lrc/no_lyrics.flac")
+    result = rename_entry(folder / "no_lyrics.flac", "Renamed.flac")
+    assert result.sidecar is not None  # no_lyrics.lrc followed
+    report = scanner(writer).apply_renames(result.steps)
+    assert report.folder_id == entry_id(read, library, "Fixture Artist/Lrc")
+    assert entry_id(read, library, "Fixture Artist/Lrc/Renamed.flac") == flac_id
+    assert track(read, library, "Fixture Artist/Lrc/Renamed.flac")["has_lrc_sidecar"] == 1
+    assert indexed_paths(read, library) == disk_paths(library)
+    again = scanner(writer).scan_root(root_id)
+    assert (again.added, again.removed, again.tags_read) == (0, 0, 0)  # the index already matched the disk
+
+
+def test_apply_renames_of_a_folder(writer, read, library, root_id):
+    from music_desk.core.inline_rename import rename_entry
+
+    scanner(writer).scan_root(root_id)
+    album_id = entry_id(read, library, f"Fixture Artist/{ALBUM}")
+    track_id = entry_id(read, library, f"Fixture Artist/{ALBUM}/01 First.flac")
+    result = rename_entry(library / "Fixture Artist" / ALBUM, "Album (2024)")
+    scanner(writer).apply_renames(result.steps)
+    assert entry_id(read, library, "Fixture Artist/Album (2024)") == album_id
+    assert entry_id(read, library, "Fixture Artist/Album (2024)/01 First.flac") == track_id
+
+
+def test_apply_renames_when_audio_becomes_text(writer, read, library, root_id):
+    from music_desk.core.inline_rename import rename_entry
+
+    scanner(writer).scan_root(root_id)
+    before = read.execute("SELECT count(*) FROM tracks").fetchone()[0]
+    result = rename_entry(library / "Formats" / "tone.mp3", "tone.txt")
+    scanner(writer).apply_renames(result.steps)
+    assert read.execute("SELECT count(*) FROM tracks").fetchone()[0] == before - 1
+    assert indexed_paths(read, library) == disk_paths(library)
+
+
+def test_apply_renames_when_text_becomes_audio(writer, read, library, root_id, fixtures_dir):
+    from music_desk.core.inline_rename import rename_entry
+
+    shutil.copy2(fixtures_dir / "formats" / "tone.flac", library / "Formats" / "hidden.dat")
+    scanner(writer).scan_root(root_id)
+    result = rename_entry(library / "Formats" / "hidden.dat", "found.flac")
+    scanner(writer).apply_renames(result.steps)
+    assert track(read, library, "Formats/found.flac")["format"] == "FLAC"
+
+
+def test_outside_renames_keep_ids_and_tags(writer, read, library, root_id):
+    scanner(writer).scan_root(root_id)
+    flac = entry_id(read, library, "Formats/tone.flac")
+    album = entry_id(read, library, f"Fixture Artist/{ALBUM}")
+    os.rename(library / "Formats" / "tone.flac", library / "Formats" / "Tone (renamed).flac")
+    os.rename(library / "Fixture Artist" / ALBUM, library / "Fixture Artist" / "Renamed Album")
+    report = scanner(writer).scan_root(root_id)
+    assert (report.added, report.removed, report.tags_read) == (0, 0, 0)
+    assert entry_id(read, library, "Formats/Tone (renamed).flac") == flac
+    assert entry_id(read, library, "Fixture Artist/Renamed Album") == album
+    assert indexed_paths(read, library) == disk_paths(library)
+
+
+def test_ambiguous_or_retyped_renames_are_not_matched(writer, read, library, root_id):
+    scanner(writer).scan_root(root_id)
+    stamp = (1_700_000_000, 1_700_000_000)
+    for name in ("a.txt", "b.txt"):
+        (library / "Empty" / name).write_bytes(b"same")
+        os.utime(library / "Empty" / name, stamp)
+    scanner(writer).scan_root(root_id)
+    for old, new in (("a.txt", "c.txt"), ("b.txt", "d.txt")):  # two alike files renamed: can't tell which
+        os.rename(library / "Empty" / old, library / "Empty" / new)
+    os.rename(library / "Formats" / "notes.txt", library / "Formats" / "notes.nfo")  # another extension
+    report = scanner(writer).scan_root(root_id)
+    assert (report.added, report.removed) == (3, 3)
+    assert indexed_paths(read, library) == disk_paths(library)

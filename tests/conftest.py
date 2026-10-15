@@ -46,3 +46,20 @@ def fixture_copy(tmp_path):
         return target
 
     return copy
+
+
+@pytest.fixture(autouse=True)
+def no_real_dialogs(monkeypatch):
+    """A real modal dialog would wait for a click and stall the run. Tests answer the app's questions by replacing
+    its confirm_* / ask_* / choose_* methods; any dialog that still opens fails the test at once."""
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    def refuse(name):
+        def opened(*_args, **_kwargs):
+            raise AssertionError(f"a real dialog opened during a test ({name}); answer it in the test instead")
+        return opened
+
+    for name in ("question", "information", "warning", "critical", "exec"):
+        monkeypatch.setattr(QMessageBox, name, refuse(f"QMessageBox.{name}"))
+    for name in ("getOpenFileName", "getOpenFileNames", "getSaveFileName", "getExistingDirectory"):
+        monkeypatch.setattr(QFileDialog, name, refuse(f"QFileDialog.{name}"))

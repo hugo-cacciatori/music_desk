@@ -38,6 +38,7 @@ class Snapshot:
     id3_version: str | None  # "2.3" / "2.4" for ID3 files
     lrc_name: str | None = None  # a same-stem .lrc next to the file (SPEC §7: "Import from <name>.lrc")
     lrc_text: str | None = None
+    suggested_name: str | None = None  # the name the rename masks give, when it differs (SPEC §7's hint)
 
     @property
     def format_line(self) -> str:
@@ -78,6 +79,20 @@ def _size(size: int) -> str:
             return f"{value:.0f} {unit}" if unit in ("B", "KB") or value >= 100 else f"{value:.1f} {unit}"
         value /= 1024
     return ""
+
+
+def suggested_name(tagged: TaggedFile) -> str | None:
+    """What the Rename tool's default masks would name this file, if that differs from its name."""
+    from music_desk.core.rename import DEFAULT_OPTIONS, choose_name, mask_values
+
+    if not tagged.info.tags:
+        return None
+    fields = mask_values(tagged.rename_fields(), DEFAULT_OPTIONS.replacement)
+    choice = choose_name(fields, DEFAULT_OPTIONS.masks)
+    if choice is None:
+        return None
+    name = f"{choice[0]}{tagged.path.suffix.lower()}"
+    return None if name == tagged.path.name else name
 
 
 def decode_text(data: bytes) -> str:
@@ -136,6 +151,7 @@ def read_snapshot(path: str | Path) -> Snapshot:
     if tagged.info.family.value == "ID3" and tags is not None and hasattr(tags, "version"):
         id3_version = f"2.{tags.version[1]}"
     sidecar = lrc_sidecar(path)
+    suggestion = suggested_name(tagged)
     return Snapshot(
         path=path, size=stat.st_size, mtime=stat.st_mtime, editable=tagged.info.tags,
         family=tagged.info.family.value, container=tagged.info.container, fields=tagged.fields(),
@@ -144,6 +160,7 @@ def read_snapshot(path: str | Path) -> Snapshot:
         replaygain={key: tagged.get_replaygain(key) for key in RG_KEYS},
         cover=cover, cover_source=source, id3_version=id3_version,
         lrc_name=sidecar[0] if sidecar else None, lrc_text=sidecar[1] if sidecar else None,
+        suggested_name=suggestion,
     )
 
 

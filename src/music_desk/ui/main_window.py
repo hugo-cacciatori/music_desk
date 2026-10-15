@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from music_desk.core import fsops, playlists
+from music_desk.core import fsops, inline_rename, playlists
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
@@ -68,6 +68,8 @@ class DropOverlay(QLabel):
 
 class MainWindow(QMainWindow):
     shellFailed = Signal(str, str, bool)  # message, a path to show in Explorer instead, whether it is a folder
+    renameDone = Signal(object, bool)  # RenameResult, whether it was an Undo
+    renameFailed = Signal(str)
 
     def __init__(self, library: LibraryService | None = None, settings: Settings | None = None) -> None:
         super().__init__()
@@ -136,9 +138,15 @@ class MainWindow(QMainWindow):
         self.file_view.folderActivated.connect(self.open_folder)
         self.file_view.fileActivated.connect(lambda entry_id: self.open_files([entry_id]))
         self.file_view.menuRequested.connect(lambda ids, pos: self.list_menu(ids).exec(pos))
-        self.sidebar.folder_menu_provider = self.add_folder_actions
+        self.sidebar.folder_menu_provider = lambda menu, entry_id: self.add_folder_actions(
+            menu, entry_id, rename=lambda: self.sidebar.tree.start_rename(entry_id))
+        self.file_view.renameRequested.connect(self.rename_entry)
+        self.sidebar.renameRequested.connect(self.rename_entry)
+        self.renameDone.connect(self._renamed)
+        self.renameFailed.connect(lambda message: self.toast.show_message(message))
         self.file_view.selectionChanged.connect(self._selection_changed)
         self.side_panel.metadata.fileSaved.connect(self._file_saved)
+        self.side_panel.metadata.renameSuggested.connect(self.rename_path)
         self.side_panel.metadata.filesSaved.connect(
             lambda count: self.statusBar().showMessage(f"Saved the tags of {count} files.", STATUS_MS))
         self.side_panel.metadata.saveFailed.connect(lambda message: self.toast.show_message(message))
@@ -350,7 +358,18 @@ class MainWindow(QMainWindow):
         self.sidebar.model.refresh(entry_id)
         if entry_id == self.folder_id:
             self.file_view.refresh()
+            self._show_selection(self._selected_ids)  # a renamed file reloads under its new name
+        self._refresh_location()
         self.side_panel.refresh_folder()
+
+    def _refresh_location(self) -> None:
+        """The open folder (or a folder above it) may have been renamed: its path and breadcrumb follow."""
+        if self.folder_id is None or not self._folder_exists(self.folder_id):
+            return
+        path = str(path_of(self.library.conn, self.folder_id))
+        if path != self.folder_path:
+            self.folder_path = path
+            self.address_bar.set_location(queries.folder_crumbs(self.library.conn, self.folder_id), path)
 
     def scan_finished(self, _report: ScanReport) -> None:
         if not self._library_open():
@@ -442,7 +461,7 @@ class MainWindow(QMainWindow):
                 self.add_folder_actions(menu, self.folder_id, include_open=False)
             return menu
         if len(ids) == 1 and self.file_view.is_dir(ids[0]):
-            self.add_folder_actions(menu, ids[0])
+            self.add_folder_actions(menu, ids[0], rename=lambda: self.file_view.start_rename(ids[0]))
             return menu
         open_action = menu.addAction("Open", lambda: self.open_files(ids))
         open_action.setEnabled(len(ids) == 1)
@@ -451,9 +470,12 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("Open in File Explorer", lambda: self.reveal(ids[0]))
         menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: self.copy_paths(ids))
+        if len(ids) == 1:
+            menu.addSeparator()
+            menu.addAction("Rename\tF2", lambda: self.file_view.start_rename(ids[0]))
         return menu
 
-    def add_folder_actions(self, menu: QMenu, entry_id: int, include_open: bool = True) -> None:
+    def add_folder_actions(self, menu: QMenu, entry_id: int, include_open: bool = True, rename=None) -> None:
         if include_open:
             menu.addAction("Open", lambda: self.open_folder(entry_id))
         menu.addAction("Play folder", lambda: self.play_folder(entry_id, recursive=False))
@@ -462,7 +484,88 @@ class MainWindow(QMainWindow):
         menu.addAction("Open in File Explorer", lambda: self.reveal(entry_id))
         menu.addAction("Copy path", lambda: self.copy_paths([entry_id]))
         menu.addSeparator()
+        if rename is not None and queries.parent_folder(self.library.conn, entry_id) is not None:
+            menu.addAction("Rename\tF2", rename)  # not a library root
         menu.addAction("Rescan", lambda: self.library.indexer.scan_folder(entry_id))
+
+    # -- inline rename (SPEC §11) --
+
+    def confirm_extension_change(self, old: str, new: str) -> bool:
+        answer = QMessageBox.question(
+            self, "Change the extension?",
+            f"Change the extension of {old} to {Path(new).suffix or '(none)'}?\n\nThe file may stop opening in its "
+            "usual app, or stop counting as audio.")
+        return answer == QMessageBox.StandardButton.Yes
+
+    def rename_path(self, path: str, new_name: str) -> None:
+        """A rename asked by path (the hint after a save)."""
+        if not self._library_open():
+            return
+        found = find_folder(self.library.conn, os.path.dirname(path))
+        entry_id = queries.find_child(self.library.conn, found[0], os.path.basename(path)) \
+            if found and found[1] else None
+        if entry_id is not None:
+            self.rename_entry(entry_id, new_name)
+
+    def rename_entry(self, entry_id: int, new_name: str) -> None:
+        """Rename a file or folder on disk (off the UI thread), then update the index in place."""
+        if not self._library_open() or not self._folder_exists(entry_id):
+            return
+        conn = self.library.conn
+        if queries.parent_folder(conn, entry_id) is None:
+            self.toast.show_message("A library folder can't be renamed here. Rename it in File Explorer, then "
+                                    "add it again.")
+            return
+        path = path_of(conn, entry_id)
+        if new_name == path.name:
+            return
+        is_dir = bool(conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()[0])
+        if not is_dir and Path(new_name).suffix.lower() != path.suffix.lower() and \
+                not self.confirm_extension_change(path.name, new_name):
+            return
+        edited = self.side_panel.metadata.path == path or path in self.side_panel.metadata.paths
+        if (edited or is_dir) and not self.side_panel.can_leave():
+            return
+        locks = self.library.locks
+
+        def run() -> None:
+            try:
+                result = inline_rename.rename_entry(path, new_name, locks)
+            except inline_rename.RenameError as e:
+                self.renameFailed.emit(str(e))
+                return
+            self.renameDone.emit(result, False)
+
+        self._shell.submit(run)
+
+    def _renamed(self, result: inline_rename.RenameResult, was_undo: bool) -> None:
+        if not result.steps:
+            return
+        if self._library_open():
+            self.library.indexer.apply_renames(result.steps)
+        old, new = result.steps[0]
+        if was_undo:
+            self.statusBar().showMessage(f"Renamed {old.name} back to {new.name}.", STATUS_MS)
+            return
+        text = f"Renamed {old.name} to {new.name}"
+        if result.sidecar:
+            text += f", and its lyrics file {result.sidecar[0].name} to {result.sidecar[1].name}"
+        text += "."
+        if result.warnings:
+            text += " " + " ".join(result.warnings)
+        locks = self.library.locks if self._library_open() else None
+
+        def undo() -> None:
+            def run() -> None:
+                try:
+                    back = inline_rename.undo(result, locks)
+                except inline_rename.RenameError as e:
+                    self.renameFailed.emit(str(e))
+                    return
+                self.renameDone.emit(back, True)
+            self._shell.submit(run)
+
+        self.toast.show_message(text, "Undo", undo, timeout_ms=10_000)
 
     # -- actions handed to Windows --
 

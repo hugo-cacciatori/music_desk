@@ -97,6 +97,7 @@ class MetadataTab(QWidget):
     fileSaved = Signal(str)  # one file saved
     filesSaved = Signal(int)  # a multi-file save: how many files were saved
     saveFailed = Signal(str)
+    renameSuggested = Signal(str, str)  # path, new name: the hint after a save (SPEC §7)
 
     def __init__(self, io: TagIO, writer: TagWriter, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -121,6 +122,7 @@ class MetadataTab(QWidget):
         self._cover_change: tuple | None = None  # ("set", bytes, QImage) or ("remove",), until saved
         self._image_token: int | None = None
         self._can_edit_cover = False
+        self._hint: tuple[str, str] = ("", "")  # (path, suggested name) of the rename hint
         io.loaded.connect(self._loaded)
         io.imageRead.connect(self._image_read)
         io.loadedMany.connect(self._loaded_many)
@@ -214,6 +216,13 @@ class MetadataTab(QWidget):
         lyrics_widget.setLayout(lyrics_box)
         form.addRow("Lyrics", lyrics_widget)
         outer.addLayout(form)
+
+        self.rename_hint = QLabel()
+        self.rename_hint.setTextFormat(Qt.TextFormat.RichText)
+        self.rename_hint.setWordWrap(True)
+        self.rename_hint.linkActivated.connect(lambda _link: self._accept_rename_hint())
+        self.rename_hint.hide()
+        outer.addWidget(self.rename_hint)
 
         buttons = QHBoxLayout()
         self.error_label = QLabel()
@@ -366,6 +375,7 @@ class MetadataTab(QWidget):
         self.details_title.show()
         self.details_box.show()
         self.error_label.hide()
+        self.rename_hint.hide()
         self._fill_details(snapshot)
         self._set_dirty(False)
         self._update_lock()
@@ -589,7 +599,21 @@ class MetadataTab(QWidget):
             return
         if not self.multi and self.path == result.snapshot.path and self.pages.currentIndex() == 1:
             self._fill(result.snapshot, result.cover)
+            self._show_rename_hint(result.snapshot)
         self.fileSaved.emit(str(result.snapshot.path))
+
+    def _show_rename_hint(self, snapshot: Snapshot) -> None:
+        """After a save: the tags no longer match the file name the rename masks give."""
+        name = snapshot.suggested_name
+        if name:
+            self._hint = (str(snapshot.path), name)
+            self.rename_hint.setText(f'The name no longer matches the tags. <a href="rename">Rename to '
+                                     f'"{html.escape(name)}"?</a>')
+        self.rename_hint.setVisible(bool(name))
+
+    def _accept_rename_hint(self) -> None:
+        self.rename_hint.hide()
+        self.renameSuggested.emit(*self._hint)
 
     def _batch_saved(self, result: BatchWritten) -> None:
         if result.token != self._save_token:

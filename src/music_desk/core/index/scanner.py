@@ -290,6 +290,56 @@ class Scanner:
         report.tag_errors = int(track["read_error"] is not None)
         return report
 
+    def apply_renames(self, steps: list[tuple[Path, Path]]) -> ScanReport | None:
+        """Renames the app just made (inline rename, Undo): update the entries in place, so their ids stay (the
+        selection with them) and the subtree of a renamed folder follows. A file whose audio-ness changed with
+        its extension is re-read. Entries the index doesn't know make their folder be scanned instead."""
+        if not steps:
+            return None
+        conn = connect_read(self.writer.path)
+        try:
+            found = find_folder(conn, steps[0][0].parent)
+            if found is None:
+                return None
+            folder_id, exact = found
+            rows = []
+            for old, new in steps:
+                row = conn.execute(
+                    "SELECT e.id, e.root_id, e.is_dir, t.entry_id IS NOT NULL FROM entries e "
+                    "LEFT JOIN tracks t ON t.entry_id = e.id WHERE e.parent_id = ? AND e.name = ? COLLATE NOCASE",
+                    (folder_id, old.name)).fetchone() if exact else None
+                if row is None:
+                    break
+                rows.append((row, new))
+        finally:
+            conn.close()
+        if len(rows) != len(steps):
+            return self.scan_folder(folder_id, recursive=not exact)
+
+        changed_kind = [(entry_id, has_track, new) for (entry_id, _root, is_dir, has_track), new in rows
+                         if not is_dir and has_track != (new.suffix.lower() in AUDIO_EXTENSIONS)]
+
+        def write(conn: sqlite3.Connection) -> None:
+            for (entry_id, _root, is_dir, _has_track), new in rows:
+                ext = None if is_dir else new.suffix.lower()
+                conn.execute("UPDATE entries SET name = ?, ext = ? WHERE id = ?", (new.name, ext, entry_id))
+                conn.execute("UPDATE search SET name = ? WHERE rowid = ?", (new.name, entry_id))
+            for entry_id, had_track, new in changed_kind:
+                if had_track:  # "song.flac" renamed "song.txt": no longer a track
+                    conn.execute("DELETE FROM tracks WHERE entry_id = ?", (entry_id,))
+                    conn.execute("DELETE FROM search WHERE rowid = ?", (entry_id,))
+                    conn.execute("INSERT INTO search (rowid, name) VALUES (?, ?)", (entry_id, new.name))
+            _update_sidecars_in_folder(conn, folder_id)
+
+        self.writer.submit(write).result()
+        root_id = rows[0][0][1]
+        if changed_kind:
+            for _entry_id, had_track, new in changed_kind:
+                if not had_track:  # "song.txt" renamed "song.flac": read its tags
+                    self.update_file(new)
+            self._finish(root_id, last_scan=None)  # the totals changed with the kind of file
+        return ScanReport(root_id, updated=len(rows), folder_id=folder_id)
+
     @staticmethod
     def _next_gen(conn: sqlite3.Connection, root_id: int) -> int:
         return (conn.execute("SELECT max(scan_gen) FROM entries WHERE root_id = ?", (root_id,)).fetchone()[0]
@@ -355,6 +405,7 @@ class Scanner:
         known = {row[1].casefold(): row for row in ctx.conn.execute(
             "SELECT id, name, is_dir, size, mtime FROM entries WHERE parent_id = ?", (ref.id,))}
         subfolders = []
+        new_children = []
         for child in listed:
             if not child.is_dir:
                 ctx.report.files += 1
@@ -365,17 +416,30 @@ class Scanner:
                 ctx.report.removed += 1
                 row = None
             if row is None:
-                new_ref = _Ref() if child.is_dir else None
-                batch.inserts.append((ref, child, new_ref))
-                ctx.report.added += 1
-                if new_ref is not None:
-                    subfolders.append((new_ref, os.path.join(path, child.name)))
+                new_children.append(child)
                 continue
             if row[1] != child.name or (not child.is_dir and (row[3] != child.size or row[4] != child.mtime)):
                 batch.updates.append((child.name, child.size, child.mtime, ctx.gen, row[0]))
                 ctx.report.updated += 1
             if child.is_dir:
                 subfolders.append((_Ref(row[0]), os.path.join(path, child.name)))
+
+        # A vanished entry and a new one alike in kind, extension, size and mtime (one of each) were renamed
+        # outside the app, or by the app just before its own index update: keep the row, its id and its tags.
+        renamed = _match_renames(list(known.values()), new_children)
+        for row, child in renamed:
+            del known[row[1].casefold()]
+            new_children.remove(child)
+            batch.updates.append((child.name, child.size, child.mtime, ctx.gen, row[0]))
+            ctx.report.updated += 1
+            if child.is_dir:
+                subfolders.append((_Ref(row[0]), os.path.join(path, child.name)))
+        for child in new_children:
+            new_ref = _Ref() if child.is_dir else None
+            batch.inserts.append((ref, child, new_ref))
+            ctx.report.added += 1
+            if new_ref is not None:
+                subfolders.append((new_ref, os.path.join(path, child.name)))
         for row in known.values():
             batch.deletes.append(row[0])
             ctx.report.removed += 1
@@ -520,6 +584,36 @@ def _update_sidecars(conn: sqlite3.Connection, root_id: int) -> None:
         )
         FROM entries e WHERE e.id = tracks.entry_id AND e.root_id = ?
         """, (root_id,))
+
+
+def _match_renames(vanished: list, appeared: list[_Child]) -> list[tuple]:
+    """Pairs (row, child) that are the same entry under a new name: same kind, lowercase extension, size and
+    mtime, and the only such pair. Anything ambiguous stays a delete plus an insert."""
+    def key(is_dir, name, size, mtime):
+        return (bool(is_dir), None if is_dir else os.path.splitext(name)[1].lower(), None if is_dir else size,
+                mtime)
+
+    old: dict[tuple, list] = {}
+    for row in vanished:
+        old.setdefault(key(row[2], row[1], row[3], row[4]), []).append(row)
+    new: dict[tuple, list[_Child]] = {}
+    for child in appeared:
+        new.setdefault(key(child.is_dir, child.name, child.size, child.mtime), []).append(child)
+    return [(rows[0], new[k][0]) for k, rows in old.items() if len(rows) == 1 and len(new.get(k, [])) == 1]
+
+
+def _update_sidecars_in_folder(conn: sqlite3.Connection, folder_id: int) -> None:
+    """has_lrc_sidecar for one folder's tracks (after a rename there)."""
+    conn.execute(
+        """
+        UPDATE tracks SET has_lrc_sidecar = EXISTS (
+            SELECT 1 FROM entries s
+            WHERE s.parent_id = e.parent_id AND s.ext = '.lrc'
+              AND lower(substr(s.name, 1, length(s.name) - 4))
+                = lower(substr(e.name, 1, length(e.name) - length(e.ext)))
+        )
+        FROM entries e WHERE e.id = tracks.entry_id AND e.parent_id = ?
+        """, (folder_id,))
 
 
 def _stats_values(conn: sqlite3.Connection, entry_id: int) -> tuple:

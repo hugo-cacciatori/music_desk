@@ -8,6 +8,7 @@ import sqlite3
 import threading
 from collections.abc import Callable, Iterable
 from concurrent.futures import Future
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +134,20 @@ def connect_read(path: str | Path) -> sqlite3.Connection:
         raise
     conn.row_factory = sqlite3.Row
     return conn
+
+
+@contextmanager
+def consistent_read(conn: sqlite3.Connection):
+    """Several queries that must see one state of the index (WAL gives each statement the newest commit, so a
+    removal between two of them would otherwise show half of it)."""
+    if conn.in_transaction:
+        yield conn
+        return
+    conn.execute("BEGIN")
+    try:
+        yield conn
+    finally:
+        conn.execute("COMMIT")
 
 
 def path_of(conn: sqlite3.Connection, entry_id: int) -> Path:

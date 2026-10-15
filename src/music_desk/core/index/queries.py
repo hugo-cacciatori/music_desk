@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from music_desk.core.fsops import natural_key
-from music_desk.core.index.store import path_of
+from music_desk.core.index.store import consistent_read, path_of
 from music_desk.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND
 from music_desk.core.playlists import PlaylistEntry
 
@@ -224,6 +224,11 @@ def first_track(conn: sqlite3.Connection, folder_id: int) -> Path | None:
 
 
 def folder_summary(conn: sqlite3.Connection, folder_id: int) -> FolderSummary | None:
+    with consistent_read(conn):
+        return _folder_summary(conn, folder_id)
+
+
+def _folder_summary(conn: sqlite3.Connection, folder_id: int) -> FolderSummary | None:
     if conn.execute("SELECT 1 FROM entries WHERE id = ? AND is_dir = 1", (folder_id,)).fetchone() is None:
         return None
     stats = conn.execute(

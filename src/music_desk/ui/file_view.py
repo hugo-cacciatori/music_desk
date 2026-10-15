@@ -10,6 +10,7 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from PySide6.QtCore import (
     QAbstractTableModel,
@@ -18,6 +19,7 @@ from PySide6.QtCore import (
     QPoint,
     QSortFilterProxyModel,
     Qt,
+    QTimer,
     Signal,
 )
 from PySide6.QtGui import QAction, QKeySequence, QPalette, QShortcut
@@ -27,6 +29,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMenu,
     QStyle,
+    QStyledItemDelegate,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -108,6 +111,8 @@ COLUMN_INDEX = {column.key: i for i, column in enumerate(COLUMNS)}
 
 
 class FileListModel(QAbstractTableModel):
+    renameRequested = Signal(int, str)  # entry id, the new name as typed
+
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], parent=None) -> None:
         super().__init__(parent)
         self._conn = conn
@@ -184,6 +189,8 @@ class FileListModel(QAbstractTableModel):
         column = COLUMNS[index.column()]
         if role == Qt.ItemDataRole.DisplayRole:
             return column.text(row)
+        if role == Qt.ItemDataRole.EditRole and index.column() == 0:
+            return row.name
         if role == Qt.ItemDataRole.DecorationRole and index.column() == 0:
             return self._icons["dir" if row.is_dir else "audio" if row.is_audio else "file"]
         if role == Qt.ItemDataRole.ForegroundRole and not row.is_dir and not row.is_audio:
@@ -201,7 +208,18 @@ class FileListModel(QAbstractTableModel):
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
             return Qt.ItemFlag.NoItemFlags
-        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable  # no drag: a drop in Explorer would move
+        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable  # no drag: a drop in Explorer would move
+        if index.column() == 0:
+            flags |= Qt.ItemFlag.ItemIsEditable  # inline rename (SPEC §11)
+        return flags
+
+    def setData(self, index: QModelIndex, value, role: int = Qt.ItemDataRole.EditRole) -> bool:
+        """An inline rename: asked of the window, which renames on disk; the row follows from the index."""
+        if role == Qt.ItemDataRole.EditRole and index.column() == 0 and isinstance(value, str):
+            row = self.rows[index.row()]
+            if value != row.name:
+                self.renameRequested.emit(row.id, value)
+        return False
 
 
 class FileSortProxy(QSortFilterProxyModel):
@@ -225,11 +243,29 @@ class FileSortProxy(QSortFilterProxyModel):
         return model.keys[left.row()][0] < model.keys[right.row()][0]  # ties: by name
 
 
+class RenameDelegate(QStyledItemDelegate):
+    """The inline editor selects only the stem of a file name, as Explorer does."""
+
+    def setEditorData(self, editor, index: QModelIndex) -> None:
+        super().setEditorData(editor, index)
+        if isinstance(editor, QLineEdit) and not index.data(IS_DIR_ROLE):
+            stem = len(Path(editor.text()).stem) if Path(editor.text()).suffix else len(editor.text())
+            QTimer.singleShot(0, lambda: _select(editor, stem))
+
+
+def _select(editor: QLineEdit, length: int) -> None:
+    try:
+        editor.setSelection(0, length)
+    except RuntimeError:  # the editor closed meanwhile
+        pass
+
+
 class FileView(QWidget):
     folderActivated = Signal(int)  # a folder row was opened (Enter or double-click)
     fileActivated = Signal(int)  # a file row was opened: the app hands it to its default app
     selectionChanged = Signal(list)  # entry ids
     menuRequested = Signal(list, QPoint)  # selected entry ids in view order (empty: the background), global pos
+    renameRequested = Signal(int, str)
 
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -255,7 +291,12 @@ class FileView(QWidget):
         self.view.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.view.customContextMenuRequested.connect(self._menu_requested)
-        self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        # Rename: F2 (below, always on the Name column) or a slow second click on a selected name.
+        self.view.setEditTriggers(QAbstractItemView.EditTrigger.SelectedClicked)
+        self.view.setItemDelegateForColumn(0, RenameDelegate(self.view))
+        self.model.renameRequested.connect(self.renameRequested)
+        QShortcut(QKeySequence(Qt.Key.Key_F2), self.view, activated=self._rename_current,
+                  context=Qt.ShortcutContext.WidgetShortcut)
         self.view.activated.connect(self._activated)
         self.view.selectionModel().selectionChanged.connect(
             lambda *_: self.selectionChanged.emit(self.selected_ids()))
@@ -318,6 +359,18 @@ class FileView(QWidget):
     def visible_names(self) -> list[str]:
         """The Name column as shown, top to bottom (tests, and Play selection in the view's order later)."""
         return [self.proxy.index(row, 0).data() for row in range(self.proxy.rowCount())]
+
+    def start_rename(self, entry_id: int) -> None:
+        row = self.model.row_for(entry_id)
+        if row is not None:
+            index = self.proxy.mapFromSource(self.model.index(row, 0))
+            self.view.setCurrentIndex(index)
+            self.view.edit(index)
+
+    def _rename_current(self) -> None:
+        index = self.view.currentIndex()
+        if index.isValid():
+            self.start_rename(index.data(ENTRY_ID_ROLE))
 
     def _activated(self, index: QModelIndex) -> None:
         if index.data(IS_DIR_ROLE):

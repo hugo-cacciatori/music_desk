@@ -52,6 +52,8 @@ class _Node:
 
 
 class FolderTreeModel(QAbstractItemModel):
+    renameRequested = Signal(int, str)
+
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], parent=None) -> None:
         super().__init__(parent)
         self._conn = conn
@@ -124,6 +126,8 @@ class FolderTreeModel(QAbstractItemModel):
             if node.root is not None:
                 return node.root.path if node.root.online else f"{node.root.path}  (offline)"
             return node.name
+        if role == Qt.ItemDataRole.EditRole:
+            return node.name
         if role == Qt.ItemDataRole.ToolTipRole:
             if offline:
                 return (f"{node.path}\nNot reachable: its last index stays browsable, read-only. "
@@ -142,7 +146,17 @@ class FolderTreeModel(QAbstractItemModel):
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
             return Qt.ItemFlag.NoItemFlags
-        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable  # no drag: the app never moves files
+        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable  # no drag: the app never moves files
+        if index.internalPointer().root is None:
+            flags |= Qt.ItemFlag.ItemIsEditable  # folders rename inline; library roots don't (SPEC §11)
+        return flags
+
+    def setData(self, index: QModelIndex, value, role: int = Qt.ItemDataRole.EditRole) -> bool:
+        if role == Qt.ItemDataRole.EditRole and index.isValid() and isinstance(value, str):
+            node: _Node = index.internalPointer()
+            if node.root is None and value != node.name:
+                self.renameRequested.emit(node.id, value)
+        return False
 
     # -- lookups --
 
@@ -278,11 +292,19 @@ class FolderTreeView(QTreeView):
         self.setUniformRowHeights(True)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setDragEnabled(False)
+        self.setEditTriggers(QAbstractItemView.EditTrigger.EditKeyPressed
+                             | QAbstractItemView.EditTrigger.SelectedClicked)
         self._expanded = {os.path.normcase(p) for p in (expanded or [])}
         self.expanded.connect(lambda index: self._remember(index, True))
         self.collapsed.connect(lambda index: self._remember(index, False))
         model.rowsInserted.connect(self._restore_expansion)
         self.selectionModel().currentChanged.connect(self._current_changed)
+
+    def start_rename(self, entry_id: int) -> None:
+        index = self.model().index_for(entry_id)
+        if index.isValid():
+            self.setCurrentIndex(index)
+            self.edit(index)
 
     def expanded_paths(self) -> list[str]:
         return sorted(self._expanded)

@@ -4,9 +4,12 @@ on a slow drive."""
 
 import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 
 from music_desk.core.fsops import natural_key
+from music_desk.core.index.store import path_of
 from music_desk.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND
+from music_desk.core.playlists import PlaylistEntry
 
 
 @dataclass(frozen=True)
@@ -140,3 +143,46 @@ def folder_path_ids(conn: sqlite3.Connection, entry_id: int) -> list[int]:
         SELECT id FROM up ORDER BY depth DESC
         """, (entry_id,)).fetchall()
     return [row[0] for row in rows]
+
+
+def _entries(conn: sqlite3.Connection, ids: list[int]) -> list[PlaylistEntry]:
+    """Playlist entries from the index (no file is read), in the order given, audio files only."""
+    if not ids:
+        return []
+    marks = ", ".join("?" * len(ids))
+    rows = {r[0]: r for r in conn.execute(
+        f"SELECT t.entry_id, t.duration, t.artist, t.title FROM tracks t WHERE t.entry_id IN ({marks})", ids)}
+    folder_paths: dict[int, str] = {}
+    entries = []
+    for entry_id in ids:
+        row = rows.get(entry_id)
+        if row is None:
+            continue  # not audio
+        parent_id, name = conn.execute("SELECT parent_id, name FROM entries WHERE id = ?", (entry_id,)).fetchone()
+        if parent_id not in folder_paths:
+            folder_paths[parent_id] = str(path_of(conn, parent_id))
+        entries.append(PlaylistEntry(Path(folder_paths[parent_id], name), row[1], row[2], row[3]))
+    return entries
+
+
+def playlist_for_ids(conn: sqlite3.Connection, ids: list[int]) -> list[PlaylistEntry]:
+    """Play selection: the selected audio files, in the given (view) order."""
+    return _entries(conn, ids)
+
+
+def playlist_for_folder(conn: sqlite3.Connection, folder_id: int, recursive: bool = False) -> list[PlaylistEntry]:
+    """Play folder: the folder's audio files in natural order, then (recursive) each subfolder's, in natural
+    order (SPEC §14). Read from the index, so it is instant even on a slow drive."""
+    ids: list[int] = []
+
+    def visit(folder: int) -> None:
+        rows = conn.execute("SELECT e.id, e.name, e.is_dir FROM entries e WHERE e.parent_id = ?",
+                            (folder,)).fetchall()
+        files = sorted((r for r in rows if not r[2]), key=lambda r: natural_key(r[1]))
+        ids.extend(r[0] for r in files)
+        if recursive:
+            for sub in sorted((r for r in rows if r[2]), key=lambda r: natural_key(r[1])):
+                visit(sub[0])
+
+    visit(folder_id)
+    return _entries(conn, ids)

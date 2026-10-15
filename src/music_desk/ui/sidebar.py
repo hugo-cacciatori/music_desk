@@ -8,7 +8,7 @@ from PySide6.QtCore import QModelIndex, QPoint, Qt, Signal
 from PySide6.QtWidgets import QLabel, QMenu, QPushButton, QVBoxLayout, QWidget
 
 from music_desk.core.index.roots import Root
-from music_desk.ui.folder_tree import FolderTreeModel, FolderTreeView
+from music_desk.ui.folder_tree import ENTRY_ID_ROLE, FolderTreeModel, FolderTreeView
 
 
 class Sidebar(QWidget):
@@ -38,6 +38,8 @@ class Sidebar(QWidget):
         layout.addWidget(self.empty_hint)
         layout.addWidget(self.add_button)
         self._roots: dict[int, Root] = {}
+        # Set by the window: builds the folder actions for an entry (Open, Play, Explorer…).
+        self.folder_menu_provider: Callable[[QMenu, int], None] | None = None
         self.set_roots([])
 
     def set_roots(self, roots: list[Root]) -> None:
@@ -62,6 +64,9 @@ class Sidebar(QWidget):
 
     def context_menu_for(self, index: QModelIndex) -> QMenu:
         menu = QMenu(self)
+        if index.isValid() and self.folder_menu_provider is not None:
+            self.folder_menu_provider(menu, index.data(ENTRY_ID_ROLE))
+            menu.addSeparator()
         root = self.model.root_for(index)
         if root is not None:
             menu.addAction("Remove from library", lambda: self.removeRequested.emit(root))

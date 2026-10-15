@@ -1,8 +1,10 @@
 import base64
+import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QEvent, QObject, Qt
+from PySide6.QtCore import QByteArray, QEvent, QObject, Qt, Signal
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -17,6 +19,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QSplitter,
     QStyle,
@@ -24,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from music_desk.core import fsops, playlists
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
@@ -34,6 +38,8 @@ from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.file_view import FileView
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
+
+log = logging.getLogger(__name__)
 
 APP_TITLE = "MusicDesk"
 STATUS_MS = 8000
@@ -57,6 +63,8 @@ class DropOverlay(QLabel):
 
 
 class MainWindow(QMainWindow):
+    shellFailed = Signal(str, str, bool)  # message, a path to show in Explorer instead, whether it is a folder
+
     def __init__(self, library: LibraryService | None = None, settings: Settings | None = None) -> None:
         super().__init__()
         self.library = library
@@ -65,6 +73,12 @@ class MainWindow(QMainWindow):
         self.folder_path: str | None = None  # to find the nearest surviving folder if this one disappears
         self.history_back: list[int] = []
         self.history_forward: list[int] = []
+        # Handing files to Windows can stall (a slow drive, a busy shell), so it happens off the UI thread.
+        # These three are replaced in tests, which never launch anything.
+        self.launch = fsops.open_with_default_app
+        self.show_in_explorer = fsops.open_in_explorer
+        self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\MusicDesk\playlists
+        self._shell = ThreadPoolExecutor(1, thread_name_prefix="shell")
         self.setWindowTitle(APP_TITLE)
         self.resize(1200, 760)
         self.index_label = QLabel()
@@ -105,6 +119,10 @@ class MainWindow(QMainWindow):
         self.sidebar.removeRequested.connect(self.remove_root)
         self.sidebar.folderSelected.connect(self.open_folder)
         self.file_view.folderActivated.connect(self.open_folder)
+        self.file_view.fileActivated.connect(lambda entry_id: self.open_files([entry_id]))
+        self.file_view.menuRequested.connect(lambda ids, pos: self.list_menu(ids).exec(pos))
+        self.sidebar.folder_menu_provider = self.add_folder_actions
+        self.shellFailed.connect(self._shell_failed)
         QApplication.instance().installEventFilter(self)  # the mouse back/forward buttons, anywhere in the window
 
         if library is None:
@@ -344,7 +362,112 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         self.save_state()
         QApplication.instance().removeEventFilter(self)
+        self._shell.shutdown(wait=False)
         super().closeEvent(event)
+
+    # -- context menus (SPEC §5): only what exists so far; Rename, Tidy and ReplayGain come with their milestones
+
+    def list_menu(self, ids: list[int]) -> QMenu:
+        """The file list's menu: for the selection, or for the open folder when the click was on the background."""
+        menu = QMenu(self)
+        if not self._library_open():
+            return menu
+        if not ids:
+            if self.folder_id is not None:
+                self.add_folder_actions(menu, self.folder_id, include_open=False)
+            return menu
+        if len(ids) == 1 and self.file_view.is_dir(ids[0]):
+            self.add_folder_actions(menu, ids[0])
+            return menu
+        open_action = menu.addAction("Open", lambda: self.open_files(ids))
+        open_action.setEnabled(len(ids) == 1)
+        play = menu.addAction("Play selection", lambda: self.play_selection(ids))
+        play.setEnabled(bool(queries.playlist_for_ids(self.library.conn, ids)))
+        menu.addSeparator()
+        menu.addAction("Open in File Explorer", lambda: self.reveal(ids[0]))
+        menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: self.copy_paths(ids))
+        return menu
+
+    def add_folder_actions(self, menu: QMenu, entry_id: int, include_open: bool = True) -> None:
+        if include_open:
+            menu.addAction("Open", lambda: self.open_folder(entry_id))
+        menu.addAction("Play folder", lambda: self.play_folder(entry_id, recursive=False))
+        menu.addAction("Play folder and subfolders", lambda: self.play_folder(entry_id, recursive=True))
+        menu.addSeparator()
+        menu.addAction("Open in File Explorer", lambda: self.reveal(entry_id))
+        menu.addAction("Copy path", lambda: self.copy_paths([entry_id]))
+        menu.addSeparator()
+        menu.addAction("Rescan", lambda: self.library.indexer.scan_folder(entry_id))
+
+    # -- actions handed to Windows --
+
+    def _paths(self, ids: list[int]) -> list[str]:
+        return [str(path_of(self.library.conn, entry_id)) for entry_id in ids if self._folder_exists(entry_id)]
+
+    def open_files(self, ids: list[int]) -> None:
+        """Open with the default app, as a double-click in Explorer does."""
+        if not self._library_open():
+            return
+        for path in self._paths(ids):
+            self._in_shell(lambda p=path: self.launch(p),
+                           f"Windows couldn't open {os.path.basename(path)}: no app is set for this file type, "
+                           "or the file isn't reachable.", path, False)
+
+    def reveal(self, entry_id: int) -> None:
+        if not self._library_open() or not self._folder_exists(entry_id):
+            return
+        path = str(path_of(self.library.conn, entry_id))
+        is_dir = bool(self.library.conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()[0])
+        self._in_shell(lambda: self.show_in_explorer(path, is_dir), f"File Explorer couldn't show {path}.", "", True)
+
+    def copy_paths(self, ids: list[int]) -> None:
+        paths = self._paths(ids) if self._library_open() else []
+        if paths:
+            QApplication.clipboard().setText("\n".join(paths))
+            self.statusBar().showMessage("Path copied." if len(paths) == 1 else f"{len(paths)} paths copied.",
+                                         STATUS_MS)
+
+    def play_folder(self, entry_id: int, recursive: bool) -> None:
+        if not self._library_open() or not self._folder_exists(entry_id):
+            return
+        entries = queries.playlist_for_folder(self.library.conn, entry_id, recursive)
+        self._play(entries, str(path_of(self.library.conn, entry_id)), True)
+
+    def play_selection(self, ids: list[int]) -> None:
+        if not self._library_open():
+            return
+        entries = queries.playlist_for_ids(self.library.conn, ids)
+        self._play(entries, str(entries[0].path) if entries else "", False)
+
+    def _play(self, entries: list[playlists.PlaylistEntry], fallback: str, fallback_is_dir: bool) -> None:
+        """Write a temporary playlist (the app's own file) and hand it to the default player (SPEC §14)."""
+        if not entries:
+            self.statusBar().showMessage("There are no audio files to play here.", STATUS_MS)
+            return
+
+        def run() -> None:
+            playlist = playlists.write_temp_playlist(entries, self.playlist_dir)
+            self.launch(playlist)
+
+        self._in_shell(run, "No app is set to play .m3u8 playlists. To choose one, open Windows Settings > Apps > "
+                       "Default apps and search for .m3u8.", fallback, fallback_is_dir)
+        self.statusBar().showMessage(f"Playing {len(entries)} track{'s' if len(entries) > 1 else ''}…", STATUS_MS)
+
+    def _in_shell(self, fn, message: str, fallback: str, fallback_is_dir: bool) -> None:
+        def run() -> None:
+            try:
+                fn()
+            except OSError as e:
+                log.warning("%s (%s)", message, e)
+                self.shellFailed.emit(message, fallback, fallback_is_dir)
+        self._shell.submit(run)
+
+    def _shell_failed(self, message: str, fallback: str, fallback_is_dir: bool) -> None:
+        if fallback:
+            self.toast.show_message(message, "Open in File Explorer", lambda: self._shell.submit(
+                lambda: self.show_in_explorer(fallback, fallback_is_dir)))
+        else:
+            self.toast.show_message(message)
 
     # -- indexing --
 

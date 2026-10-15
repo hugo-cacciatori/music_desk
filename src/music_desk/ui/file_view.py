@@ -15,6 +15,7 @@ from PySide6.QtCore import (
     QAbstractTableModel,
     QByteArray,
     QModelIndex,
+    QPoint,
     QSortFilterProxyModel,
     Qt,
     Signal,
@@ -226,7 +227,9 @@ class FileSortProxy(QSortFilterProxyModel):
 
 class FileView(QWidget):
     folderActivated = Signal(int)  # a folder row was opened (Enter or double-click)
+    fileActivated = Signal(int)  # a file row was opened: the app hands it to its default app
     selectionChanged = Signal(list)  # entry ids
+    menuRequested = Signal(list, QPoint)  # selected entry ids in view order (empty: the background), global pos
 
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -248,7 +251,10 @@ class FileView(QWidget):
         self.view.setAlternatingRowColors(True)
         self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.view.setDragEnabled(False)
+        self.view.setDragEnabled(False)  # a drop in Explorer would move the files (Ground rule 1)
+        self.view.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
+        self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.view.customContextMenuRequested.connect(self._menu_requested)
         self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.view.activated.connect(self._activated)
         self.view.selectionModel().selectionChanged.connect(
@@ -280,7 +286,20 @@ class FileView(QWidget):
         self.model.refresh()
 
     def selected_ids(self) -> list[int]:
-        return [index.data(ENTRY_ID_ROLE) for index in self.view.selectionModel().selectedRows()]
+        """The selected entries, top to bottom as shown (Play selection follows the view's sort order)."""
+        rows = sorted(self.view.selectionModel().selectedRows(), key=lambda index: index.row())
+        return [index.data(ENTRY_ID_ROLE) for index in rows]
+
+    def is_dir(self, entry_id: int) -> bool:
+        row = self.model.row_for(entry_id)
+        return row is not None and self.model.rows[row].is_dir
+
+    def _menu_requested(self, pos: QPoint) -> None:
+        index = self.view.indexAt(pos)
+        if index.isValid() and not self.view.selectionModel().isRowSelected(index.row()):
+            self.view.setCurrentIndex(index)  # a right-click on an unselected row selects it, as in Explorer
+        ids = self.selected_ids() if index.isValid() else []
+        self.menuRequested.emit(ids, self.view.viewport().mapToGlobal(pos))
 
     def select_ids(self, entry_ids: list[int]) -> None:
         selection = self.view.selectionModel()
@@ -303,6 +322,8 @@ class FileView(QWidget):
     def _activated(self, index: QModelIndex) -> None:
         if index.data(IS_DIR_ROLE):
             self.folderActivated.emit(index.data(ENTRY_ID_ROLE))
+        else:
+            self.fileActivated.emit(index.data(ENTRY_ID_ROLE))
 
     # -- filter --
 

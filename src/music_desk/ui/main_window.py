@@ -66,6 +66,11 @@ from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN, TIDY, ToolRequest
 log = logging.getLogger(__name__)
 
 APP_TITLE = "MusicDesk"
+FIND_QUERIES = (  # the Lyrics menu's Find entries: (menu text, search query)
+    ("Find songs LRCLIB didn't find", "lrclib:notfound"),
+    ("Find songs without lyrics in their tags", "lyricstag:no lyricstag:lrc"),
+    ("Find songs LRCLIB can't look up (no artist or title)", "lrclib:notags"),
+)
 STATUS_MS = 8000
 
 
@@ -254,6 +259,10 @@ class MainWindow(QMainWindow):
         self.auto_save_action.toggled.connect(self.set_lyrics_auto_save)
         lyrics_menu.addAction(self.offline_action)
         lyrics_menu.addAction(self.auto_save_action)
+        lyrics_menu.addSeparator()
+        # Library-wide lists for a lyrics action, as ready-made searches (SPEC §5: instead of smart views).
+        for text, query in FIND_QUERIES:
+            lyrics_menu.addAction(text, lambda q=query: self.find(q))
         lyrics_menu.setEnabled(library is not None)
         self.embedder = None
         if library is not None:
@@ -566,6 +575,18 @@ class MainWindow(QMainWindow):
             self._run_search()
         self.search_field.setFocus()
         self.search_field.selectAll()
+
+    def find(self, query: str) -> None:
+        """A ready-made search over the whole library (the Lyrics menu's Find entries)."""
+        if not self._library_open():
+            return
+        self.open_search()
+        if not self.showing_search:
+            return  # unsaved tag edits, and Cancel
+        self.search_field.setText(query)
+        self.search_view.scope_box.setChecked(False)
+        self.search_view.set_chip(ALL)
+        self._run_search()
 
     def close_search(self) -> None:
         """Esc: back to the folder that was open, as it was."""

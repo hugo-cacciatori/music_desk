@@ -25,7 +25,7 @@ META_COLUMNS = ("name", "title", "artist", "albumartist", "album", "genre")  # a
 TEXT_FIELDS = {"artist": ("artist", "albumartist"), "album": ("album",), "genre": ("genre",)}
 VALUE_FIELDS = {
     "lyricstag": ("yes", "no", "lrc"),
-    "lrclib": ("synced", "plain", "instrumental", "notfound", "pending", "error"),
+    "lrclib": ("synced", "plain", "instrumental", "notfound", "pending", "error", "notags"),
     "rg": ("none", "partial", "full"),
 }
 FIELDS = (*TEXT_FIELDS, "year", "ext", *VALUE_FIELDS)
@@ -158,7 +158,7 @@ def _like(text: str) -> str:
 # The LRCLIB column's states (queries._lrclib_state), in SQL.
 _LRCLIB_STATE = f"""CASE
     WHEN t.read_error IS NOT NULL THEN ''
-    WHEN t.lyrics_key IS NULL THEN 'no tags'
+    WHEN t.lyrics_key IS NULL THEN 'notags'
     WHEN l.status = '{FOUND}' THEN CASE WHEN coalesce(l.synced, '') != '' THEN 'synced' ELSE 'plain' END
     WHEN l.status = '{INSTRUMENTAL}' THEN 'instrumental'
     WHEN l.status = '{NOT_FOUND}' THEN 'notfound'

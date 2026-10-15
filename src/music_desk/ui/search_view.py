@@ -355,7 +355,7 @@ class SearchView(QWidget):
         self.play_button.setEnabled(False)
         self._set_note("Type to search titles, artists, albums, file names and lyrics. Filters: artist: album: "
                        "year: genre: ext: lyricstag:yes|no|lrc lrclib:synced|plain|instrumental|notfound|pending|"
-                       "error rg:none|partial|full, and \"quoted text\".")
+                       "error|notags rg:none|partial|full, and \"quoted text\".")
 
     def show_results(self, rows: list[SearchRow], total: int, errors: tuple[str, ...] = (),
                      failure: str | None = None, *, keys: list[tuple] | None = None, in_place: bool = False) -> None:

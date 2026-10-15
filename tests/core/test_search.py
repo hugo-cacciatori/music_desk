@@ -211,6 +211,7 @@ def test_lrclib_states(lib, songs):
     assert find(lib, "lrclib:pending", error_keys={"k6"}) == {"03 Pending.flac"}
     assert find(lib, "lrclib:error", error_keys={"k6"}) == {"04 Failed.flac"}
     assert find(lib, "lrclib:synced lrclib:plain") == {"01 Hunter.flac", "Glove.mp3"}
+    assert find(lib, "lrclib:notags") == {"untitled.flac"}  # not the unreadable file
 
 
 def test_chips(lib, songs):

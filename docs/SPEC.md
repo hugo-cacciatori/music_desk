@@ -358,6 +358,13 @@ coverage, cover, a Play button and tool shortcuts.
   - Play folder (enabled when the folder has tracks of its own) and Play with subfolders.
   - LRCLIB coverage appears with M4, and tool shortcuts with M5.
   - It refreshes when the indexer updates the folder.
+- As built (M3 task 6), the .lrc import:
+  - The sidecar is the same-stem `.lrc` next to the file, matched ignoring case.
+  - Its text is decoded as UTF-8 (a BOM is dropped), else Windows-1252; undecodable bytes become U+FFFD instead of
+    failing.
+  - The link shows for one editable, unlocked file while its Lyrics field is empty, so emptying the field offers
+    it again.
+  - The import normalizes line endings and trims leading and trailing blank lines. The .lrc file is only read.
 
 ## 8. Lyrics tab
 The tab shows only externally fetched lyrics: what LRCLIB returns for the selected track. It never shows the

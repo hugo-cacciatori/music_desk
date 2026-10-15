@@ -11,7 +11,7 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 6):**
-- **M3 in progress** (tasks 1 to 5 done: the Metadata tab for a single file; TagWriter and path locks; multi-file editing; cover editing; folder summary):
+- **M3 in progress** (tasks 1 to 6 done: the Metadata tab for a single file; TagWriter and path locks; multi-file editing; cover editing; folder summary; .lrc import):
   - `core/metadata.py`: `read_snapshot(path) -> Snapshot` (fields, stream details, RG values, the cover with its
     source, the ID3 version, `format_line` such as "FLAC 16-bit/44.1 kHz · 4:44 · 32 MB", with bit depth for
     lossless and kbps for lossy), `folder_cover` (folder.jpg, cover.jpg, front.jpg, ignoring case) and
@@ -108,7 +108,15 @@ two files alone.
       (also right after opening a folder). It refreshes on `folderUpdated` and `scanFinished`, and Play goes to
       `play_folder`.
     - Invalid images (the test library's 3-byte `cover.jpg`) give "No cover".
-  - 556 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
+  - .lrc import (task 6):
+    - `metadata.lrc_sidecar(path)` finds the same-stem `.lrc`, ignoring case, read through `open_shared`.
+      `decode_text` tries UTF-8 (BOM dropped), else cp1252 with replacement characters, so it never fails.
+    - `Snapshot.lrc_name` and `lrc_text`.
+    - The tab shows an "Import from <name>.lrc" link under Lyrics: one file only, when the Lyrics field is empty
+      and the file is editable and not locked.
+    - The import fills the field (CRLF normalized, edge newlines stripped) and makes the tab dirty. Saving is
+      the usual Save; the .lrc bytes are never touched (tested).
+  - 565 tests pass, 8 are skipped, the 23 `slow` tests pass, and ruff is clean. The app starts and exits cleanly
     offscreen.
 - **M2 is complete** (its "Done when" holds: measured on a copied 10k-file tree, see the end of this block):
   - `core/index/schema.py`: schema v1 = the SPEC §2 tables (`roots`, `entries`, `tracks`, `lyrics`,
@@ -339,16 +347,30 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M3's sixth task: import lyrics from a .lrc sidecar. Read SPEC §7 (the Lyrics field) and §10 (when
-a .lrc counts as a sidecar), first.
-- `Snapshot` gains the same-stem `.lrc` next to the file (name and text), read in `read_snapshot` on the worker
-  thread through `open_shared`. Decode as UTF-8 (with or without BOM), else cp1252; record the choice.
-- Metadata tab, single file: when the Lyrics tag is empty and a sidecar exists, show an "Import from <name>.lrc"
-  link that fills the field (dirty). Saving is the usual Save; the .lrc file itself is never touched.
-- Keep the import within the existing rules: LRC timestamps kept as typed, CRLF normalized.
-- The folder list's lyrics column already shows ".lrc" for sidecar-only tracks (`has_lrc_sidecar`).
-- Tests: the link shows only when the tag is empty, import plus save round trip, the .lrc unchanged (bytes
-  compared), encodings, and a multi-selection (no link: Lyrics is per-track).
+**Next step:** M3's seventh and last task: inline rename of files and folders, with sidecars and Undo, plus the
+rename hint after a save. That completes M3. Read SPEC §11, §10 (sidecars, forbidden characters) and §7 (the
+hint), and Ground rule 1, first.
+- Core, plain Python (`core/fsops.py` or a new `core/inline_rename.py`):
+  - `validate_name(folder, old, new)`:
+    - not empty; none of the script's forbidden characters (reuse `core/rename.py`'s list) or control
+      characters;
+    - no trailing space or dot, no reserved names (CON, PRN, AUX, NUL, COM1–9, LPT1–9), within the path limit;
+    - no clash with a sibling (a case-only rename is allowed: `fsops.is_same_file`).
+  - `rename_entry(path, new_name)`: the file, plus its same-stem `.lrc` when exactly one audio file has that stem
+    (the §10 rule), with a case-only rename through a temporary name. It returns what to undo.
+- Index: update `entries.name` in place, and the sidecar's row, through a writer job (no rescan), then
+  `folderUpdated`. A renamed folder is one row update; paths below follow.
+- UI:
+  - F2, a slow double-click and the context menu ("Rename") in the list, and in the tree for folders. Only the
+    stem is selected; changing the extension asks first.
+  - Blocked on roots and under a job's lock (PathLocks), with a message.
+  - After a rename, a toast naming the sidecar too offers Undo for 10 s.
+- The hint (§7): after a tag save, if the name no longer matches the rename masks, offer "Rename to '03 New
+  Title.flac'?". Use `core/rename.py`'s mask logic for one file.
+- Watch out: the watcher sees the rename too. Make sure the in-place index update and the watcher's rescan agree
+  (no duplicate rows, and the entry id is kept so the selection stays).
+- Tests: validation cases, file + sidecar + Undo, case-only, a folder rename keeping the subtree, blocked on
+  roots and locked paths, the extension prompt, the hint, and the index ids kept.
 
 Don't start it until Hugo says so.
 
@@ -453,6 +475,7 @@ Don't start it until Hugo says so.
 | 2026-10-15 | Multi-file editing: only shared fields that were edited or cleared are written. Emptying a "(multiple values)" field by hand leaves it alone, and only the clear button clears it on all files. A batch save reports per-file failures and keeps the edits for a retry. Any job-locked file makes the multi-edit read-only. Details in SPEC §7. |
 | 2026-10-15 | Covers: Replace (picker or a dropped jpg/png) and Remove change only the embedded front cover, and other pictures stay. A change is pending until Save, and Revert drops it. Over 1 MB asks first. With several files, a change applies to all, and the header says whether they share one cover. Folder images are shown, never written. Details in SPEC §7. |
 | 2026-10-15 | Folder summary: shown for one selected folder, or for the open folder when nothing is selected. It is built from the index (subtree totals) plus one cover read on the worker thread: the folder image, else the first track's embedded cover. Tool shortcuts wait for M5, and LRCLIB coverage waits for M4. Details in SPEC §7. |
+| 2026-10-15 | .lrc import: any same-stem .lrc (ignoring case) is offered while the Lyrics field is empty, for one file. Its text is decoded as UTF-8, else Windows-1252 (never an error). The .lrc file itself is never modified. Details in SPEC §7. |
 | deferred   | App name and icon. Retiring the original scripts. |
 
 ## Stack
@@ -568,7 +591,7 @@ the index.
 - [x] Multi-file editing (per-track fields disabled)
 - [x] Cover display, replace and remove
 - [x] Folder summary
-- [ ] Import from a .lrc sidecar
+- [x] Import from a .lrc sidecar
 - [ ] Inline rename of files and folders, sidecars included, with Undo; the rename hint after a save
 
 Done when: every format with a fixture round-trips through the UI, and ID3 versions are preserved.

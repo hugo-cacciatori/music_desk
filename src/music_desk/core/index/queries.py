@@ -181,9 +181,9 @@ def playlist_for_ids(conn: sqlite3.Connection, ids: list[int]) -> list[PlaylistE
     return _entries(conn, ids)
 
 
-def playlist_for_folder(conn: sqlite3.Connection, folder_id: int, recursive: bool = False) -> list[PlaylistEntry]:
-    """Play folder: the folder's audio files in natural order, then (recursive) each subfolder's, in natural
-    order (SPEC §14). Read from the index, so it is instant even on a slow drive."""
+def folder_entry_ids(conn: sqlite3.Connection, folder_id: int, recursive: bool = False) -> list[int]:
+    """The folder's files in natural order, then (recursive) each subfolder's, in natural order: Explorer's
+    order, as Play folder and the playlist builder use it (SPEC §14, §15). From the index only."""
     ids: list[int] = []
 
     def visit(folder: int) -> None:
@@ -196,7 +196,68 @@ def playlist_for_folder(conn: sqlite3.Connection, folder_id: int, recursive: boo
                 visit(sub[0])
 
     visit(folder_id)
-    return _entries(conn, ids)
+    return ids
+
+
+def playlist_for_folder(conn: sqlite3.Connection, folder_id: int, recursive: bool = False) -> list[PlaylistEntry]:
+    """Play folder (SPEC §14). Read from the index, so it is instant even on a slow drive."""
+    return _entries(conn, folder_entry_ids(conn, folder_id, recursive))
+
+
+def track_ids_for(conn: sqlite3.Connection, ids: list[int]) -> list[int]:
+    """Dropped items, in the order given, as tracks: a folder brings every track under it (Explorer's order), a
+    track itself; anything else (a cover, a text file) is left out. For the playlist builder (SPEC §15)."""
+    tracks: list[int] = []
+    for entry_id in ids:
+        row = conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()
+        if row is None:
+            continue
+        candidates = folder_entry_ids(conn, entry_id, recursive=True) if row[0] else [entry_id]
+        if not candidates:
+            continue
+        marks = ", ".join("?" * len(candidates))
+        audio = {r[0] for r in conn.execute(f"SELECT entry_id FROM tracks WHERE entry_id IN ({marks})", candidates)}
+        tracks.extend(i for i in candidates if i in audio)
+    return tracks
+
+
+@dataclass(frozen=True)
+class TrackRow:
+    """A playlist builder row: a track's columns (SPEC §15), from the index."""
+
+    id: int
+    path: Path
+    name: str
+    folder: str
+    title: str | None
+    artist: str | None
+    album: str | None
+    albumartist: str | None
+    track: int | None
+    disc: int | None
+    year: str | None
+    genre: str | None
+    duration: float | None
+    format: str | None
+
+
+def track_rows(conn: sqlite3.Connection, ids: list[int]) -> dict[int, TrackRow]:
+    """The rows of the given tracks (ids that left the index are absent). Folder paths are built once each."""
+    rows: dict[int, TrackRow] = {}
+    folders: dict[int, str] = {}
+    for start in range(0, len(ids), 500):
+        chunk = ids[start:start + 500]
+        marks = ", ".join("?" * len(chunk))
+        for r in conn.execute(
+                f"""
+                SELECT e.id, e.parent_id, e.name, t.title, t.artist, t.album, t.albumartist, t.track, t.disc, t.date,
+                       t.genre, t.duration, t.format
+                FROM entries e JOIN tracks t ON t.entry_id = e.id WHERE e.id IN ({marks})
+                """, chunk):
+            if r[1] not in folders:
+                folders[r[1]] = str(path_of(conn, r[1]))
+            rows[r[0]] = TrackRow(r[0], Path(folders[r[1]], r[2]), r[2], folders[r[1]], *r[3:])
+    return rows
 
 
 @dataclass(frozen=True)

@@ -1074,6 +1074,25 @@ import of existing playlists): one playlist in progress, built by dragging music
   foobar2000, or whatever is associated with `.m3u8`.
 - The playlist is kept across restarts in the app's data (`%LOCALAPPDATA%\MusicDesk`), until it is cleared.
 
+**As built (M7 task 1): the core.**
+- `core/playlist_builder.py` `Builder`: an ordered list of `Item(entry_id, path)`.
+  - The id keeps an item valid through in-app renames. The path finds it again after an index rebuild, and keeps
+    a file that left the library listed (`entry_id` None, shown dimmed).
+  - `add(items, position)` inserts in order and skips tracks already there (by id, else by path ignoring case),
+    returning (added, skipped).
+  - `move_rows(rows, ±1)`: every selected row moves one step, nothing moves when the selection touches the edge.
+    `move_to(rows, position)` is the drag.
+  - `sort(key, reverse)` is stable. `resolve(lookup)` brings items up to date with the index.
+  - `save` / `load`: JSON (`{"version": 1, "items": [{"id", "path"}]}`), written atomically; anything malformed
+    is dropped, never an error.
+- `queries.track_ids_for(conn, ids)`: dropped items in the order given. A folder brings its tracks in Explorer's
+  order (`folder_entry_ids`, shared with Play folder); a track stays a track; anything else is left out.
+- `queries.track_rows(conn, ids)` → `TrackRow` (path, name, folder, title, artist, album, album artist, track,
+  disc, year, genre, duration, format); ids that left the index are absent.
+- `playlists.export_playlist(entries, target, relative)`, through `render(relative_to=)` and `playlist_path`.
+  Relative paths are relative to the file's folder, and a file on another drive (no relative path exists) stays
+  absolute. The file is written atomically.
+
 ## 16. Architecture and concurrency
     UI thread (Qt) ◄── queued signals ── services (QObjects in worker threads)
        │ read-only SQLite connection

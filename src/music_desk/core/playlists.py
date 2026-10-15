@@ -1,7 +1,7 @@
 """Temporary .m3u8 playlists for "Play folder", "Play selection" and "Play results" (SPEC §14).
 
 They are the app's own files, written to %LOCALAPPDATA%\\MusicDesk\\playlists and opened with the default player.
-Only the newest ones are kept. The saved playlists of M7 will live here too.
+Only the newest ones are kept. The playlist builder's export (M7) writes the same format where the user chooses.
 """
 
 import logging
@@ -71,16 +71,38 @@ def folder_tracks(folder: str | Path, recursive: bool = False) -> list[Path]:
     return result
 
 
-def render(entries: Iterable[PlaylistEntry]) -> str:
-    """Extended M3U text: absolute paths, audio files only, Windows line endings."""
+def render(entries: Iterable[PlaylistEntry], relative_to: Path | None = None) -> str:
+    """Extended M3U text, audio files only, Windows line endings. Paths are absolute, or relative to the folder
+    `relative_to` (where the playlist is saved); a file on another drive keeps its absolute path."""
     lines = ["#EXTM3U"]
     for entry in entries:
         if not is_audio(entry.path):
             continue
         seconds = round(entry.duration) if entry.duration else -1
         lines.append(f"#EXTINF:{seconds},{entry.label}")
-        lines.append(str(entry.path.absolute()))
+        lines.append(playlist_path(entry.path, relative_to))
     return "\r\n".join(lines) + "\r\n"
+
+
+def playlist_path(path: Path, relative_to: Path | None) -> str:
+    absolute = str(path.absolute())
+    if relative_to is None:
+        return absolute
+    base = str(Path(relative_to).absolute())
+    if os.path.splitdrive(absolute)[0].casefold() != os.path.splitdrive(base)[0].casefold():
+        return absolute  # another drive: no relative path exists
+    return os.path.relpath(absolute, base)
+
+
+def export_playlist(entries: Iterable[PlaylistEntry], target: str | Path, relative: bool) -> Path:
+    """The playlist builder's export (SPEC §15): a UTF-8 .m3u8 where the user chose, replacing a file there (the
+    Save dialog asked first). Relative paths are relative to the file's folder."""
+    target = Path(target)
+    text = render(entries, target.parent if relative else None)
+    temp = target.with_name(target.name + ".tmp")
+    temp.write_bytes(text.encode("utf-8"))
+    os.replace(temp, target)  # a crash can't leave half a playlist where the user saved it
+    return target
 
 
 def write_temp_playlist(entries: Iterable[PlaylistEntry], directory: Path | None = None, keep: int = KEEP_PLAYLISTS,

@@ -12,6 +12,14 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 9):**
+- **M7 task 1 is done (the core).** `core/playlist_builder.py` `Builder` of `Item(entry_id, path)`: add (at a
+  position, duplicates skipped), remove, clear, move_rows (Ctrl+↑/↓), move_to (drag), sort, resolve, and the
+  JSON save/load. `queries.folder_entry_ids` (shared with Play folder), `track_ids_for` (dropped items → tracks,
+  Explorer's order), `track_rows` → `TrackRow`. `playlists.render(relative_to=)`, `playlist_path`,
+  `export_playlist`. Tests: `tests/core/test_playlist_builder.py`.
+  - **Watch for:** one full non-slow run had one failure whose output wasn't kept; the rerun and a saved full run
+    were clean. If it happens again, keep the output (`uv run pytest > out.txt`) to name the test.
+- **The tweaks before M7 are done** (Progress, "Tweaks and fixes before M7").
 - **M6 is complete.** Both "Done when" conditions hold (the installer installs the app and it runs from Program
   Files with the bundled rsgain; the seek_lyrics search parity test passes). Also done at the end of the session:
   - the folder summary's LRCLIB coverage row (planned for M4, missed until now);
@@ -645,8 +653,8 @@ two files alone.
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
 **Next step:** M6 is complete, v0.1.0 is released on GitHub, and the tweaks before M7 are done. What is left:
-- **M7, the playlist builder**: designed with Hugo (SPEC §15) and broken into tasks in Progress. Start with its
-  first task, the core model.
+- **M7, the playlist builder**: designed with Hugo (SPEC §15). Task 1 (the core) is done; next is task 2, the
+  panel (`ui/playlist_panel.py`), building on SPEC §15 "As built (M7 task 1)".
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
   agree) and pyproject's `version`, run `uv run python packaging/build_installer.py`, then
   `gh release create v<version> dist/installer/MusicDesk-Setup-<version>.exe` (with Hugo's go).
@@ -962,7 +970,7 @@ Done when:
       renames were applied as one batch tied to the first folder)
 
 **M7 Playlist builder** (read SPEC §15, designed with Hugo on 2026-10-15; also §5 and §14)
-- [ ] Core (`core/playlists.py`, no Qt): the builder's model (entry ids, the natural import order, insert at a
+- [x] Core (`core/playlists.py`, no Qt): the builder's model (entry ids, the natural import order, insert at a
       position, skip duplicates, move, remove, sort by a field), saving and restoring it in the app's data,
       and the `.m3u8` export with relative or absolute paths (another drive falls back to absolute). Tests.
 - [ ] The panel (`ui/playlist_panel.py`): a narrow vertical column between the file list and the side panel,

@@ -1,8 +1,9 @@
 # MusicDesk: CLAUDE.md
 
-MusicDesk (working name) is a Windows desktop app for browsing a music library, editing tags, tidying albums
+MusicDesk is a Windows desktop app for browsing a music library, editing tags, tidying albums
 (renaming from tags, ReplayGain with the bundled rsgain) and looking up lyrics in the background. It replaces
-`music_tools.py` and `seek_lyrics.py`, which sit at the project root (`C:\Code\music_desk\`).
+`music_tools.py` and `seek_lyrics.py`. Those were deleted from the project root on 2026-10-15; their frozen copies
+are in `tests/reference/`.
 
 This file is the working summary: state, rules, decisions, progress and open questions. The detailed feature spec
 is in [docs/SPEC.md](docs/SPEC.md), referred to as "SPEC §n". It isn't loaded automatically: before working on a
@@ -11,6 +12,11 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-15, end of session 9):**
+- **M6 is complete.** Both "Done when" conditions hold (the installer installs the app and it runs from Program
+  Files with the bundled rsgain; the seek_lyrics search parity test passes). Also done at the end of the session:
+  - the folder summary's LRCLIB coverage row (planned for M4, missed until now);
+  - the root `music_tools.py` and `seek_lyrics.py` deleted (`git rm`, Hugo's go; the frozen copies stay);
+  - the v0.1.0 GitHub release with the setup.
 - **M6 task 5 is done (the installer).** `packaging/installer.iss` and `packaging/build_installer.py`; details in
   SPEC §13, "As built (M6 task 5)". Both M6 "Done when" conditions hold. MusicDesk 0.1.0 is installed for all
   users in `C:\Program Files\MusicDesk` on Hugo's machine (Start menu shortcut). Left in M6: the README and
@@ -638,13 +644,14 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** the last M6 task.
-- README.md is written (Hugo approved the draft, 2026-10-15). It names the setup file but links no download:
-  the GitHub repo has no release yet, and publishing one needs Hugo's go.
-- **Retire the root scripts**, once Hugo uses the installed app in their place (it is installed in Program Files
-  since 2026-10-15). Tell him the exact delete command first.
-- M6's two "Done when" conditions hold: the installer installs the app, and it runs from Program Files with the
-  bundled rsgain; the seek_lyrics search parity test passes.
+**Next step:** M6 is complete, and v0.1.0 is released on GitHub (the setup as a release asset). What is left:
+- **M7, the playlist builder** (SPEC §15): settle its design with Hugo first (where saved playlists go, absolute
+  or relative paths: Open question 3), then break it into tasks in Progress.
+- Open questions 1 and 2 (sample files for the formats ffmpeg can't encode; ReplayGain for the formats rsgain
+  can't handle) wait on Hugo.
+- A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
+  agree) and pyproject's `version`, run `uv run python packaging/build_installer.py`, then
+  `gh release create v<version> dist/installer/MusicDesk-Setup-<version>.exe` (with Hugo's go).
 
 **Done in session 9 (the original M6 task 1 brief, kept for reference):** the schema v3 migration and the
 `lrclib` column, `text_search` with the parity test, then the Ctrl+K UI (results with a Folder column, up to
@@ -698,9 +705,9 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 - ffmpeg's build has no libspeex encoder, so there is no Speex fixture.
 
 **Sources:**
-- `music_tools.py` and `seek_lyrics.py` at the project root: the code to port. Their frozen copies are in
-  `tests/reference/` (since 2026-10-15); never edit those. Ruff excludes both locations, and pytest doesn't
-  collect `reference/` or `fixtures/`.
+- `music_tools.py` and `seek_lyrics.py`: the code that was ported. Only the frozen copies in `tests/reference/`
+  remain (the root copies were deleted on 2026-10-15, with Hugo's go); never edit those. Ruff excludes
+  `tests/reference`, and pytest doesn't collect `reference/` or `fixtures/`.
 - The original rsgain download (`rsgain-3.6-win64/`, with the legacy `scan_library_full.py`) is no longer on disk;
   `resources/rsgain/` is the only copy. The legacy script was superseded and isn't ported.
 - `music_tools.py` resolves rsgain as `<script folder>/rsgain-3.6-win64/rsgain.exe`, which doesn't exist anymore.
@@ -827,7 +834,7 @@ Commands (from the project root):
 ## Project layout
     music_desk/             C:\Code\music_desk
       CLAUDE.md, pyproject.toml
-      music_tools.py, seek_lyrics.py   the original scripts (not part of the app; frozen into tests/reference/)
+      README.md, LICENSE
       docs/SPEC.md          detailed feature spec
       src/music_desk/
         __main__.py, app.py
@@ -938,8 +945,8 @@ cleanup fixture case gets the expected status.
 - [x] Theme and icons: the app icon and the exe's version info; light and dark follow Windows (no theme setting)
 - [x] Inno Setup installer; check the licenses of the FFmpeg libraries built into rsgain
 - [x] README.md: what the app does, its features, install (the installer), build from source, licence
-- [ ] Retire the root `music_tools.py` and `seek_lyrics.py`, once the installed v1 replaces them for Hugo. Tell
-      him the exact delete command first; `tests/reference/` keeps the frozen copies the parity tests use.
+- [x] Retire the root `music_tools.py` and `seek_lyrics.py` (deleted with `git rm` on 2026-10-15, Hugo's go;
+      `tests/reference/` keeps the frozen copies the parity tests use)
 
 Done when:
 - the installer installs the app, and it runs from Program Files with the bundled rsgain;

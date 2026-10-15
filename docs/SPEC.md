@@ -1061,7 +1061,8 @@ Planned for M7, not in v1. A sketch to refine with Hugo before M7:
 
 ## 17. Porting reference
 Source: `tests/reference/music_tools.py` and `tests/reference/seek_lyrics.py`, frozen copies of `music_tools.py`
-and `seek_lyrics.py` at the project root, made at M1.
+and `seek_lyrics.py`, made at M1 from the originals at the project root (deleted on 2026-10-15, once the app
+replaced them).
 
 **Required refactors:**
 - Remove every `os.getcwd()`, `os.chdir` and `contextlib.chdir`. The working directory is process-global, so

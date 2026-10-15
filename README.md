@@ -32,9 +32,10 @@ Recycle Bin, and only when you tick that option and confirm.
 
 ## Install
 
-Run `MusicDesk-Setup-<version>.exe` (Windows 10 or 11, 64-bit). It installs for all users in Program Files, or
-only for you if you choose that on its first page. The setup isn't signed, so Windows SmartScreen may warn about
-it: choose "More info", then "Run anyway".
+Download `MusicDesk-Setup-<version>.exe` from the
+[latest release](https://github.com/hugo-cacciatori/music_desk/releases/latest) and run it (64-bit Windows 10 or
+11). It installs for all users in Program Files, or only for you if you choose that on its first page. The setup
+isn't signed, so Windows SmartScreen may warn about it: choose "More info", then "Run anyway".
 
 MusicDesk keeps its own data (the library index, settings and logs) in `%LOCALAPPDATA%\MusicDesk`. Uninstalling
 asks whether to delete it too. Your music folders are never touched.

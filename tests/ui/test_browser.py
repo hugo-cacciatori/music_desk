@@ -4,71 +4,15 @@ updates without resets, and the persisted layout."""
 import os
 import shutil
 
-import pytest
-from PySide6.QtCore import QModelIndex, Qt
+from browser_helpers import child_names, column, entry
+from PySide6.QtCore import Qt
 from PySide6.QtTest import QSignalSpy
 
 from music_desk.core.index import queries
-from music_desk.services.library import LibraryService
 from music_desk.settings import Settings
 from music_desk.ui.file_view import COLUMN_INDEX, format_duration, format_size
 from music_desk.ui.folder_tree import ENTRY_ID_ROLE
 from music_desk.ui.main_window import MainWindow
-
-ALBUM = "Fixture Artist - Fixture Album"
-
-
-@pytest.fixture
-def library_dir(tmp_path, fixtures_dir):
-    lib = tmp_path / "lib"
-    album = lib / "Artist" / "Album"
-    album.mkdir(parents=True)
-    for name in ("Track 10.flac", "Track 2.flac", "track 1.flac"):
-        shutil.copy2(fixtures_dir / "formats" / "tone.flac", album / name)
-    shutil.copy2(fixtures_dir / "formats" / "tone.mp3", album / "Track 3.mp3")
-    (album / "cover.jpg").write_bytes(b"jpg")
-    (album / "CD 10").mkdir()
-    (album / "CD 2").mkdir()
-    (lib / "Artist" / "Scans").mkdir()
-    (lib / "Artist" / "Scans" / "back.jpg").write_bytes(b"jpg")
-    shutil.copytree(fixtures_dir / "album" / ALBUM, lib / "Other" / ALBUM)
-    return lib
-
-
-@pytest.fixture
-def service(qtbot, tmp_path, library_dir):
-    service = LibraryService(tmp_path / "db" / "library.db", watcher_options={"debounce": 0.1, "max_delay": 1})
-    with qtbot.waitSignal(service.indexer.idle, timeout=20000):
-        with qtbot.waitSignal(service.addFinished, timeout=5000):
-            service.add_folders([library_dir])
-    yield service
-    service.close()
-
-
-@pytest.fixture
-def window(qtbot, service):
-    window = MainWindow(service)
-    qtbot.addWidget(window)
-    window.show()
-    return window
-
-
-def entry(service, *names) -> int:
-    folder = service.roots()[0].top_entry_id
-    for name in names:
-        folder = service.conn.execute("SELECT id FROM entries WHERE parent_id = ? AND name = ?",
-                                      (folder, name)).fetchone()[0]
-    return folder
-
-
-def child_names(model, parent: QModelIndex) -> list[str]:
-    return [model.index(row, 0, parent).data() for row in range(model.rowCount(parent))]
-
-
-def column(window, key) -> list[str]:
-    proxy = window.file_view.proxy
-    return [proxy.index(row, COLUMN_INDEX[key]).data() for row in range(proxy.rowCount())]
-
 
 # -- queries --
 

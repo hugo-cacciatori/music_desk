@@ -1,9 +1,28 @@
 import base64
 import os
+from pathlib import Path
 
-from PySide6.QtCore import QByteArray, Qt
-from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QKeySequence
-from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QMessageBox, QSplitter, QWidget
+from PySide6.QtCore import QByteArray, QEvent, QObject, Qt
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDragEnterEvent,
+    QDragLeaveEvent,
+    QDropEvent,
+    QKeySequence,
+    QShortcut,
+)
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QSplitter,
+    QStyle,
+    QToolBar,
+    QWidget,
+)
 
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
@@ -11,6 +30,7 @@ from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
 from music_desk.core.index.store import path_of
 from music_desk.services.library import LibraryService
 from music_desk.settings import Settings
+from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.file_view import FileView
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
@@ -43,6 +63,8 @@ class MainWindow(QMainWindow):
         self.settings = settings or Settings()
         self.folder_id: int | None = None
         self.folder_path: str | None = None  # to find the nearest surviving folder if this one disappears
+        self.history_back: list[int] = []
+        self.history_forward: list[int] = []
         self.setWindowTitle(APP_TITLE)
         self.resize(1200, 760)
         self.index_label = QLabel()
@@ -61,6 +83,7 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setSizes([280, 920])
         self.setCentralWidget(self.splitter)
+        self._build_navigation(conn)
         self._restore_state()
 
         self.add_folder_action = QAction("&Add folder…", self, shortcut=QKeySequence("Ctrl+O"))
@@ -82,6 +105,7 @@ class MainWindow(QMainWindow):
         self.sidebar.removeRequested.connect(self.remove_root)
         self.sidebar.folderSelected.connect(self.open_folder)
         self.file_view.folderActivated.connect(self.open_folder)
+        QApplication.instance().installEventFilter(self)  # the mouse back/forward buttons, anywhere in the window
 
         if library is None:
             self.add_folder_action.setEnabled(False)
@@ -110,15 +134,138 @@ class MainWindow(QMainWindow):
 
     # -- browsing --
 
-    def open_folder(self, entry_id: int) -> None:
-        """Show a folder at once from the index, then have it revalidated (stale-while-revalidate)."""
+    def open_folder(self, entry_id: int, *, record: bool = True) -> None:
+        """Show a folder at once from the index, then have it revalidated (stale-while-revalidate).
+        `record`: a new step in the history (not for back, forward, or a replacement of a vanished folder)."""
         if not self._library_open() or entry_id == self.folder_id or not self._folder_exists(entry_id):
             return  # a row being removed can still be selected for a moment
+        if record and self.folder_id is not None:
+            self.history_back.append(self.folder_id)
+            self.history_forward.clear()
         self.folder_id = entry_id
         self.folder_path = str(path_of(self.library.conn, entry_id))
         self.file_view.set_folder(entry_id)
-        self.sidebar.tree.select_entry(queries.folder_path_ids(self.library.conn, entry_id))
+        crumbs = queries.folder_crumbs(self.library.conn, entry_id)
+        self.address_bar.set_location(crumbs, self.folder_path)
+        self.sidebar.tree.select_entry([entry for entry, _name in crumbs])
         self.library.folder_opened(entry_id)
+        self._update_navigation()
+
+    # -- history and navigation --
+
+    def _build_navigation(self, conn) -> None:
+        style = self.style()
+        self.back_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_ArrowBack), "Back", self)
+        # Explicit keys: Qt's standard Back also binds Backspace, which goes up here (SPEC §5), and a key bound
+        # twice is ambiguous and fires nothing.
+        self.back_action.setShortcut(QKeySequence("Alt+Left"))
+        self.back_action.triggered.connect(self.go_back)
+        self.forward_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_ArrowForward), "Forward", self)
+        self.forward_action.setShortcut(QKeySequence("Alt+Right"))
+        self.forward_action.triggered.connect(self.go_forward)
+        self.up_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_ArrowUp), "Up", self)
+        self.up_action.setShortcut(QKeySequence("Alt+Up"))
+        self.up_action.triggered.connect(self.go_up)
+        self.refresh_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload), "Rescan folder",
+                                      self)
+        self.refresh_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Refresh))
+        self.refresh_action.triggered.connect(self.rescan_folder)
+        self.address_action = QAction("Edit address", self, shortcut=QKeySequence("Ctrl+L"))
+        self.address_action.triggered.connect(lambda: self.address_bar.edit())
+        self.addAction(self.address_action)
+
+        self.address_bar = AddressBar(
+            lambda entry_id: [(f.id, f.name) for f in queries.child_folders(
+                conn(), entry_id, only_music=self.settings.hide_folders_without_music)] if conn() else [])
+        self.address_bar.folderRequested.connect(self.open_folder)
+        self.address_bar.pathEntered.connect(self.go_to_path)
+
+        toolbar = QToolBar("Navigation")
+        toolbar.setMovable(False)
+        toolbar.setObjectName("navigation")
+        for action in (self.back_action, self.forward_action, self.up_action, self.refresh_action):
+            toolbar.addAction(action)
+        toolbar.addWidget(self.address_bar)
+        self.addToolBar(toolbar)
+
+        # Backspace goes up, but only from the lists (it edits text everywhere else).
+        for view in (self.file_view.view, self.sidebar.tree):
+            QShortcut(QKeySequence(Qt.Key.Key_Backspace), view, activated=self.go_up,
+                      context=Qt.ShortcutContext.WidgetShortcut)
+        self._update_navigation()
+
+    def _update_navigation(self) -> None:
+        open_ = self._library_open() and self.folder_id is not None
+        self.back_action.setEnabled(bool(self.history_back))
+        self.forward_action.setEnabled(bool(self.history_forward))
+        self.up_action.setEnabled(open_ and queries.parent_folder(self.library.conn, self.folder_id) is not None)
+        self.refresh_action.setEnabled(open_)
+
+    def go_back(self) -> None:
+        self._step(self.history_back, self.history_forward)
+
+    def go_forward(self) -> None:
+        self._step(self.history_forward, self.history_back)
+
+    def _step(self, source: list[int], target: list[int]) -> None:
+        """Move through the history, skipping folders that left the index."""
+        if not self._library_open():
+            return
+        while source:
+            entry_id = source.pop()
+            if self._folder_exists(entry_id) and entry_id != self.folder_id:
+                if self.folder_id is not None:
+                    target.append(self.folder_id)
+                self.open_folder(entry_id, record=False)
+                return
+        self._update_navigation()
+
+    def go_up(self) -> None:
+        if not self._library_open() or self.folder_id is None:
+            return
+        child = self.folder_id
+        parent = queries.parent_folder(self.library.conn, child)
+        if parent is not None:
+            self.open_folder(parent)
+            self.file_view.select_ids([child])  # as Explorer does: the folder you came from is selected
+
+    def rescan_folder(self) -> None:
+        """F5: reconcile the open folder with the disk now."""
+        if self._library_open() and self.folder_id is not None:
+            self.library.indexer.scan_folder(self.folder_id)
+            self.statusBar().showMessage("Rescanning this folder…", 2000)
+
+    def go_to_path(self, text: str) -> None:
+        """A typed or pasted path: open it if it is an indexed folder, or open a file's folder and select it."""
+        if not self._library_open():
+            return
+        found = find_folder(self.library.conn, text)
+        if found is None:
+            self.statusBar().showMessage(f"{text} isn't in the library. Add its folder first (File > Add folder…).",
+                                         STATUS_MS)
+            return
+        folder, exact = found
+        if exact:
+            self.open_folder(folder)
+            return
+        rest = Path(os.path.normpath(os.path.abspath(text))).relative_to(path_of(self.library.conn, folder)).parts
+        file_id = queries.find_child(self.library.conn, folder, rest[0]) if len(rest) == 1 else None
+        if file_id is not None:
+            self.open_folder(folder)
+            self.file_view.select_ids([file_id])
+        else:
+            self.statusBar().showMessage(f"{text} wasn't found in the library's index.", STATUS_MS)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.MouseButtonPress and isinstance(watched, QWidget) and \
+                watched.window() is self:
+            if event.button() == Qt.MouseButton.BackButton:
+                self.go_back()
+                return True
+            if event.button() == Qt.MouseButton.ForwardButton:
+                self.go_forward()
+                return True
+        return False
 
     def folder_updated(self, entry_id: int) -> None:
         if not self._library_open():
@@ -145,7 +292,7 @@ class MainWindow(QMainWindow):
         if found is None:
             self._close_folder()
         else:
-            self.open_folder(found[0])
+            self.open_folder(found[0], record=False)
 
     def _library_open(self) -> bool:
         """False without a library, and once it is closed: queued signals can arrive after the shutdown."""
@@ -158,6 +305,8 @@ class MainWindow(QMainWindow):
         self.folder_id = None
         self.folder_path = None
         self.file_view.set_folder(None)
+        self.address_bar.set_location([], "")
+        self._update_navigation()
 
     def set_hide_folders_without_music(self, hide: bool) -> None:
         self.settings.hide_folders_without_music = hide
@@ -194,6 +343,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.save_state()
+        QApplication.instance().removeEventFilter(self)
         super().closeEvent(event)
 
     # -- indexing --

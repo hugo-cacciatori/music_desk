@@ -103,6 +103,31 @@ def folder_listing(conn: sqlite3.Connection, folder_id: int) -> list[FileRow]:
     return listing
 
 
+def folder_crumbs(conn: sqlite3.Connection, entry_id: int) -> list[tuple[int, str]]:
+    """(id, name) from the root's top entry down to this entry; the top entry's name is the root path."""
+    rows = conn.execute(
+        """
+        WITH RECURSIVE up(id, parent_id, name, depth) AS (
+            SELECT id, parent_id, name, 0 FROM entries WHERE id = ?
+            UNION ALL
+            SELECT e.id, e.parent_id, e.name, up.depth + 1 FROM entries e JOIN up ON e.id = up.parent_id
+        )
+        SELECT id, name FROM up ORDER BY depth DESC
+        """, (entry_id,)).fetchall()
+    return [(row[0], row[1]) for row in rows]
+
+
+def parent_folder(conn: sqlite3.Connection, entry_id: int) -> int | None:
+    row = conn.execute("SELECT parent_id FROM entries WHERE id = ?", (entry_id,)).fetchone()
+    return row[0] if row else None
+
+
+def find_child(conn: sqlite3.Connection, folder_id: int, name: str) -> int | None:
+    row = conn.execute("SELECT id FROM entries WHERE parent_id = ? AND name = ? COLLATE NOCASE",
+                       (folder_id, name)).fetchone()
+    return row[0] if row else None
+
+
 def folder_path_ids(conn: sqlite3.Connection, entry_id: int) -> list[int]:
     """The ids from the root's top entry down to this entry (to expand the tree to a folder)."""
     rows = conn.execute(

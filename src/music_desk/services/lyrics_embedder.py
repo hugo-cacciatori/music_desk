@@ -82,6 +82,9 @@ class AutoEmbedder(QObject):
     # -- the worker: finds the files and hands them to the TagWriter --
 
     def _find(self, key: str | None, skip: frozenset[int], backfill: bool) -> None:
+        if not self._enabled or self._closed:  # turned off (or closing) since this job was queued
+            self._queued.emit(None, [], backfill, False)
+            return
         try:
             conn = connect_read(self.db_path)
         except Exception:  # noqa: BLE001 - tried again at the next result or start
@@ -103,6 +106,8 @@ class AutoEmbedder(QObject):
         finally:
             conn.close()
         more = backfill and len(candidates) >= self._batch
+        if not self._enabled:  # turned off while the index was read: write nothing
+            items, ids, more = [], [], False
         token = self._writer.embed_lyrics(items, only_if_empty=True) if items else None
         self._queued.emit(token, ids, backfill, more)
 

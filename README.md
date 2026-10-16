@@ -1,12 +1,13 @@
 # MusicDesk
 
 A Windows desktop app for looking after a local music library: browse it like File Explorer, edit tags, read
-lyrics, and tidy albums (rename files from their tags, apply ReplayGain).
+lyrics, tidy albums (rename files from their tags, apply ReplayGain), and split single-file albums into tracks
+from their cue sheet.
 
 MusicDesk works on your files where they are. It never copies or moves music, and never deletes anything for
 good. Its only changes are the ones you ask for: tag edits, renames, ReplayGain tags, a `replaygain.log` per
-album, and the playlists you export. What you delete, and junk files when you tick that option, go to the
-Recycle Bin after you confirm.
+album, the playlists you export, the tracks of a split and the cue sheets you save. What you delete, a cue sheet
+you save over, and junk files when you tick that option, go to the Recycle Bin.
 
 ## Features
 
@@ -19,9 +20,10 @@ Recycle Bin after you confirm.
 - **Lyrics from [LRCLIB](https://lrclib.net)**, looked up in the background for every track. Synced and plain
   lyrics are shown beside the file. One click saves them into the file's tags, or auto-save can fill empty
   lyrics tags.
-- **Library search (Ctrl+K).** Type any part of a title, artist, album, file name or lyric line. Accents and
-  case are ignored, and filters such as `artist:`, `year:`, `ext:`, `lrclib:notfound` or `rg:none` narrow it.
-  The matching lyric line is shown in the results.
+- **Library search (Ctrl+K).** Type any part of a folder or file name, a title, artist, album or lyric line.
+  Names are found as soon as a folder is listed, before its tags are read. Accents and case are ignored, and
+  filters such as `artist:`, `year:`, `ext:`, `lrclib:notfound` or `rg:none` narrow it. The matching lyric line
+  is shown in the results. Action › Show tracks without ReplayGain tags lists those at once.
 - **Preview** rip logs, cue sheets, notes, `.nfo` files and scans beside the list, read-only. Each text file is
   read in its own encoding, such as an EAC log's UTF-16 or an `.nfo`'s DOS code page.
 - **Delete** files and folders (Del) from the file list, the folder tree or search results. They always go to
@@ -35,6 +37,14 @@ Recycle Bin after you confirm.
   - **Tidy**: the rename, then ReplayGain.
 
   Jobs run in the background, and you can keep browsing meanwhile.
+- **Split a single-file album** (one FLAC, WAV or AIFF image and its `.cue`) into one FLAC file per track: select
+  the `.cue`, then "Split into tracks…" on its preview. The Split page shows the whole sheet, editable: start
+  times and gaps, titles and the other fields, tracks to add or delete, and the text encoding of old sheets.
+  Save writes your edits back into the `.cue`, changing only the lines you edited. Tick the tracks you want,
+  and each one is cut with the bundled [flac](https://xiph.org/flac/), tagged from the sheet with the album's
+  cover, named with your file name masks, and checked sample for sample against its part of the original.
+  Nothing is overwritten (a taken name gets a number), and the original files stay unless you choose to send
+  them to the Recycle Bin.
 - **Play** a folder, a selection or search results in your default music player, through a temporary playlist.
 - **Build a playlist** (View › Playlist builder, Ctrl+Shift+P): drag folders and songs in from the folder tree,
   the file list or search results, in the order Explorer shows them. Rearrange it by dragging, with Ctrl+↑/↓ or
@@ -63,7 +73,7 @@ installer. Python 3.13 is fetched by uv if needed.
 ```bash
 uv sync
 uv run python -m music_desk                    # run from source
-uv run pytest                                  # the tests (add -m "not slow" to skip the rsgain runs)
+uv run pytest                                  # the tests (add -m "not slow" to skip the rsgain and flac runs)
 uv run ruff check .
 uv run python packaging/build_installer.py     # dist/MusicDesk/ and dist/installer/MusicDesk-Setup-<version>.exe
 ```
@@ -73,6 +83,7 @@ The tests run on generated sample files, never on a real library. `docs/SPEC.md`
 ## Licence
 
 MusicDesk is free software under the [GNU General Public License, version 3 or later](LICENSE). It bundles
-rsgain (BSD-2-Clause) with FFmpeg (LGPL-2.1-or-later) and Fraunhofer FDK AAC, and uses Qt for Python
+rsgain (BSD-2-Clause) with FFmpeg (LGPL-2.1-or-later) and Fraunhofer FDK AAC, and flac (GPL-2.0-or-later, with
+libFLAC under Xiph's BSD-style licence), and uses Qt for Python
 (LGPL-3.0), mutagen (GPL-2.0-or-later), watchdog, natsort and Send2Trash. Their licence texts are in
 [`resources/licenses/`](resources/licenses/), and the app lists them under Help › About.

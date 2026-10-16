@@ -87,3 +87,13 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
   - "Find songs LRCLIB didn't find": `lrclib:notfound` (to look them up on Genius or Google);
   - "Find songs without lyrics in their tags": `lyricstag:no lyricstag:lrc`;
   - "Find songs LRCLIB can't look up (no artist or title)": `lrclib:notags`.
+
+  They stay as they are until the advanced search (§6, "Later") replaces them (Hugo, 2026-10-16: these lyrics
+  lists don't really answer a user need).
+- **Action menu** (Hugo, 2026-10-16): between Lyrics and Help (File, View, Lyrics, Action, Help), for actions over
+  the whole library. Disabled with no library, as Lyrics is.
+  - "Show tracks without ReplayGain tags" opens library search (§6) with `rg:none`, through `MainWindow.find` as
+    the Find entries do: the tracks whose tags were read and that carry no ReplayGain tag. Partial tags aren't
+    listed (`rg:partial` stays typeable).
+  - It is on demand: the smart-views reasoning above still keeps it out of the sidebar, but Hugo wants the list
+    as an explicit action.

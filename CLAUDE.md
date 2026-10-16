@@ -26,8 +26,8 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
 - **Search redesigned with Hugo (2026-10-16, docs only, SPEC §6):** folders and audio files are found by name
   before their tags are read; the chips and the "Only in" box are to be removed; lyrics are always searched.
-- **Next step: Search task 1** (0.2.11), then M10 task 5 (the editable sheet, 0.2.12), task 6 (the Split page,
-  0.2.13) and task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
+- **Next step: Search task 1** (0.2.11), then the Action menu (0.2.12), M10 task 5 (the editable sheet, 0.2.13),
+  task 6 (the Split page, 0.2.14) and task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
   manual-check-instructions).
 
 ## Work plan
@@ -42,6 +42,12 @@ Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2
 
 Done when: with tag reading held back (a stub reader), a file's and a folder's names are found; a lyrics word is
 found through the tag and through the LRCLIB text; the page shows no chips and no scope box; the suite passes.
+
+**Action menu** (added by Hugo on 2026-10-16; read SPEC §5 "Action menu").
+- [ ] 1. The Action menu between Lyrics and Help, with "Show tracks without ReplayGain tags" (`rg:none` through
+      `MainWindow.find`); a test that it opens the search with that query.
+
+Done when: the menu shows, and its entry lists exactly the fixture tracks without ReplayGain tags.
 
 **Installer: uninstall shortcut** (read SPEC §13, "Uninstalling from the Start menu"). Small, so it goes first; it
 reaches Hugo with the next setup he asks for.
@@ -118,6 +124,10 @@ Done when:
 - pyright passes (basic mode) in the full test run, and ruff is clean;
 - `main_window.py` holds the window, its layout and the browsing; each feature's flow lives in its controller;
 - the full suite passes unchanged, apart from tests that reached into moved internals.
+
+**M12 Advanced search** (added by Hugo on 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first,
+reconsidering every option from the need (the Lyrics menu's Find entries don't really answer one). It replaces
+those Find entries. No tasks yet.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task.

@@ -124,3 +124,9 @@ checks this subsection first.
   - Live results: folder updates, finished scans and LRCLIB results re-run the query after 1 s while the page
     shows. The same query's results are applied in place (removals in runs, changed rows, additions, then the
     current sort), so the selection stays; a new query resets the list.
+
+### Later: advanced search (Hugo, 2026-10-16; not specified)
+- A future feature that would bring together, in a streamlined way, the Lyrics menu's three Find entries (§5):
+  songs LRCLIB didn't find, songs LRCLIB can't look up, songs without lyrics in their tags.
+- Hugo's view: those lyrics lists don't really answer a user need. Its options and features are therefore to be
+  fully reconsidered from the need when it is specified (M12), not carried over. Nothing is designed yet.

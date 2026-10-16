@@ -257,3 +257,43 @@ def test_source_tags_fill_what_the_sheet_lacks(tmp_path):
 def test_names_follow_the_shared_masks(split_dir):
     result = plan(split_dir / "hidden_track" / "Split Album.cue", masks=("{disc}-{track:02} {artist} - {title}",))
     assert result.tracks[3].name == "1-03 Fixture Artist & Guest - Duet.flac"
+
+
+# -- ticked tracks and in-memory sheets (the Split page) --
+
+def test_only_track_3_keeps_the_boundaries_and_its_number(split_dir):
+    path = split_dir / "hidden_track" / "Split Album.cue"
+    every = plan(path)
+    sheet = cue.read_cue_sheet(path)
+    only = cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-", ticked={3})
+    assert only.refusal is None and bounds(only) == bounds(every)
+    assert [t.number for t in only.written] == [3] and not only.all_ticked and every.all_ticked
+    assert (only.written[0].fields["track"], only.written[0].fields["track_total"]) == (3, 3)
+    assert [t.row for t in only.tracks] == [None, 0, 1, 2]  # the hidden track has no row in the sheet
+    assert cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-", ticked=()).refusal == "No track is ticked."
+
+
+def test_an_edited_sheet_in_memory_is_planned(split_dir):
+    from music_desk.core.cue_edit import read_document
+
+    path = split_dir / "hidden_track" / "Split Album.cue"
+    document = read_document(path)
+    document.set_track(2, "title", "Renamed")
+    result = cue.plan_sheet(document.sheet(), path, DEFAULT_MASKS, "-")
+    assert result.tracks[-1].name == "03 Renamed.flac" and path.read_text(encoding="utf-8").count("Renamed") == 0
+
+
+def test_unticked_tracks_are_not_checked_for_clashes_or_masks(split_dir):
+    path = split_dir / "name_clash" / "image.cue"  # "02 Two.flac" is already in the folder
+    sheet = cue.read_cue_sheet(path)
+    clash = cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-")
+    assert clash.refusal.startswith("Nothing is ever overwritten")
+    assert clash.problems == [(2, "02 Two.flac already exists, and nothing is ever overwritten.")]
+    fine = cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-", ticked={1})
+    assert fine.refusal is None and fine.problems == [] and fine.tracks[1].name == "02 Two.flac"
+
+    sheet.tracks[1].title = ""  # no default mask fits track 2 now: they all need its title
+    assert cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-", ticked={1}).refusal is None
+    unfit = cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-")
+    assert unfit.refusal == "Track 2 fits no file name mask (missing: title)." and unfit.tracks[1].name == ""
+    assert unfit.problems == [(2, "No file name mask fits (missing: title).")]

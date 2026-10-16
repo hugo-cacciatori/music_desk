@@ -271,8 +271,9 @@ class PlannedTrack:
     end: int  # one past the last sample
     fields: dict  # rename fields, as TaggedFile.rename_fields gives them (the masks' input)
     isrc: str = ""
-    name: str = ""
+    name: str = ""  # "" when no mask fits an unticked track
     path: Path | None = None
+    row: int | None = None  # its row among the sheet's audio tracks; None for a hidden track
 
     @property
     def length(self) -> int:
@@ -285,9 +286,23 @@ class AlbumPlan:
     source: Path | None = None
     sheet: CueSheet | None = None
     info: SourceInfo | None = None
-    tracks: list[PlannedTrack] = field(default_factory=list)
+    tracks: list[PlannedTrack] = field(default_factory=list)  # every track: they all set the boundaries
     refusal: str | None = None  # why the album is left alone; None when it can be split
     warnings: list[str] = field(default_factory=list)
+    ticked: frozenset[int] | None = None  # the track numbers to write (0 is a hidden track); None for all
+    problems: list[tuple[int, str]] = field(default_factory=list)  # (track number, why): no mask fits, a clash
+
+    def is_ticked(self, number: int) -> bool:
+        return self.ticked is None or number in self.ticked
+
+    @property
+    def written(self) -> list[PlannedTrack]:
+        """The ticked tracks, in order: the ones the split writes."""
+        return [t for t in self.tracks if self.is_ticked(t.number)]
+
+    @property
+    def all_ticked(self) -> bool:
+        return len(self.written) == len(self.tracks)
 
 
 def _source_in_folder(folder: Path, name: str) -> Path | None:
@@ -324,17 +339,27 @@ def track_fields(sheet: CueSheet, track: CueTrack | None, number: int, total: in
 def plan_album(cue: str | Path, name_masks: Sequence[str], replacement: str, encoding: str | None = None,
                is_silent: Callable[[Path, int, int], bool] | None = None,
                read_info: Callable[[Path], SourceInfo] = read_source) -> AlbumPlan:
-    """What splitting this album would write, or why it can't be split. Nothing on disk changes.
-
-    `is_silent(source, start, end)` decodes that range (the job's flac); without it, audio before track 1 that
-    is 2 s or longer is kept as a hidden track (no sample is lost either way)."""
+    """plan_sheet() for a .cue on disk."""
     cue = Path(cue)
-    plan = AlbumPlan(cue)
     try:
         sheet = read_cue_sheet(cue, encoding)
     except (OSError, CueError) as e:
-        plan.refusal = f"The cue sheet can't be read: {e}"
-        return plan
+        return AlbumPlan(cue, refusal=f"The cue sheet can't be read: {e}")
+    return plan_sheet(sheet, cue, name_masks, replacement, is_silent=is_silent, read_info=read_info)
+
+
+def plan_sheet(sheet: CueSheet, cue: str | Path, name_masks: Sequence[str], replacement: str, *,
+               ticked: Iterable[int] | None = None, is_silent: Callable[[Path, int, int], bool] | None = None,
+               read_info: Callable[[Path], SourceInfo] = read_source) -> AlbumPlan:
+    """What splitting this sheet would write, or why it can't be split. Nothing on disk changes. `cue` is where
+    the sheet lives (its folder holds the source); the sheet itself may hold the Split page's unsaved edits.
+
+    `ticked` are the track numbers to write (None: all). Unticked tracks still set the boundaries, and the tags'
+    track total is the sheet's, whatever is ticked. `is_silent(source, start, end)` decodes that range (the
+    job's flac); without it, audio before track 1 that is 2 s or longer is kept as a hidden track (no sample is
+    lost either way)."""
+    cue = Path(cue)
+    plan = AlbumPlan(cue, ticked=frozenset(ticked) if ticked is not None else None)
     plan.sheet = sheet
     if sheet.fell_back:
         plan.warnings.append("If the titles look wrong, pick the cue sheet's encoding.")
@@ -377,8 +402,8 @@ def plan_album(cue: str | Path, name_masks: Sequence[str], replacement: str, enc
 
     total = len(sheet.tracks)
     ends = starts[1:] + [info.samples]
-    tracks = [PlannedTrack(t.number, s, e, track_fields(sheet, t, t.number, total, info.tags), t.isrc)
-              for t, s, e in zip(sheet.tracks, starts, ends, strict=True)]
+    tracks = [PlannedTrack(t.number, s, e, track_fields(sheet, t, t.number, total, info.tags), t.isrc, row=row)
+              for row, (t, s, e) in enumerate(zip(sheet.tracks, starts, ends, strict=True))]
     if starts[0] > 0:
         audible = starts[0] >= HIDDEN_KEEP_SECONDS * info.rate and not (
             is_silent is not None and is_silent(source, 0, starts[0]))
@@ -397,7 +422,9 @@ def plan_album(cue: str | Path, name_masks: Sequence[str], replacement: str, enc
 def name_tracks(plan: AlbumPlan, name_masks: Sequence[str], replacement: str,
                 existing: Iterable[str] | None = None) -> str | None:
     """Give each track its file name with the shared masks (SPEC §21). Returns why the album can't be split, or
-    None. Nothing is ever overwritten: a name taken in the folder, or given twice, refuses the album."""
+    None, and lists each track's problem in `plan.problems`. Nothing is ever overwritten: a ticked track's name
+    taken in the folder, or given to two ticked tracks, refuses the album. Unticked tracks are named when a mask
+    fits them, and not checked."""
     folder = plan.cue.parent
     if existing is None:
         try:
@@ -406,24 +433,41 @@ def name_tracks(plan: AlbumPlan, name_masks: Sequence[str], replacement: str,
             existing = []
     taken = {name.casefold() for name in existing}
     seen: dict[str, int] = {}
-    clashes = []
+    clashes, refusals = [], []
+    plan.problems = []
     for track in plan.tracks:
+        ticked = plan.is_ticked(track.number)
         name = masks.name_for(track.fields, name_masks, replacement, ".flac")
         if name is None:
-            missing = masks.missing_from(name_masks[0], masks.mask_values(track.fields, replacement))
-            return f"Track {track.number} fits no file name mask (missing: {missing})."
+            track.name, track.path = "", None
+            if ticked:
+                missing = masks.missing_from(name_masks[0], masks.mask_values(track.fields, replacement))
+                refusals.append(f"Track {track.number} fits no file name mask (missing: {missing}).")
+                plan.problems.append((track.number, f"No file name mask fits (missing: {missing})."))
+            continue
         track.name, track.path = name, folder / name
+        if not ticked:
+            continue
         key = name.casefold()
         if key in seen:
             clashes.append(f"tracks {seen[key]} and {track.number} would both be named {name}")
+            plan.problems.append((track.number, f"Track {seen[key]} would have the same name."))
         elif key in taken:
             clashes.append(f"{name} (track {track.number}) already exists")
+            plan.problems.append((track.number, f"{name} already exists, and nothing is ever overwritten."))
         seen.setdefault(key, track.number)
         if len(str(track.path)) > MAX_PATH:
-            return (f"Track {track.number}'s file would have a path of {len(str(track.path))} characters, longer "
-                    f"than Windows tools can open ({MAX_PATH}): {name}. Shorten the masks or move the album.")
+            refusals.append(f"Track {track.number}'s file would have a path of {len(str(track.path))} characters, "
+                            f"longer than Windows tools can open ({MAX_PATH}): {name}. Shorten the masks or move "
+                            "the album.")
+            plan.problems.append((track.number, f"The path would have {len(str(track.path))} characters, longer "
+                                                f"than Windows tools can open ({MAX_PATH})."))
+    if refusals:
+        return refusals[0]
     if clashes:
         return "Nothing is ever overwritten, and these names clash: " + "; ".join(clashes) + "."
+    if not plan.written:
+        return "No track is ticked."
     return None
 
 

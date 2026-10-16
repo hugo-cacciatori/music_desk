@@ -29,7 +29,7 @@ Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2
 
 **M10 Shared masks and cue split** (read SPEC §21, §22, §13, and §10)
 - Tasks 1–4 are done (0.2.7–0.2.10, HISTORY.md). Tasks 5 and 6 replace the 0.2.10 Split card (SPEC §22).
-- [ ] 5. Core: the editable sheet, `format_cue` and its round trip, Save / Save as, planning with ticked tracks,
+- [x] 5. Core: the editable sheet, `format_cue` and its round trip, Save / Save as, planning with ticked tracks,
       the per-track proof (SPEC §22 "Planned").
 - [ ] 6. UI: remove the 0.2.10 card, menus, folder scan and `Settings.split_options`; the button on every `.cue`
       preview; the Split page; the one-album job and report (SPEC §22 "In the app", "Replaced").
@@ -197,4 +197,8 @@ agree) and pyproject's `version`, then `uv lock`.
 `tests/` (`reference/`, `fixtures/`, `core/`, `ui/`), `packaging/`, `docs/`. File by file: SPEC §16 "Project layout".
 
 ## Open questions
-None.
+- (M10 task 6) Should naming problems (a ticked track no mask fits, a name clash, a path too long) disable Save
+  as well as Split? SPEC §22 lists them among the problems that disable both, but they aren't cue data: the core
+  keeps them apart (`plan.problems` vs `validate`).
+- (M10 task 5) When a cue save's recycle or rename fails after its check passed, may the save delete its own
+  `.cue.partial` (a new Ground rule 1 exception)? As built, it stays and the error names it.

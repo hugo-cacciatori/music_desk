@@ -272,7 +272,50 @@ the replaced version going to the Recycle Bin).
     silent and joined track 1.
   - Moving one boundary by one sample failed the proof on both length and MD5, and left the folder as it was.
 
-## Planned (M10 tasks 5 and 6): the editable sheet and the Split page
+## As built (M10 task 5, 0.2.13): the editable sheet, ticks and the per-track proof
+- **`core/cue_edit.py`** (a module of its own beside `cue.py`, which keeps parsing and planning):
+  - `CueDocument` is the file's lines in order, each with its own text and line ending (CRLF, LF, CR, or none on
+    a last line). The lines are the only state: album fields, tracks and their values are parsed from them each
+    time they are asked for. New lines take the file's most common ending.
+  - `read_document(path, encoding=None)` / `parse_document(bytes)`: Auto is a BOM (UTF-8, UTF-16), then UTF-8,
+    then Windows-1252, as the preview. Decoding uses `surrogateescape`, so bytes the encoding can't decode are
+    written back as they were; the page sees them as U+FFFD.
+  - `format_cue(doc)` is the BOM plus every line re-encoded: every fixture sheet, read with any picker encoding,
+    comes back byte-identical, and so do LF, CR, no final line ending, UTF-16 and undecodable cp1252 bytes.
+    A character the encoding can't hold raises `CueEncodingError` naming it; `use_utf8_bom()` then switches the
+    document to UTF-8 with a BOM.
+  - Edits: `set_file`, `set_album(field, value)`, `set_track(row, field, value)`, `set_album_other`,
+    `set_track_other`, `add_track(after, audio_frames)`, `delete_tracks(rows)`. A value equal to the current one
+    leaves its line untouched; an empty one removes the line. A changed line keeps its indentation; a new one
+    goes where EAC puts it (REM lines after the last REM, other album lines before FILE, a track's fields after
+    the last field EAC writes before it). Times typed as `9:1:6` are written `09:01:06`; a malformed time is
+    kept as typed for `validate` to mark. Quoted values are read up to the line's last quote, so a quote inside
+    a value shows and is marked.
+  - Add and delete renumber the TRACK lines 1…N, rewriting only the ones whose number changes. Deleting track 1
+    gives its start to the next track kept, and drops that track's INDEX 00.
+  - `validate(doc, info)` → `Problem(row, column, message, blocks_save)` per bad cell: a missing or malformed
+    time, a gap after its start, starts that don't increase, a start past the end of the audio, fewer than two
+    tracks, a double quote in a quoted value, a disc number that isn't a number.
+  - `save_cue(doc, path, recycle, check)` is Save and Save as: it refuses an existing `<name>.partial` and,
+    before writing anything, a file Windows can't recycle (`CannotRecycle`); then it writes the `.partial`,
+    recycles the file it replaces, and renames. If the recycle or the rename still fails, the `.partial` stays
+    and the error names it (Ground rule 1 deletes nothing else for good; open question to Hugo).
+- **Ticks:** `cue.plan_sheet(sheet, cue_path, masks, replacement, ticked=…)` plans an in-memory sheet (the
+  page's, with unsaved edits); `plan_album` reads the file and calls it. `AlbumPlan.tracks` keeps every track
+  (they set the boundaries), `written` is the ticked ones, `all_ticked` says whether every one is. Each track
+  has its `row` in the sheet (None for a hidden track). Clashes, unfit masks and too-long paths are checked
+  for ticked tracks only and listed per track in `plan.problems`; an unticked track that no mask fits gets no
+  name.
+- **The proof** (`split.prove`): each written track's length, then its MD5 against `decode_range` of its own
+  range of the source. With every track ticked, the tracks end to end must also match the STREAMINFO MD5, or,
+  without one (WAV, AIFF), the source ranges' hashes end to end, which cover the whole audio, so the source is
+  decoded once. Free space is the ticked tracks' share of the source's size. `finish_album` renames, tags and
+  recycles the written tracks only, and keeps the originals when not every track was split.
+- **Tests:** `tests/core/test_cue_edit.py`; ticks in `test_cue.py` and `test_split.py`, including the real flac
+  extracting only track 3 (its length and MD5 against its range) and track 2 one sample off (moving only its
+  start fails on the length; moving its start and end keeps the length and fails on the MD5).
+
+## Planned (M10 tasks 5 and 6; task 5 built above): the editable sheet and the Split page
 - **Core (`core/cue.py`, no Qt):**
   - The sheet model keeps **every line** of the file in order, each with its raw text: the parsed fields read
     from it, and the raw text written back unchanged unless that line was edited. Unknown lines are kept as they

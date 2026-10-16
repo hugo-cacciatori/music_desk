@@ -1,14 +1,16 @@
 """Cutting a planned album into tracks, and proving nothing was lost (SPEC §22). No Qt.
 
-Each track is written to "<its name>.partial" first. The proof then decodes every track:
-  1. each track's sample count must equal its planned length (a cut in the wrong place);
-  2. the MD5 of all the tracks' audio, end to end, must equal the source's (its FLAC STREAMINFO MD5, or the hash
-     of its decoded audio).
+Each ticked track is written to "<its name>.partial" first. The proof then decodes every written track:
+  1. its sample count must equal its planned length (a cut in the wrong place);
+  2. the MD5 of its audio must equal the MD5 of the same range of the source, decoded by flac.
+With every track ticked, the MD5 of all the tracks end to end must also equal the source's: its FLAC STREAMINFO
+MD5, or, without one, the ranges' hashes end to end (every sample is in exactly one track).
 On a failure or a Stop, this run's .partial files are deleted, and only those (Ground rule 1). Renaming them to
 their final names and writing the tags come after, in the job.
 """
 
 import hashlib
+import math
 import shutil
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -51,9 +53,10 @@ class CutResult:
     ok: bool = False
     cancelled: bool = False
     error: str | None = None  # flac's message, a failed proof, or why the album wasn't started
-    partials: list[Path] = field(default_factory=list)  # the verified tracks, in order, when ok
-    lengths: list[int] = field(default_factory=list)  # samples per track, as decoded
-    md5: str | None = None  # of the tracks end to end
+    partials: list[Path] = field(default_factory=list)  # the verified (ticked) tracks, in order, when ok
+    lengths: list[int] = field(default_factory=list)  # samples per written track, as decoded
+    track_md5s: list[str] = field(default_factory=list)  # per written track, equal to its range of the source
+    md5: str | None = None  # of the tracks end to end, when every track was written
     expected_md5: str | None = None  # of the source
 
 
@@ -66,23 +69,26 @@ def is_silent(runner, cancel: CancelToken | None = None) -> Callable[[Path, int,
 
 def cut_album(plan: AlbumPlan, runner, cancel: CancelToken | None = None,
               free_space: Callable[[Path], int] = lambda folder: shutil.disk_usage(folder).free) -> CutResult:
-    """Write and prove this album's tracks as .partial files. Nothing else in the folder is touched."""
+    """Write and prove this album's ticked tracks as .partial files. Nothing else in the folder is touched."""
     if plan.refusal is not None or plan.source is None or plan.info is None:
         return CutResult(error=plan.refusal or "The album wasn't planned.")
+    if not plan.written:
+        return CutResult(error="No track is ticked.")
     folder = plan.cue.parent
-    needed = plan.source.stat().st_size
+    share = sum(t.length for t in plan.written) / max(plan.info.samples, 1)  # the ticked tracks' part
+    needed = math.ceil(plan.source.stat().st_size * share)
     free = free_space(folder)
     if free < needed:
         return CutResult(error=f"Not enough free space: the tracks need about {_mb(needed)}, and the drive has "
                                f"{_mb(free)} free.")
-    taken = [partial_path(t).name for t in plan.tracks if partial_path(t).exists()]
+    taken = [partial_path(t).name for t in plan.written if partial_path(t).exists()]
     if taken:
         return CutResult(error=f"{', '.join(taken)} already exist{'s' if len(taken) == 1 else ''}, maybe left by an "
                                "earlier split. Delete them in File Explorer, then split again.")
 
     written: list[Path] = []
     try:
-        for track in plan.tracks:
+        for track in plan.written:
             output = partial_path(track)
             written.append(output)  # recorded first: a flac killed mid-way may leave it behind
             end = None if track.end == plan.info.samples else track.end
@@ -100,27 +106,35 @@ def cut_album(plan: AlbumPlan, runner, cancel: CancelToken | None = None,
 
 
 def prove(plan: AlbumPlan, partials: list[Path], runner, cancel: CancelToken | None = None) -> CutResult:
-    """Decode the written tracks: each must have its planned length, and together the source's MD5."""
+    """Decode the written tracks: each must have its planned length and its range's MD5; with every track
+    written, together they must also have the source's MD5."""
     info = plan.info
     frame_bytes = info.channels * ((info.bits + 7) // 8)
-    digest = hashlib.md5()
-    lengths, problems = [], []
-    for track, path in zip(plan.tracks, partials, strict=True):
-        size = _hash(runner.decode(path, cancel), digest)
+    tracks_digest, source_digest = hashlib.md5(), hashlib.md5()
+    lengths, track_md5s, problems = [], [], []
+    for track, path in zip(plan.written, partials, strict=True):
+        own, part = hashlib.md5(), hashlib.md5()
+        size = _hash(runner.decode(path, cancel), own, tracks_digest)
+        end = None if track.end == info.samples else track.end
+        _hash(runner.decode_range(plan.source, track.start, end, cancel), part, source_digest)
         lengths.append(size // frame_bytes)
+        track_md5s.append(own.hexdigest())
         if size % frame_bytes or size // frame_bytes != track.length:
             problems.append(f"track {track.number} has {size // frame_bytes:,} samples, but the cut planned "
                             f"{track.length:,}")
-    md5 = digest.hexdigest()
-    expected = info.md5
-    if not expected:  # a WAV or AIFF, or a FLAC written without an MD5: hash the source's own audio
-        whole = hashlib.md5()
-        _hash(runner.decode_range(plan.source, 0, None, cancel), whole)
-        expected = whole.hexdigest()
-    if md5 != expected:
-        problems.append(f"the tracks' audio doesn't match the original's (MD5 {md5[:8]}… instead of "
-                        f"{expected[:8]}…)")
-    result = CutResult(ok=not problems, partials=list(partials), lengths=lengths, md5=md5, expected_md5=expected)
+        elif own.hexdigest() != part.hexdigest():
+            problems.append(f"track {track.number}'s audio doesn't match its part of the original (MD5 "
+                            f"{own.hexdigest()[:8]}… instead of {part.hexdigest()[:8]}…)")
+    md5 = expected = None
+    if plan.all_ticked:
+        md5 = tracks_digest.hexdigest()
+        # A WAV or AIFF, or a FLAC written without an MD5: the source's ranges end to end are its whole audio.
+        expected = info.md5 or source_digest.hexdigest()
+        if md5 != expected:
+            problems.append(f"the tracks' audio doesn't match the original's (MD5 {md5[:8]}… instead of "
+                            f"{expected[:8]}…)")
+    result = CutResult(ok=not problems, partials=list(partials), lengths=lengths, track_md5s=track_md5s, md5=md5,
+                       expected_md5=expected)
     if problems:
         result.error = "The proof failed: " + "; ".join(problems) + "."
     return result
@@ -141,21 +155,23 @@ def finish_album(plan: AlbumPlan, cut: CutResult, recycle_originals: bool = Fals
                  recycle: Callable[[Path], None] | None = None) -> Finished:
     """Give the proved tracks their names (checked free again), write their tags and cover, then recycle the
     originals if asked. Nothing is ever overwritten: if a name was taken since the plan, no track is renamed."""
-    taken = [t.name for t in plan.tracks if t.path.exists()]
+    taken = [t.name for t in plan.written if t.path.exists()]
     if taken:
         _delete(cut.partials)
         return Finished(error="Nothing is ever overwritten, and these names were taken meanwhile: "
                               + ", ".join(taken) + ".")
     finished = Finished()
-    for track, partial in zip(plan.tracks, cut.partials, strict=True):
+    for track, partial in zip(plan.written, cut.partials, strict=True):
         partial.rename(track.path)
         finished.tracks.append(track.path)
-    for track in plan.tracks:
+    for track in plan.written:
         try:
             write_tags(track, plan.info.cover)
         except Exception as e:  # noqa: BLE001 - the audio is proved and in place; say which tags are missing
             finished.warnings.append(f"{track.name}: the tags couldn't be written ({type(e).__name__}: {e})")
-    if recycle_originals:
+    if recycle_originals and not plan.all_ticked:
+        finished.kept_reason = "Not every track was split, so the album file and its .cue stay."
+    elif recycle_originals:
         from music_desk.core import fsops
 
         recycle = recycle or fsops.send_to_recycle_bin
@@ -188,10 +204,11 @@ def write_tags(track: PlannedTrack, cover: bytes | None) -> None:
         audio.save()
 
 
-def _hash(chunks: Iterable[bytes], digest) -> int:
+def _hash(chunks: Iterable[bytes], *digests) -> int:
     size = 0
     for chunk in chunks:
-        digest.update(chunk)
+        for digest in digests:
+            digest.update(chunk)
         size += len(chunk)
     return size
 

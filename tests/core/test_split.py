@@ -265,3 +265,98 @@ def test_find_albums_and_options(tmp_path):
     options = split.SplitOptions(recursive=False, recycle=True, replaygain=True)
     assert split.options_from_json(split.options_to_json(options)) == options
     assert split.options_from_json({"recycle": "yes"}) == split.SplitOptions()
+
+
+# -- ticked tracks (the Split page) --
+
+def ticked_plan(folder, ticked, md5=None):
+    info = cue.SourceInfo("FLAC", 75, SAMPLES, 1, 8, md5)
+    path = folder / "image.cue"
+    plan = cue.plan_sheet(cue.read_cue_sheet(path), path, DEFAULT_MASKS, "-", ticked=ticked,
+                          read_info=lambda _p: info)
+    assert plan.refusal is None
+    return plan
+
+
+def test_only_the_ticked_track_is_written_and_proved_against_its_range(album):
+    plan = ticked_plan(album, {2}, hashlib.md5(PCM).hexdigest())
+    result = split.cut_album(plan, FakeRunner(), free_space=lambda _f: 10**9)
+    assert result.ok and [p.name for p in result.partials] == ["02 Two.flac.partial"]
+    assert result.lengths == [270] and result.track_md5s == [hashlib.md5(PCM[265:535]).hexdigest()]
+    assert result.md5 is None and result.expected_md5 is None  # no end-to-end check without every track
+
+
+class Corrupting(FakeRunner):
+    """Writes the right number of samples, one of them wrong: only the per-track MD5 can see it."""
+
+    def encode(self, source, start, end, output, cancel=None):
+        super().encode(source, start, end, output, cancel)
+        data = bytearray(output.read_bytes())
+        data[len(data) // 2] ^= 1
+        output.write_bytes(bytes(data))
+
+
+def test_a_track_with_the_right_length_but_wrong_audio_fails(album):
+    plan = ticked_plan(album, {3})
+    result = split.cut_album(plan, Corrupting(), free_space=lambda _f: 10**9)
+    assert not result.ok and result.error.startswith("The proof failed: track 3's audio doesn't match its part "
+                                                     "of the original")
+    assert names(album) == ORIGINALS
+
+
+def test_free_space_counts_the_ticked_tracks_only(album):
+    size = (album / "image.flac").stat().st_size  # 100 bytes for SAMPLES samples
+    needed = -(-size * 270 // SAMPLES)  # track 2's share, rounded up
+    plan = ticked_plan(album, {2})
+    assert split.cut_album(plan, FakeRunner(), free_space=lambda _f: needed).ok
+    plan = ticked_plan(album, {2})
+    for partial in album.glob("*.partial"):
+        partial.unlink()
+    result = split.cut_album(plan, FakeRunner(), free_space=lambda _f: needed - 1)
+    assert result.error.startswith("Not enough free space")
+
+
+def test_a_leftover_partial_of_an_unticked_track_is_ignored(album):
+    (album / "02 Two.flac.partial").write_bytes(b"someone else's")
+    result = split.cut_album(ticked_plan(album, {1, 3}), FakeRunner(), free_space=lambda _f: 10**9)
+    assert result.ok and (album / "02 Two.flac.partial").read_bytes() == b"someone else's"
+
+
+def test_the_originals_stay_unless_every_track_was_split(album):
+    plan = ticked_plan(album, {1, 3})
+    cut = split.cut_album(plan, FakeRunner(), free_space=lambda _f: 10**9)
+    for partial in cut.partials:
+        partial.write_bytes(b"")
+    recycled = []
+    done = split.finish_album(plan, cut, True, recycled.append)
+    assert [p.name for p in done.tracks] == ["01 One.flac", "03 Three.flac"] and recycled == []
+    assert done.kept_reason == "Not every track was split, so the album file and its .cue stay."
+
+
+@pytest.mark.slow
+def test_extracting_only_track_3_with_the_real_flac(fixtures_dir, tmp_path, runner):
+    plan = real_plan(fixtures_dir, tmp_path, "hidden_track", runner)
+    plan = cue.plan_sheet(plan.sheet, plan.cue, DEFAULT_MASKS, "-", ticked={3}, is_silent=split.is_silent(runner))
+    result = split.cut_album(plan, runner)
+    assert result.ok, result.error
+    assert result.lengths == [3 * 44100] and [p.name for p in result.partials] == ["03 Duet.flac.partial"]
+    expected = hashlib.md5(b"".join(runner.decode_range(plan.source, 9 * 44100, None))).hexdigest()
+    assert result.track_md5s == [expected]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("shift_end", [False, True])
+def test_extracting_track_2_one_sample_off_fails_with_the_real_flac(fixtures_dir, tmp_path, runner, shift_end):
+    """Moving only its start changes its length; moving both keeps the length, and the MD5 catches it."""
+    class Shifted(FlacRunner):
+        def encode(self, source, start, end, output, cancel=None):
+            super().encode(source, start + 1, end + 1 if shift_end else end, output, cancel)
+
+    plan = real_plan(fixtures_dir, tmp_path, "hidden_track", runner)
+    plan = cue.plan_sheet(plan.sheet, plan.cue, DEFAULT_MASKS, "-", ticked={2}, is_silent=split.is_silent(runner))
+    before = names(plan.cue.parent)
+    result = split.cut_album(plan, Shifted(paths.flac_path()))
+    assert not result.ok
+    reason = "doesn't match its part of the original" if shift_end else "samples, but the cut planned"
+    assert result.error.startswith("The proof failed: track 2") and reason in result.error
+    assert names(plan.cue.parent) == before

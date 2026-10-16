@@ -145,6 +145,19 @@ def names(service) -> set[str]:
     return {row[0] for row in service.conn.execute("SELECT name FROM entries WHERE parent_id IS NOT NULL")}
 
 
+def rename_retrying(src, dst, timeout: float = 2.0) -> None:
+    """os.rename, retried while something briefly holds a file under the folder (see test_live_folder_changes)."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            os.rename(src, dst)
+            return
+        except PermissionError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(0.01)
+
+
 def test_live_file_changes(qtbot, service, library_dir, fixtures_dir):
     shutil.copy2(fixtures_dir / "formats" / "tone.mp3", library_dir / "Album" / "02 Two.mp3")
     qtbot.waitUntil(lambda: service.conn.execute(
@@ -164,8 +177,14 @@ def test_live_folder_changes(qtbot, service, library_dir, fixtures_dir):
     new.mkdir(parents=True)
     shutil.copy2(fixtures_dir / "formats" / "tone.ogg", new / "01.ogg")
     qtbot.waitUntil(lambda: {"Artist", "New Album", "01.ogg"} <= names(service), timeout=10000)
-
-    os.rename(library_dir / "Artist", library_dir / "Artist (moved)")
+    # The names reach the index before the tags are read, and Windows refuses to rename a folder while a file
+    # under it is open, even with FILE_SHARE_DELETE (SPEC §7). Measured 2026-10-16: 7 runs in 100 hit the app's
+    # own tag read of 01.ogg here (a 4-5 ms lock, ending as the read closed); 0 in 100 with tag reading
+    # stubbed out. So wait for the read, and retry briefly in case a later rescan reads it again.
+    qtbot.waitUntil(lambda: service.conn.execute(
+        "SELECT count(*) FROM tracks t JOIN entries e ON e.id = t.entry_id WHERE e.name = '01.ogg'"
+    ).fetchone()[0] == 1, timeout=10000)
+    rename_retrying(library_dir / "Artist", library_dir / "Artist (moved)")
     # An outside rename looks like a delete plus a create: the parent is reconciled, then the moved folder's
     # subtree is scanned again (renames made in the app will update the index directly).
     qtbot.waitUntil(lambda: {"Artist (moved)", "New Album", "01.ogg"} <= names(service)

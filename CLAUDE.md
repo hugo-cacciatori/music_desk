@@ -22,17 +22,17 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   512 KB and the wrap rule, measured in SPEC §20). 0.2.7 added the shared file name masks (M10 task 1, §21).
   0.2.8 added `core/cue.py`, the split plan, with Hugo's EAC sheet as a fixture (M10 task 2, §22). 0.2.9
   bundles flac, with its self-check, `core/flac.py` and `core/split.py` (cut, proof, cleanup; M10 task 3).
-  v0.2.1 is the latest GitHub release. M0–M9 are complete (Progress is in HISTORY.md). Of 1046 tests, 1045
-  passed in the last full run, slow ones included; the one failure was the watcher flake (below). Ruff is clean.
+  v0.2.1 is the latest GitHub release. M0–M9 are complete (Progress is in HISTORY.md). All 1046 tests passed
+  in the last full run, slow ones included. Ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
 - **Next step: M10 task 4**: the Split card, "Split into tracks…", the preview page with its encoding picker, and
   the job (lock, Stop, renames from `.partial`, tags and cover, recycling, ReplayGain afterwards) and its report.
   The frozen build's flac hasn't been run yet (task 5 builds the installer).
-- **Watch for:** an intermittent failure, `tests/ui/test_watcher.py::test_live_folder_changes`:
-  `PermissionError: [WinError 5] Access is denied` on the test's own `os.rename` of `lib\Artist`, right after
-  copying a file into it. Measured on 2026-10-16: it also fails when run alone, 2 runs in 17, so "it passes
-  alone" (said earlier) was wrong. The cause isn't measured: another handle on the folder (Defender, or the
-  app's own scan or watcher). Until it's understood, a failure of that test alone doesn't block a commit.
+- **Watcher flake, solved (2026-10-16, measured):** `test_live_folder_changes` failed 2 runs in 17 with
+  "Access is denied" on its folder rename. The cause was the app's own tag read of the new file: Windows
+  refuses to rename a folder while any file under it is open, even with FILE_SHARE_DELETE (SPEC §7). It hit
+  7 runs in 100, and 0 in 100 with tag reading stubbed out. The test now waits for the tag read and retries
+  the rename for up to 2 s: 0 failures in 40 runs alone.
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with

@@ -40,7 +40,12 @@ cover scan…), it shows a read-only preview of it instead (§20, from M9).
   - Raw .aac (no tags) is shown read-only, with a note.
   - Cancel in the unsaved-edits prompt keeps the selection, the open folder, and the window open.
   - Every read that isn't followed by a save (the indexer, the side panel, folder images) opens the file with
-    FILE_SHARE_DELETE, so the app never makes a delete or rename in Explorer fail while it reads.
+    FILE_SHARE_DELETE, so the app never makes a delete or rename of that file fail while it reads.
+  - Windows still refuses to rename a folder while any file under it is open, whatever the share mode
+    (measured 2026-10-16: a FILE_SHARE_DELETE open of a file two levels down blocks it with "Access is denied";
+    a scandir of the folder itself or a watchdog watch on the root doesn't). A tag read lasts a few
+    milliseconds, so renaming a folder whose new files are being indexed can fail at that moment; retrying
+    succeeds.
 - As built (M3 task 2):
   - Every tag save goes through TagWriter, one at a time on its own thread. It holds a short lock on the file
     while writing.

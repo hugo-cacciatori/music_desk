@@ -20,8 +20,9 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added `fsops.can_recycle` (SPEC §19, measured on a
   network path). 0.2.4 added Delete to the Recycle Bin. 0.2.5 and 0.2.6 added the file preview (M9; text cap
   512 KB and the wrap rule, measured in SPEC §20). 0.2.7 added the shared file name masks (M10 task 1, SPEC
-  §21). v0.2.1 is the latest GitHub release. M0–M9 are complete (Progress is in HISTORY.md). 1003 tests (1002 in the last full run, plus the known watcher flake passing alone)
-  pass, slow ones included, and ruff is clean.
+  §21). v0.2.1 is the latest GitHub release. M0–M9 are complete (Progress is in HISTORY.md). Of 1003 tests,
+  1002 passed in the last full run, slow ones included; the known watcher flake (below) passed alone. Ruff is
+  clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
 - **Specified on 2026-10-16:** M10 tasks 2–5 below. `resources/flac/` holds flac 1.5.0 (not bundled yet), and a
   trial on a fixture copy measured a lossless split (SPEC §22).

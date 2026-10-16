@@ -95,7 +95,7 @@ Done when:
 **M11 Maintenance** (added by Hugo on 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Worthwhile,
 not urgent: after M10, or between tasks when Hugo says so. Neither changes what the app does.
 - [ ] 1. Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), with its findings
-      fixed. It would have caught the wrong-argument calls to `read_snapshot` in M10 task 1.
+      fixed. It catches callers left behind when a signature changes; see SPEC §18 for what it wouldn't catch.
 - [ ] 2. Split `ui/main_window.py` (2,043 lines at 0.2.10) into one controller per feature: tools (Rename,
       ReplayGain, Tidy), split, delete, search. Behaviour and tests unchanged.
 

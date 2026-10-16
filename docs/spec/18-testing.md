@@ -43,8 +43,11 @@
   - play a folder through the default app.
 
 **Static types** (M11 task 1, added by Hugo on 2026-10-16; not urgent)
-- The code has type hints everywhere (a convention since M0), but nothing checks them. In M10 task 1 a changed
-  signature (`read_snapshot` gained the masks) broke callers that only a test happened to catch.
+- The code has type hints everywhere (a convention since M0), but nothing checks them. Pyright would catch a
+  caller left behind when a signature changes, or a wrong argument type.
+- What it wouldn't catch, from M10 task 1: when `read_snapshot` gained the masks, `write_fields` kept calling it
+  with the defaults (type-correct, so a test found it). And the tests that broke used a fake swapped in with
+  monkeypatch, which a type checker doesn't see. Tests stay the main guard.
 - The plan: pyright (basic mode) as a dev dependency, configured in `pyproject.toml` for `src/`, and run by
   the test suite (`tests/test_types.py` runs it and fails on any error), so it can't be forgotten.
 - Its first run's findings are fixed in the same task. Third-party packages without stubs (mutagen, watchdog,

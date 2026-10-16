@@ -1,6 +1,6 @@
 """The playlist builder's panel (SPEC §15, M7 task 2): showing and hiding it without resizing the tree or the side
 panel, its columns, the header sort that reorders the playlist, missing tracks, the footer, and keeping the
-playlist across restarts. Adding by drag and drop is task 3; here tracks are added through the model."""
+playlist across restarts. Drag and drop is in test_playlist_dnd.py; here tracks are added through the model."""
 
 from pathlib import Path
 

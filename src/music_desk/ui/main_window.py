@@ -237,6 +237,7 @@ class MainWindow(QMainWindow):
         self.playlist_panel.model.changed.connect(self._playlist_save.start)
         self._playlist_refresh = QTimer(self, singleShot=True, interval=1000)  # the index changed: rows follow
         self._playlist_refresh.timeout.connect(self.playlist_panel.model.refresh)
+        self.playlist_panel.model.added.connect(self.show_playlist_added)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.center)
@@ -1181,6 +1182,15 @@ class MainWindow(QMainWindow):
         self.settings.playlist_visible = visible
         if self.playlist_action.isChecked() != visible:
             self.playlist_action.setChecked(visible)
+
+    def show_playlist_added(self, added: int, skipped: int) -> None:
+        if not added and not skipped:
+            text = "Nothing to add: there is no music in what was dropped."
+        else:
+            text = f"Added {added:,} track{'s' if added != 1 else ''} to the playlist."
+            if skipped:
+                text += f" {skipped:,} already in it {'were' if skipped != 1 else 'was'} skipped."
+        self.statusBar().showMessage(text, STATUS_MS)
 
     def _restore_playlist(self) -> None:
         self.playlist_panel.restore_layout(self.settings.playlist_header)

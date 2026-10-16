@@ -12,6 +12,7 @@ from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QAbstractItemView, QApplication
 
 from music_desk.core import fsops
+from music_desk.ui.entry_drag import ENTRY_IDS_MIME, entry_mime
 
 
 class Recorder:
@@ -221,11 +222,16 @@ def test_rescan_from_the_menu(window, service, monkeypatch):
 # -- drag-out stays disabled (a drop in Explorer would move the files) --
 
 def test_no_drag_out(window, service):
+    """Ground rule 1: the views drag entry ids for the playlist builder, never files, and only as a copy, so a
+    drop in File Explorer does nothing (tests/ui/test_playlist_dnd.py checks the drag's content)."""
     window.open_folder(entry(service, "Artist", "Album"))
+    window.file_view.view.selectAll()
     for view in (window.file_view.view, window.sidebar.tree):
-        assert not view.dragEnabled()
+        assert view.dragDropMode() == QAbstractItemView.DragDropMode.DragOnly  # nothing can be dropped on them
+        assert view.defaultDropAction() == Qt.DropAction.CopyAction
         model = view.model()
         index = model.index(0, 0)
         assert index.isValid()
-        assert not model.flags(index) & Qt.ItemFlag.ItemIsDragEnabled
-    assert window.file_view.view.dragDropMode() == QAbstractItemView.DragDropMode.NoDragDrop
+        assert model.mimeData([index]) is None or not model.mimeData([index]).hasUrls()
+    ids = window.file_view.view.drag_ids()
+    assert ids and entry_mime(ids).formats() == [ENTRY_IDS_MIME]

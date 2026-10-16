@@ -3,22 +3,28 @@ showing the playlist in progress (core/playlist_builder.py) with customisable co
 
 A header click sorts the playlist itself, since its order is what gets exported. A track that left the index is
 dimmed, with its path as the tooltip. Rows come from the index (queries.track_rows), so no file is read.
+
+Music comes in by dragging folders and songs from the tree, the list or the search results (entry ids, see
+ui/entry_drag.py); rows are moved by dragging them, or with Ctrl+Up/Down.
 """
 
 import base64
+import json
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QAbstractTableModel, QByteArray, QModelIndex, QRect, Qt, Signal
-from PySide6.QtGui import QAction, QPainter, QPalette
+from PySide6.QtCore import QAbstractTableModel, QByteArray, QMimeData, QModelIndex, QRect, Qt, Signal
+from PySide6.QtGui import QAction, QKeySequence, QPainter, QPalette, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QHBoxLayout,
     QLabel,
     QMenu,
+    QMessageBox,
+    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -29,9 +35,11 @@ from music_desk.core.index import queries
 from music_desk.core.index.queries import TrackRow
 from music_desk.core.index.scanner import find_folder
 from music_desk.core.playlist_builder import Builder, Item
+from music_desk.ui.entry_drag import ENTRY_IDS_MIME, entry_ids
 from music_desk.ui.file_view import format_duration
 
 PLACEHOLDER = "Drag folders or songs here to build a playlist"
+PLAYLIST_ROWS_MIME = "application/x-musicdesk-playlist-rows"  # a drag of the playlist's own rows
 _NO_PARENT = QModelIndex()
 
 
@@ -79,6 +87,8 @@ class PlaylistModel(QAbstractTableModel):
     """The builder's items as rows. `changed` follows every change of the playlist itself (to save it)."""
 
     changed = Signal()
+    added = Signal(int, int)  # a drop of library items: (tracks added, tracks skipped as already there)
+    rowsDropped = Signal(list)  # rows moved by a drag, at their new positions (the view selects them)
 
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], builder: Builder | None = None,
                  parent=None) -> None:
@@ -138,6 +148,50 @@ class PlaylistModel(QAbstractTableModel):
         self.refresh()
         self.changed.emit()
         return result
+
+    def add_entries(self, ids: list[int], position: int | None = None) -> tuple[int, int]:
+        """Dropped library items (folders and files, in the view's order): their tracks, in Explorer's order."""
+        conn = self._conn()
+        if conn is None:
+            return 0, 0
+        tracks = queries.track_ids_for(conn, ids)
+        rows = queries.track_rows(conn, tracks)
+        result = self.add([Item(i, str(rows[i].path)) for i in tracks if i in rows], position) if tracks else (0, 0)
+        self.added.emit(*result)
+        return result
+
+    def remove_rows(self, rows: list[int]) -> None:
+        """Delete: out of the playlist (the files are untouched)."""
+        if not rows:
+            return
+        self.beginResetModel()
+        self.builder.remove(rows)
+        self.endResetModel()
+        self.changed.emit()
+
+    def clear(self) -> None:
+        self.beginResetModel()
+        self.builder.clear()
+        self._added = {}
+        self.endResetModel()
+        self.changed.emit()
+
+    def move_rows(self, rows: list[int], delta: int) -> list[int]:
+        """Ctrl+Up / Ctrl+Down. Returns the rows' new positions (to keep them selected)."""
+        return self._move(lambda: self.builder.move_rows(rows, delta))
+
+    def move_rows_to(self, rows: list[int], position: int) -> list[int]:
+        """A drag inside the list: the rows go before the row at `position`."""
+        return self._move(lambda: self.builder.move_to(rows, position))
+
+    def _move(self, move: Callable[[], list[int]]) -> list[int]:
+        before = list(self.builder.items)
+        self.layoutAboutToBeChanged.emit()
+        moved = move()
+        self.layoutChanged.emit()
+        if self.builder.items != before:
+            self.changed.emit()
+        return moved
 
     def set_builder(self, builder: Builder) -> None:
         self.beginResetModel()
@@ -205,7 +259,45 @@ class PlaylistModel(QAbstractTableModel):
         return None
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable if index.isValid() else Qt.ItemFlag.NoItemFlags
+        if not index.isValid():
+            return Qt.ItemFlag.ItemIsDropEnabled  # drops land between rows, or at the end
+        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
+
+    # -- drag and drop: copies only, so Qt never removes rows after a drop (the moves are done here) --
+
+    def mimeTypes(self) -> list[str]:  # noqa: N802 - Qt's name
+        return [ENTRY_IDS_MIME, PLAYLIST_ROWS_MIME]
+
+    def supportedDropActions(self) -> Qt.DropAction:  # noqa: N802 - Qt's name
+        return Qt.DropAction.CopyAction
+
+    def supportedDragActions(self) -> Qt.DropAction:  # noqa: N802 - Qt's name
+        return Qt.DropAction.CopyAction
+
+    def mimeData(self, indexes: list[QModelIndex]) -> QMimeData:  # noqa: N802 - Qt's name
+        mime = QMimeData()
+        rows = sorted({index.row() for index in indexes if index.isValid()})
+        mime.setData(PLAYLIST_ROWS_MIME, json.dumps(rows).encode("ascii"))
+        return mime
+
+    def dropMimeData(self, data: QMimeData, action: Qt.DropAction, row: int, column: int,  # noqa: N802
+                     parent: QModelIndex) -> bool:
+        if action == Qt.DropAction.IgnoreAction:
+            return True
+        position = row if row >= 0 else parent.row() if parent.isValid() else len(self.builder.items)
+        if data.hasFormat(PLAYLIST_ROWS_MIME):
+            try:
+                rows = json.loads(bytes(data.data(PLAYLIST_ROWS_MIME)).decode("ascii"))
+            except ValueError:
+                return False
+            moved = self.move_rows_to([r for r in rows if isinstance(r, int)], position)
+            self.rowsDropped.emit(moved)
+            return bool(moved)
+        ids = entry_ids(data)
+        if not ids:
+            return False
+        self.add_entries(ids, position)
+        return True
 
     # -- totals --
 
@@ -238,7 +330,7 @@ class PlaylistView(QTreeView):
 
 
 class PlaylistPanel(QWidget):
-    """The panel: a title, the list and a footer with the count and the total duration."""
+    """The panel: a title with Clear, the list and a footer with the count and the total duration."""
 
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -254,6 +346,14 @@ class PlaylistPanel(QWidget):
         self.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.view.setSortingEnabled(True)
         self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.view.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+        self.view.setDefaultDropAction(Qt.DropAction.CopyAction)
+        self.view.setDropIndicatorShown(True)
+        self.model.rowsDropped.connect(self.select_rows)
+        for key, action in ((Qt.Modifier.CTRL | Qt.Key.Key_Up, lambda: self.move_selected(-1)),
+                            (Qt.Modifier.CTRL | Qt.Key.Key_Down, lambda: self.move_selected(1)),
+                            (Qt.Key.Key_Delete, self.remove_selected)):
+            QShortcut(QKeySequence(key), self.view, activated=action, context=Qt.ShortcutContext.WidgetShortcut)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         header = self.view.header()
         header.setSectionsMovable(True)
@@ -263,6 +363,10 @@ class PlaylistPanel(QWidget):
         header.customContextMenuRequested.connect(lambda pos: self.header_menu().exec(header.mapToGlobal(pos)))
         self.reset_layout()
         self.footer = QLabel()
+        self.clear_button = QToolButton()
+        self.clear_button.setText("Clear")
+        self.clear_button.setToolTip("Empty the playlist (the files are untouched)")
+        self.clear_button.clicked.connect(self.clear)
         self.model.modelReset.connect(self._update_footer)
         self.model.changed.connect(self._update_footer)
         self.model.layoutChanged.connect(self._update_footer)
@@ -270,6 +374,7 @@ class PlaylistPanel(QWidget):
         top = QHBoxLayout()
         top.addWidget(self.title)
         top.addStretch(1)
+        top.addWidget(self.clear_button)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 8, 4, 4)
         layout.setSpacing(4)
@@ -280,6 +385,7 @@ class PlaylistPanel(QWidget):
 
     def _update_footer(self) -> None:
         count = self.model.rowCount()
+        self.clear_button.setEnabled(count > 0)
         if not count:
             self.footer.setText("Empty")
             return
@@ -289,6 +395,48 @@ class PlaylistPanel(QWidget):
         if missing:
             text += f" · {missing} not in the library"
         self.footer.setText(text)
+
+    # -- arranging --
+
+    def selected_rows(self) -> list[int]:
+        return sorted(index.row() for index in self.view.selectionModel().selectedRows())
+
+    def select_rows(self, rows: list[int]) -> None:
+        selection = self.view.selectionModel()
+        selection.clearSelection()
+        flags = selection.SelectionFlag.Select | selection.SelectionFlag.Rows
+        for row in rows:
+            selection.select(self.model.index(row, 0), flags)
+        if rows:
+            selection.setCurrentIndex(self.model.index(rows[0], 0), selection.SelectionFlag.NoUpdate)
+            self.view.scrollTo(self.model.index(rows[-1], 0))
+            self.view.scrollTo(self.model.index(rows[0], 0))
+
+    def move_selected(self, delta: int) -> None:
+        rows = self.selected_rows()
+        if rows:
+            self.select_rows(self.model.move_rows(rows, delta))
+
+    def remove_selected(self) -> None:
+        rows = self.selected_rows()
+        if not rows:
+            return
+        self.model.remove_rows(rows)
+        if self.model.rowCount():  # the row after the removed ones, as a list does
+            self.select_rows([min(rows[0], self.model.rowCount() - 1)])
+
+    def clear(self) -> None:
+        count = self.model.rowCount()
+        if count and self.ask_clear(count):
+            self.model.clear()
+
+    def ask_clear(self, count: int) -> bool:
+        """Replaced in tests."""
+        answer = QMessageBox.question(
+            self, "Clear the playlist",
+            f"Remove all {count:,} track{'s' if count != 1 else ''} from the playlist? The files are untouched.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
+        return answer == QMessageBox.StandardButton.Yes
 
     # -- columns --
 

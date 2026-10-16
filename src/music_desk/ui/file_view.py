@@ -30,7 +30,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QStyle,
     QStyledItemDelegate,
-    QTreeView,
     QVBoxLayout,
     QWidget,
 )
@@ -38,6 +37,7 @@ from PySide6.QtWidgets import (
 from music_desk.core.fsops import natural_key
 from music_desk.core.index import queries
 from music_desk.core.index.queries import FileRow
+from music_desk.ui.entry_drag import EntryDragView
 
 ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
 IS_DIR_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -225,7 +225,8 @@ class FileListModel(QAbstractTableModel):
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
             return Qt.ItemFlag.NoItemFlags
-        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable  # no drag: a drop in Explorer would move
+        # dragged into the playlist builder as entry ids only (ui/entry_drag.py): a drop in Explorer does nothing
+        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
         if index.column() == 0:
             flags |= Qt.ItemFlag.ItemIsEditable  # inline rename (SPEC §11)
         return flags
@@ -296,7 +297,7 @@ class FileView(QWidget):
         self.filter.textChanged.connect(self.proxy.setFilterFixedString)
         self.filter.hide()
 
-        self.view = QTreeView()
+        self.view = EntryDragView()
         self.view.setModel(self.proxy)
         self.view.setRootIsDecorated(False)
         self.view.setUniformRowHeights(True)
@@ -304,8 +305,10 @@ class FileView(QWidget):
         self.view.setAlternatingRowColors(True)
         self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.view.setDragEnabled(False)  # a drop in Explorer would move the files (Ground rule 1)
-        self.view.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
+        # Drags carry entry ids, never files (a drop in Explorer would move them: Ground rule 1), for the playlist.
+        self.view.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.view.setDefaultDropAction(Qt.DropAction.CopyAction)
+        self.view.drag_ids = self.selected_ids
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.view.customContextMenuRequested.connect(self._menu_requested)
         # Rename: F2 (below, always on the Name column) or a slow second click on a selected name.

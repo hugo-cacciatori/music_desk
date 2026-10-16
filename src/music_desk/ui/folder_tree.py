@@ -10,10 +10,11 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QAbstractItemView, QApplication, QStyle, QTreeView, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QStyle, QWidget
 
 from music_desk.core.index import queries
 from music_desk.core.index.roots import Root
+from music_desk.ui.entry_drag import EntryDragView
 
 ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
 PATH_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -146,7 +147,8 @@ class FolderTreeModel(QAbstractItemModel):
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
             return Qt.ItemFlag.NoItemFlags
-        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable  # no drag: the app never moves files
+        # dragged into the playlist builder as entry ids only (ui/entry_drag.py): the app never moves files
+        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
         if index.internalPointer().root is None:
             flags |= Qt.ItemFlag.ItemIsEditable  # folders rename inline; library roots don't (SPEC §11)
         return flags
@@ -279,8 +281,9 @@ class FolderTreeModel(QAbstractItemModel):
             parent.has_subfolders = False
 
 
-class FolderTreeView(QTreeView):
-    """The tree, remembering which folders are expanded (by path, so it survives rescans and restarts)."""
+class FolderTreeView(EntryDragView):
+    """The tree, remembering which folders are expanded (by path, so it survives rescans and restarts). Several
+    folders can be selected (Ctrl/Shift+click) to drag them into the playlist; the current one is the open folder."""
 
     folderSelected = Signal(int)  # entry id
 
@@ -290,8 +293,10 @@ class FolderTreeView(QTreeView):
         self.setModel(model)
         self.setHeaderHidden(True)
         self.setUniformRowHeights(True)
-        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.setDragEnabled(False)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.setDefaultDropAction(Qt.DropAction.CopyAction)
+        self.drag_ids = self.selected_ids
         self.setEditTriggers(QAbstractItemView.EditTrigger.EditKeyPressed
                              | QAbstractItemView.EditTrigger.SelectedClicked)
         self._expanded = {os.path.normcase(p) for p in (expanded or [])}
@@ -305,6 +310,20 @@ class FolderTreeView(QTreeView):
         if index.isValid():
             self.setCurrentIndex(index)
             self.edit(index)
+
+    def selected_ids(self) -> list[int]:
+        """The selected folders, top to bottom as shown."""
+        def place(index: QModelIndex) -> list[int] | None:  # rows from the top; None under a collapsed folder
+            rows = []
+            while index.isValid():
+                rows.append(index.row())
+                index = index.parent()
+                if index.isValid() and not self.isExpanded(index):
+                    return None
+            return rows[::-1]
+
+        shown = [(rows, i) for i in self.selectionModel().selectedRows() if (rows := place(i)) is not None]
+        return [i.data(ENTRY_ID_ROLE) for _rows, i in sorted(shown, key=lambda pair: pair[0])]
 
     def expanded_paths(self) -> list[str]:
         return sorted(self._expanded)

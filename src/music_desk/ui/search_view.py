@@ -17,13 +17,13 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QToolButton,
-    QTreeView,
     QVBoxLayout,
     QWidget,
 )
 
 from music_desk.core.fsops import natural_key
 from music_desk.core.index.search import ALL, LIMIT, MISSING, WITH_LYRICS, SearchRow
+from music_desk.ui.entry_drag import EntryDragView
 from music_desk.ui.file_view import COLUMNS, ENTRY_ID_ROLE, Column, FileListModel
 
 HIGHLIGHT_ROLE = Qt.ItemDataRole.UserRole + 10  # ((start, end), ...) in the cell's text
@@ -51,7 +51,7 @@ SEARCH_COLUMNS: tuple[Column, ...] = (
 )
 SEARCH_COLUMN_INDEX = {column.key: i for i, column in enumerate(SEARCH_COLUMNS)}
 _NO_PARENT = QModelIndex()
-_ROW_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+_ROW_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
 _SPANS = {"title": "title_spans", "artist": "artist_spans", "snippet": "snippet_spans"}
 
 
@@ -159,8 +159,8 @@ class SearchResultsModel(FileListModel):
         return super().data(index, role)
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-        # Asked for every row on a reset, so a constant (enum arithmetic is slow). No drag (a drop in Explorer
-        # would move the file), no rename (done from the file's folder).
+        # Asked for every row on a reset, so a constant (enum arithmetic is slow). Dragged as entry ids only, into
+        # the playlist (ui/entry_drag.py); no rename (done from the file's folder).
         return _ROW_FLAGS if index.isValid() else Qt.ItemFlag.NoItemFlags
 
 
@@ -283,7 +283,7 @@ class SearchView(QWidget):
         self.note.setWordWrap(True)
         self.note.hide()
 
-        self.view = QTreeView()
+        self.view = EntryDragView()
         self.view.setModel(self.model)
         self.view.setRootIsDecorated(False)
         self.view.setUniformRowHeights(True)
@@ -291,8 +291,10 @@ class SearchView(QWidget):
         self.view.setAlternatingRowColors(True)
         self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.view.setDragEnabled(False)  # a drop in Explorer would move the files (Ground rule 1)
-        self.view.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
+        # Drags carry entry ids, never files (a drop in Explorer would move them: Ground rule 1), for the playlist.
+        self.view.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.view.setDefaultDropAction(Qt.DropAction.CopyAction)
+        self.view.drag_ids = self.selected_ids
         self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.view.customContextMenuRequested.connect(self._menu_requested)

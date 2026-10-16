@@ -407,7 +407,8 @@ fill the index at any time and nothing is lost by waiting.
     query is kept for the next Ctrl+K.
   - Under it: the chips, "Only in <folder> and below" (the folder open when the search started), the count and
     Play results. Columns: Name, Title, Artist, Lyrics (the snippet), Album, Folder (elided on the left), then
-    the file list's other columns. The model sorts itself (no sort proxy) and isn't editable or draggable.
+    the file list's other columns. The model sorts itself (no sort proxy) and isn't editable;
+    since M7 task 3 its rows drag as entry ids into the playlist (§15).
   - Enter or a double-click goes to the file's folder with the file selected. The context menu has Go to folder,
     Open, Play selection, Open in File Explorer, Copy path(s), and "Filter by <artist>"; Ctrl+click on an artist
     does the same (the page's artist checkboxes).
@@ -1095,6 +1096,21 @@ import of existing playlists): one playlist in progress, built by dragging music
 - **Open playlist with default player** plays it through a temporary playlist, as Play selection does (§14):
   foobar2000, or whatever is associated with `.m3u8`.
 - The playlist is kept across restarts in the app's data (`%LOCALAPPDATA%\MusicDesk`), until it is cleared.
+
+**As built (M7 task 3): drag and drop** (`ui/entry_drag.py`, `ui/playlist_panel.py`).
+- `ENTRY_IDS_MIME` ("application/x-musicdesk-entry-ids"): a JSON list of entry ids, the drag's only format (no
+  URLs, no text), offered as a copy only. `EntryDragView` (a QTreeView) drags its `drag_ids()`, the selection in
+  the order shown; the file list, the search results and the folder tree use it (`DragOnly`: nothing can be
+  dropped on them). A drop in File Explorer therefore does nothing (Ground rule 1, tested).
+- The folder tree allows several folders to be selected (Ctrl/Shift+click); the current one is still the open
+  folder. Its drag gives the selected folders in the tree's order, leaving out any under a collapsed folder.
+- `PlaylistModel.dropMimeData`: entry ids go through `add_entries` (`track_ids_for`, then `track_rows` for the
+  paths) at the drop row, or at the end on the empty area; `added(added, skipped)` gives the status bar message
+  ("Added N tracks to the playlist. M already in it were skipped.", or "Nothing to add…"). The playlist's own
+  rows drag in a second format (`PLAYLIST_ROWS_MIME`) and are moved by the model itself (`move_rows_to`), as a
+  copy, so Qt never removes rows after the drop; the moved rows stay selected.
+- Ctrl+↑/↓ (`move_selected`) and Delete (`remove_selected`) are shortcuts on the list. **Clear** sits beside the
+  title, enabled when the playlist isn't empty, and asks first (`ask_clear`, replaced in tests).
 
 **As built (M7 task 2): the panel** (`ui/playlist_panel.py`).
 - `PlaylistPanel` (title, list, footer) wraps `PlaylistModel` over a `Builder`. It is the splitter's third pane,

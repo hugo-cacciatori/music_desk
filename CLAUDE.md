@@ -11,7 +11,16 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-16, end of session 10):** everything is committed and pushed (`main` = origin), the full
+**Session 11 (2026-10-16): M7 task 3 is done (drag and drop), version 0.1.1.** Details in SPEC §15, "As built
+(M7 task 3)": `ui/entry_drag.py` (`ENTRY_IDS_MIME`, `entry_mime`, `entry_ids`, `EntryDragView`), the tree's
+multi-selection (`FolderTreeView.selected_ids`), `PlaylistModel.dropMimeData` / `add_entries` / `added` /
+`remove_rows` / `move_rows` / `move_rows_to` / `clear`, `PlaylistPanel.move_selected` / `remove_selected` /
+`clear` / `ask_clear` / `clear_button`, `MainWindow.show_playlist_added`. Tests: `tests/ui/test_playlist_dnd.py`,
+and `test_no_drag_out` rewritten (entry ids only, copy only). Hugo's versioning from now on: a version bump after
+each step, 0.1.1 (this task), 0.1.2 (task 4), 0.2.0 (task 5, the release). The setup was not rebuilt (that is
+task 5); nothing pushed. 931 tests pass (slow ones included, none skipped), ruff is clean.
+
+**Session 10 (2026-10-16):** everything is committed and pushed (`main` = origin), the full
 suite passes (923 tests, slow ones included, none skipped), ruff is clean, and the setup
 `dist/installer/MusicDesk-Setup-0.1.0.exe` is rebuilt from the latest code (Hugo installs it over the old one; the
 version is still 0.1.0, no new GitHub release). Done this session, newest first:
@@ -681,18 +690,16 @@ version is still 0.1.0, no new GitHub release). Done this session, newest first:
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M7 task 3, drag and drop into and within the playlist panel (Progress; read SPEC §15 "Adding
-music", "Arranging it" and the two "As built (M7 task 1/2)" blocks first).
-- Building blocks already there: `PlaylistModel.add(items, position)` (duplicates skipped, returns
-  (added, skipped)), `Builder.move_rows` / `move_to` / `remove` / `clear`, `queries.track_ids_for` (dropped ids ->
-  tracks in Explorer's order) and `track_rows` (for the items' paths).
-- To build: an app-only MIME type carrying entry ids, never file URLs (Ground rule 1: a test must check a drop
-  in Explorer gets nothing), from the folder tree, the file list and the search results; drop to insert at the
-  drop row; drag rows to reorder; Ctrl+Up/Down (not Alt+Up, which goes up a folder); Delete; Clear with a
-  confirmation (an `ask_*` method, replaced in tests); the status bar says how many duplicates were skipped.
-- Today the file list and tree have drag disabled (`setDragEnabled(False)`; `tests/ui/test_context_menus.py`
-  `test_no_drag_out` checks it). Enabling an internal drag must keep that test's intent: no URLs, no move.
-- Then M7 task 4 (export and play) and task 5 (docs, README, version 0.2.0, a release built locally).
+**Next step:** M7 task 4, export and play (Progress; read SPEC §15 "Using it" and the "As built (M7 task 1/2/3)"
+blocks first), then bump to 0.1.2.
+- Building blocks already there: `playlists.export_playlist(entries, target, relative)` (relative to the file's
+  folder, another drive stays absolute, atomic), `MainWindow._play(entries, fallback, fallback_is_dir)` (the §14
+  temporary playlist), `PlaylistModel.row_for` (missing tracks are left out).
+- To build: buttons in the panel (Export…, the remembered Relative paths checkbox, Open with default player); a
+  Save dialog through a `choose_*` method (replaced in tests) remembering its folder in `Settings`; add the
+  export to Ground rule 1's exceptions.
+- Then M7 task 5 (docs, README, version 0.2.0, a release built locally).
+- A version bump: the three files below, then `uv lock` (it records the project version).
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
   agree) and pyproject's `version`, run `uv run python packaging/build_installer.py`, then
   `gh release create v<version> dist/installer/MusicDesk-Setup-<version>.exe` (with Hugo's go).
@@ -770,8 +777,8 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
      confirms. Audio files, playlists, cover images, the ReplayGain log, cue sheets of single-file albums and `.lrc`
      files not yet in the tags are never junk (SPEC §10).
 
-   For anything else, the app offers "Open in File Explorer". Dragging items out of the app is disabled, because a
-   drop in Explorer would move the files. The app's own files (index, settings, logs, temporary playlists) live only
+   For anything else, the app offers "Open in File Explorer". Drags inside the app carry entry ids only (never
+   file URLs) and only copy, because a drop of files in Explorer would move them. The app's own files (index, settings, logs, temporary playlists) live only
    in `%LOCALAPPDATA%\MusicDesk\`.
 2. The UI thread never blocks. All scanning, tag reading and writing, rsgain runs and LRCLIB calls happen in
    background workers. Target: no event-loop stall above 50 ms.
@@ -843,6 +850,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Tweaks before M7 (Hugo): ReplayGain has no preview (Run starts it; the report lists what was skipped), user-triggered refreshes jump the indexer's queue and are served inside a running scan, and every tool refreshes its whole folder afterwards. Details in SPEC §4 and §10. |
 | 2026-10-15 | M7 designed with Hugo: one playlist in progress (kept across restarts until cleared), in a narrow vertical panel between the file list and the side panel that takes only the list's spare width and blocks nothing. Built by dragging folders or songs (Explorer-style multi-selection) from the tree, the list or search results; natural order on import, duplicates skipped. Reorder by drag, Ctrl+↑/↓ or a header sort; customisable columns; a placeholder when empty. Export to .m3u8 with relative or absolute paths, chosen at export; open with the default player. Dropped: sample files for the formats ffmpeg can't encode, and ReplayGain for the formats rsgain can't handle. Details in SPEC §15. |
 | 2026-10-16 | ReplayGain (Hugo): `replaygain.log` holds the last run only (replaced each run; the script appended). ReplayGain tags can be removed from tracks and folders; "the ReplayGain tags" are every REPLAYGAIN_* value plus the comment lines written from the card's template (any target), while other comment lines and the log files stay. Details in SPEC §10 B and §17. |
+| 2026-10-16 | Drag and drop as built: drags carry entry ids in an app-only format, as a copy only, so nothing outside the app can take them. The folder tree allows a multi-selection (Ctrl/Shift+click) for dragging; its current folder is still the one open. Versions (Hugo): a bump after each step, 0.1.1 for drag and drop, 0.1.2 for export and play, 0.2.0 for the release. Details in SPEC §15. |
 | 2026-10-15 | Installer as built: all users in Program Files by default (Hugo: install in Program Files), with Inno Setup's "only for me" choice; 64-bit only; licence page; the uninstaller asks before deleting the app data (default No, kept when silent). Inno Setup itself is installed in `C:\Program Files\Inno Setup 6`. Details in SPEC §13. |
 | 2026-10-15 | MusicDesk is licensed GPL-3.0-or-later (Hugo): compatible with mutagen (GPL-2.0-or-later) and Qt (LGPL-3.0). `LICENSE` holds the GPL-3.0 text, `pyproject.toml` declares it, About says it. Details in SPEC §13. |
 | 2026-10-15 | The name stays MusicDesk (Hugo). The icon is drawn by `packaging/make_icon.py` (no image editor, reproducible) and embedded in the exe with a version resource. No theme setting: Qt follows Windows' light and dark (checked). FFmpeg inside rsgain is an LGPL build with Fraunhofer FDK AAC; the LGPL-2.1 text and FDK AAC's notice are shipped. Details in SPEC §13. |
@@ -911,7 +919,7 @@ Commands (from the project root):
           rename_job.py, replaygain_job.py
         ui/
           main_window.py, sidebar.py, folder_tree.py, file_view.py, address_bar.py, search_view.py,
-          playlist_panel.py, jobs_panel.py, about_dialog.py, toast.py
+          playlist_panel.py, entry_drag.py, jobs_panel.py, about_dialog.py, toast.py
           side_panel/       panel.py, metadata_tab.py, lyrics_tab.py, folder_summary.py
           tools/            tools_page.py, rename_card.py, replaygain_card.py, rename_preview.py, rg_report.py
       resources/rsgain/     rsgain.exe 3.6 + DLLs + presets + licenses (the only copy left)
@@ -1054,7 +1062,7 @@ Done when:
       (Ctrl+Shift+P). Opening it takes only the file list's width. Columns with a header menu, header-click
       sort that reorders the playlist, the empty-state placeholder, the footer (count, duration), missing
       tracks dimmed.
-- [ ] Drag and drop: an internal MIME type carrying entry ids (never file URLs: a test checks it) from the folder
+- [x] Drag and drop (0.1.1): an internal MIME type carrying entry ids (never file URLs: a test checks it) from the folder
       tree, the file list and the search results, with their Explorer-style multi-selection. Drop to insert,
       drag to reorder, Ctrl+↑/↓ to move, Delete to remove, Clear with a confirmation.
 - [ ] Export to .m3u8 (a Save dialog, the remembered Relative paths checkbox and folder) and Open playlist with

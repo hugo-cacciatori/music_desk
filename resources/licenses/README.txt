@@ -12,6 +12,9 @@ MusicDesk ships with these third-party components. Their licence texts are in th
   Send2Trash                      BSD-3-Clause          send2trash-BSD.txt
   rsgain 3.6                      BSD-2-Clause          rsgain-BSD-2-Clause.txt
   CRC++ (built into rsgain)       BSD-3-Clause          CRCpp-BSD.txt
+  flac 1.5.0                      GPL-2.0-or-later      flac-GPL-2.0.txt
+  libFLAC 1.5.0 (with flac)       BSD-3-Clause          libFLAC-Xiph-BSD.txt
+                                  (Xiph.Org)
 
   FFmpeg 7.1 (built into rsgain)  LGPL-2.1-or-later     FFmpeg-LGPL-2.1.txt
   Fraunhofer FDK AAC (built into  FDK AAC licence       FDK-AAC-NOTICE.txt
@@ -21,3 +24,6 @@ rsgain 3.6's Windows build gets FFmpeg from vcpkg with the avcodec, avformat, sw
 and without "gpl" (see rsgain's vcpkg.json at https://github.com/complexlogic/rsgain), so FFmpeg is under the
 LGPL. Its source code is at https://ffmpeg.org/, and rsgain's at https://github.com/complexlogic/rsgain.
 The FDK AAC library's source code is at https://github.com/mstorsjo/fdk-aac.
+
+flac 1.5.0 is the official Xiph.Org Win64 build (flac-1.5.0-win.zip from https://github.com/xiph/flac/releases);
+MusicDesk runs flac.exe to cut single-file albums into tracks. Its source code is at https://github.com/xiph/flac.

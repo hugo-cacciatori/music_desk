@@ -52,3 +52,10 @@ def test_installer_script():
     assert r'Name: "{autoprograms}\{#AppName}"; Filename' not in iss
     for path in ("LICENSE", "resources/icons/music_desk.ico"):
         assert (ROOT / path).is_file()
+
+
+def test_flac_is_bundled():
+    """flac.exe and its one DLL ship in resources/flac (SPEC §13), with their licences."""
+    spec = (ROOT / "packaging" / "music_desk.spec").read_text(encoding="utf-8")
+    assert '"resources/flac"' in spec
+    assert paths.flac_path().is_file() and (paths.flac_path().parent / "libFLAC.dll").is_file()

@@ -194,6 +194,31 @@ deleting the split's own `.partial` files from the same run.
 - The split fixtures are 16-bit mono chirps (`CHIRP`, a rising pitch), generated with `make_fixtures.py split`
   and byte-identical across runs.
 
+## As built (M10 task 3): flac, the cut and the proof
+- **Bundled:** `packaging/music_desk.spec` ships `resources/flac`, and `paths.flac_path()` finds it. The licences
+  are `flac-GPL-2.0.txt` and `libFLAC-Xiph-BSD.txt` in `resources/licenses/` and two `COMPONENTS` rows.
+- **Self-check:** `app.ToolCheck` (formerly `RsgainCheck`) runs `rsgain --version`, then `flac --version`, off
+  the UI thread. `MainWindow.show_flac_version` keeps the result for the Split card (task 4) and About ("Cue
+  split: flac 1.5.0", or "flac unavailable"). There's no status-bar label (lean UI).
+- **`core/flac.py` `FlacRunner`:**
+  - `encode(source, start, end, output)` runs `flac -8 -V --silent --skip --until -o`.
+  - `decode(path)` gives raw PCM: little-endian, signed, interleaved, the layout the STREAMINFO MD5 hashes.
+  - `decode_range(source, start, end)` pipes `flac -c -0` into `flac -d`, so WAV and AIFF sources are read by
+    flac itself, as the tracks were.
+  - Stop kills the processes. stderr is drained on a thread, and flac's last line becomes the error.
+- **`core/split.py`:**
+  - `cut_album(plan, runner, cancel, free_space)` checks free space and refuses existing `.partial` names
+    (never overwritten nor deleted). It writes each track to `<name>.partial`, then `prove()`s.
+  - On a flac error, a failed proof or Stop, it deletes exactly this run's `.partial` paths, recorded before
+    each flac run, since a killed flac may leave one behind.
+  - `is_silent(runner)` is `plan_album`'s silence check: decode the range and look for any non-zero byte.
+  - The renames, tags and recycling are the job's (task 4).
+- **Measured on this machine (real flac, `slow` tests):**
+  - Whole-file decodes through `decode` and `decode_range` both gave the hidden-track fixture's STREAMINFO MD5.
+  - The FLAC, WAV and silent-pregap fixtures cut and proved in 0.16–0.31 s. The silent 3 s pregap was found
+    silent and joined track 1.
+  - Moving one boundary by one sample failed the proof on both length and MD5, and left the folder as it was.
+
 ## Tests
 - **Fixtures** (`make_fixtures.py`, ffmpeg, dev-only; non-repeating audio):
   - a FLAC image with an INDEX 00 gap and a 3 s audible hidden track;

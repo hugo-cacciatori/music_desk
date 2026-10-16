@@ -132,6 +132,7 @@ class MainWindow(QMainWindow):
         self.history_back: list[int] = []
         self.history_forward: list[int] = []
         self.rsgain_version: str | None = None  # from the startup self-check (About)
+        self.flac_version: str | None = None  # likewise; the cue split needs it (SPEC §22)
         self._indexing_paused = False  # while a ReplayGain job runs
         # Handing files to Windows can stall (a slow drive, a busy shell), so it happens off the UI thread.
         # These three are replaced in tests, which never launch anything.
@@ -399,9 +400,14 @@ class MainWindow(QMainWindow):
             self.rsgain_label.setText("rsgain unavailable: ReplayGain tools disabled")
             self.rsgain_label.setToolTip("The bundled rsgain.exe could not run. See the log for details.")
 
+    def show_flac_version(self, version: str | None) -> None:
+        """The startup self-check of the bundled flac (SPEC §13). The split card (M10 task 4) is disabled with
+        the reason when it failed; nothing else uses flac, so it has no status-bar label."""
+        self.flac_version = version
+
     def open_about(self) -> None:
         """Help › About: versions and licences."""
-        dialog = AboutDialog(self.rsgain_version, self)
+        dialog = AboutDialog(self.rsgain_version, self, flac_version=self.flac_version)
         folder = str(licenses_dir())
         dialog.licensesRequested.connect(lambda: self._in_shell(
             lambda: self.show_in_explorer(folder, True), f"File Explorer couldn't open {folder}.", "", True))

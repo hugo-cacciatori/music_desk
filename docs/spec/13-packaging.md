@@ -19,10 +19,10 @@
   - Chosen over an LGPL FFmpeg build (77–170 MB zipped) because Hugo's single-file albums are FLAC or WAV, which
     flac reads (with AIFF, W64 and RF64). It adds about 0.9 MB.
   - Licences: the flac program is GPL-2.0-or-later and libFLAC is under Xiph's BSD-like licence, both compatible
-    with the app's GPL-3.0-or-later. They join `resources/licenses/`, `licenses.py` `COMPONENTS` and About in
-    M10 task 3.
-  - Resolved through `paths.resource_path("flac/flac.exe")`, never configurable (as rsgain, Ground rule 5). The
-    PyInstaller spec bundles `resources/flac` (M10 task 3).
+    with the app's GPL-3.0-or-later. As built (M10 task 3) they are `flac-GPL-2.0.txt` and
+    `libFLAC-Xiph-BSD.txt` in `resources/licenses/`, two `COMPONENTS` rows, and About.
+  - Resolved through `paths.flac_path()` (`resources/flac/flac.exe`), never configurable (as rsgain, Ground rule
+    5). The PyInstaller spec bundles `resources/flac`, as built in M10 task 3.
   - Startup self-check: `flac --version` (expected "flac 1.5.0"). If it fails, the Split card and "Split into
     tracks…" are disabled with the reason.
   - It is called like rsgain: `CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS`, output read by the job's

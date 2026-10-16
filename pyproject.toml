@@ -1,6 +1,6 @@
 [project]
 name = "music-desk"
-version = "0.2.8"
+version = "0.2.9"
 description = "Windows desktop app for browsing a music library, editing tags, tidying albums and finding lyrics."
 requires-python = ">=3.13,<3.14"
 license = "GPL-3.0-or-later"
@@ -46,4 +46,4 @@ testpaths = ["tests"]
 pythonpath = ["tests/core"]  # shared helpers such as lrclib_fake, for tests in any folder
 norecursedirs = ["reference", "fixtures", ".*", "build", "dist"]
 qt_api = "pyside6"
-markers = ["slow: runs the real rsgain (deselect with -m \"not slow\")"]
+markers = ["slow: runs the real rsgain or flac (deselect with -m \"not slow\")"]

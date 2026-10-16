@@ -49,3 +49,13 @@ def test_open_licences_folder(qtbot, window):
     [dialog] = open_about(window)
     dialog.licenses_button.click()
     qtbot.waitUntil(lambda: recorder.calls == [(str(licenses_dir()), True)], timeout=5000)
+
+
+def test_flac_version_and_unavailable(window):
+    """The cue split's flac (SPEC §13): its self-check result is shown beside rsgain's."""
+    window.show_flac_version("flac 1.5.0")
+    [dialog] = open_about(window)
+    assert "Cue split: flac 1.5.0" in dialog.versions.text()
+    window.show_flac_version(None)
+    [dialog] = open_about(window)
+    assert "Cue split: flac unavailable" in dialog.versions.text()

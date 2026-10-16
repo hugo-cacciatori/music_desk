@@ -35,6 +35,11 @@ def rsgain_path() -> Path:
     return resource_path("rsgain", "rsgain.exe")
 
 
+def flac_path() -> Path:
+    """The bundled flac, for the cue split (SPEC §22). Never configurable (Ground rule 5)."""
+    return resource_path("flac", "flac.exe")
+
+
 def app_data_dir() -> Path:
     """%LOCALAPPDATA%\\MusicDesk, created on demand."""
     base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")

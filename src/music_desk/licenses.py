@@ -40,6 +40,9 @@ COMPONENTS: tuple[Component, ...] = (
     # LGPL applies. That build also enables Fraunhofer's FDK AAC, under its own licence.
     Component("FFmpeg (in rsgain)", "LGPL-2.1-or-later", ("FFmpeg-LGPL-2.1.txt",), version="7.1"),
     Component("Fraunhofer FDK AAC (in rsgain)", "FDK AAC licence", ("FDK-AAC-NOTICE.txt",)),
+    # The official Xiph.Org Win64 build (SPEC §13): the flac program is GPL, its libFLAC library BSD-like.
+    Component("flac", "GPL-2.0-or-later", ("flac-GPL-2.0.txt",), version="1.5.0"),
+    Component("libFLAC (with flac)", "BSD-3-Clause (Xiph.Org)", ("libFLAC-Xiph-BSD.txt",), version="1.5.0"),
 )
 
 

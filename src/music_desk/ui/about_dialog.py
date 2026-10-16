@@ -26,14 +26,16 @@ HEADERS = ("Component", "Version", "Licence")
 class AboutDialog(QDialog):
     licensesRequested = Signal()  # "Open licences folder": the window opens it off the UI thread
 
-    def __init__(self, rsgain_version: str | None, parent: QWidget | None = None) -> None:
+    def __init__(self, rsgain_version: str | None, parent: QWidget | None = None, *,
+                 flac_version: str | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("About MusicDesk")
         title = QLabel(f"<b>MusicDesk {__version__}</b>")
         title.setStyleSheet("font-size: 16px;")
         self.versions = QLabel(
             f"Python {platform.python_version()} · Qt {qVersion()} (PySide6 {pyside_version})\n"
-            f"ReplayGain: {rsgain_version or 'rsgain unavailable'}")
+            f"ReplayGain: {rsgain_version or 'rsgain unavailable'} · "
+            f"Cue split: {flac_version or 'flac unavailable'}")
         self.table = QTableWidget(len(COMPONENTS), len(HEADERS))
         self.table.setHorizontalHeaderLabels(HEADERS)
         self.table.verticalHeader().hide()

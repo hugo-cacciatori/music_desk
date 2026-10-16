@@ -1,0 +1,102 @@
+# 6. Library search
+- Ctrl+K searches the whole library, with a scope toggle for "this folder and below". Matching runs as you type
+  (120 ms debounce, stale queries cancelled, worker thread). Free text matches as seek_lyrics' search did (below).
+- Field filters:
+  - `artist:` `album:` `year:` `genre:` `ext:opus`
+  - `lyricstag:yes|no|lrc`
+  - `lrclib:synced|plain|instrumental|notfound|pending|error|notags`
+  - `rg:none`
+  - `"quoted phrase"` keeps spaces and punctuation as typed. The phrase is still matched as a substring, in
+    every free-text column, lyrics included.
+
+  Free text searches the free-text columns (below) as substrings.
+- Results appear as a flat list with a Folder column (up to 5,000 shown, with the total count). Enter or a
+  double-click goes to the file's folder with the file selected. Esc returns to the previous folder. Search
+  results can be played (§14).
+
+### Preserved from seek_lyrics' songs.html search (must not be lost)
+songs.html is gone (§17), but its search box was a real feature: type anything, and see every song whose title,
+artist, album or lyrics contain it. Library search must keep that behaviour. It lives inside the one Ctrl+K search
+of the app's normal workflow, not as a separate lyrics page or a second search UI. Anyone planning or changing §6
+checks this subsection first.
+
+**The original** (`tests/reference/seek_lyrics.py`, the page script):
+- haystack = title, artist, album and plain lyrics, lowercased;
+- a song matches when `haystack.includes(query)`: any substring, of any length, mid-word included, case-insensitive;
+- results highlight the match in the title and artist. When only the lyrics match, they also show the first
+  matching lyric line as a snippet, with the match highlighted;
+- "N of M songs", status chips (All, With lyrics, Missing), an artist checkbox filter, and a detail pane with the
+  lyrics (synced or plain) and the Genius/Google links.
+
+**In the app:**
+- **Free text** is that rule: a case-insensitive substring over name, title, artist, albumartist, album, genre,
+  and lyrics (the LRCLIB plain text and the file's own lyrics tag). "ove" finds "glove" and "lovely", and one or
+  two characters work too.
+- **Deliberate differences (§17):**
+  - accents are ignored ("Sigur Ros" finds "Sigur Rós");
+  - every audio file under the roots is searchable, not only the songs a script run saw;
+  - the file name, album artist and genre are searched too.
+- **Results:**
+  - The match is highlighted in the Title and Artist cells.
+  - A **Lyrics** column shows the first matching lyric line, with the match highlighted, when the match is only
+    in the lyrics. It is empty otherwise.
+  - The count reads "N of M tracks".
+- **Filters:**
+  - The status chips become one-click chips under the search box: All, With lyrics (`lrclib:` synced, plain or
+    instrumental) and Missing (the rest).
+  - The artist checkboxes become `artist:` filters (repeatable, ORed), which a click on an artist value in the
+    results can add.
+- **The detail pane is the side panel:** selecting a result shows its lyrics in the Lyrics tab (§8), with the
+  timestamps toggle and the Genius/Google buttons. Nothing is duplicated.
+- **Acceptance (M6 "Done when"):** a parity test re-implements the page script's rule (lowercased `includes` over
+  title, artist, album and plain lyrics). Run on the fixture library with scripted LRCLIB lyrics, it must select
+  every track the app's free-text search finds on those fields, and the reverse, apart from the accent
+  difference.
+
+### As built (M6 task 1)
+- **Query syntax** (`core/index/search.py` `parse_query`):
+  - The unquoted text left after the filters, trimmed, is **one** substring, as the page took the whole box:
+    "glove like" doesn't find "like a glove". Each `"quoted phrase"` is another substring; all parts are ANDed.
+  - A word before a colon that isn't a filter name stays text ("Re: Stacks"). A filter with an unknown value is
+    ignored and named in a note above the results. An empty `artist:` (being typed) is ignored.
+  - Every filter is repeatable; a filter's values are ORed, different filters ANDed. Values may be quoted
+    (`artist:"Sigur Rós"`). `artist:` covers the album artist too. `year:` is a prefix of the date. `ext:` takes
+    "opus" or ".opus". `lyricstag:` follows the ♪ column (yes = a tag, lrc = only a sidecar, no = neither).
+    `lrclib:` follows the LRCLIB column (`error` = a key whose lookup failed this session, from the lyrics
+    service; `notags` = no artist or title, never looked up). `rg:` takes none, partial or full.
+- **Matching** (`text_search`): tracks only. Every part of 3 or more characters goes into one FTS5 `MATCH`
+  (FTS5 allows one per table per query), as a quoted phrase with column filters; shorter parts use `LIKE` over
+  the same columns. For a short non-ASCII part, a Python function `md_contains` folds both sides, since SQLite's
+  LIKE folds ASCII only. Known limit: a 1–2 character ASCII query keeps accents ("jo" doesn't find "Jóga").
+- **Chips:** With lyrics = the key is found or instrumental; Missing = every other track (pending, not found,
+  no tags, unreadable). An empty query with All shows the prompt; an empty query with another chip lists every
+  track it covers, as the page did.
+- **Order and cap:** every match is sorted in Python by (folder path, name), natural order (a folder's files
+  before its subfolders'), then cut at 5,000; the count reads "N of M tracks". The header can sort by any
+  column; the Folder column's order is the result order (the default).
+- **Rows** (`result_rows`): file list rows plus the folder path, highlight spans for Title and Artist (free text,
+  and the `artist:` values) and the snippet: the first line of the LRCLIB text, else of the tags' lyrics
+  (timestamps stripped), containing a part that matches none of name, title, artist, album artist, album or
+  genre. `fold()` (NFD, marks dropped, casefold, with offsets) places the highlights; `fold_text()` is the fast
+  form for long texts.
+- **Service** (`services/search_service.py` `SearchService`): one worker with its own read connection. A new
+  query interrupts the running one (`sqlite3` interrupt) and stale results are never emitted. The rows' sort keys
+  are computed there too (`search_view.sort_keys`, as per-column ranks), so the UI thread only swaps rows.
+  Measured on 5,000 tracks with 1.5 KB of lyrics each: about 0.1–0.2 s to match, 0.5 s to build 5,000 rows with
+  snippets and 0.35 s for the keys, all on the worker; showing them costs the UI thread about 20 ms plus a repaint.
+- **Page** (`ui/search_view.py` `SearchView`, a page of the window's centre):
+  - The query field is in the toolbar ("Search library (Ctrl+K)"). Typing opens the page and runs after 120 ms.
+    Enter in the field moves to the results; Esc (field or results) returns to the file list as it was. The
+    query is kept for the next Ctrl+K.
+  - Under it: the chips, "Only in <folder> and below" (the folder open when the search started), the count and
+    Play results. Columns: Name, Title, Artist, Lyrics (the snippet), Album, Folder (elided on the left), then
+    the file list's other columns. The model sorts itself (no sort proxy) and isn't editable;
+    since M7 task 3 its rows drag as entry ids into the playlist (§15).
+  - Enter or a double-click goes to the file's folder with the file selected. The context menu has Go to folder,
+    Open, Play selection, Open in File Explorer, Copy path(s), and "Filter by <artist>"; Ctrl+click on an artist
+    does the same (the page's artist checkboxes).
+  - Opening the search switches the side panel to the Lyrics tab once. A result's selection drives the side
+    panel as the file list does, unsaved edits included (Cancel keeps the result, and the search).
+  - Live results: folder updates, finished scans and LRCLIB results re-run the query after 1 s while the page
+    shows. The same query's results are applied in place (removals in runs, changed rows, additions, then the
+    current sort), so the selection stays; a new query resets the list.

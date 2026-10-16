@@ -1,0 +1,32 @@
+# 18. Testing
+- `pytest` runs:
+  - core unit tests (no Qt);
+  - LRCLIB tests on mocked HTTP (tests never call the real API);
+  - pytest-qt tests for the models, navigation, side panel save and revert, and rename validation.
+- Fixtures:
+  - tiny 1-second files per format, with varied tags: missing title, ID3v2.3, lowercase TXXX ReplayGain,
+    lite/bonus/CD2 subfolders, a name clash;
+  - cleanup cases: a single-file album with its .cue, a per-track .cue, .lrc sidecars with and without a lyrics
+    tag, `replaygain.log`, `folder.jpg`, a `.m3u`.
+
+  Tests copy them to `tmp_path`.
+- Fixture generation:
+  - `tests/fixtures/make_fixtures.py` generates the fixtures with ffmpeg (dev-only, found on PATH or through an
+    `FFMPEG` environment variable), and the generated files are committed, so running the tests doesn't need
+    ffmpeg.
+  - ffmpeg can encode FLAC, Vorbis, Opus, MP3, MP2, WAV, AIFF, AAC and ALAC in M4A, WavPack, TTA and WMA. It can't
+    encode APE, TAK, Musepack, OptimFROG or DSF/DFF, and Speex depends on the build. They have no fixture: getting
+    sample files was dropped (Hugo, 2026-10-15), so they stay supported through mutagen, untested with a real file.
+- Parity: run the reference functions and the ported core on identical copies of FLAC/MP3 fixtures, then compare
+  file names, tags and RunLog text with timestamps and durations masked. Other formats get their own expected
+  values.
+- `slow` marker: the real bundled rsgain on fixtures, for every format rsgain supports.
+- Performance: a synthetic tree of 100k entries checks index time and UI responsiveness. Debug builds log any
+  event-loop stall above 50 ms through a QTimer watchdog (as built in 0.2.1: `ui/stall_watch.py` `StallWatch`, a
+  20 ms timer that logs how late it fires, turned on by `app.main` when running from source, not in the
+  installed exe).
+- Manual checklist per milestone, on a copied album:
+  - browse while indexing; edit tags, including multi-file edits and the cover; rename a file and a folder;
+  - preview and run each tool, including the cleanup protections, then compare `replaygain.log` with a script run;
+  - go through every Lyrics tab state, including offline mode;
+  - play a folder through the default app.

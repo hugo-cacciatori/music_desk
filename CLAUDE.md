@@ -16,13 +16,13 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 13):** 0.3.0 is committed on `main` (not pushed) and its installer is built
-  (`dist/installer/MusicDesk-Setup-0.3.0.exe`). M10 tasks 5 and 6 are done (the Split page). All 1114 tests passed
-  in the last full run, slow ones included (two timing tests failed once each in earlier runs, then passed).
-- **Left to Hugo:** the installed-app split check (task 7), then his go to push and publish v0.3.0; opening an
-  exported playlist in a real player, and a mouse drag in the installed app.
-- **Next step:** after Hugo's check, `gh release create v0.3.0` and tick task 7; then M11 (not urgent) or M12
-  (to specify with Hugo). Give Hugo full manual steps for checks (memory: manual-check-instructions).
+- **State (2026-10-17, session 13):** 0.3.0 is on `main` and pushed, not released (Hugo, 2026-10-17: no release
+  for now). Its installer is built (`dist/installer/MusicDesk-Setup-0.3.0.exe`). M10 tasks 5 and 6 are done (the
+  Split page). All 1114 tests passed in the last full run, slow ones included.
+- **Left to Hugo:** the installed-app split check of task 7 (he chose not to run it on 2026-10-17), the release
+  when he wants it; opening an exported playlist in a real player, and a mouse drag in the installed app.
+- **Next step:** M11 (not urgent) or M12 (to specify with Hugo); task 7's release on Hugo's go. Give Hugo full
+  manual steps for checks (memory: manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with

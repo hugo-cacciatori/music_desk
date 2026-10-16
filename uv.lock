@@ -43,7 +43,7 @@ wheels = [
 
 [[package]]
 name = "music-desk"
-version = "0.2.10"
+version = "0.2.11"
 source = { editable = "." }
 dependencies = [
     { name = "mutagen" },

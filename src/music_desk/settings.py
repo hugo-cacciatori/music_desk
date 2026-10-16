@@ -36,6 +36,8 @@ class Settings:
     playlist_visible: bool = False  # the playlist builder's panel (SPEC §15)
     playlist_width: int = 300
     playlist_header: str = ""  # base64 of the panel's QHeaderView.saveState()
+    playlist_relative: bool = True  # the export's Relative paths checkbox
+    playlist_export_dir: str = ""  # the folder the last export was saved in
 
     path: Path | None = field(default=None, repr=False, compare=False)  # where save() writes; None: not saved
 

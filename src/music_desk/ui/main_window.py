@@ -100,6 +100,7 @@ class MainWindow(QMainWindow):
     shellFailed = Signal(str, str, bool)  # message, a path to show in Explorer instead, whether it is a folder
     renameDone = Signal(object, bool)  # RenameResult, whether it was an Undo
     renameFailed = Signal(str)
+    playlistExported = Signal(str, int)  # the saved file, its track count (emitted from the shell thread)
 
     def __init__(self, library: LibraryService | None = None, settings: Settings | None = None) -> None:
         super().__init__()
@@ -238,6 +239,11 @@ class MainWindow(QMainWindow):
         self._playlist_refresh = QTimer(self, singleShot=True, interval=1000)  # the index changed: rows follow
         self._playlist_refresh.timeout.connect(self.playlist_panel.model.refresh)
         self.playlist_panel.model.added.connect(self.show_playlist_added)
+        self.playlist_panel.playRequested.connect(self.play_playlist)
+        self.playlist_panel.exportRequested.connect(self.export_playlist)
+        self.playlist_panel.relative_paths.setChecked(self.settings.playlist_relative)
+        self.playlist_panel.relative_paths.toggled.connect(lambda on: setattr(self.settings, "playlist_relative", on))
+        self.playlistExported.connect(self._playlist_exported)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.center)
@@ -1190,6 +1196,46 @@ class MainWindow(QMainWindow):
             text = f"Added {added:,} track{'s' if added != 1 else ''} to the playlist."
             if skipped:
                 text += f" {skipped:,} already in it {'were' if skipped != 1 else 'was'} skipped."
+        self.statusBar().showMessage(text, STATUS_MS)
+
+    def play_playlist(self) -> None:
+        """Through a temporary playlist, as Play selection (SPEC §14); tracks gone from the library are left out."""
+        entries = self.playlist_panel.entries()
+        self._play(entries, str(entries[0].path) if entries else "", False)
+
+    def choose_export_file(self, suggested: str) -> str:
+        """Replaced in tests. The dialog asks before replacing a file."""
+        target, _filter = QFileDialog.getSaveFileName(self, "Export the playlist", suggested,
+                                                      "M3U8 playlist (*.m3u8)")
+        return target
+
+    def export_playlist(self) -> None:
+        """Save the playlist as a .m3u8 where the user chooses (a Ground rule 1 exception), off the UI thread."""
+        entries = self.playlist_panel.entries()
+        if not entries:
+            self.statusBar().showMessage("The playlist has no tracks to export.", STATUS_MS)
+            return
+        folder = Path(self.settings.playlist_export_dir or Path.home() / "Music")
+        chosen = self.choose_export_file(str(folder / "Playlist.m3u8"))
+        if not chosen:
+            return
+        target = Path(chosen)
+        if target.suffix.lower() != ".m3u8":
+            target = target.with_name(target.name + ".m3u8")
+        self.settings.playlist_export_dir = str(target.parent)
+        relative = self.playlist_panel.relative_paths.isChecked()
+
+        def run() -> None:
+            playlists.export_playlist(entries, target, relative)
+            self.playlistExported.emit(str(target), len(entries))
+
+        self._in_shell(run, f"The playlist couldn't be saved as {target}.", str(target.parent), True)
+
+    def _playlist_exported(self, target: str, count: int) -> None:
+        text = f"Exported {count:,} track{'s' if count != 1 else ''} to {target}."
+        missing = self.playlist_panel.model.rowCount() - count
+        if missing > 0:
+            text += f" {missing} not in the library {'were' if missing != 1 else 'was'} left out."
         self.statusBar().showMessage(text, STATUS_MS)
 
     def _restore_playlist(self) -> None:

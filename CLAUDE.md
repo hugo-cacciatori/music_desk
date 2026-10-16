@@ -11,6 +11,13 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
+**Session 11 (2026-10-16), later: M7 task 4 is done (export and play), version 0.1.2.** Details in SPEC §15,
+"As built (M7 task 4)": the panel's Play, Export… and Relative paths (`PlaylistPanel.entries`, `play_button`,
+`export_button`, `relative_paths`, `playRequested`, `exportRequested`); `MainWindow.play_playlist`,
+`export_playlist`, `choose_export_file` (replaced in tests), `playlistExported`; `Settings.playlist_relative`
+and `playlist_export_dir`. Ground rule 1 now lists the export. Tests: `tests/ui/test_playlist_export.py`. 938
+tests pass (slow ones included), ruff is clean. Not rebuilt, not pushed.
+
 **Session 11 (2026-10-16): M7 task 3 is done (drag and drop), version 0.1.1.** Details in SPEC §15, "As built
 (M7 task 3)": `ui/entry_drag.py` (`ENTRY_IDS_MIME`, `entry_mime`, `entry_ids`, `EntryDragView`), the tree's
 multi-selection (`FolderTreeView.selected_ids`), `PlaylistModel.dropMimeData` / `add_entries` / `added` /
@@ -690,15 +697,13 @@ version is still 0.1.0, no new GitHub release). Done this session, newest first:
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M7 task 4, export and play (Progress; read SPEC §15 "Using it" and the "As built (M7 task 1/2/3)"
-blocks first), then bump to 0.1.2.
-- Building blocks already there: `playlists.export_playlist(entries, target, relative)` (relative to the file's
-  folder, another drive stays absolute, atomic), `MainWindow._play(entries, fallback, fallback_is_dir)` (the §14
-  temporary playlist), `PlaylistModel.row_for` (missing tracks are left out).
-- To build: buttons in the panel (Export…, the remembered Relative paths checkbox, Open with default player); a
-  Save dialog through a `choose_*` method (replaced in tests) remembering its folder in `Settings`; add the
-  export to Ground rule 1's exceptions.
-- Then M7 task 5 (docs, README, version 0.2.0, a release built locally).
+**Next step:** M7 task 5, the release (Progress), then version 0.2.0.
+- Check M7's "Done when" end to end in the app (a scratch `LOCALAPPDATA` and a copied library): a tree
+  multi-selection lands in natural order, reorder by drag, keyboard and header sort, export a relative .m3u8 and
+  open it in a player (Hugo), the playlist survives a restart.
+- README: the playlist builder in Features, and the export in the "only changes" paragraph.
+- Bump to 0.2.0, rebuild the setup (`uv run python packaging/build_installer.py`); the GitHub release only with
+  Hugo's go.
 - A version bump: the three files below, then `uv lock` (it records the project version).
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
   agree) and pyproject's `version`, run `uv run python packaging/build_installer.py`, then
@@ -773,6 +778,8 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
    - writing tags into music files (metadata editor, "Save to file tags" in the Lyrics tab, ReplayGain tool);
    - writing `replaygain.log` in album folders (ReplayGain tool; each run replaces it, while the script
      appended);
+   - writing a playlist the user exports from the playlist builder, where the user saves it (the Save dialog
+     asks before replacing a file);
    - sending junk files to the **Recycle Bin**, only when the user ticks that option in the Rename tool and
      confirms. Audio files, playlists, cover images, the ReplayGain log, cue sheets of single-file albums and `.lrc`
      files not yet in the tags are never junk (SPEC §10).
@@ -851,6 +858,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | M7 designed with Hugo: one playlist in progress (kept across restarts until cleared), in a narrow vertical panel between the file list and the side panel that takes only the list's spare width and blocks nothing. Built by dragging folders or songs (Explorer-style multi-selection) from the tree, the list or search results; natural order on import, duplicates skipped. Reorder by drag, Ctrl+↑/↓ or a header sort; customisable columns; a placeholder when empty. Export to .m3u8 with relative or absolute paths, chosen at export; open with the default player. Dropped: sample files for the formats ffmpeg can't encode, and ReplayGain for the formats rsgain can't handle. Details in SPEC §15. |
 | 2026-10-16 | ReplayGain (Hugo): `replaygain.log` holds the last run only (replaced each run; the script appended). ReplayGain tags can be removed from tracks and folders; "the ReplayGain tags" are every REPLAYGAIN_* value plus the comment lines written from the card's template (any target), while other comment lines and the log files stay. Details in SPEC §10 B and §17. |
 | 2026-10-16 | Drag and drop as built: drags carry entry ids in an app-only format, as a copy only, so nothing outside the app can take them. The folder tree allows a multi-selection (Ctrl/Shift+click) for dragging; its current folder is still the one open. Versions (Hugo): a bump after each step, 0.1.1 for drag and drop, 0.1.2 for export and play, 0.2.0 for the release. Details in SPEC §15. |
+| 2026-10-16 | Export and play as built: Play, Export… and Relative paths (ticked by default, remembered) sit under the playlist's footer. The export suggests Playlist.m3u8 in the last export folder, else Music, and is written off the UI thread. Tracks gone from the library are left out, and the status bar says how many. The export is a Ground rule 1 exception. Details in SPEC §15. |
 | 2026-10-15 | Installer as built: all users in Program Files by default (Hugo: install in Program Files), with Inno Setup's "only for me" choice; 64-bit only; licence page; the uninstaller asks before deleting the app data (default No, kept when silent). Inno Setup itself is installed in `C:\Program Files\Inno Setup 6`. Details in SPEC §13. |
 | 2026-10-15 | MusicDesk is licensed GPL-3.0-or-later (Hugo): compatible with mutagen (GPL-2.0-or-later) and Qt (LGPL-3.0). `LICENSE` holds the GPL-3.0 text, `pyproject.toml` declares it, About says it. Details in SPEC §13. |
 | 2026-10-15 | The name stays MusicDesk (Hugo). The icon is drawn by `packaging/make_icon.py` (no image editor, reproducible) and embedded in the exe with a version resource. No theme setting: Qt follows Windows' light and dark (checked). FFmpeg inside rsgain is an LGPL build with Fraunhofer FDK AAC; the LGPL-2.1 text and FDK AAC's notice are shipped. Details in SPEC §13. |
@@ -1065,7 +1073,7 @@ Done when:
 - [x] Drag and drop (0.1.1): an internal MIME type carrying entry ids (never file URLs: a test checks it) from the folder
       tree, the file list and the search results, with their Explorer-style multi-selection. Drop to insert,
       drag to reorder, Ctrl+↑/↓ to move, Delete to remove, Clear with a confirmation.
-- [ ] Export to .m3u8 (a Save dialog, the remembered Relative paths checkbox and folder) and Open playlist with
+- [x] Export to .m3u8 (0.1.2) (a Save dialog, the remembered Relative paths checkbox and folder) and Open playlist with
       default player (the §14 temporary playlist). Add the export to Ground rule 1's exceptions.
 - [ ] Docs, README, version 0.2.0 and a release built locally.
 

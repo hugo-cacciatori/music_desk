@@ -1097,6 +1097,19 @@ import of existing playlists): one playlist in progress, built by dragging music
   foobar2000, or whatever is associated with `.m3u8`.
 - The playlist is kept across restarts in the app's data (`%LOCALAPPDATA%\MusicDesk`), until it is cleared.
 
+**As built (M7 task 4): export and play** (`ui/playlist_panel.py`, `MainWindow`).
+- Under the footer: **Play**, **Export…** and the **Relative paths** checkbox (ticked by default). Play and
+  Export… are enabled when at least one track is still in the library. `PlaylistPanel.entries()` gives the
+  tracks in the playlist's order, without those gone from the library, from the index (`TrackRow` paths,
+  durations, artists and titles).
+- `MainWindow.play_playlist` goes through `_play` (§14's temporary playlist, its .m3u8 fallback toast included).
+- `MainWindow.export_playlist`: the Save dialog (`choose_export_file`, replaced in tests; Windows' dialog asks
+  before replacing a file) suggests `Playlist.m3u8` in the last export folder (`Settings.playlist_export_dir`,
+  else the user's Music folder); `.m3u8` is added when no extension is typed. `playlists.export_playlist` runs
+  on the shell thread; `playlistExported` gives "Exported N tracks to <file>." plus how many tracks not in the
+  library were left out, and a failure gives a toast offering the folder in Explorer.
+- `Settings.playlist_relative` keeps the checkbox.
+
 **As built (M7 task 3): drag and drop** (`ui/entry_drag.py`, `ui/playlist_panel.py`).
 - `ENTRY_IDS_MIME` ("application/x-musicdesk-entry-ids"): a JSON list of entry ids, the drag's only format (no
   URLs, no text), offered as a copy only. `EntryDragView` (a QTreeView) drags its `drag_ids()`, the selection in

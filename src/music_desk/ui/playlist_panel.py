@@ -5,7 +5,8 @@ A header click sorts the playlist itself, since its order is what gets exported.
 dimmed, with its path as the tooltip. Rows come from the index (queries.track_rows), so no file is read.
 
 Music comes in by dragging folders and songs from the tree, the list or the search results (entry ids, see
-ui/entry_drag.py); rows are moved by dragging them, or with Ctrl+Up/Down.
+ui/entry_drag.py); rows are moved by dragging them, or with Ctrl+Up/Down. Play and Export… go out through the
+window, which writes the files off the UI thread.
 """
 
 import base64
@@ -20,10 +21,12 @@ from PySide6.QtGui import QAction, QKeySequence, QPainter, QPalette, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCheckBox,
     QHBoxLayout,
     QLabel,
     QMenu,
     QMessageBox,
+    QPushButton,
     QToolButton,
     QTreeView,
     QVBoxLayout,
@@ -35,6 +38,7 @@ from music_desk.core.index import queries
 from music_desk.core.index.queries import TrackRow
 from music_desk.core.index.scanner import find_folder
 from music_desk.core.playlist_builder import Builder, Item
+from music_desk.core.playlists import PlaylistEntry
 from music_desk.ui.entry_drag import ENTRY_IDS_MIME, entry_ids
 from music_desk.ui.file_view import format_duration
 
@@ -330,7 +334,11 @@ class PlaylistView(QTreeView):
 
 
 class PlaylistPanel(QWidget):
-    """The panel: a title with Clear, the list and a footer with the count and the total duration."""
+    """The panel: a title with Clear, the list, a footer with the count and the total duration, and the buttons
+    that play or export it."""
+
+    playRequested = Signal()
+    exportRequested = Signal()
 
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -367,6 +375,15 @@ class PlaylistPanel(QWidget):
         self.clear_button.setText("Clear")
         self.clear_button.setToolTip("Empty the playlist (the files are untouched)")
         self.clear_button.clicked.connect(self.clear)
+        self.play_button = QPushButton("Play")
+        self.play_button.setToolTip("Open the playlist with the default player")
+        self.play_button.clicked.connect(self.playRequested)
+        self.export_button = QPushButton("Export…")
+        self.export_button.setToolTip("Save the playlist as a .m3u8 file")
+        self.export_button.clicked.connect(self.exportRequested)
+        self.relative_paths = QCheckBox("Relative paths")
+        self.relative_paths.setToolTip("Paths relative to the saved file, so the playlist keeps working when it "
+                                       "moves together with the music. Songs on another drive stay absolute.")
         self.model.modelReset.connect(self._update_footer)
         self.model.changed.connect(self._update_footer)
         self.model.layoutChanged.connect(self._update_footer)
@@ -381,11 +398,20 @@ class PlaylistPanel(QWidget):
         layout.addLayout(top)
         layout.addWidget(self.view, 1)
         layout.addWidget(self.footer)
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.play_button)
+        buttons.addWidget(self.export_button)
+        buttons.addWidget(self.relative_paths)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
         self._update_footer()
 
     def _update_footer(self) -> None:
         count = self.model.rowCount()
         self.clear_button.setEnabled(count > 0)
+        playable = any(not self.model.missing(row) for row in range(count))
+        self.play_button.setEnabled(playable)
+        self.export_button.setEnabled(playable)
         if not count:
             self.footer.setText("Empty")
             return
@@ -395,6 +421,11 @@ class PlaylistPanel(QWidget):
         if missing:
             text += f" · {missing} not in the library"
         self.footer.setText(text)
+
+    def entries(self) -> list[PlaylistEntry]:
+        """What Play and Export write: the tracks in the playlist's order, without those gone from the library."""
+        return [PlaylistEntry(row.path, row.duration, row.artist, row.title)
+                for item in self.model.builder.items if (row := self.model.row_for(item)) is not None]
 
     # -- arranging --
 

@@ -11,6 +11,14 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
+**Current state (2026-10-16, end of session 11): M7 is complete, and so is the project as planned (M0–M7).**
+Version 0.2.0 is committed on `main` (not pushed) and the setup `dist/installer/MusicDesk-Setup-0.2.0.exe` is
+built locally; the GitHub release waits for Hugo's go. The README has the playlist builder. M7's "Done when" was
+checked end to end with the real window, a scratch `LOCALAPPDATA` and a copied fixture library (two folders
+selected in the tree landed in natural order; drag, Ctrl+Down and a header sort reordered them; the relative
+.m3u8 export's 21 paths all resolve; the playlist and panel came back after a restart). 938 tests pass (slow ones included), ruff is clean. Left to Hugo: opening an
+exported playlist in a real player, and a mouse drag in the installed app.
+
 **Session 11 (2026-10-16), later: M7 task 4 is done (export and play), version 0.1.2.** Details in SPEC §15,
 "As built (M7 task 4)": the panel's Play, Export… and Relative paths (`PlaylistPanel.entries`, `play_button`,
 `export_button`, `relative_paths`, `playRequested`, `exportRequested`); `MainWindow.play_playlist`,
@@ -697,13 +705,8 @@ version is still 0.1.0, no new GitHub release). Done this session, newest first:
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M7 task 5, the release (Progress), then version 0.2.0.
-- Check M7's "Done when" end to end in the app (a scratch `LOCALAPPDATA` and a copied library): a tree
-  multi-selection lands in natural order, reorder by drag, keyboard and header sort, export a relative .m3u8 and
-  open it in a player (Hugo), the playlist survives a restart.
-- README: the playlist builder in Features, and the export in the "only changes" paragraph.
-- Bump to 0.2.0, rebuild the setup (`uv run python packaging/build_installer.py`); the GitHub release only with
-  Hugo's go.
+**Next step:** none planned. With Hugo's go: push `main`, then
+`gh release create v0.2.0 dist/installer/MusicDesk-Setup-0.2.0.exe`. New work starts from Hugo's feedback.
 - A version bump: the three files below, then `uv lock` (it records the project version).
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
   agree) and pyproject's `version`, run `uv run python packaging/build_installer.py`, then
@@ -1075,7 +1078,7 @@ Done when:
       drag to reorder, Ctrl+↑/↓ to move, Delete to remove, Clear with a confirmation.
 - [x] Export to .m3u8 (0.1.2) (a Save dialog, the remembered Relative paths checkbox and folder) and Open playlist with
       default player (the §14 temporary playlist). Add the export to Ground rule 1's exceptions.
-- [ ] Docs, README, version 0.2.0 and a release built locally.
+- [x] Docs, README, version 0.2.0 and a release built locally (2026-10-16; the GitHub release waits for Hugo).
 
 Done when: folders dragged from the tree (a multi-selection) land in natural order, can be reordered by drag,
 by keyboard and by a header sort, and export to a relative .m3u8 that a player opens; the playlist survives a
@@ -1088,6 +1091,6 @@ restart.
 - `logging` writes to `%LOCALAPPDATA%\MusicDesk\logs\app.log`.
 
 ## Open questions
-None at the end of session 9 (2026-10-15). Getting sample files for the formats ffmpeg can't encode, and
+None at the end of session 11 (2026-10-16). Getting sample files for the formats ffmpeg can't encode, and
 ReplayGain for the formats rsgain can't handle, were both dropped by Hugo; the playlist questions are answered
 in SPEC §15.

@@ -4,8 +4,8 @@ A Windows desktop app for looking after a local music library: browse it like Fi
 lyrics, and tidy albums (rename files from their tags, apply ReplayGain).
 
 MusicDesk works on your files where they are. It never copies, moves or deletes music. Its only changes are the
-ones you ask for: tag edits, renames, ReplayGain tags and a `replaygain.log` per album. Junk files go to the
-Recycle Bin, and only when you tick that option and confirm.
+ones you ask for: tag edits, renames, ReplayGain tags, a `replaygain.log` per album, and the playlists you
+export. Junk files go to the Recycle Bin, and only when you tick that option and confirm.
 
 ## Features
 
@@ -30,6 +30,10 @@ Recycle Bin, and only when you tick that option and confirm.
 
   Jobs run in the background, and you can keep browsing meanwhile.
 - **Play** a folder, a selection or search results in your default music player, through a temporary playlist.
+- **Build a playlist** (View › Playlist builder, Ctrl+Shift+P): drag folders and songs in from the folder tree,
+  the file list or search results, in the order Explorer shows them. Rearrange it by dragging, with Ctrl+↑/↓ or
+  by sorting on a column, then play it or export it as a `.m3u8`, with paths relative to the playlist so it keeps
+  working when it moves with your music. It is kept until you clear it.
 
 ## Install
 

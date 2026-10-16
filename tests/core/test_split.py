@@ -204,3 +204,64 @@ def test_stopping_the_real_flac(fixtures_dir, tmp_path, runner):
     before = names(plan.cue.parent)
     result = split.cut_album(plan, runner, token)
     assert result.cancelled and names(plan.cue.parent) == before
+
+
+# -- finishing an album --
+
+@pytest.mark.slow
+def test_finish_names_tags_and_recycles(fixtures_dir, tmp_path, runner):
+    plan = real_plan(fixtures_dir, tmp_path, "hidden_track", runner)
+    cut = split.cut_album(plan, runner)
+    recycled = []
+    done = split.finish_album(plan, cut, True, recycled.append)
+    assert done.error is None and done.warnings == [] and recycled == [plan.source, plan.cue]
+    assert [p.name for p in done.tracks] == ["00 Hidden track.flac", "01 Opening.flac", "02 Second Song.flac",
+                                             "03 Duet.flac"]
+    from mutagen.flac import FLAC
+
+    from music_desk.core.tags import TaggedFile
+
+    opening = TaggedFile(done.tracks[1])
+    fields = opening.fields()
+    assert (fields.track, fields.track_total, fields.disc, fields.disc_total) == (1, 3, 1, 2)
+    assert (fields.title, fields.artist, fields.album, fields.year, fields.genre, fields.composer) == (
+        "Opening", "Fixture Artist", "Split Album", "2024", "Test Rock", "A. Writer")
+    assert opening.cover() is not None and FLAC(str(done.tracks[1]))["ISRC"] == ["GBAYE2400001"]
+    assert not list(plan.cue.parent.glob("*.partial"))
+
+
+def test_a_name_taken_meanwhile_renames_nothing(album):
+    plan = make_plan(album)
+    cut = split.cut_album(plan, FakeRunner(), free_space=lambda _f: 10**9)
+    (album / "02 Two.flac").write_bytes(b"arrived meanwhile")
+    done = split.finish_album(plan, cut)
+    assert done.error == "Nothing is ever overwritten, and these names were taken meanwhile: 02 Two.flac."
+    assert names(album) == sorted(ORIGINALS + ["02 Two.flac"])
+    assert (album / "02 Two.flac").read_bytes() == b"arrived meanwhile"
+
+
+def test_originals_that_cant_be_recycled_stay(album):
+    from music_desk.core.fsops import CannotRecycle
+
+    def refuse(path):
+        raise CannotRecycle("X: has no Recycle Bin")
+
+    plan = make_plan(album)
+    cut = split.cut_album(plan, FakeRunner(), free_space=lambda _f: 10**9)
+    for partial in cut.partials:  # the fake writes raw bytes: give the tag writer nothing to choke on
+        partial.write_bytes(b"")
+    done = split.finish_album(plan, cut, True, refuse)
+    assert done.recycled == [] and done.kept_reason == "image.flac stayed: X: has no Recycle Bin"
+    assert (album / "image.flac").exists() and (album / "image.cue").exists()
+
+
+def test_find_albums_and_options(tmp_path):
+    for path in ("b/album.cue", "a/2.cue", "a/10.cue", "top.CUE", "a/notes.txt"):
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text("", encoding="utf-8")
+    assert [p.relative_to(tmp_path).as_posix() for p in cue.find_albums(tmp_path)] == [
+        "top.CUE", "a/2.cue", "a/10.cue", "b/album.cue"]
+    assert [p.name for p in cue.find_albums(tmp_path, recursive=False)] == ["top.CUE"]
+    options = split.SplitOptions(recursive=False, recycle=True, replaygain=True)
+    assert split.options_from_json(split.options_to_json(options)) == options
+    assert split.options_from_json({"recycle": "yes"}) == split.SplitOptions()

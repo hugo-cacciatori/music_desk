@@ -31,6 +31,7 @@ class Settings:
     # Tools (SPEC §10): the cards' options, as core.rename / core.replaygain options_to_json write them
     rename_options: dict = field(default_factory=dict)
     replaygain_options: dict = field(default_factory=dict)
+    split_options: dict = field(default_factory=dict)  # core.split options_to_json (SPEC §22)
     # UI state
     window_geometry: str = ""  # base64 of QWidget.saveGeometry()
     splitter_state: str = ""

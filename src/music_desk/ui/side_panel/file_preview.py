@@ -27,6 +27,7 @@ from music_desk.ui.file_view import format_size
 
 class FilePreview(QWidget):
     openRequested = Signal(str)  # the file, to open in its default app
+    splitRequested = Signal(str)  # a .cue: "Split into tracks…" (SPEC §22)
 
     def __init__(self, io: TagIO, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -53,7 +54,13 @@ class FilePreview(QWidget):
         self.open_button = QPushButton("Open")
         self.open_button.setToolTip("Open it in its default app")
         self.open_button.clicked.connect(lambda: self.path is not None and self.openRequested.emit(str(self.path)))
+        self.split_button = QPushButton("Split into tracks…")
+        self.split_button.setToolTip("Cut the album this cue sheet describes into one FLAC file per track. You "
+                                     "check the tracks before anything is written.")
+        self.split_button.clicked.connect(lambda: self.path is not None and self.splitRequested.emit(str(self.path)))
+        self.split_button.hide()
         header.addLayout(names, 1)
+        header.addWidget(self.split_button, 0, Qt.AlignmentFlag.AlignTop)
         header.addWidget(self.open_button, 0, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(header)
 
@@ -90,6 +97,7 @@ class FilePreview(QWidget):
             return
         reload = path == self.path and self.result is not None
         self.path, self._stamp = path, stamp
+        self.split_button.setVisible(path.suffix.lower() == ".cue")
         self._scroll = (self.text.horizontalScrollBar().value(), self.text.verticalScrollBar().value()) \
             if reload and self.pages.currentWidget() is self.text else None
         if not reload:

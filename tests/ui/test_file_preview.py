@@ -91,7 +91,7 @@ def test_nothing_on_the_page_can_write(qtbot, panel, fixtures_dir):
     assert page.findChildren(QLineEdit) == []
     editors = page.findChildren(QPlainTextEdit)
     assert editors == [page.text] and all(e.isReadOnly() for e in editors)
-    assert [b.text() for b in page.findChildren(QAbstractButton)] == ["Open"]
+    assert [b.text() for b in page.findChildren(QAbstractButton) if b.isVisible()] == ["Open"]  # Split: .cue only
 
 
 def test_a_text_over_the_cap(qtbot, panel, tmp_path):

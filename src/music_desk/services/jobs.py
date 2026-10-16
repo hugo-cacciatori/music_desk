@@ -12,13 +12,13 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal
 
 RUNNING, DONE, STOPPED, FAILED = "running", "done", "stopped", "failed"
-RENAME, REPLAYGAIN, TIDY = "Rename", "ReplayGain", "Tidy"
+RENAME, REPLAYGAIN, TIDY, SPLIT = "Rename", "ReplayGain", "Tidy", "Split"
 
 
 @dataclass
 class Job:
     id: int
-    kind: str  # RENAME, REPLAYGAIN or TIDY
+    kind: str  # RENAME, REPLAYGAIN, TIDY or SPLIT
     folder: Path  # the folder tree it locks while it runs
     state: str = RUNNING
     status: str = "Starting…"  # one line: the album running, or how it ended

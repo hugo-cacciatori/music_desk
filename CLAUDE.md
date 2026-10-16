@@ -16,18 +16,18 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, session 12):** version 0.2.9 is on `main` (not pushed). 0.2.2 added the Start menu folder
-  with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added `fsops.can_recycle` (SPEC §19, measured on a
-  network path). 0.2.4 added Delete to the Recycle Bin. 0.2.5 and 0.2.6 added the file preview (M9; text cap
-  512 KB and the wrap rule, measured in SPEC §20). 0.2.7 added the shared file name masks (M10 task 1, §21).
-  0.2.8 added `core/cue.py`, the split plan, with Hugo's EAC sheet as a fixture (M10 task 2, §22). 0.2.9
-  bundles flac, with its self-check, `core/flac.py` and `core/split.py` (cut, proof, cleanup; M10 task 3).
-  v0.2.1 is the latest GitHub release. M0–M9 are complete (Progress is in HISTORY.md). All 1046 tests passed
-  in the last full run, slow ones included. Ruff is clean.
+- **State (2026-10-16, session 12):** version 0.2.10 is on `main`; 0.2.9 and the watcher fix are pushed, 0.2.10
+  isn't. 0.2.2 added the Start menu folder with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added
+  `fsops.can_recycle` (§19, measured on a network path). 0.2.4 added Delete to the Recycle Bin. 0.2.5 and 0.2.6
+  added the file preview (M9; text cap 512 KB and the wrap rule, measured in §20). 0.2.7 added the shared file
+  name masks (M10 task 1, §21). 0.2.8 added `core/cue.py`, the split plan (task 2). 0.2.9 bundles flac, with
+  `core/flac.py` and `core/split.py` (task 3). 0.2.10 adds the Split card, its preview and job, and "Split into
+  tracks…" (task 4, §22). v0.2.1 is the latest GitHub release. M0–M9 are complete (Progress is in
+  HISTORY.md). All 1060 tests passed in the last full run, slow ones included. Ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Next step: M10 task 4**: the Split card, "Split into tracks…", the preview page with its encoding picker, and
-  the job (lock, Stop, renames from `.partial`, tags and cover, recycling, ReplayGain afterwards) and its report.
-  The frozen build's flac hasn't been run yet (task 5 builds the installer).
+- **Next step: M10 task 5**: README, version 0.3.0, the installer, and the GitHub release (on Hugo's go). M10's
+  last "Done when": the installed app splits a copied album with its bundled flac. That is also the first run
+  of the frozen build's flac. Give Hugo full manual steps (memory: manual-check-instructions).
 - **Watcher flake, solved (2026-10-16, measured):** `test_live_folder_changes` failed 2 runs in 17 with
   "Access is denied" on its folder rename. The cause was the app's own tag read of the new file: Windows
   refuses to rename a folder while any file under it is open, even with FILE_SHARE_DELETE (SPEC §7). It hit
@@ -82,7 +82,7 @@ Done when:
       the split fixtures, with audio that never repeats.
 - [x] 3. flac: bundle `resources/flac` (PyInstaller spec, `licenses.py`, `resources/licenses/`, About), the
       `flac --version` self-check, the runner and the proof, `slow` tests.
-- [ ] 4. UI: the Split card, "Split into tracks…" (menus, `.cue` preview), the preview page with its encoding
+- [x] 4. UI: the Split card, "Split into tracks…" (menus, `.cue` preview), the preview page with its encoding
       picker, the job (lock, Stop, partial cleanup, recycling, ReplayGain afterwards) and its report.
 - [ ] 5. README, version 0.3.0, the installer, and the GitHub release (Hugo's go).
 

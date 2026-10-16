@@ -14,13 +14,14 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from music_desk.core import rename, replaygain
+from music_desk.core import rename, replaygain, split
 from music_desk.settings import Settings
 from music_desk.ui.tools.names_card import FileNamesCard
 from music_desk.ui.tools.rename_card import RenameCard
 from music_desk.ui.tools.replaygain_card import ReplayGainCard, TidyCard
+from music_desk.ui.tools.split_card import SplitCard
 
-RENAME, REPLAYGAIN, TIDY = "rename", "replaygain", "tidy"
+RENAME, REPLAYGAIN, TIDY, SPLIT = "rename", "replaygain", "tidy", "split"
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,9 @@ class ToolRequest:
     rename_options: rename.RenameOptions | None = None
     replaygain_options: replaygain.ReplayGainOptions | None = None
     discography: bool = False
+    split_options: split.SplitOptions | None = None
+    cues: tuple[Path, ...] | None = None  # "Split into tracks…": these sheets only
+    source: Path | None = None  # "Split into tracks…" on an album file: the sheets that cut it
 
 
 class ToolsPage(QWidget):
@@ -70,6 +74,10 @@ class ToolsPage(QWidget):
         self.rename_card = RenameCard(self.names_card)
         self.replaygain_card = ReplayGainCard()
         self.tidy_card = TidyCard(self.rename_card, self.replaygain_card)
+        self.split_card = SplitCard(self.names_card)
+        self.split_card.set_options(split.options_from_json(settings.split_options))
+        self.split_card.changed.connect(self._save_split)
+        self.split_card.runRequested.connect(lambda: self.request(SPLIT))
         self.rename_card.set_options(rename.options_from_json(settings.rename_options))
         self.replaygain_card.set_options(replaygain.options_from_json(settings.replaygain_options))
         self.rename_card.changed.connect(self._save_rename)
@@ -80,7 +88,7 @@ class ToolsPage(QWidget):
 
         cards = QWidget()
         cards_layout = QVBoxLayout(cards)
-        for card in (self.names_card, self.rename_card, self.replaygain_card, self.tidy_card):
+        for card in (self.names_card, self.rename_card, self.replaygain_card, self.tidy_card, self.split_card):
             cards_layout.addWidget(card)
         cards_layout.addStretch(1)
         scroll = QScrollArea()
@@ -101,6 +109,7 @@ class ToolsPage(QWidget):
             self.heading.setText(f"<b>Tools</b> · {scope.folder}")
         self.rename_card.set_selection(scope.is_selection)
         self.replaygain_card.set_selection(scope.is_selection)
+        self.split_card.set_selection(scope.is_selection)
         self.names_card.set_example(None)
 
     def set_example(self, fields: dict | None, extension: str) -> None:
@@ -108,6 +117,9 @@ class ToolsPage(QWidget):
 
     def set_rsgain_unavailable(self, reason: str | None) -> None:
         self.replaygain_card.set_unavailable(reason)
+
+    def set_flac_unavailable(self, reason: str | None) -> None:
+        self.split_card.set_unavailable(reason)
 
     def rename_options(self) -> rename.RenameOptions:
         """The Rename card's options for a run: the ReplayGain log (its configured name) is never junk."""
@@ -123,10 +135,22 @@ class ToolsPage(QWidget):
             self.runRequested.emit(ToolRequest(
                 REPLAYGAIN, self.scope, replaygain_options=self.replaygain_card.options(),
                 discography=self.replaygain_card.scope == "discography"))
+        elif tool == SPLIT and self.split_card.valid:
+            self.runRequested.emit(self.split_request(self.scope))
         elif tool == TIDY and self.tidy_card.run_button.isEnabled():
             self.runRequested.emit(ToolRequest(
                 TIDY, self.scope, rename_options=self.rename_options(),
                 replaygain_options=self.replaygain_card.options(), discography=self.tidy_card.scope == "discography"))
+
+    def split_request(self, scope: ToolScope, cues: tuple[Path, ...] | None = None,
+                      source: Path | None = None) -> ToolRequest:
+        """A split with the card's saved options: the card's Run, or "Split into tracks…" on one album."""
+        return ToolRequest(SPLIT, scope, rename_options=self.rename_options(),
+                           replaygain_options=self.replaygain_card.options(), split_options=self.split_card.options(),
+                           cues=cues, source=source)
+
+    def _save_split(self) -> None:
+        self.settings.split_options = split.options_to_json(self.split_card.options())
 
     def _save_names(self) -> None:
         self.settings.name_masks = list(self.names_card.mask_list())

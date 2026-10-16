@@ -219,6 +219,37 @@ deleting the split's own `.partial` files from the same run.
     silent and joined track 1.
   - Moving one boundary by one sample failed the proof on both length and MD5, and left the folder as it was.
 
+## As built (M10 task 4): the card, the preview, the job
+- **Core:**
+  - `split.finish_album(plan, cut, recycle_originals, recycle)` checks every final name is still free; if one
+    was taken meanwhile, nothing is renamed and the `.partial` files go. Otherwise it renames them, writes the
+    tags (`write_tags`: the fields through `TaggedFile`, the cover, ISRC as a Vorbis comment) and recycles the
+    album file then its .cue. A refusal (`CannotRecycle` included) keeps both and says why.
+  - `cue.find_albums(folder, recursive)` lists the sheets in Explorer's order. `split.SplitOptions` and its
+    JSON are `Settings.split_options`.
+- **`services/split_job.py` `SplitRunner`:**
+  - `plan(folder, recursive, masks, replacement, cues, source)` plans on its worker, with flac's silence
+    check, and `replan(cue, encoding, …)` serves the picker.
+  - `run(folder, plans, options, rg_options)` takes the "the Split tool" lock. Then, per album: `cut_album`,
+    `finish_album`, and ReplayGain when asked.
+  - ReplayGain is `replaygain.process_album` inside the same job (as Tidy chains its steps), only when both
+    originals reached the Recycle Bin; otherwise the report says why it didn't run.
+  - Background indexing pauses while the job runs, as for ReplayGain. Tests inject `recycle` and `scanner`.
+- **UI:**
+  - `ui/tools/split_card.py` `SplitCard` is last on the Tools page. Its ReplayGain box is enabled only with
+    recycling, and a saved ReplayGain option is always off without it.
+  - Run is disabled by invalid masks, a failed flac self-check (`ToolsPage.set_flac_unavailable`, from
+    `MainWindow.show_flac_version`), or a file selection (the card works on folders).
+  - `ui/tools/split_preview.py` `SplitPreview` shows `AlbumBlock`s: the source, an encoding picker that
+    re-reads that album, a track table, warnings or the refusal. Then the summary, Split N albums, Stop, and
+    the report (`report_text`, and `short_result` for the jobs panel).
+- **"Split into tracks…":**
+  - In the file list's menu, on one `.cue`, or on an audio file that looks like an album file **from the
+    index alone**: a .cue beside it with the same stem, or the folder's only audio file next to a .cue (no
+    file is read on the UI thread). The preview then says if it isn't one.
+  - On a `.cue` preview, a **Split into tracks…** button (`FilePreview.splitRequested`).
+  - Both open the preview for that album with the card's saved options.
+
 ## Tests
 - **Fixtures** (`make_fixtures.py`, ffmpeg, dev-only; non-repeating audio):
   - a FLAC image with an INDEX 00 gap and a 3 s audible hidden track;

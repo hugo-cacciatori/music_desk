@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from music_desk.core import fsops, inline_rename, playlists, rename
+from music_desk.core import cue, fsops, inline_rename, playlists, rename
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
@@ -50,6 +50,8 @@ from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACH
 from music_desk.services.rename_job import Applied, Planned, RenameRunner
 from music_desk.services.replaygain_job import Finished, ReplayGainRunner
 from music_desk.services.search_service import SearchResults, SearchService
+from music_desk.services.split_job import Planned as SplitPlanned
+from music_desk.services.split_job import Replanned, SplitFinished, SplitRunner
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
@@ -65,7 +67,9 @@ from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
 from music_desk.ui.tools.rename_preview import RenamePreview
 from music_desk.ui.tools.rg_report import ReplayGainView, short_result
-from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN, TIDY, ToolRequest, ToolScope, ToolsPage
+from music_desk.ui.tools.split_preview import SplitPreview
+from music_desk.ui.tools.split_preview import short_result as split_short_result
+from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN, SPLIT, TIDY, ToolRequest, ToolScope, ToolsPage
 
 log = logging.getLogger(__name__)
 
@@ -182,6 +186,7 @@ class MainWindow(QMainWindow):
         self.side_panel.lyrics.urlRequested.connect(self.open_url)
         self.side_panel.summary.playRequested.connect(self.play_folder)
         self.side_panel.summary.toolsRequested.connect(lambda entry_id: self.open_tools([entry_id]))
+        self.side_panel.preview.splitRequested.connect(lambda path: self.split_album(Path(path)))
         self.side_panel.preview.openRequested.connect(lambda path: self._in_shell(
             lambda: self.launch(path), f"Windows couldn't open {os.path.basename(path)}: no app is set for this "
             "file type, or the file isn't reachable.", path, False))
@@ -216,6 +221,22 @@ class MainWindow(QMainWindow):
         self.rg_runner.finished.connect(self._rg_finished)
         self._rg_token: int | None = None
         self._rg_request: ToolRequest | None = None
+        # The cue split (SPEC §22): its preview, report and job.
+        self.split_preview = SplitPreview()
+        self.split_preview.backRequested.connect(self._split_back)
+        self.split_preview.doneRequested.connect(self.close_tools)
+        self.split_preview.applyRequested.connect(self.apply_split)
+        self.split_preview.cancelRequested.connect(lambda: self.split_runner.cancel())
+        self.split_preview.encodingChanged.connect(self._split_encoding)
+        self.split_runner = SplitRunner(library.locks if library is not None else PathLocks(), self)
+        self.split_runner.planned.connect(self._split_planned)
+        self.split_runner.replanned.connect(self._split_replanned)
+        self.split_runner.progress.connect(self._split_progress)
+        self.split_runner.finished.connect(self._split_finished)
+        self._split_token: int | None = None
+        self._split_replans: set[int] = set()
+        self._split_request: ToolRequest | None = None
+        self._split_job: int | None = None
         # The jobs panel (SPEC §10): this session's runs, in a bottom drawer; they go on while you browse.
         self.jobs = JobList(self)
         self.jobs_panel = JobsPanel(self.jobs)
@@ -259,6 +280,7 @@ class MainWindow(QMainWindow):
         self.center.addWidget(self.tools_page)
         self.center.addWidget(self.rename_preview)
         self.center.addWidget(self.rg_view)
+        self.center.addWidget(self.split_preview)
         # The playlist builder (SPEC §15): a narrow column between the centre and the side panel, hidden until asked.
         self.playlist_panel = PlaylistPanel(conn)
         self.playlist_file: Path | None = (self.settings.path.with_name("playlist.json")
@@ -401,9 +423,11 @@ class MainWindow(QMainWindow):
             self.rsgain_label.setToolTip("The bundled rsgain.exe could not run. See the log for details.")
 
     def show_flac_version(self, version: str | None) -> None:
-        """The startup self-check of the bundled flac (SPEC §13). The split card (M10 task 4) is disabled with
-        the reason when it failed; nothing else uses flac, so it has no status-bar label."""
+        """The startup self-check of the bundled flac (SPEC §13). The Split card is disabled with the reason when
+        it failed; nothing else uses flac, so it has no status-bar label."""
         self.flac_version = version
+        self.tools_page.set_flac_unavailable(
+            None if version else "flac couldn't run, so the split is unavailable. See the log for details.")
 
     def open_about(self) -> None:
         """Help › About: versions and licences."""
@@ -829,6 +853,8 @@ class MainWindow(QMainWindow):
                 self._leave_search()
             if self.rename_preview.state == "planning":
                 self.rename_runner.cancel()
+            if self.split_preview.state == "planning":
+                self.split_runner.cancel()
             self.center.setCurrentWidget(self.file_view)
             self.file_view.view.setFocus()
 
@@ -844,7 +870,9 @@ class MainWindow(QMainWindow):
         """A card's button: the rename preview, the ReplayGain job (no preview), or Tidy's rename preview. A tool
         runs one job at a time: while its job runs, its page shows that job instead."""
         busy = None
-        if request.tool in (RENAME, TIDY) and self._rename_job is not None:
+        if request.tool == SPLIT and self._split_job is not None:
+            busy = self._split_job
+        elif request.tool in (RENAME, TIDY) and self._rename_job is not None:
             busy = self._rename_job
         elif request.tool in (REPLAYGAIN, TIDY) and self._rg_job is not None:
             busy = self._rg_job
@@ -860,6 +888,8 @@ class MainWindow(QMainWindow):
             self.run_replaygain(request)  # no preview: it only writes tags and the logs (Hugo, 2026-10-15)
         elif request.tool == TIDY:
             self.preview_rename(request)  # Tidy: the rename step is previewed; ReplayGain follows Apply
+        elif request.tool == SPLIT:
+            self.preview_split(request)
 
     def _unsaved_edits_under(self, folder: Path) -> bool:
         """Unsaved Metadata edits on a file a job is about to change: ask Save, Discard or Cancel first."""
@@ -1022,6 +1052,128 @@ class MainWindow(QMainWindow):
             self.jobs.finish(job, jobs_module.STOPPED if report.cancelled else jobs_module.DONE, summary)
             self._rename_job = None
 
+    # -- the cue split (SPEC §22) --
+
+    def split_album(self, path: Path) -> None:
+        """"Split into tracks…" on a .cue (that sheet) or an album file (the sheets beside it that cut it), with
+        the Split card's saved options."""
+        if not self._library_open():
+            return
+        card = self.tools_page.split_card
+        if not card.names.valid or card.unavailable:
+            self.toast.show_message(card.unavailable or "Fix the file names first (Tools › File names).")
+            return
+        found = find_folder(self.library.conn, str(path.parent))
+        if found is None or not found[1]:
+            return
+        scope = ToolScope(path.parent, found[0])
+        if path.suffix.lower() == ".cue":
+            request = self.tools_page.split_request(scope, cues=(path,))
+        else:
+            sheets = tuple(path.parent / n for n in self._names_in(found[0]) if n.lower().endswith(".cue"))
+            request = self.tools_page.split_request(scope, cues=sheets, source=path)
+        self.tools_page.set_scope(scope)
+        self.run_tool(request)
+
+    def _split_target(self, ids: list[int]) -> Path | None:
+        """The file "Split into tracks…" applies to: one selected .cue, or a single-file album's audio file."""
+        if len(ids) != 1 or self.folder_id is None or self.folder_path is None:
+            return None
+        row = self.file_view.model.row_for(ids[0])
+        if row is None or self.file_view.model.rows[row].is_dir:
+            return None
+        name = self.file_view.model.rows[row].name
+        if name.lower().endswith(".cue") or self.is_album_file(self.folder_id, name):
+            return Path(self.folder_path, name)
+        return None
+
+    def _names_in(self, folder_id: int) -> list[str]:
+        return [name for (name,) in self.library.conn.execute(
+            "SELECT name FROM entries WHERE parent_id = ? AND is_dir = 0", (folder_id,))]
+
+    def is_album_file(self, folder_id: int, name: str) -> bool:
+        """An audio file that looks like a single-file album's, from the index only (no file is read on the UI
+        thread): a .cue beside it with the same stem, or the folder's only audio file next to a .cue. The preview
+        then reads the sheets and says if it isn't one."""
+        names = self._names_in(folder_id)
+        cues = {Path(n).stem.casefold() for n in names if n.lower().endswith(".cue")}
+        if not cues:
+            return False
+        audio = [n for n in names if Path(n).suffix.lower() in cue.SUPPORTED]
+        return Path(name).stem.casefold() in cues or audio == [name]
+
+    def preview_split(self, request: ToolRequest) -> None:
+        self._split_request = request
+        options = request.split_options
+        self.split_preview.show_planning(request.scope.folder, options)
+        self.center.setCurrentWidget(self.split_preview)
+        name_masks, replacement = self._name_masks()
+        self._split_token = self.split_runner.plan(
+            request.scope.folder, options.recursive, name_masks, replacement,
+            cues=list(request.cues) if request.cues is not None else None, source=request.source)
+
+    def _split_planned(self, result: SplitPlanned) -> None:
+        if result.token != self._split_token or result.cancelled:
+            return
+        if result.error:
+            self.split_preview.show_error(f"The preview failed: {result.error}")
+        else:
+            self.split_preview.show_plans(result.plans)
+
+    def _split_encoding(self, path: Path, codec) -> None:
+        name_masks, replacement = self._name_masks()
+        self._split_replans.add(self.split_runner.replan(path, codec, name_masks, replacement))
+
+    def _split_replanned(self, result: Replanned) -> None:
+        if result.token in self._split_replans:
+            self._split_replans.discard(result.token)
+            if self.split_preview.state == "preview":
+                self.split_preview.replace_plan(result.plan)
+
+    def apply_split(self) -> None:
+        request = self._split_request
+        if request is None or not self.split_preview.ready() or not self._library_open():
+            return
+        folder = request.scope.folder
+        if self._unsaved_edits_under(folder):
+            return
+        try:
+            self._split_token = self.split_runner.run(folder, self.split_preview.plans, request.split_options,
+                                                      request.replaygain_options)
+        except LockedError as e:
+            self.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            return
+        self._split_job = self._start_job(jobs_module.SPLIT, folder)
+        self._pause_indexing(True)  # flac reads the whole album: the drive is the split's meanwhile
+        self.split_preview.show_running()
+
+    def _split_progress(self, done: int, total: int, label: str) -> None:
+        self.split_preview.set_progress(done, total, label)
+        if self._split_job is not None and label != "done":
+            self.jobs.update(self._split_job, status=f"Running ({done + 1} of {total}): {label}",
+                             progress=(done, total))
+
+    def _split_finished(self, finished: SplitFinished) -> None:
+        if finished.token != self._split_token:
+            return
+        self._pause_indexing(False)
+        if self._library_open():
+            self.refresh_after_tool(finished.folder)  # new tracks, recycled originals
+        self.split_preview.show_result(finished)
+        if self._split_job is not None:
+            self.jobs.report(self._split_job, "split", finished)
+            state = (jobs_module.FAILED if finished.error else jobs_module.STOPPED if finished.cancelled
+                     else jobs_module.DONE)
+            self.jobs.finish(self._split_job, state, split_short_result(finished))
+            self._split_job = None
+        count = sum(a.split for a in finished.albums)
+        self.statusBar().showMessage(f"Split {count} album{'s' if count != 1 else ''}.", STATUS_MS)
+
+    def _split_back(self) -> None:
+        if self.split_preview.state == "planning":
+            self.split_runner.cancel()
+        self.center.setCurrentWidget(self.tools_page)
+
     # -- the jobs panel --
 
     def _start_job(self, kind: str, folder: Path) -> int:
@@ -1040,7 +1192,12 @@ class MainWindow(QMainWindow):
         job = self.jobs.get(job_id)
         if job is None:
             return
-        if job_id == self._rename_job:
+        if job_id == self._split_job:
+            self.center.setCurrentWidget(self.split_preview)
+        elif "split" in job.reports:
+            self.split_preview.show_result(job.reports["split"])
+            self.center.setCurrentWidget(self.split_preview)
+        elif job_id == self._rename_job:
             self.center.setCurrentWidget(self.rename_preview)
         elif job_id == self._rg_job:
             self.center.setCurrentWidget(self.rg_view)
@@ -1056,7 +1213,9 @@ class MainWindow(QMainWindow):
             self.toast.show_message(f"{job.kind} in {job.folder}: {job.status}")
 
     def stop_job(self, job_id: int) -> None:
-        if job_id == self._rename_job:
+        if job_id == self._split_job:
+            self.split_runner.cancel()
+        elif job_id == self._rename_job:
             self.rename_runner.cancel()
         elif job_id == self._rg_job:
             self.rg_runner.cancel()
@@ -1069,7 +1228,8 @@ class MainWindow(QMainWindow):
         answer = QMessageBox.question(
             self, "A job is running",
             "Still running:\n" + "\n".join(names) + "\n\nStop it and quit? A stopped rename leaves the files "
-            "after that point as they were; a stopped ReplayGain album is reported as cancelled.")
+            "after that point as they were; a stopped ReplayGain album is reported as cancelled; a stopped split "
+            "deletes the tracks it was writing and leaves its album as it was.")
         return answer == QMessageBox.StandardButton.Yes
 
     def _rename_back(self) -> None:
@@ -1334,6 +1494,7 @@ class MainWindow(QMainWindow):
             self.embedder.close()  # before the writer: it may still hand it a batch
         self.rename_runner.close()  # a running rename stops between two files
         self.rg_runner.close()  # a running rsgain is killed; its album is reported as cancelled
+        self.split_runner.close()  # a running flac is killed; that album's .partial files are deleted
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
         self._playlist_save.stop()
@@ -1370,6 +1531,9 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         if len(ids) == 1:
             menu.addAction("Rename\tF2", lambda: self.file_view.start_rename(ids[0]))
+        album = self._split_target(ids)
+        if album is not None:
+            menu.addAction("Split into tracks…", lambda: self.split_album(album))
         tools = menu.addAction("Tools…", lambda: self.open_tools(ids))
         any_audio = any(self.file_view.model.rows[r].is_audio for i in ids
                         if (r := self.file_view.model.row_for(i)) is not None)

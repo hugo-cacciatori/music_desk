@@ -21,6 +21,27 @@ from music_desk.core.flac import Cancelled, FlacError
 PARTIAL = ".partial"
 
 
+@dataclass(frozen=True)
+class SplitOptions:
+    """The Split card's options (SPEC §22), saved as Settings.split_options."""
+
+    recursive: bool = True
+    recycle: bool = False  # the album file and its .cue, once the tracks are proved (Hugo: off)
+    replaygain: bool = False  # only with `recycle`: ReplayGain measures every audio file in the folder
+
+
+def options_to_json(options: SplitOptions) -> dict:
+    return {"recursive": options.recursive, "recycle": options.recycle, "replaygain": options.replaygain}
+
+
+def options_from_json(data) -> SplitOptions:
+    """Saved options; a missing or mistyped value falls back to its default."""
+    data = data if isinstance(data, dict) else {}
+    default = SplitOptions()
+    flag = lambda key: data[key] if isinstance(data.get(key), bool) else getattr(default, key)  # noqa: E731
+    return SplitOptions(recursive=flag("recursive"), recycle=flag("recycle"), replaygain=flag("replaygain"))
+
+
 def partial_path(track: PlannedTrack) -> Path:
     return track.path.with_name(track.name + PARTIAL)
 
@@ -103,6 +124,68 @@ def prove(plan: AlbumPlan, partials: list[Path], runner, cancel: CancelToken | N
     if problems:
         result.error = "The proof failed: " + "; ".join(problems) + "."
     return result
+
+
+@dataclass
+class Finished:
+    """One album after its proof: the tracks under their real names, and what happened to the originals."""
+
+    tracks: list[Path] = field(default_factory=list)
+    recycled: list[Path] = field(default_factory=list)  # the album file and its .cue, when asked and possible
+    kept_reason: str | None = None  # why the originals stayed although recycling was asked
+    error: str | None = None  # a final name was taken meanwhile: nothing was renamed, the .partial files are gone
+    warnings: list[str] = field(default_factory=list)
+
+
+def finish_album(plan: AlbumPlan, cut: CutResult, recycle_originals: bool = False,
+                 recycle: Callable[[Path], None] | None = None) -> Finished:
+    """Give the proved tracks their names (checked free again), write their tags and cover, then recycle the
+    originals if asked. Nothing is ever overwritten: if a name was taken since the plan, no track is renamed."""
+    taken = [t.name for t in plan.tracks if t.path.exists()]
+    if taken:
+        _delete(cut.partials)
+        return Finished(error="Nothing is ever overwritten, and these names were taken meanwhile: "
+                              + ", ".join(taken) + ".")
+    finished = Finished()
+    for track, partial in zip(plan.tracks, cut.partials, strict=True):
+        partial.rename(track.path)
+        finished.tracks.append(track.path)
+    for track in plan.tracks:
+        try:
+            write_tags(track, plan.info.cover)
+        except Exception as e:  # noqa: BLE001 - the audio is proved and in place; say which tags are missing
+            finished.warnings.append(f"{track.name}: the tags couldn't be written ({type(e).__name__}: {e})")
+    if recycle_originals:
+        from music_desk.core import fsops
+
+        recycle = recycle or fsops.send_to_recycle_bin
+        for original in (plan.source, plan.cue):
+            try:
+                recycle(original)
+            except OSError as e:  # CannotRecycle included: the originals stay, never deleted for good
+                finished.kept_reason = f"{original.name} stayed: {e.strerror or e}"
+                break
+            finished.recycled.append(original)
+    return finished
+
+
+def write_tags(track: PlannedTrack, cover: bytes | None) -> None:
+    """The sheet's fields, the ISRC (a Vorbis comment) and the source's front cover (SPEC §22)."""
+    from mutagen.flac import FLAC
+
+    from music_desk.core.tags import TaggedFile
+
+    tagged = TaggedFile(track.path)
+    numbers = ("track", "track_total", "disc", "disc_total")
+    tagged.set_fields({name: track.fields[name] if name in numbers else str(track.fields[name])
+                       for name in track.fields})
+    if cover:
+        tagged.set_cover(cover)
+    tagged.save()
+    if track.isrc:
+        audio = FLAC(str(track.path))
+        audio["ISRC"] = track.isrc
+        audio.save()
 
 
 def _hash(chunks: Iterable[bytes], digest) -> int:

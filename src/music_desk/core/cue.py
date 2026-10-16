@@ -427,6 +427,21 @@ def name_tracks(plan: AlbumPlan, name_masks: Sequence[str], replacement: str,
     return None
 
 
+def find_albums(folder: str | Path, recursive: bool = True) -> list[Path]:
+    """The .cue sheets in a folder (and its subfolders), in Explorer's order. Each is planned; the ones that
+    aren't single-file albums are listed as such and left alone (SPEC §22)."""
+    from music_desk.core.fsops import natural_key
+
+    folder = Path(folder)
+    found = []
+    for root, dirs, files in os.walk(folder):
+        dirs.sort(key=natural_key)
+        found += [Path(root) / name for name in sorted(files, key=natural_key) if name.lower().endswith(".cue")]
+        if not recursive:
+            break
+    return found
+
+
 def _clock(samples: int, rate: int) -> str:
     seconds = samples / rate
     return f"{int(seconds // 60)}:{seconds % 60:05.2f}"

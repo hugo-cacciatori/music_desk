@@ -12,8 +12,8 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-16, end of session 11): M7 is complete, and so is the project as planned (M0–M7).**
-Version 0.2.0 is committed on `main` (not pushed) and the setup `dist/installer/MusicDesk-Setup-0.2.0.exe` is
-built locally; the GitHub release waits for Hugo's go. The README has the playlist builder. M7's "Done when" was
+Version 0.2.0 is on `main`, pushed, and published as the GitHub release v0.2.0 with
+`MusicDesk-Setup-0.2.0.exe` (Hugo's go, 2026-10-16). The README has the playlist builder. M7's "Done when" was
 checked end to end with the real window, a scratch `LOCALAPPDATA` and a copied fixture library (two folders
 selected in the tree landed in natural order; drag, Ctrl+Down and a header sort reordered them; the relative
 .m3u8 export's 21 paths all resolve; the playlist and panel came back after a restart). 938 tests pass (slow ones included), ruff is clean. Left to Hugo: opening an
@@ -705,8 +705,7 @@ version is still 0.1.0, no new GitHub release). Done this session, newest first:
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** none planned. With Hugo's go: push `main`, then
-`gh release create v0.2.0 dist/installer/MusicDesk-Setup-0.2.0.exe`. New work starts from Hugo's feedback.
+**Next step:** none planned. New work starts from Hugo's feedback.
 - A version bump: the three files below, then `uv lock` (it records the project version).
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
   agree) and pyproject's `version`, run `uv run python packaging/build_installer.py`, then
@@ -1078,7 +1077,7 @@ Done when:
       drag to reorder, Ctrl+↑/↓ to move, Delete to remove, Clear with a confirmation.
 - [x] Export to .m3u8 (0.1.2) (a Save dialog, the remembered Relative paths checkbox and folder) and Open playlist with
       default player (the §14 temporary playlist). Add the export to Ground rule 1's exceptions.
-- [x] Docs, README, version 0.2.0 and a release built locally (2026-10-16; the GitHub release waits for Hugo).
+- [x] Docs, README, version 0.2.0 and a release built locally (2026-10-16; published as v0.2.0 the same day).
 
 Done when: folders dragged from the tree (a multi-selection) land in natural order, can be reordered by drag,
 by keyboard and by a header sort, and export to a relative .m3u8 that a player opens; the playlist survives a

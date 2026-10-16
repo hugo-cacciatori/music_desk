@@ -11,7 +11,21 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
-**Current state (2026-10-16, session 10):**
+**Current state (2026-10-16, end of session 10):** everything is committed and pushed (`main` = origin), the full
+suite passes (923 tests, slow ones included, none skipped), ruff is clean, and the setup
+`dist/installer/MusicDesk-Setup-0.1.0.exe` is rebuilt from the latest code (Hugo installs it over the old one; the
+version is still 0.1.0, no new GitHub release). Done this session, newest first:
+- **ReplayGain log and removal** (Progress, "ReplayGain: log and removal"; SPEC §10 B, §17): each run replaces
+  `replaygain.log`; "Remove ReplayGain tags…" in the track, folder and search-result menus removes every
+  REPLAYGAIN_* tag and the LUFS comment lines (`core/replaygain.remove_replaygain`, `lufs_comment_pattern`,
+  `TaggedFile.remove_replaygain`, `TagWriter.remove_replaygain` → `replaygainRemoved`,
+  `MainWindow.remove_replaygain` / `ask_remove_replaygain`). Tests: `tests/core/test_replaygain_remove.py`,
+  `tests/ui/test_replaygain_remove_ui.py`.
+- **Tool button names** (Progress, "Tool button names"; SPEC §10): "Run rename…", "Run ReplayGain", "Run Tidy…";
+  the rename preview's "Apply renames" and "← Back to options". The cards' buttons are `run_button` /
+  `runRequested` (no more `preview_button`).
+- **What "Tidy" is** was explained to Hugo (he didn't remember it): the script run without flags, rename then
+  ReplayGain. He kept it as is.
 - **M7 task 2 is done (the panel).** Details in SPEC §15, "As built (M7 task 2)": `ui/playlist_panel.py`
   (`PlaylistPanel`, `PlaylistModel`, `PlaylistView`, `COLUMNS`); `MainWindow.set_playlist_visible`,
   `playlist_action`, `save_playlist`, `playlist_file` (None in tests without a settings path); `Settings.playlist_*`.
@@ -667,11 +681,18 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M7 task 3, drag and drop into and within the panel (Progress, SPEC §15 "Adding music" and
-"Arranging it"). The panel's model already has `add(items, position)`, and the Builder has `move_rows` and
-`move_to`. Then:
-- **M7, the playlist builder**: designed with Hugo (SPEC §15). Task 1 (the core) is done; next is task 2, the
-  panel (`ui/playlist_panel.py`), building on SPEC §15 "As built (M7 task 1)".
+**Next step:** M7 task 3, drag and drop into and within the playlist panel (Progress; read SPEC §15 "Adding
+music", "Arranging it" and the two "As built (M7 task 1/2)" blocks first).
+- Building blocks already there: `PlaylistModel.add(items, position)` (duplicates skipped, returns
+  (added, skipped)), `Builder.move_rows` / `move_to` / `remove` / `clear`, `queries.track_ids_for` (dropped ids ->
+  tracks in Explorer's order) and `track_rows` (for the items' paths).
+- To build: an app-only MIME type carrying entry ids, never file URLs (Ground rule 1: a test must check a drop
+  in Explorer gets nothing), from the folder tree, the file list and the search results; drop to insert at the
+  drop row; drag rows to reorder; Ctrl+Up/Down (not Alt+Up, which goes up a folder); Delete; Clear with a
+  confirmation (an `ask_*` method, replaced in tests); the status bar says how many duplicates were skipped.
+- Today the file list and tree have drag disabled (`setDragEnabled(False)`; `tests/ui/test_context_menus.py`
+  `test_no_drag_out` checks it). Enabling an internal drag must keep that test's intent: no URLs, no move.
+- Then M7 task 4 (export and play) and task 5 (docs, README, version 0.2.0, a release built locally).
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
   agree) and pyproject's `version`, run `uv run python packaging/build_installer.py`, then
   `gh release create v<version> dist/installer/MusicDesk-Setup-<version>.exe` (with Hugo's go).
@@ -860,37 +881,47 @@ Commands (from the project root):
 
 ## Project layout
     music_desk/             C:\Code\music_desk
-      CLAUDE.md, pyproject.toml
-      README.md, LICENSE
+      CLAUDE.md, pyproject.toml, uv.lock, README.md, LICENSE (GPL-3.0)
       docs/SPEC.md          detailed feature spec
       src/music_desk/
-        __main__.py, app.py
-        paths.py            resource_path(), rsgain_path(), app data and logs dirs (%LOCALAPPDATA%\MusicDesk)
+        __main__.py, app.py   entry point: logging, the rsgain self-check, the window
+        paths.py            resource_path(), rsgain_path(), icon_path(), app data and logs (%LOCALAPPDATA%\MusicDesk)
         logging_setup.py    rotating app.log, plus stderr when not frozen
-        settings.py         typed settings, JSON persistence
+        settings.py         typed settings, JSON persistence (settings.json; playlist.json sits beside it)
+        licenses.py         the bundled third-party components and their licence files (Help > About)
         core/               (no Qt)
           formats.py        the SPEC §1 table: extensions, tag family, mutagen class, capabilities
-          tags.py           one adapter per tag family: editable fields, ReplayGain values, lyrics, cover
+          tags.py           one adapter per tag family: fields, ReplayGain values (and their removal), lyrics, cover
+          metadata.py       snapshots for the Metadata tab, field writes, covers, .lrc sidecars
           rename.py         rename step: plan / apply, junk rules, sidecars
-          replaygain.py     ReplayGain step, RunLog, discography
+          inline_rename.py  F2 renames with their .lrc, and Undo
+          replaygain.py     ReplayGain step, RunLog, discography, remove_replaygain
           rsgain.py         subprocess wrapper (cwd, CREATE_NO_WINDOW, below-normal priority, cancel)
           lyrics.py         LRCLIB client, matching, lookups, embed
-          playlists.py      temporary .m3u8 writer (and the M7 playlist model later)
-          fsops.py          rename validation, natural sort key, open in Explorer, open with default app, Recycle Bin
-          index/            schema.py, scanner.py, store.py, search.py
+          playlists.py      .m3u8 writing: temporary playlists, and the builder's export (relative or absolute)
+          playlist_builder.py  the playlist builder's model (Builder, Item), JSON persistence
+          fsops.py          natural sort key, shared opens, open in Explorer, default app, Recycle Bin
+          path_locks.py     PathLocks: folder and file locks shared by jobs and saves
+          cancel.py         CancelToken
+          index/            schema.py (v3), store.py (DbWriter, read connections), scanner.py, queries.py,
+                            search.py, roots.py, lyrics_index.py, lyrics_import.py
         services/           (Qt glue: QObject workers and signals)
-          indexer.py, watcher.py, lyrics_service.py, search_service.py, jobs.py, tag_writer.py, path_locks.py, db_writer.py
+          library.py (owns the writer, indexer, watcher, lyrics service), indexer.py, watcher.py,
+          lyrics_service.py, lyrics_embedder.py, search_service.py, tag_io.py, tag_writer.py, jobs.py,
+          rename_job.py, replaygain_job.py
         ui/
           main_window.py, sidebar.py, folder_tree.py, file_view.py, address_bar.py, search_view.py,
-          status_bar.py, jobs_panel.py, about_dialog.py
-          side_panel/       panel.py, metadata_tab.py, lyrics_tab.py, cover_widget.py, folder_summary.py
+          playlist_panel.py, jobs_panel.py, about_dialog.py, toast.py
+          side_panel/       panel.py, metadata_tab.py, lyrics_tab.py, folder_summary.py
           tools/            tools_page.py, rename_card.py, replaygain_card.py, rename_preview.py, rg_report.py
-          theme/
       resources/rsgain/     rsgain.exe 3.6 + DLLs + presets + licenses (the only copy left)
-      resources/icons/
+      resources/icons/      music_desk.ico / .png (drawn by packaging/make_icon.py)
+      resources/licenses/   the third-party licence texts and their README
       tests/                conftest.py, reference/ (frozen original scripts), fixtures/ (make_fixtures.py +
-                            generated/), core/, ui/
-      packaging/            music_desk.spec, launcher.py (PyInstaller entry), installer.iss
+                            generated/), core/ (with lrclib_fake.py, rsgain_fake.py), ui/ (conftest.py,
+                            browser_helpers.py), test_settings.py, test_licenses.py, test_packaging.py
+      packaging/            music_desk.spec, launcher.py (PyInstaller entry), installer.iss, build_installer.py,
+                            make_icon.py, version_info.txt
 
 ## Progress
 Tick tasks as they're done (`[x]`). A milestone is complete when its "Done when" holds.

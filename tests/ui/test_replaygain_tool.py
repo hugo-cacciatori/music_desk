@@ -244,3 +244,20 @@ def test_indexing_pauses_while_replaygain_runs(qtbot, window, service, library_d
     assert not service.indexer.paused  # and indexing resumed after the job
     window.show_index_progress(type("P", (), {"root_id": -1, "phase": "tags", "tags_done": 1, "tags_total": 2})())
     assert "paused" not in window.index_label.text()
+
+
+def test_elapsed_time_while_an_album_is_scanned(qtbot, window, service, library_dir, fake):
+    """rsgain's output only arrives when it exits, so the page shows the album's elapsed time meanwhile."""
+    import threading
+
+    release = threading.Event()
+    fake.before = lambda folder: release.wait(10)  # the "rsgain" run lasts until the test releases it
+    open_card(window, service, library_dir / "Fixture Artist" / "Album B")
+    view = window.rg_view
+    qtbot.waitUntil(lambda: view.message.text().startswith("Album 1 of 1: Album B · 0:0"), timeout=5000)
+    first = view.message.text()
+    assert "rsgain reports each album when it is done" in first
+    qtbot.waitUntil(lambda: view.message.text() != first, timeout=3000)  # it ticks
+    release.set()
+    qtbot.waitUntil(lambda: view.state == "result", timeout=10000)
+    assert not view._clock.isActive() and view.message.text().startswith("Done")

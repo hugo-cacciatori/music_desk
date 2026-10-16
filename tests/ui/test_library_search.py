@@ -38,12 +38,21 @@ def search(qtbot, window, text: str | None = None) -> None:
     if text is not None:
         window.search_field.clear()
         QTest.keyClicks(window.search_field, text)
+    # The results on screen are those of the latest request, and that request is the field's text: never the empty
+    # query that opening the page runs while the typed one is still debounced.
     qtbot.waitUntil(lambda: window._search_token is not None and window.search_shown == window._search_token
-                    and not window._search_timer.isActive(), timeout=10000)
+                    and not window._search_timer.isActive()
+                    and window._search_request == window.search_field.text(), timeout=10000)
 
 
 def names(window) -> list[str]:
     return window.search_view.column_texts("name")
+
+
+def shown(window) -> str:
+    """What the page says besides the rows, for failure messages: an empty result may be an error note."""
+    view = window.search_view
+    return f"count {view.count_label.text()!r}, note {view.note.text()!r}, request {window._search_request!r}"
 
 
 @pytest.fixture
@@ -66,9 +75,9 @@ def test_ctrl_k_opens_the_search_with_a_prompt(qtbot, window):
 def test_typing_runs_after_a_pause_and_counts(qtbot, window):
     window.open_search()
     QTest.keyClicks(window.search_field, "fir")
-    assert window._search_timer.isActive()  # debounced: nothing runs on each key
+    assert window._search_timer.isActive() and window._search_request == ""  # debounced: nothing runs on each key
     search(qtbot, window)
-    assert names(window) == ["01 First.flac", "clash.flac", "01 First.flac"]
+    assert names(window) == ["01 First.flac", "clash.flac", "01 First.flac"], shown(window)
     assert window.search_view.count_label.text() == "3 of 3 results"
     assert window.search_view.column_texts("folder")[0].endswith(ALBUM)
     assert window.search_view.play_button.isEnabled()
@@ -158,6 +167,9 @@ def test_enter_goes_to_the_file_and_esc_returns(qtbot, window, service):
 
     window.open_folder(album)
     search(qtbot, window, "first")
+    window.activateWindow()  # Esc is a shortcut of the field: it needs the focus, in the active window
+    window.search_field.setFocus()
+    qtbot.waitUntil(lambda: window.search_field.hasFocus())
     QTest.keyClick(window.search_field, Qt.Key.Key_Escape)
     assert not window.showing_search and window.folder_id == album
     window.open_search()

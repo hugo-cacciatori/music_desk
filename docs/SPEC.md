@@ -783,15 +783,16 @@ happen to which files.
   - the target, whose spin box only allows rsgain's −30 to −5 LUFS;
   - "Advanced" with the threshold, margin, keywords (comma-separated, since they may hold spaces), log file name
     and comment text.
-- **Tidy card:** a scope, and the two cards' options ("Preview rename…").
+- **Tidy card:** a scope, and the two cards' options ("Run Tidy…").
 - **Validation**, inline, under each card:
   - Rename: `rename.validate`.
   - ReplayGain: the new `replaygain.validate`. The script had no ReplayGain checks. It checks rsgain's target
     range, a threshold in (0, 1], a margin of 0–6 dB, non-empty lowercase keywords (folder names are compared in
     lowercase), a valid log file name, and a comment that only uses `{target}`.
   - Tidy: needs both cards valid.
-  - A card's button (Rename's Preview, ReplayGain's Run, Tidy's Preview rename) stays disabled until its card is
-    valid; the ReplayGain and Tidy buttons also while rsgain is unavailable (the startup self-check).
+  - A card's button stays disabled until its card is valid: "Run rename…", "Run ReplayGain", "Run Tidy…" (named on
+    2026-10-16 with Hugo: the tools are *run* from their card; the "…" means a preview to check comes first, and
+    ReplayGain has none); the ReplayGain and Tidy buttons also while rsgain is unavailable (the startup self-check).
 - **Saved options.** Each change is saved to `Settings.rename_options` / `replaygain_options` (JSON through
   `options_to_json` / `options_from_json`). A mistyped saved value falls back to its default; a well-typed invalid
   value is kept for validation to show. "Reset to defaults" is per card.
@@ -802,7 +803,10 @@ happen to which files.
 - **Running.** `RenameRunner` runs `plan_renames` (now cancellable: `PlanCancelled`) and `apply_plan` on one
   worker thread. A newer preview cancels an older one still reading tags. A selection plans without subfolders or
   junk.
-- **The preview page** replaces the Tools page in the centre ("← Back to Tools" cancels a preview in progress):
+- **The preview page** replaces the Tools page in the centre, titled "Rename: check the changes". "← Back to
+  options" (at the top, and next to Apply) returns to the card with its options as they were, changing nothing,
+  and cancels a preview still reading tags. The primary button is "Apply renames". There is no Close in the
+  preview, only Apply or Back; Done closes the result:
   - the summary line in the script's dry-run wording;
   - a table (Folder, Name, New name, Status, Details), sorted by folder then name, with a status filter that
     shows the counts. The statuses are rename, fallback mask (missing: …), unchanged, missing tags (missing: …),
@@ -847,8 +851,9 @@ happen to which files.
   changed (the new ReplayGain tags and the comment).
 - **Unsaved Metadata edits** on a file in the folder ask Save, Discard or Cancel before a run (the rename tool
   does the same).
-- **Tidy:** the Tidy card opens the rename preview, titled "Tidy album, step 1 of 2". Apply ("Apply, then run
-  ReplayGain") is enabled even when there is nothing to rename. After the rename, the ReplayGain job starts on the
+- **Tidy:** the Tidy card opens the rename preview, titled "Tidy, step 1 of 2: check the renames". Its button,
+  "Apply renames, then run ReplayGain", reads "Run ReplayGain" when there is nothing to rename, and is enabled
+  then too. After the rename, the ReplayGain job starts on the
   same folder and scope ("step 2 of 2"), with no separate preview, as in the script. A stopped rename doesn't start
   ReplayGain.
 

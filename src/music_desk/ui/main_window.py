@@ -953,7 +953,7 @@ class MainWindow(QMainWindow):
         if request is not None and request.tool == TIDY:  # Tidy, step 2: ReplayGain on the final names
             if report.cancelled:
                 self.rename_preview.message.setText("Stopped, so ReplayGain was not run.")
-            elif self.run_replaygain(request, "Tidy album, step 2 of 2: ReplayGain"):
+            elif self.run_replaygain(request, "Tidy, step 2 of 2: ReplayGain"):
                 return  # the job goes on (its rename report is kept)
             else:
                 self.rename_preview.message.setText("Renamed. ReplayGain was not started (see the message).")

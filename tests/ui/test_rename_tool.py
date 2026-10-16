@@ -52,6 +52,10 @@ def apply(qtbot, window):
 def test_preview_then_apply(qtbot, window, service, library_dir, recycled):
     album = library_dir / "Artist" / ALBUM
     view = preview(qtbot, window, service, album)
+    assert window.tools_page.rename_card.run_button.text() == "Run rename…"
+    assert view.apply_button.text() == "Apply renames" and view.back_bottom.isVisible()
+    assert not view.done_button.isVisible()  # in the preview: Apply, or back to the options
+    assert view.message.text().endswith("Back to options changes nothing.")
     rows = {row[1]: row for row in view.visible_rows()}
     assert rows["track2.flac"][2:4] == ("02 Second.flac", "rename")
     assert rows["missing_title.flac"][3:] == ("missing tags", "missing: title")
@@ -186,3 +190,13 @@ def test_renames_in_subfolders_reach_the_index(qtbot, window, service, library_d
         row = service.conn.execute("SELECT name FROM entries WHERE id = ?", (entry_id,)).fetchone()
         return row[0] if row else None
     qtbot.waitUntil(lambda: name(sub_id) == "02 Second.flac" and name(top_id) == "02 Second.flac", timeout=10000)
+
+
+def test_back_to_options_changes_nothing(qtbot, window, service, library_dir, recycled):
+    album = library_dir / "Artist" / ALBUM
+    view = preview(qtbot, window, service, album)
+    window.tools_page.rename_card.cleanup.setChecked(True)  # an option set before; the card keeps it
+    view.back_bottom.click()
+    assert window.center.currentWidget() is window.tools_page
+    assert window.tools_page.rename_card.cleanup.isChecked()
+    assert (album / "track2.flac").exists() and recycled == []  # nothing was renamed

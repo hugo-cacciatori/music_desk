@@ -995,7 +995,15 @@ Done when:
 - [x] The ReplayGain card's number fields ignore the mouse wheel (`NoWheelSpinBox`).
 - [x] Rebuilt the setup (2026-10-16) after a test for the elapsed time and a full green run (878 tests).
 - [x] Hugo's check on his drive (2026-10-16): with the new setup, ReplayGain on an album takes a few seconds
-      again. The cause is confirmed: indexing read the same drive meanwhile.
+      again. That fits the cause found (indexing read the same drive meanwhile) but doesn't prove it: the first
+      indexing may simply have finished by then. Proof would be a quick album while the status bar shows
+      "(paused while ReplayGain runs)".
+
+**Tool button names** (Hugo, 2026-10-16)
+- [x] The tools are run from their cards: "Run rename…", "Run ReplayGain", "Run Tidy…" ("…" = a preview to check
+      comes first). The rename preview: "Rename: check the changes", "Apply renames" (Tidy: "Apply renames, then
+      run ReplayGain", or "Run ReplayGain" with nothing to rename) and "← Back to options" beside it (also at the
+      top; the ReplayGain page's back button says the same). No Close in the preview. SPEC §10.
 
 **M7 Playlist builder** (read SPEC §15, designed with Hugo on 2026-10-15; also §5 and §14)
 - [x] Core (`core/playlists.py`, no Qt): the builder's model (entry ids, the natural import order, insert at a

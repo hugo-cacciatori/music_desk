@@ -132,11 +132,13 @@ def test_tidy_renames_then_runs_replaygain(qtbot, window, service, library_dir, 
     open_card(window, service, album, tool=TIDY)
     rename_view = window.rename_preview
     qtbot.waitUntil(lambda: rename_view.state == "preview", timeout=10000)
-    assert "Tidy album, step 1 of 2" in rename_view.heading.text()
-    assert rename_view.apply_button.text() == "Apply, then run ReplayGain"
+    assert window.tools_page.tidy_card.run_button.text() == "Run Tidy…"
+    assert "Tidy, step 1 of 2: check the renames" in rename_view.heading.text()
+    assert rename_view.apply_button.text() == "Apply renames, then run ReplayGain"
+    assert rename_view.back_bottom.isVisible()  # the way back, next to Apply
     rename_view.apply_button.click()
     qtbot.waitUntil(lambda: window.rg_view.state == "result", timeout=20000)
-    assert "Tidy album, step 2 of 2: ReplayGain" in window.rg_view.heading.text()
+    assert "Tidy, step 2 of 2: ReplayGain" in window.rg_view.heading.text()
     assert (album / "01 Loud.flac").exists() and fake.calls[0][0].count("01 Loud.flac") == 1  # the final names
     assert rg(album / "01 Loud.flac", ALBUM_GAIN) is not None
 
@@ -144,7 +146,8 @@ def test_tidy_renames_then_runs_replaygain(qtbot, window, service, library_dir, 
 def test_tidy_with_nothing_to_rename_still_runs_replaygain(qtbot, window, service, library_dir, fake):
     open_card(window, service, library_dir / "Fixture Artist" / "Album B", tool=TIDY)
     qtbot.waitUntil(lambda: window.rename_preview.state == "preview", timeout=10000)
-    assert window.rename_preview.message.text() == "Nothing to rename. Apply runs ReplayGain."
+    assert window.rename_preview.message.text().startswith("Nothing to rename. Run ReplayGain goes straight to")
+    assert window.rename_preview.apply_button.text() == "Run ReplayGain"
     window.rename_preview.apply_button.click()
     qtbot.waitUntil(lambda: window.rg_view.state == "result", timeout=20000)
     assert len(fake.calls) == 1

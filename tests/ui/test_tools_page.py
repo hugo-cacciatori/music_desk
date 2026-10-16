@@ -32,7 +32,7 @@ def requests(page) -> list:
 def test_rename_card_defaults(page):
     card = page.rename_card
     assert card.options() == rename.DEFAULT_OPTIONS
-    assert card.preview_button.isEnabled() and not card.problems.isVisible()
+    assert card.run_button.isEnabled() and not card.problems.isVisible()
     assert [card.masks.item(i).text() for i in range(card.masks.count())] == ["{track:02} {title}", "{title}"]
     assert card.junk.text() == ".cue .lrc .nfo .sfv .txt"
 
@@ -40,7 +40,7 @@ def test_rename_card_defaults(page):
 def test_rename_card_validation_is_inline(page):
     card = page.rename_card
     card.masks.item(0).setText("{track:02} {bogus}")
-    assert not card.preview_button.isEnabled()
+    assert not card.run_button.isEnabled()
     assert card.problems.text() == "• mask '{track:02} {bogus}': unknown field(s) bogus"
     card.masks.item(0).setText("{track:02} {title}")
     card.junk.setText(".cue .m3u .jpg")
@@ -51,7 +51,7 @@ def test_rename_card_validation_is_inline(page):
     card.replacement.textEdited.emit("/")
     assert "• The replacement contains a character not allowed in file names" in card.problems.text()
     card.reset()
-    assert card.preview_button.isEnabled() and card.options() == rename.DEFAULT_OPTIONS
+    assert card.run_button.isEnabled() and card.options() == rename.DEFAULT_OPTIONS
 
 
 def test_rename_card_masks_can_be_added_filled_and_removed(page):
@@ -64,7 +64,7 @@ def test_rename_card_masks_can_be_added_filled_and_removed(page):
     assert card.options().masks == ("{track:02} {title}", "{title} {artist}")
     card.masks.clear()
     card._edited()
-    assert card.problems.text() == "• No rename mask" and not card.preview_button.isEnabled()
+    assert card.problems.text() == "• No rename mask" and not card.run_button.isEnabled()
 
 
 def test_rename_card_live_example(page):
@@ -95,10 +95,10 @@ def test_replaygain_card_defaults_and_validation(page):
     card.subfolders.textEdited.emit(card.subfolders.text())
     assert not card.run_button.isEnabled()
     assert "'Bonus' must be lowercase" in card.problems.text()
-    assert not page.tidy_card.preview_button.isEnabled()
+    assert not page.tidy_card.run_button.isEnabled()
     assert page.tidy_card.problems.text() == "• The ReplayGain card's options need fixing."
     card.reset()
-    assert card.run_button.isEnabled() and page.tidy_card.preview_button.isEnabled()
+    assert card.run_button.isEnabled() and page.tidy_card.run_button.isEnabled()
 
 
 def test_replaygain_card_target_stays_in_rsgains_range(page):
@@ -112,7 +112,7 @@ def test_replaygain_scope_and_unavailable_rsgain(page):
     card.scope_group.buttons()[1].setChecked(True)
     assert card.scope == "discography" and card.scope_note.text().startswith("Discography:")
     page.set_rsgain_unavailable("rsgain couldn't run, so ReplayGain is unavailable.")
-    assert not card.run_button.isEnabled() and not page.tidy_card.preview_button.isEnabled()
+    assert not card.run_button.isEnabled() and not page.tidy_card.run_button.isEnabled()
     assert "rsgain couldn't run" in card.scope_note.text()
     page.set_rsgain_unavailable(None)
     assert card.run_button.isEnabled()
@@ -121,8 +121,8 @@ def test_replaygain_scope_and_unavailable_rsgain(page):
 def test_replaygain_and_tidy_need_a_folder(page):
     page.set_scope(ToolScope(Path("C:/lib/Album"), 1, (Path("C:/lib/Album/a.flac"),)))
     assert not page.replaygain_card.run_button.isEnabled()
-    assert not page.tidy_card.preview_button.isEnabled()
-    assert page.rename_card.preview_button.isEnabled()
+    assert not page.tidy_card.run_button.isEnabled()
+    assert page.rename_card.run_button.isEnabled()
     assert page.replaygain_card.scope_note.text().startswith("ReplayGain works on album folders.")
 
 
@@ -132,10 +132,10 @@ def test_requests_carry_the_checked_options(page):
     received = requests(page)
     page.replaygain_card.log_file.setText("rg.log")
     page.replaygain_card.log_file.textEdited.emit("rg.log")
-    page.rename_card.preview_button.click()
+    page.rename_card.run_button.click()
     page.replaygain_card.run_button.click()
     page.tidy_card.scope_group.buttons()[1].setChecked(True)
-    page.tidy_card.preview_button.click()
+    page.tidy_card.run_button.click()
     assert [r.tool for r in received] == [RENAME, REPLAYGAIN, TIDY]
     assert received[0].rename_options.protected_names == ("rg.log",)  # the configured log is never junk
     assert received[1].replaygain_options.log_file == "rg.log" and not received[1].discography

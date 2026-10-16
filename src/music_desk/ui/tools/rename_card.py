@@ -100,7 +100,7 @@ class Card(QFrame):
 
 class RenameCard(Card):
     changed = Signal()  # the options changed (valid or not)
-    previewRequested = Signal()
+    runRequested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Rename files from tags", DESCRIPTION, parent)
@@ -167,11 +167,11 @@ class RenameCard(Card):
         self.body.addWidget(self.advanced_toggle(advanced))
         self.body.addWidget(advanced)
 
-        self.preview_button = QPushButton("Preview…")
-        self.preview_button.clicked.connect(self.previewRequested)
+        self.run_button = QPushButton("Run rename…")  # "…": a preview to check comes first
+        self.run_button.clicked.connect(self.runRequested)
         self.reset_button = QPushButton("Reset to defaults")
         self.reset_button.clicked.connect(self.reset)
-        self.buttons.addWidget(self.preview_button)
+        self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)
         self.buttons.addWidget(self.reset_button)
         self.set_options(rename.DEFAULT_OPTIONS)
@@ -271,7 +271,7 @@ class RenameCard(Card):
             return
         problems = self.problems_list()
         self.show_problems(problems)
-        self.preview_button.setEnabled(not problems)
+        self.run_button.setEnabled(not problems)
         self.remove_mask.setEnabled(self.masks.count() > 0)
         self._update_example()
         self.changed.emit()

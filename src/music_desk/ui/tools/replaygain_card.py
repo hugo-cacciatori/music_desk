@@ -209,7 +209,7 @@ class ReplayGainCard(Card):
 class TidyCard(Card):
     """Rename, then ReplayGain on the final names, with the two cards' options (SPEC §10 C)."""
 
-    previewRequested = Signal()
+    runRequested = Signal()
 
     def __init__(self, rename_card, replaygain_card: ReplayGainCard, parent: QWidget | None = None) -> None:
         super().__init__("Tidy album", TIDY_DESCRIPTION, parent)
@@ -222,9 +222,9 @@ class TidyCard(Card):
         form.addRow("Scope:", scope_row)
         self.body.addLayout(form)
         self.body.addWidget(self.note)
-        self.preview_button = QPushButton("Preview rename…")
-        self.preview_button.clicked.connect(self.previewRequested)
-        self.buttons.addWidget(self.preview_button)
+        self.run_button = QPushButton("Run Tidy…")  # "…": the rename preview comes first
+        self.run_button.clicked.connect(self.runRequested)
+        self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)
         rename_card.changed.connect(self.update_state)
         replaygain_card.changed.connect(self.update_state)
@@ -250,5 +250,5 @@ class TidyCard(Card):
             notes.append(self.replaygain_card.unavailable)
         self.note.setText("\n".join(notes))
         self.note.setVisible(bool(notes))
-        self.preview_button.setEnabled(not problems and not self.replaygain_card.unavailable
+        self.run_button.setEnabled(not problems and not self.replaygain_card.unavailable
                                        and not self.replaygain_card.selection)

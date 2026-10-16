@@ -74,7 +74,7 @@ class RenamePreview(QWidget):
         self.state = "idle"  # planning, preview, applying, result, error
         self.tidy = False  # step 1 of Tidy: Apply also starts ReplayGain, even with nothing to rename
 
-        self.back_button = QPushButton("← Back to Tools")
+        self.back_button = QPushButton("← Back to options")
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
@@ -119,14 +119,17 @@ class RenamePreview(QWidget):
         self.extras.setReadOnly(True)
         self.extras.setMaximumHeight(160)
 
-        self.apply_button = QPushButton("Apply")
+        self.apply_button = QPushButton("Apply renames")
         self.apply_button.clicked.connect(self.applyRequested)
+        self.back_bottom = QPushButton("← Back to options")  # next to Apply: return without changing anything
+        self.back_bottom.clicked.connect(self.backRequested)
         self.cancel_button = QPushButton("Stop")
         self.cancel_button.clicked.connect(self.cancelRequested)
         self.done_button = QPushButton("Done")
         self.done_button.clicked.connect(self.doneRequested)
         buttons = QHBoxLayout()
         buttons.addWidget(self.apply_button)
+        buttons.addWidget(self.back_bottom)
         buttons.addWidget(self.cancel_button)
         buttons.addStretch(1)
         buttons.addWidget(self.done_button)
@@ -146,11 +149,11 @@ class RenamePreview(QWidget):
     def show_planning(self, folder: Path, selection: int = 0, tidy: bool = False) -> None:
         self.plan, self.report, self.tidy = None, None, tidy
         what = f"{selection} selected file{'s' if selection != 1 else ''} in {folder}" if selection else str(folder)
-        title = "Tidy album, step 1 of 2: rename preview" if tidy else "Rename preview"
+        title = "Tidy, step 1 of 2: check the renames" if tidy else "Rename: check the changes"
         self.heading.setText(f"<b>{title}</b> · {what}")
-        self.apply_button.setText("Apply, then run ReplayGain" if tidy else "Apply")
+        self.apply_button.setText("Apply renames, then run ReplayGain" if tidy else "Apply renames")
         self.table.setRowCount(0)
-        self._show("planning", "Reading the tags… Nothing is renamed until you click Apply.")
+        self._show("planning", "Reading the tags… Nothing is renamed until you apply.")
 
     def show_plan(self, plan: RenamePlan) -> None:
         self.plan = plan
@@ -161,12 +164,17 @@ class RenamePreview(QWidget):
         self.extras.setPlainText(self._extras_text(plan))
         self.extras.setVisible(bool(self.extras.toPlainText()))
         actionable = any(i.status in (Status.RENAME, Status.JUNK) for i in plan.items)
-        if self.tidy:
+        back = "Back to options changes nothing."
+        if self.tidy and actionable:
             message = ("Nothing has changed yet. Apply renames exactly these files, then runs ReplayGain on the final "
-                       "names." if actionable else "Nothing to rename. Apply runs ReplayGain.")
+                       f"names. {back}")
+        elif self.tidy:
+            message = f"Nothing to rename. Run ReplayGain goes straight to step 2. {back}"
+            self.apply_button.setText("Run ReplayGain")
+        elif actionable:
+            message = f"Nothing has changed yet. Apply renames exactly these files. {back}"
         else:
-            message = ("Nothing has changed yet. Apply renames exactly these files." if actionable else
-                       "Nothing to rename: every file already has its name, or can't be renamed.")
+            message = "Nothing to rename: every file already has its name, or can't be renamed."
         self._show("preview", message)
         self.apply_button.setEnabled(actionable or self.tidy)
 
@@ -198,8 +206,10 @@ class RenamePreview(QWidget):
             self.extras.setMaximumHeight(160)
         self.extras.setVisible(state == "result" or (preview and bool(self.extras.toPlainText())))
         self.apply_button.setVisible(preview)
+        self.back_bottom.setVisible(preview)
+        self.back_button.setVisible(state != "applying")  # no way back while files are being renamed
         self.cancel_button.setVisible(state in ("planning", "applying"))
-        self.done_button.setVisible(state in ("result", "error", "preview"))
+        self.done_button.setVisible(state in ("result", "error"))
         self.done_button.setText("Done" if state == "result" else "Close")
 
     # -- the table --

@@ -16,11 +16,12 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 13):** 0.2.12 is on `main` (not pushed): search finds names before tags (0.2.11)
-  and the Action menu lists tracks without ReplayGain tags (0.2.12). M0–M9 are complete. All 1065 tests passed in
-  the last full run, slow ones included. Ruff is clean. The last GitHub release is v0.2.10.
-- **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Next step: M10 task 5** (0.2.13), then task 6 (0.2.14) and task 7 (0.3.0 and the release). Give
+- **State (2026-10-17, session 13):** 0.2.13 is on `main` (not pushed): search by name (0.2.11), the Action menu
+  (0.2.12) and the cue split core (M10 task 5). All 1104 tests passed in the last full run, slow ones included.
+  Ruff is clean. The last GitHub release is v0.2.10.
+- **Left to Hugo:** the two Open questions (before task 6), opening an exported playlist in a real player,
+  and a mouse drag in the installed app.
+- **Next step: M10 task 6** (0.2.14), then task 7 (0.3.0 and the release). Give
   Hugo full manual steps for the installed-app check (memory: manual-check-instructions).
 
 ## Work plan

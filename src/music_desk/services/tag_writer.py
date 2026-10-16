@@ -14,10 +14,11 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from music_desk.core import lyrics, metadata
+from music_desk.core import lyrics, metadata, replaygain
 from music_desk.core.lyrics import EmbedResult
 from music_desk.core.metadata import Snapshot
 from music_desk.core.path_locks import LockedError, PathLocks
+from music_desk.core.replaygain import ReplayGainOptions
 from music_desk.services.tag_io import Loaded, decode_cover
 
 log = logging.getLogger(__name__)
@@ -46,10 +47,21 @@ class LyricsEmbedded:
         return [path for path, result, _error in self.results if result is EmbedResult.WRITTEN]
 
 
+@dataclass(frozen=True)
+class ReplayGainRemoved:
+    """The result of remove_replaygain: the files changed, how many had nothing to remove, and the failures."""
+
+    token: int
+    removed: list[str]
+    unchanged: int
+    failed: list[tuple[str, str]]  # (path, message)
+
+
 class TagWriter(QObject):
     written = Signal(object)  # Loaded: the fresh snapshot, or an error
     batchWritten = Signal(object)  # BatchWritten
     lyricsEmbedded = Signal(object)  # LyricsEmbedded
+    replaygainRemoved = Signal(object)  # ReplayGainRemoved
     locksChanged = Signal()  # a job took or released a lock: locked files turn read-only, or editable again
 
     def __init__(self, locks: PathLocks, on_written: Callable[[str], None] | None = None,
@@ -105,6 +117,43 @@ class TagWriter(QObject):
         except RuntimeError:  # closed meanwhile (the auto-save worker)
             self.lyricsEmbedded.emit(LyricsEmbedded(token, [(str(p), None, "The app is closing.") for p, _e in items]))
         return token
+
+    def remove_replaygain(self, paths: list[str | Path], options: ReplayGainOptions) -> int:
+        """Queue the removal of the files' ReplayGain tags (core.replaygain.remove_replaygain: the REPLAYGAIN_*
+        values and the LUFS comment lines). A file under a job's lock is refused; the others go on. One
+        `replaygainRemoved` reports them all."""
+        token = self._next_token()
+        if self._closed:
+            closing = [(str(p), "The app is closing.") for p in paths]
+            self.replaygainRemoved.emit(ReplayGainRemoved(token, [], 0, closing))
+            return token
+        self._pool.submit(self._remove_replaygain, token, [str(p) for p in paths], options)
+        return token
+
+    def _remove_replaygain(self, token: int, paths: list[str], options: ReplayGainOptions) -> None:
+        removed, unchanged, failed = [], 0, []
+        for path in paths:
+            name = os.path.basename(path)
+            try:
+                with self.locks.lock([path], SAVE_OWNER):
+                    changed = replaygain.remove_replaygain(path, options)
+            except LockedError as e:
+                failed.append((path, f"{name} is in use by {e.owner}. Try again when it has finished."))
+                continue
+            except Exception as e:  # noqa: BLE001 - reported; the other files go on
+                log.warning("removing ReplayGain from %s failed: %s", path, e)
+                failed.append((path, f"{name}: {type(e).__name__}: {e}"))
+                continue
+            if not changed:
+                unchanged += 1
+                continue
+            removed.append(path)
+            log.info("removed the ReplayGain tags of %s", path)
+            try:
+                self.on_written(path)
+            except Exception:  # noqa: BLE001 - the file is saved; the index catches up at the next scan
+                log.exception("index update after saving %s failed", path)
+        self.replaygainRemoved.emit(ReplayGainRemoved(token, removed, unchanged, failed))
 
     def _embed_many(self, token: int, items: list[tuple[str, dict]], only_if_empty: bool) -> None:
         results = []

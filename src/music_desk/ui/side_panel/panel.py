@@ -36,6 +36,7 @@ class SidePanel(QWidget):
         self.lyrics = LyricsTab(self._conn, lyrics_service, writer)
         self.lyrics.can_write = self._can_write_lyrics
         writer.lyricsEmbedded.connect(self._lyrics_embedded)
+        writer.replaygainRemoved.connect(self._replaygain_removed)
         self.tabs.addTab(self.metadata, "Metadata")
         self.tabs.addTab(self.lyrics, "Lyrics")
         self.metadata.dirtyChanged.connect(
@@ -89,6 +90,13 @@ class SidePanel(QWidget):
         if self.metadata.dirty and (self.metadata.path == Path(path) or Path(path) in map(Path, self.metadata.paths)):
             return "This file has unsaved edits in the Metadata tab. Save or revert them first."
         return None
+
+    def _replaygain_removed(self, result) -> None:
+        """ReplayGain removed from the file the Metadata tab shows: its Loudness block follows."""
+        path = self.metadata.path
+        if path is not None and not self.metadata.dirty and not self.metadata.multi and \
+                any(Path(p) == path for p in result.removed):
+            self.metadata.show_file(path)
 
     def _lyrics_embedded(self, result: LyricsEmbedded) -> None:
         """Lyrics saved into a file the Metadata tab shows (by the Lyrics tab or auto-save): show the new tag."""

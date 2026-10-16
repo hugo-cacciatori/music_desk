@@ -8,6 +8,7 @@ through core/tags.py, a Reporter instead of print, cancellation, and a crash is 
 import logging
 import math
 import os
+import re
 import time
 import traceback
 from collections.abc import Callable
@@ -220,8 +221,9 @@ class RunLog:
         return "\n".join(lines) + "\n"
 
     def write(self) -> None:
-        """Append the report to the album's log file (the one file the app may append to, Ground rule 1)."""
-        with open(self.folder / self.options.log_file, "a", encoding="utf-8") as log_file:
+        """Write the report as the album's log file, replacing the previous run's (Hugo, 2026-10-16; the script
+        appended). Within one discography run, the leveling line is added after it (`process_discography`)."""
+        with open(self.folder / self.options.log_file, "w", encoding="utf-8") as log_file:
             log_file.write(self.text())
 
 
@@ -633,7 +635,10 @@ def discography_summary_text(root: Path, options: ReplayGainOptions, start: date
 
 def write_discography_summary(root: Path, options: ReplayGainOptions, start: datetime, duration: float,
                               albums: list[AlbumOutcome], target: float | None, cancelled: bool = False) -> None:
-    with open(root / options.log_file, "a", encoding="utf-8") as log_file:
+    """The summary replaces the artist folder's log, unless that folder was also one of this run's albums: then
+    it follows that album's report, written minutes earlier in the same run."""
+    mode = "a" if any(Path(album.folder) == Path(root) for album in albums) else "w"
+    with open(root / options.log_file, mode, encoding="utf-8") as log_file:
         log_file.write(discography_summary_text(root, options, start, duration, albums, target, cancelled))
 
 
@@ -711,3 +716,38 @@ def options_from_json(data) -> ReplayGainOptions:
         subfolder_keywords=strings("subfolder_keywords"), track_data_keywords=strings("track_data_keywords"),
         track_data_excluded_keywords=strings("track_data_excluded_keywords"), log_file=text("log_file"),
         comment=text("comment"))
+
+
+# ---------------------------------------------------------------------------
+# Removing ReplayGain (SPEC §10 B, Hugo 2026-10-16)
+# ---------------------------------------------------------------------------
+
+_NUMBER = r"[-+]?\d+(?:[.,]\d+)?"
+
+
+def lufs_comment_pattern(template: str) -> re.Pattern:
+    """A comment line the ReplayGain step writes, for any target: the template ("LUFS Target : {target}") with
+    {target} as a number. A template without {target} matches only itself."""
+    body = _NUMBER.join(re.escape(part) for part in template.strip().split("{target}"))
+    return re.compile(r"\s*" + body + r"\s*")
+
+
+def remove_replaygain(path: str | Path, options: ReplayGainOptions = DEFAULT_OPTIONS) -> bool:
+    """Remove a file's ReplayGain tags: every REPLAYGAIN_* value, and the comment lines the ReplayGain step wrote
+    (the card's comment template, any target). Other comment lines stay. Saves only when something changed;
+    returns whether it did. Raises the file's errors (unreadable, no tags, locked...) to the caller."""
+    tagged = TaggedFile(path)
+    if not tagged.info.tags:
+        return False  # raw AAC: nothing to remove, nothing can be written
+    changed = tagged.remove_replaygain() > 0
+    comment = tagged.fields().comment
+    if comment:
+        pattern = lufs_comment_pattern(options.comment)
+        lines = comment.splitlines()
+        kept = [line for line in lines if not pattern.fullmatch(line)]
+        if len(kept) != len(lines):
+            tagged.set_fields({"comment": "\n".join(kept).strip() or None})
+            changed = True
+    if changed:
+        tagged.save()
+    return changed

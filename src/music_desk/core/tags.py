@@ -27,6 +27,7 @@ TEXT_FIELDS = ("title", "artist", "albumartist", "album", "year", "genre", "comp
 RENAME_TEXT_FIELDS = ("title", "artist", "albumartist", "album", "year", "genre", "composer")
 
 FRONT_COVER = 3
+REPLAYGAIN_PREFIX = "replaygain_"  # every ReplayGain tag name starts so (ignoring case), in every family
 
 
 class TagError(Exception):
@@ -125,6 +126,20 @@ class _Adapter:
 
     def set_comment(self, audio, text: str) -> None:
         self.write_text(audio, "comment", text)
+
+    def replaygain_name(self, key: str) -> str:
+        """The ReplayGain name a tag key carries (MP4 wraps it in a freeform key)."""
+        return key
+
+    def remove_replaygain(self, audio) -> int:
+        """Delete every REPLAYGAIN_* tag (any case: rsgain's four values, and any other a tool wrote, such as a
+        reference loudness). Returns how many keys went."""
+        if audio.tags is None:
+            return 0
+        keys = [k for k in list(audio.tags.keys()) if self.replaygain_name(k).lower().startswith(REPLAYGAIN_PREFIX)]
+        for key in keys:
+            del audio.tags[key]
+        return len(keys)
 
     def cover(self, audio) -> Cover | None:
         raise NotImplementedError
@@ -307,6 +322,14 @@ class _ID3Adapter(_Adapter):
             return []
         return [frame for frame in audio.tags.getall("TXXX") if frame.desc.lower() == name.lower()]
 
+    def remove_replaygain(self, audio) -> int:
+        if audio.tags is None:
+            return 0
+        frames = [f for f in audio.tags.getall("TXXX") if f.desc.lower().startswith(REPLAYGAIN_PREFIX)]
+        for frame in frames:
+            audio.tags.delall(frame.HashKey)
+        return len(frames)
+
     def remove_txxx(self, audio, name) -> None:
         for frame in self.find_txxx(audio, name):
             audio.tags.delall(frame.HashKey)
@@ -383,6 +406,9 @@ class _MP4Adapter(_Adapter):
     def freeform_keys(self, audio, key) -> list[str]:
         wanted = (self.FREEFORM + key).lower()
         return [k for k in (audio.tags or {}) if k.lower() == wanted]
+
+    def replaygain_name(self, key: str) -> str:
+        return key[len(self.FREEFORM):] if key.startswith(self.FREEFORM) else ""
 
     def get_replaygain(self, audio, key) -> str | None:
         keys = self.freeform_keys(audio, key)
@@ -564,6 +590,9 @@ class _NoTagsAdapter(_Adapter):
     def get_replaygain(self, audio, key) -> str | None:
         return None
 
+    def remove_replaygain(self, audio) -> int:
+        return 0
+
     def cover(self, audio) -> Cover | None:
         return None
 
@@ -656,6 +685,11 @@ class TaggedFile:
             self._adapter.set_comment(self.audio, text)
         except TagError as e:
             raise self._wrap(e) from None
+
+    def remove_replaygain(self) -> int:
+        """Delete the ReplayGain values (every REPLAYGAIN_* tag); the comment is the caller's business
+        (core.replaygain.remove_replaygain). Returns how many tags went; save() writes it."""
+        return self._adapter.remove_replaygain(self.audio)
 
     # -- cover --
 

@@ -743,7 +743,8 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
    - renaming files and folders (inline F2, or the Rename tool), including an audio file's same-stem `.lrc`
      sidecar, which follows its rename;
    - writing tags into music files (metadata editor, "Save to file tags" in the Lyrics tab, ReplayGain tool);
-   - appending to `replaygain.log` in album folders (ReplayGain tool, as the script does);
+   - writing `replaygain.log` in album folders (ReplayGain tool; each run replaces it, while the script
+     appended);
    - sending junk files to the **Recycle Bin**, only when the user ticks that option in the Rename tool and
      confirms. Audio files, playlists, cover images, the ReplayGain log, cue sheets of single-file albums and `.lrc`
      files not yet in the tags are never junk (SPEC §10).
@@ -820,6 +821,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-15 | Release decisions (Hugo): an Inno Setup installer, chosen over a portable zip and a one-file exe for a normal Windows install (Start menu, uninstaller, clean updates). The README is written with the installer, once the name, licence and install steps are known. The root scripts are deleted as the last M6 step, once the installed v1 replaces them; `tests/reference/` keeps the frozen copies. |
 | 2026-10-15 | Tweaks before M7 (Hugo): ReplayGain has no preview (Run starts it; the report lists what was skipped), user-triggered refreshes jump the indexer's queue and are served inside a running scan, and every tool refreshes its whole folder afterwards. Details in SPEC §4 and §10. |
 | 2026-10-15 | M7 designed with Hugo: one playlist in progress (kept across restarts until cleared), in a narrow vertical panel between the file list and the side panel that takes only the list's spare width and blocks nothing. Built by dragging folders or songs (Explorer-style multi-selection) from the tree, the list or search results; natural order on import, duplicates skipped. Reorder by drag, Ctrl+↑/↓ or a header sort; customisable columns; a placeholder when empty. Export to .m3u8 with relative or absolute paths, chosen at export; open with the default player. Dropped: sample files for the formats ffmpeg can't encode, and ReplayGain for the formats rsgain can't handle. Details in SPEC §15. |
+| 2026-10-16 | ReplayGain (Hugo): `replaygain.log` holds the last run only (replaced each run; the script appended). ReplayGain tags can be removed from tracks and folders; "the ReplayGain tags" are every REPLAYGAIN_* value plus the comment lines written from the card's template (any target), while other comment lines and the log files stay. Details in SPEC §10 B and §17. |
 | 2026-10-15 | Installer as built: all users in Program Files by default (Hugo: install in Program Files), with Inno Setup's "only for me" choice; 64-bit only; licence page; the uninstaller asks before deleting the app data (default No, kept when silent). Inno Setup itself is installed in `C:\Program Files\Inno Setup 6`. Details in SPEC §13. |
 | 2026-10-15 | MusicDesk is licensed GPL-3.0-or-later (Hugo): compatible with mutagen (GPL-2.0-or-later) and Qt (LGPL-3.0). `LICENSE` holds the GPL-3.0 text, `pyproject.toml` declares it, About says it. Details in SPEC §13. |
 | 2026-10-15 | The name stays MusicDesk (Hugo). The icon is drawn by `packaging/make_icon.py` (no image editor, reproducible) and embedded in the exe with a version resource. No theme setting: Qt follows Windows' light and dark (checked). FFmpeg inside rsgain is an LGPL build with Fraunhofer FDK AAC; the LGPL-2.1 text and FDK AAC's notice are shipped. Details in SPEC §13. |
@@ -1004,6 +1006,13 @@ Done when:
       comes first). The rename preview: "Rename: check the changes", "Apply renames" (Tidy: "Apply renames, then
       run ReplayGain", or "Run ReplayGain" with nothing to rename) and "← Back to options" beside it (also at the
       top; the ReplayGain page's back button says the same). No Close in the preview. SPEC §10.
+
+**ReplayGain: log and removal** (Hugo, 2026-10-16)
+- [x] Each run replaces `replaygain.log` instead of appending (a discography's leveling line and summary follow
+      that run's report). Deliberate change, SPEC §17.
+- [x] "Remove ReplayGain tags…" for tracks, folders (recursive) and search results: the REPLAYGAIN_* values and
+      the LUFS comment lines, after a confirmation, through the TagWriter. `core/replaygain.remove_replaygain`,
+      `TaggedFile.remove_replaygain`, `TagWriter.remove_replaygain`. SPEC §10 B.
 
 **M7 Playlist builder** (read SPEC §15, designed with Hugo on 2026-10-15; also §5 and §14)
 - [x] Core (`core/playlists.py`, no Qt): the builder's model (entry ids, the natural import order, insert at a

@@ -90,10 +90,35 @@ def test_album_run(album_a):
     assert lines[-2].startswith("Result: OK. 3 tracks, 2 clipping fixes, 0 warnings, 0 errors, ")
 
 
-def test_log_is_appended(album_a):
+def test_each_run_replaces_the_log(album_a):
+    """Hugo (2026-10-16): replaygain.log holds the last run only; the script appended (SPEC §17)."""
+    (album_a / "replaygain.log").write_text("an older run", encoding="utf-8")
     run_album(album_a)
     run_album(album_a)
-    assert log_text(album_a).count("=" * 78) == 2
+    text = log_text(album_a)
+    assert text.count("=" * 78) == 1 and "an older run" not in text
+
+
+def test_a_discography_run_replaces_each_log_once(artist):
+    album = artist / "Album A"
+    (album / "replaygain.log").write_text("an older run", encoding="utf-8")
+    (artist / "replaygain.log").write_text("an older summary", encoding="utf-8")
+    process_discography(artist, scanner=FakeScanner(), exe=EXE, now=lambda: NOW)
+    text = log_text(album)
+    assert "an older run" not in text and text.count("=" * 78) == 1
+    assert "Discography leveling" in text  # added after this run's report, not replacing it
+    summary = (artist / "replaygain.log").read_text(encoding="utf-8")
+    assert "an older summary" not in summary
+
+
+def test_an_artist_folder_that_is_also_an_album_keeps_its_report(artist):
+    import shutil
+
+    shutil.copy2(artist / "Album A" / "01 Tone.flac", artist / "Loose Tone.flac")  # the artist folder has audio
+    process_discography(artist, scanner=FakeScanner(), exe=EXE, now=lambda: NOW)
+    text = (artist / "replaygain.log").read_text(encoding="utf-8")
+    # the artist folder is one of the run's albums (it holds audio): its report stays, the summary follows it
+    assert "Loose Tone.flac" in text and text.index("Loose Tone.flac") < text.rindex("Discography")
 
 
 def test_missing_and_invalid_values_are_warnings(album_a):

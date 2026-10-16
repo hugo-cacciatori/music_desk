@@ -158,6 +158,8 @@ class MainWindow(QMainWindow):
         self.tools_page.backRequested.connect(self.close_tools)
         self.tools_page.runRequested.connect(self.run_tool)
         self.tag_io.renameFields.connect(self._tool_example)
+        self.tag_writer.replaygainRemoved.connect(self._replaygain_removed)
+        self._rg_remove_token: int | None = None
         self._example_token: int | None = None
         self.rename_preview = RenamePreview()
         self.rename_preview.backRequested.connect(self._rename_back)
@@ -718,6 +720,8 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("Open in File Explorer", lambda: self.reveal(ids[0]))
         menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: self.copy_paths(ids))
+        menu.addSeparator()
+        menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain(ids))
         row = self.search_view.row(ids[0])
         if len(ids) == 1 and row is not None and row.artist:
             menu.addSeparator()
@@ -1256,8 +1260,11 @@ class MainWindow(QMainWindow):
         if len(ids) == 1:
             menu.addAction("Rename\tF2", lambda: self.file_view.start_rename(ids[0]))
         tools = menu.addAction("Tools…", lambda: self.open_tools(ids))
-        tools.setEnabled(any(self.file_view.model.rows[r].is_audio for i in ids
-                             if (r := self.file_view.model.row_for(i)) is not None))
+        any_audio = any(self.file_view.model.rows[r].is_audio for i in ids
+                        if (r := self.file_view.model.row_for(i)) is not None)
+        tools.setEnabled(any_audio)
+        remove = menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain(ids))
+        remove.setEnabled(any_audio)
         return menu
 
     def add_folder_actions(self, menu: QMenu, entry_id: int, include_open: bool = True, rename=None) -> None:
@@ -1274,6 +1281,65 @@ class MainWindow(QMainWindow):
         menu.addAction("Rescan", lambda: self.library.indexer.request_folder(entry_id))
         menu.addSeparator()
         menu.addAction("Tools…", lambda: self.open_tools([entry_id]))
+        menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain([entry_id]))
+
+    # -- removing ReplayGain (SPEC §10 B) --
+
+    def remove_replaygain(self, ids: list[int]) -> None:
+        """The ReplayGain tags of the tracks among `ids`, folders included with their subfolders: the
+        REPLAYGAIN_* values and the comment lines the ReplayGain step writes. Asks first; runs on the TagWriter."""
+        if not self._library_open():
+            return
+        conn = self.library.conn
+        track_ids = queries.track_ids_for(conn, ids)
+        rows = queries.track_rows(conn, track_ids)
+        paths = [str(rows[i].path) for i in track_ids if i in rows]
+        if not paths:
+            self.statusBar().showMessage("There are no audio files here.", STATUS_MS)
+            return
+        folders = [i for i in ids if (r := conn.execute("SELECT is_dir FROM entries WHERE id = ?",
+                                                         (i,)).fetchone()) and r[0]]
+        if len(ids) == 1 and folders:
+            where = f"{path_of(conn, folders[0])} and its subfolders"
+        else:
+            where = "the selection"
+        options = self.tools_page.replaygain_card.options()
+        if not self.ask_remove_replaygain(len(paths), where, options.comment):
+            return
+        self._rg_remove_token = self.tag_writer.remove_replaygain(paths, options)
+        count = len(paths)
+        self.statusBar().showMessage(f"Removing the ReplayGain tags of {count} file{'s' if count != 1 else ''}…",
+                                     STATUS_MS)
+
+    def ask_remove_replaygain(self, count: int, where: str, comment: str) -> bool:
+        """Confirm the removal (replaced in tests)."""
+        noun = f"{count} track{'s' if count != 1 else ''}"
+        box = QMessageBox(QMessageBox.Icon.Question, "Remove ReplayGain tags",
+                          f"Remove the ReplayGain tags from {noun} in {where}?\n\n"
+                          f"This deletes their track and album gain and peak values, and the comment line "
+                          f"\"{comment}\" that ReplayGain writes. Other tags, other comment lines and the audio "
+                          f"itself are not changed, and replaygain.log files stay.", parent=self)
+        remove = box.addButton("Remove", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return box.clickedButton() is remove
+
+    def _replaygain_removed(self, result) -> None:
+        if result.token != self._rg_remove_token:
+            return
+        done = len(result.removed)
+        if done:
+            text = f"Removed the ReplayGain tags of {done} file{'s' if done != 1 else ''}."
+        else:
+            text = "There were no ReplayGain tags to remove."
+        if result.unchanged and done:
+            text += f" {result.unchanged} had none."
+        self.statusBar().showMessage(text, STATUS_MS)
+        if result.failed:
+            first = result.failed[0][1]
+            more = f" (and {len(result.failed) - 1} more)" if len(result.failed) > 1 else ""
+            self.toast.show_message(f"Not changed: {first}{more}")
 
     # -- inline rename (SPEC §11) --
 

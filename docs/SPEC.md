@@ -727,6 +727,23 @@ happen to which files.
   to the lowest track gain and the album peak to the highest track peak, and writes 'LUFS Target : X' in the
   comment. It then copies the album values into the lite/bonus/CD2 subfolders, plus the track values into 'lite'
   subfolders for files with the same name. A report is appended to replaygain.log in the album folder."
+- **The log holds the last run only** (Hugo, 2026-10-16; a deliberate change from the script, which appended):
+  each run replaces the album's `replaygain.log`. Within one discography run, the leveling line follows that
+  run's report in the same file. The discography summary replaces the artist folder's log, unless that folder
+  was one of the run's albums, whose report it then follows.
+- **Removing ReplayGain** (Hugo, 2026-10-16): "Remove ReplayGain tags…" in the menus of tracks, folders (with
+  their subfolders), the list background and search results.
+  - It removes every `REPLAYGAIN_*` tag (`TaggedFile.remove_replaygain`, all families; any case, extra values
+    such as a reference loudness included), and the comment lines the ReplayGain step writes: the card's
+    comment template with any number for `{target}` (`replaygain.lufs_comment_pattern`). The user's other comment
+    lines stay.
+  - It asks first (`MainWindow.ask_remove_replaygain`, with the track count and the folder), then runs on the
+    TagWriter (`remove_replaygain` → `replaygainRemoved`): one file at a time under a short lock, refused for files
+    under a job's lock, the index updated after each file, and an unedited Metadata tab reloaded.
+  - A file with nothing to remove isn't saved again. `replaygain.log` files are left alone (the app never deletes
+    files).
+  - The status bar reports "Removed the ReplayGain tags of N files. M had none."; refusals and errors come in a
+    toast.
 - Handles every format marked ✓ in the ReplayGain column of §1. Other audio files are listed as skipped.
 - Scope:
   - **This album**: the current folder.
@@ -843,7 +860,7 @@ happen to which files.
   - the result line ("Done: N albums OK. Every album was leveled to X dB.", "Done, but N albums need checking",
     or "Stopped…");
   - for a discography, the summary table (Album, Result, Album gain, Leveled to, Files changed);
-  - each album's RunLog text, exactly as appended to its replaygain.log, in a monospace view.
+  - each album's RunLog text, exactly as written to its replaygain.log, in a monospace view.
     `process_discography(on_album=)` hands over each album's RunLog.
   - "Open replaygain.log" (the folder's log; the artist folder's for a discography) and "Open in File Explorer",
     launched on the shell thread.
@@ -1204,6 +1221,8 @@ replaced them).
 - Lyrics: every track is looked up on LRCLIB, even with a lyrics tag. The tag is no longer a lyrics "source"; the
   Lyrics tab shows LRCLIB only.
 - Auto-embed only fills empty lyrics tags.
+- ReplayGain: `replaygain.log` holds the last run only (the script appended every run); see §10 B. The parity
+  tests compare a single run on fresh copies, where the two agree.
 - LRCLIB circuit breaker: pause and auto-retry instead of stopping.
 - Junk cleanup:
   - opt-in, and files go to the Recycle Bin;

@@ -25,6 +25,7 @@ Recycle Bin, and only when you tick that option and confirm.
   - **Rename from tags**, with masks such as `{track:02} {title}`. You see a preview first, `.lrc` files
     follow their audio file, and an optional junk cleanup sends files to the Recycle Bin.
   - **ReplayGain** for an album or a whole discography, with the bundled [rsgain](https://github.com/complexlogic/rsgain).
+    Each run writes a fresh `replaygain.log`; the ReplayGain tags can also be removed from tracks or folders.
   - **Tidy**: the rename, then ReplayGain.
 
   Jobs run in the background, and you can keep browsing meanwhile.

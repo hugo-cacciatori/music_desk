@@ -71,8 +71,7 @@
           Comment: "Removes MusicDesk. Your music folders are not touched."
 
     - "Open file location" on the search result then opens that folder, with the uninstaller in it.
-    - Typing "uninstall musicdesk" in Start should find the shortcut and start the uninstaller directly. This is
-      expected from how Start indexes shortcuts, and is checked below.
+    - Typing "uninstall musicdesk" in Start finds the shortcut and starts the uninstaller directly (measured below).
     - The uninstaller itself is unchanged: UAC for an all-users install, then the question about the app's data.
   - **Upgrades:** 0.1.0–0.2.x put a loose `MusicDesk.lnk` at the top of the Start menu's Programs folder. The new
     setup deletes it (`[InstallDelete] Type: files; Name: "{autoprograms}\{#AppName}.lnk"`), so Start doesn't list
@@ -91,6 +90,13 @@
     - The search "uninstall musicdesk" finds the shortcut (record the result here as measured).
     - The shortcut starts the uninstaller.
     - Hugo's own Program Files install is upgraded only with the next release, on his go.
+  - **Measured on 2026-10-16** (0.2.2): a silent per-user 0.2.1 install in `%TEMP%\md-install-test`, then a silent
+    per-user 0.2.2 setup over it (`/CURRENTUSER` is needed, or the setup may follow Hugo's all-users install):
+    - 0.2.1 left `Programs\MusicDesk.lnk`; 0.2.2 deleted it and created `Programs\MusicDesk\` with `MusicDesk.lnk`
+      (→ the exe) and `Uninstall MusicDesk.lnk` (→ `unins000.exe`, with its comment).
+    - Hugo, in Start: "Open file location" opens that folder; typing "uninstall musicdesk" **finds the shortcut**;
+      clicking it starts the uninstaller.
+    - Start still lists the loose shortcut of Hugo's all-users 0.2.1 install, which a per-user setup can't remove.
 - Licenses to ship: rsgain (BSD-2-Clause), CRCpp, and the FFmpeg libraries built into rsgain (LGPL, checked
   below). Also Qt/PySide6 (LGPL) and mutagen (GPL-2.0-or-later).
 - As built (M6 task 3): the texts are in `resources/licenses/` (bundled as `resources/licenses`, listed in its

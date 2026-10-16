@@ -2,7 +2,8 @@
 ; from music_desk.__version__ after the PyInstaller build has filled dist\MusicDesk.
 ;
 ; Installs for all users in Program Files by default (admin); the setup's first page also offers "only for me"
-; (no admin, in %LOCALAPPDATA%\Programs). The uninstaller keeps the app's own data (%LOCALAPPDATA%\MusicDesk:
+; (no admin, in %LOCALAPPDATA%\Programs). The Start menu gets a MusicDesk folder with the app and "Uninstall
+; MusicDesk". The uninstaller keeps the app's own data (%LOCALAPPDATA%\MusicDesk:
 ; the library index, settings, logs) unless the user asks to delete it. Music folders are never touched.
 
 #ifndef AppVersion
@@ -49,8 +50,15 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "..\dist\MusicDesk\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; 0.1.0-0.2.x put a loose shortcut at the top of the Start menu's Programs; it moved into the MusicDesk folder.
+Type: files; Name: "{autoprograms}\{#AppName}.lnk"
+
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
+; A Start menu folder with the uninstaller beside the app: Start's own Uninstall button only opens Settings for
+; classic apps (SPEC §13).
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"; Comment: "Removes MusicDesk. Your music folders are not touched."
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]

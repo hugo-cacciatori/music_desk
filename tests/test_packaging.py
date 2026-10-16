@@ -36,7 +36,8 @@ def test_the_spec_uses_them():
 def test_installer_script():
     """The installer's fixed points (SPEC §13): the AppId never changes, Program Files by default with an
     "only for me" choice, the licence page, the icon, the files from the PyInstaller folder, and an uninstaller
-    that keeps the app's data unless asked (and always in a silent uninstall)."""
+    that keeps the app's data unless asked (and always in a silent uninstall). The Start menu gets a MusicDesk
+    folder with an uninstall shortcut, and an upgrade deletes the loose shortcut of 0.1.0-0.2.x."""
     iss = (ROOT / "packaging" / "installer.iss").read_text(encoding="utf-8")
     assert "AppId={{AF5F6B62-C2F8-41D7-8FBE-124F1D693BF9}" in iss
     assert r"DefaultDirName={autopf}\{#AppName}" in iss and "PrivilegesRequiredOverridesAllowed=dialog" in iss
@@ -44,5 +45,10 @@ def test_installer_script():
     assert r"LicenseFile=..\LICENSE" in iss and r"SetupIconFile=..\resources\icons\music_desk.ico" in iss
     assert r'Source: "..\dist\MusicDesk\*"' in iss and "recursesubdirs" in iss
     assert r"{localappdata}\{#AppName}" in iss and "not UninstallSilent" in iss and "MB_DEFBUTTON2" in iss
+    assert r'Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"' in iss
+    assert r'Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"' in iss
+    assert "DefaultGroupName={#AppName}" in iss
+    assert "[InstallDelete]" in iss and r'Type: files; Name: "{autoprograms}\{#AppName}.lnk"' in iss
+    assert r'Name: "{autoprograms}\{#AppName}"; Filename' not in iss
     for path in ("LICENSE", "resources/icons/music_desk.ico"):
         assert (ROOT / path).is_file()

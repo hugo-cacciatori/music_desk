@@ -16,14 +16,14 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, end of session 11):** version 0.2.1 is on `main`, pushed, and published as the GitHub
-  release v0.2.1 (`MusicDesk-Setup-0.2.1.exe`). M0–M7 are complete (Progress is in HISTORY.md). 941 tests pass,
-  slow ones included, and ruff is clean.
+- **State (2026-10-16, session 12):** version 0.2.2 is on `main` (not pushed): the Start menu folder with
+  "Uninstall MusicDesk" (SPEC §13, measured). v0.2.1 is the latest GitHub release. M0–M7 are complete (Progress is
+  in HISTORY.md). 941 tests pass, slow ones included, and ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Specified on 2026-10-16** (docs only, no app code yet): Delete to the Recycle Bin, the file preview, and the
-  shared masks with the cue split, as M8–M10 below. Also set up: `resources/flac/` holds flac 1.5.0 (not bundled
-  yet), and a trial on a fixture copy measured a lossless split (SPEC §22). Then the uninstall shortcut (§13).
-- **Next step: the uninstall shortcut task, then M8 task 1.**
+- **Specified on 2026-10-16** (docs only, no app code yet): M8–M10 below. `resources/flac/` holds flac 1.5.0 (not
+  bundled yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
+- **Next step: M8 task 1.** A probe script (send2trash on a local file and on a `\\localhost\C$\…` path) was
+  written in session 12's scratchpad but not run; rewrite it if it is gone, and show Hugo the commands first.
 - **Watch for:** an intermittent failure in full runs, probably `tests/ui/test_watcher.py::test_live_folder_changes`
   (a Windows `PermissionError`; it passes alone). When a full run fails, keep its output
   (`uv run pytest > out.txt`) to name the test.
@@ -34,7 +34,7 @@ Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2
 
 **Installer: uninstall shortcut** (read SPEC §13, "Uninstalling from the Start menu"). Small, so it goes first; it
 reaches Hugo with the next setup he asks for.
-- [ ] 1. `installer.iss`: the shortcut in a MusicDesk Start menu folder with "Uninstall MusicDesk", and the old loose
+- [x] 1. `installer.iss`: the shortcut in a MusicDesk Start menu folder with "Uninstall MusicDesk", and the old loose
       shortcut deleted on upgrade; `test_packaging.py`; the README's Install section says how to uninstall.
 
 Done when: a per-user install over a scratch 0.2.1 install shows the folder with both shortcuts and no loose one,
@@ -90,6 +90,9 @@ Done when:
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task.
 2. Hugo's global rule: before running anything destructive (deleting files, etc.), tell him the exact command
    first.
+   - Hugo works in auto mode, whose safety check blocks some needed commands (running an installer, for
+     example). When a step needs more privileges than auto mode allows, ask him to switch to manual mode (and
+     say why) instead of working around the block; tell him when he can switch back.
 3. Commit each finished task on `main`. Push, publish a release or install global tools only when Hugo asks.
    Project dependencies go in the project's virtual environment.
 4. Versions (Hugo, M7): a patch bump after each task, and a minor bump for a release (see Release).

@@ -42,6 +42,10 @@ Download `MusicDesk-Setup-<version>.exe` from the
 11). It installs for all users in Program Files, or only for you if you choose that on its first page. The setup
 isn't signed, so Windows SmartScreen may warn about it: choose "More info", then "Run anyway".
 
+To uninstall, open the MusicDesk folder in the Start menu and choose "Uninstall MusicDesk" (or type "uninstall
+musicdesk" in Start), or use Settings › Apps › Installed apps. Start's own Uninstall button on MusicDesk only opens
+that Settings page.
+
 MusicDesk keeps its own data (the library index, settings and logs) in `%LOCALAPPDATA%\MusicDesk`. Uninstalling
 asks whether to delete it too. Your music folders are never touched.
 

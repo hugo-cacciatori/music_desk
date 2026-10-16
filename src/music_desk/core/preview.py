@@ -13,7 +13,13 @@ from music_desk.core.fsops import open_shared
 TEXT_TYPES = frozenset({".txt", ".log", ".cue", ".nfo", ".sfv", ".md5", ".ffp", ".accurip", ".m3u", ".m3u8", ".lrc"})
 IMAGE_TYPES = frozenset({".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"})
 PREVIEW_TYPES = TEXT_TYPES | IMAGE_TYPES
-TEXT_LIMIT = 1024 * 1024  # bytes shown; the rest is one Open away (lowered if showing it stalls the UI, SPEC §20)
+# Showing text must not stall the UI (SPEC §20, measured in M9): 1 MB of log lines took up to 52 ms, 512 KB up to
+# 29 ms. Without word wrap Qt lays out every line to find the widest, so long lines cost more: up to 300
+# characters stay under 33 ms, longer ones are word-wrapped (under 16 ms), and a line is cut into pieces of at
+# most BREAK_AT characters, since even wrapped, one 200,000-character line took 5 to 8 s.
+TEXT_LIMIT = 512 * 1024  # bytes shown; the rest is one Open away
+WRAP_FROM = 300  # a longer line turns word wrap on
+BREAK_AT = 2000  # longer lines are cut into pieces of this length
 IMAGE_LIMIT = 50 * 1024 * 1024  # larger images aren't decoded
 
 _BOMS = ((b"\xef\xbb\xbf", "utf-8", "UTF-8 (BOM)"), (b"\xff\xfe", "utf-16-le", "UTF-16 LE"),
@@ -47,15 +53,20 @@ class TextPreview:
     encoding: str  # its name, shown with the file's details so a garbled preview explains itself
     size: int  # the whole file, in bytes
     truncated: bool  # only the first `limit` bytes are in `text`
+    wrap: bool = False  # a line is longer than WRAP_FROM: show it word-wrapped
 
 
 def read_text(path: str | Path, limit: int = TEXT_LIMIT) -> TextPreview:
-    """The first `limit` bytes of a text file, decoded. Read with sharing, so Explorer can still rename or
-    delete the file meanwhile. Raises OSError."""
+    """The first `limit` bytes of a text file, decoded, with lines over BREAK_AT cut into pieces. Read with
+    sharing, so Explorer can still rename or delete the file meanwhile. Raises OSError."""
     path = Path(path)
     with open_shared(path) as f:
         size = os.fstat(f.fileno()).st_size
         data = f.read(limit)
     truncated = size > len(data)
     text, encoding = decode(data, "cp437" if path.suffix.lower() == ".nfo" else "cp1252", cut=truncated)
-    return TextPreview(text.replace("\r\n", "\n"), encoding, size, truncated)
+    lines = text.replace("\r\n", "\n").split("\n")
+    longest = max(map(len, lines))
+    if longest > BREAK_AT:
+        lines = [line[i:i + BREAK_AT] for line in lines for i in range(0, max(len(line), 1), BREAK_AT)]
+    return TextPreview("\n".join(lines), encoding, size, truncated, wrap=longest > WRAP_FROM)

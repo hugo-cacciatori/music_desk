@@ -179,8 +179,8 @@ def test_selection_messages(panel, tmp_path):
     assert "folder" in panel.metadata.message.text()
     panel.show_selection([SelectedItem(tmp_path / "a.txt", False, False), SelectedItem(tmp_path, True, False)])
     assert "2 items selected, none of them audio files" in panel.metadata.message.text()
-    panel.show_selection([SelectedItem(tmp_path / "notes.txt", False, False)])
-    assert "isn't an audio file" in panel.metadata.message.text()
+    panel.show_selection([SelectedItem(tmp_path / "booklet.pdf", False, False)])  # not previewed (SPEC §20)
+    assert "isn't an audio file" in panel.metadata.message.text() and panel.stack.currentWidget() is panel.tabs
 
 
 def test_save_failure_keeps_the_edits(qtbot, panel, fixture_copy, monkeypatch):

@@ -10,16 +10,18 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtGui import QImage
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QObject, Qt, Signal
+from PySide6.QtGui import QImage, QImageIOHandler, QImageReader
 
-from music_desk.core import metadata
+from music_desk.core import metadata, preview
+from music_desk.core.fsops import open_shared
 from music_desk.core.metadata import Snapshot
 from music_desk.core.tags import TaggedFile
 
 log = logging.getLogger(__name__)
 
 COVER_SIZE = 220  # pixels: the decoded cover is scaled once, off the UI thread
+PREVIEW_WIDTH = 1200  # pixels: previewed images are decoded at most this wide; the page scales them to fit
 
 
 @dataclass(frozen=True)
@@ -47,8 +49,24 @@ class ImageRead:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class PreviewRead:
+    """A file preview (SPEC §20): its text, or its image scaled down, or why it can't be shown."""
+
+    token: int
+    path: str
+    kind: str  # "text" or "image"
+    size: int = 0
+    mtime: float = 0.0
+    text: preview.TextPreview | None = None
+    image: QImage | None = None
+    pixels: tuple[int, int] | None = None  # the image's own size, as shown (EXIF orientation applied)
+    error: str | None = None
+
+
 class TagIO(QObject):
     loaded = Signal(object)  # Loaded, after a read
+    previewRead = Signal(object)  # PreviewRead
     loadedMany = Signal(object)  # LoadedMany, after a batch read (multi-selection)
     imageRead = Signal(object)  # ImageRead: a picture chosen as the new cover
     folderCover = Signal(int, object, str)  # token, QImage or None, where it comes from
@@ -131,6 +149,13 @@ class TagIO(QObject):
         self._submit(run)
         return token
 
+    def read_preview(self, path: str | Path, max_width: int = PREVIEW_WIDTH) -> int:
+        """A previewed file, read and decoded off the UI thread: text up to its cap, or an image decoded at most
+        `max_width` pixels wide (never upscaled)."""
+        token = self.next_token()
+        self._submit(lambda: self.previewRead.emit(read_preview(token, Path(path), max_width)))
+        return token
+
     def close(self) -> None:
         if not self._closed:
             self._closed = True
@@ -148,6 +173,53 @@ class TagIO(QObject):
         except Exception as e:  # noqa: BLE001 - an unreadable file is shown as such
             return Loaded(token, None, None, f"{type(e).__name__}: {e}")
         return Loaded(token, snapshot, decode_cover(snapshot.cover))
+
+
+def read_preview(token: int, path: Path, max_width: int = PREVIEW_WIDTH) -> PreviewRead:
+    kind = preview.kind(path) or "text"
+    try:
+        stat = path.stat()
+    except OSError as e:
+        return PreviewRead(token, str(path), kind, error=f"Can't read {path.name}: {e.strerror or e}")
+    base = dict(token=token, path=str(path), kind=kind, size=stat.st_size, mtime=stat.st_mtime)
+    if kind == "text":
+        try:
+            return PreviewRead(**base, text=preview.read_text(path))
+        except OSError as e:
+            return PreviewRead(**base, error=f"Can't read {path.name}: {e.strerror or e}")
+    if stat.st_size > preview.IMAGE_LIMIT:
+        return PreviewRead(**base, error=f"Too large to preview ({stat.st_size / 1024 / 1024:.0f} MB). Open it "
+                                         "instead.")
+    try:
+        with open_shared(path) as f:
+            data = f.read()
+    except OSError as e:
+        return PreviewRead(**base, error=f"Can't read {path.name}: {e.strerror or e}")
+    image, pixels, error = decode_preview_image(data, max_width)
+    return PreviewRead(**base, image=image, pixels=pixels, error=error)
+
+
+def decode_preview_image(data: bytes, max_width: int) -> tuple[QImage | None, tuple[int, int] | None, str | None]:
+    """(image, its own size, error): decoded from memory at most `max_width` wide, with EXIF orientation."""
+    buffer = QBuffer()
+    buffer.setData(QByteArray(data))
+    buffer.open(QIODevice.OpenModeFlag.ReadOnly)
+    reader = QImageReader(buffer)
+    reader.setAutoTransform(True)
+    size = reader.size()
+    if not size.isValid():
+        return None, None, f"Can't show this image: {reader.errorString()}"
+    if reader.transformation() & QImageIOHandler.Transformation.TransformationRotate90:
+        size = size.transposed()  # a portrait photo stored sideways
+    if size.width() > max_width:
+        scaled = size.scaled(max_width, 1_000_000, Qt.AspectRatioMode.KeepAspectRatio)  # width-bound
+        if reader.transformation() & QImageIOHandler.Transformation.TransformationRotate90:
+            scaled = scaled.transposed()  # the reader scales before it rotates
+        reader.setScaledSize(scaled)
+    image = reader.read()
+    if image.isNull():
+        return None, None, f"Can't show this image: {reader.errorString()}"
+    return image, (size.width(), size.height()), None
 
 
 def decode_cover(data: bytes | None) -> QImage | None:

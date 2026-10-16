@@ -27,7 +27,9 @@ shows it in the side panel, read-only, instead of "<name> isn't an audio file."
   - a read-only `QPlainTextEdit` in the system's fixed-width font, with no word wrap (logs and cue sheets are
     column-aligned) and a horizontal scroll bar;
   - selecting and Ctrl+C work, and nothing can be typed.
-  - Files over 1 MB show their first 1 MB, with "Showing the first 1 MB of 12 MB. Open it to see the rest."
+  - Files over the cap (512 KB, measured below) show their first 512 KB, with "Showing the first 512 KB of
+    12 MB. Open it to see the rest."
+  - A file with lines over 300 characters is word-wrapped instead (measured below).
 - **Images:** scaled to fit the panel's width (never upscaled), keeping the ratio, with EXIF orientation applied.
   - An image that can't be decoded shows "Can't show this image: <reason>" (the fixtures' 3-byte `cover.jpg`
     is such a case).
@@ -71,6 +73,30 @@ shows it in the side panel, read-only, instead of "<name> isn't an audio file."
 
 **Responsiveness:** M9 measures the UI-thread cost of showing 1 MB of text with `StallWatch` (§18). If it is
 over 50 ms, the cap is lowered until it isn't, and the number found is recorded here.
+- **Measured (M9 task 2, 2026-10-16, this machine):** the time of `FilePreview._read` plus the events after it
+  (layout, paint), on a 360 × 700 page, worst of 5–7 runs.
+  - **1 MB** of 84-character log lines took 38–52 ms, over the target. **512 KB** took 23–29 ms, so
+    **`TEXT_LIMIT` is 512 KB**.
+  - **Without word wrap**, Qt lays out every line to find the widest, so line length matters more than size.
+    At 512 KB: lines of 200 took ≤ 28 ms, 300 ≤ 32 ms, 500 ≤ 51 ms, 2000 ≤ 162 ms, and 5000 ≤ 370 ms (even at
+    256 KB).
+  - **With word wrap**, only the visible lines are laid out: lines of 500 to 5000 took 11–25 ms. But **one line**
+    of 200,000 characters took 5.7–8.3 s, because a single block is always laid out whole.
+  - So (`core/preview.py`): **no wrap** while every line is at most `WRAP_FROM` = 300 characters (logs and cue
+    sheets keep their columns). Otherwise **word wrap**, with lines over `BREAK_AT` = 2000 characters cut into
+    pieces.
+  - **Final check** through `read_text`, with 2 MB files: an EAC-like UTF-16 log 18 ms, UTF-8 log lines 26 ms,
+    lines of 300 32 ms, lines of 301 14 ms, one 2 MB line 15 ms, prose lines of 3000 13 ms. **Worst 32 ms.**
+- **As built (M9 task 2):**
+  - `TagIO.read_preview(path)` emits `previewRead(PreviewRead)` with the text, or the image decoded at most
+    1200 px wide (`PREVIEW_WIDTH`, EXIF orientation applied), or an error. `FilePreview` (`ui/side_panel/
+    file_preview.py`) is the panel's third page, and fits the image to its width on resize.
+  - The details line uses the file list's date format (`2026-10-16 14:02`).
+  - The reload compares the index's (size, mtime) for the entry (`SidePanel._stamp`), so no file is touched on
+    the UI thread. It happens when the open folder is refreshed (`folder_updated`), keeping the scroll position.
+  - Open goes through the window's shell thread, like Open in the menus.
+  - Qt reads GIF and WebP through its image plugins, and the frozen build ships `qgif`, `qjpeg` and `qwebp`.
+    Qt can't write GIF, so the GIF test image is written by hand.
 
 **Tests**
 - Each type.

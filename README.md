@@ -22,6 +22,8 @@ Recycle Bin after you confirm.
 - **Library search (Ctrl+K).** Type any part of a title, artist, album, file name or lyric line. Accents and
   case are ignored, and filters such as `artist:`, `year:`, `ext:`, `lrclib:notfound` or `rg:none` narrow it.
   The matching lyric line is shown in the results.
+- **Preview** rip logs, cue sheets, notes, `.nfo` files and scans beside the list, read-only. Each text file is
+  read in its own encoding, such as an EAC log's UTF-16 or an `.nfo`'s DOS code page.
 - **Delete** files and folders (Del) from the file list, the folder tree or search results. They always go to
   the Recycle Bin after you confirm, never deleted for good, and where Windows has no Recycle Bin (a network
   share, a removable drive) MusicDesk refuses and offers File Explorer instead.

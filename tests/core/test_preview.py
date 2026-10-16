@@ -59,6 +59,22 @@ def test_the_cap(tmp_path):
     assert not whole.truncated and whole.text.count("\n") == 1000
 
 
+def test_long_lines_wrap_and_giant_ones_are_cut(tmp_path):
+    """Measured in M9: lines over WRAP_FROM are slow without word wrap, one over BREAK_AT is slow even with it."""
+    short = tmp_path / "short.log"
+    short.write_text(("x" * preview.WRAP_FROM + "\n") * 3, encoding="utf-8")
+    assert not preview.read_text(short).wrap
+    long = tmp_path / "long.txt"
+    long.write_text("a" * (preview.WRAP_FROM + 1) + "\nb\n", encoding="utf-8")
+    text = preview.read_text(long)
+    assert text.wrap and text.text == "a" * (preview.WRAP_FROM + 1) + "\nb\n"  # wrapped, not cut
+    giant = tmp_path / "giant.txt"
+    giant.write_text("c" * (2 * preview.BREAK_AT + 5) + "\n\nd", encoding="utf-8")
+    text = preview.read_text(giant)
+    assert text.wrap and text.text.split("\n") == ["c" * preview.BREAK_AT, "c" * preview.BREAK_AT, "c" * 5, "",
+                                                   "d"]
+
+
 def test_a_cut_inside_a_character_is_never_an_error(tmp_path):
     utf8 = tmp_path / "a.txt"
     utf8.write_bytes("ééé".encode())  # 6 bytes; a cut at 5 splits the last é

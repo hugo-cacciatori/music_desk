@@ -1,4 +1,5 @@
-"""The side panel on the right (SPEC §7): the Metadata and Lyrics tabs for files, or the folder summary."""
+"""The side panel on the right (SPEC §7): the Metadata and Lyrics tabs for files, the folder summary, or the
+preview of one log, cue sheet, note or image (§20)."""
 
 import sqlite3
 from collections.abc import Callable
@@ -8,10 +9,12 @@ from pathlib import Path
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QStackedWidget, QTabWidget, QVBoxLayout, QWidget
 
+from music_desk.core import preview
 from music_desk.core.index import queries
 from music_desk.services.lyrics_service import LyricsService
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import LyricsEmbedded, TagWriter
+from music_desk.ui.side_panel.file_preview import FilePreview
 from music_desk.ui.side_panel.folder_summary import FolderSummaryView
 from music_desk.ui.side_panel.lyrics_tab import LyricsTab
 from music_desk.ui.side_panel.metadata_tab import MetadataTab
@@ -43,9 +46,11 @@ class SidePanel(QWidget):
             lambda dirty: self.tabs.setTabText(0, "Metadata •" if dirty else "Metadata"))
 
         self.summary = FolderSummaryView()
+        self.preview = FilePreview(io)
         self.stack = QStackedWidget()
         self.stack.addWidget(self.tabs)
         self.stack.addWidget(self.summary)
+        self.stack.addWidget(self.preview)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.stack)
@@ -56,9 +61,15 @@ class SidePanel(QWidget):
     # -- files --
 
     def show_selection(self, items: list[SelectedItem]) -> None:
-        self.stack.setCurrentWidget(self.tabs)
         audio = [item.path for item in items if item.is_audio and not item.is_dir]
         self._show_lyrics(items)
+        if len(items) == 1 and not items[0].is_dir and not audio and preview.kind(items[0].path):
+            self.metadata.show_message(f"{items[0].path.name} isn't an audio file.")  # behind the preview
+            self.preview.show_file(items[0].path, self._stamp(items[0].entry_id))
+            self.stack.setCurrentWidget(self.preview)
+            return
+        self._leave_preview()
+        self.stack.setCurrentWidget(self.tabs)
         if not items:
             self.metadata.show_message("Select a file to see its tags.")
         elif not audio and len(items) == 1 and items[0].is_dir:
@@ -73,6 +84,18 @@ class SidePanel(QWidget):
         elif self.metadata.paths != audio or not self.metadata.multi:
             # several items: the audio files among them are edited together (one audio file too, with a note)
             self.metadata.show_files(audio, skipped=len(items) - len(audio))
+
+    def _stamp(self, entry_id: int | None) -> tuple | None:
+        """The index's (size, mtime) of a file: a change means it was rewritten, and the preview reloads."""
+        conn = self._conn()
+        if conn is None or entry_id is None:
+            return None
+        row = conn.execute("SELECT size, mtime FROM entries WHERE id = ?", (entry_id,)).fetchone()
+        return tuple(row) if row else None
+
+    def _leave_preview(self) -> None:
+        if self.stack.currentWidget() is self.preview:
+            self.preview.clear()
 
     def _show_lyrics(self, items: list[SelectedItem]) -> None:
         tracks = [item for item in items if item.is_audio and not item.is_dir]
@@ -126,6 +149,7 @@ class SidePanel(QWidget):
         self.metadata.show_message("Select a file to see its tags.")
         self.lyrics.show_message("Select a track to see its lyrics from LRCLIB.")
         previous = self.summary.summary
+        self._leave_preview()
         self.summary.show_summary(summary)
         self.stack.setCurrentWidget(self.summary)
         if previous is None or previous.id != summary.id or previous.first_track != summary.first_track:

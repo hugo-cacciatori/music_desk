@@ -16,14 +16,15 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, session 12):** version 0.2.3 is on `main` (not pushed). 0.2.2 added the Start menu folder
-  with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added `fsops.can_recycle`: nothing is sent where Windows
-  can't recycle (SPEC §19, measured on a network path). v0.2.1 is the latest GitHub release. M0–M7 are complete (Progress is
-  in HISTORY.md). 947 tests pass, slow ones included, and ruff is clean.
+- **State (2026-10-16, session 12):** version 0.2.4 is on `main` (not pushed). 0.2.2 added the Start menu folder
+  with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added `fsops.can_recycle` (SPEC §19, measured on a
+  network path). 0.2.4 added Delete to the Recycle Bin (M8 task 2). v0.2.1 is the latest GitHub release. M0–M7
+  are complete (Progress is in HISTORY.md). 962 tests pass, slow ones included, and ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Specified on 2026-10-16** (docs only, no app code yet): M8–M10 below. `resources/flac/` holds flac 1.5.0 (not
+- **Specified on 2026-10-16** (docs only, no app code yet): M9–M10 below. `resources/flac/` holds flac 1.5.0 (not
   bundled yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
-- **Next step: M8 task 2** (Delete in the list, the tree and the results).
+- **Next step:** M8's last "Done when" is a manual run, where Hugo deletes from a copied folder in the real app and
+  finds the items in the Recycle Bin. Then M9 task 1.
 - **Watch for:** an intermittent failure in full runs, probably `tests/ui/test_watcher.py::test_live_folder_changes`
   (a Windows `PermissionError`; it passes alone). When a full run fails, keep its output
   (`uv run pytest > out.txt`) to name the test.
@@ -47,7 +48,7 @@ junk cleanup already relies on recycling, and the split's originals will.
       (show Hugo the exact commands first), then check the Recycle Bin, and record the measured result in §19.
       Add `fsops.can_recycle`; `send_to_recycle_bin` refuses when it fails; the junk cleanup keeps and reports
       such files. Tests use an injected check.
-- [ ] 2. Delete: Del, Shift+Del and the menu item in the list, the tree and the results, through `ask_delete`;
+- [x] 2. Delete: Del, Shift+Del and the menu item in the list, the tree and the results, through `ask_delete`;
       locks, refresh, the selection afterwards, and the playlist's Del unchanged.
 
 Done when:

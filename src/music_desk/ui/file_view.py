@@ -351,6 +351,10 @@ class FileView(QWidget):
         rows = sorted(self.view.selectionModel().selectedRows(), key=lambda index: index.row())
         return [index.data(ENTRY_ID_ROLE) for index in rows]
 
+    def visible_ids(self) -> list[int]:
+        """Every row's entry id, top to bottom as shown (the selection after a delete)."""
+        return [self.proxy.index(row, 0).data(ENTRY_ID_ROLE) for row in range(self.proxy.rowCount())]
+
     def is_dir(self, entry_id: int) -> bool:
         row = self.model.row_for(entry_id)
         return row is not None and self.model.rows[row].is_dir

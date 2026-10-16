@@ -763,6 +763,11 @@ class MetadataTab(QWidget):
         box.exec()
         return "save" if box.clickedButton() is save else "discard" if box.clickedButton() is discard else "cancel"
 
+    def discard_edits(self) -> None:
+        """Forget the unsaved edits without asking (their file was sent to the Recycle Bin, after a confirmation
+        that said so)."""
+        self._set_dirty(False)
+
     def can_leave(self) -> bool:
         """True if the selection may move on: no edits, or they were saved or discarded."""
         if not self.dirty:

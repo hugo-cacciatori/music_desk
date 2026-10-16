@@ -210,7 +210,7 @@ def test_result_menu(qtbot, window, service):
     sixth = entry(service, "Other", ALBUM, "track6.FLAC")
     texts = [a.text() for a in window.result_menu([sixth]).actions() if a.text()]
     assert texts == ["Go to folder", "Open", "Play selection", "Open in File Explorer", "Copy path",
-                     "Remove ReplayGain tags…", "Filter by Fixture Artist"]
+                     "Remove ReplayGain tags…", "Delete\tDel", "Filter by Fixture Artist"]
 
 
 def test_sorting_and_live_updates_keep_the_selection(qtbot, window, service):

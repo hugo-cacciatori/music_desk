@@ -77,6 +77,25 @@ FIND_QUERIES = (  # the Lyrics menu's Find entries: (menu text, search query)
 )
 STATUS_MS = 8000
 PAUSED_NOTE = " (paused while ReplayGain runs)"
+DELETE_OWNER = "a delete"  # its PathLocks owner, as other jobs see it
+DELETE_NAMES = 10  # names listed in the question for several items
+
+
+@dataclasses.dataclass(frozen=True)
+class DeleteItem:
+    entry_id: int
+    path: Path
+    is_dir: bool
+
+
+@dataclasses.dataclass
+class DeleteRequest:
+    """One Delete, from the check to the report (SPEC §19). Its lock is held until the end."""
+
+    items: list[DeleteItem]
+    lock: int
+    view: QWidget | None  # where Del was pressed, for the selection afterwards
+    next_id: int | None  # the row to select afterwards
 
 
 class DropOverlay(QLabel):
@@ -101,6 +120,8 @@ class MainWindow(QMainWindow):
     renameDone = Signal(object, bool)  # RenameResult, whether it was an Undo
     renameFailed = Signal(str)
     playlistExported = Signal(str, int)  # the saved file, its track count (emitted from the shell thread)
+    deleteChecked = Signal(object, list)  # the DeleteRequest, [(path, why it can't be recycled)] (shell thread)
+    deleteDone = Signal(object, list, list)  # the DeleteRequest, the sent items, [(name, error)] (shell thread)
 
     def __init__(self, library: LibraryService | None = None, settings: Settings | None = None) -> None:
         super().__init__()
@@ -116,6 +137,9 @@ class MainWindow(QMainWindow):
         # These three are replaced in tests, which never launch anything.
         self.launch = fsops.open_with_default_app
         self.show_in_explorer = fsops.open_in_explorer
+        # Delete (SPEC §19): tests replace both, so they never use the real Recycle Bin.
+        self.recycle = fsops.send_to_recycle_bin
+        self.recycle_check = fsops.can_recycle
         self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\MusicDesk\playlists
         self._shell = ThreadPoolExecutor(1, thread_name_prefix="shell")
         self.setWindowTitle(APP_TITLE)
@@ -314,11 +338,14 @@ class MainWindow(QMainWindow):
         self.file_view.fileActivated.connect(lambda entry_id: self.open_files([entry_id]))
         self.file_view.menuRequested.connect(lambda ids, pos: self.list_menu(ids).exec(pos))
         self.sidebar.folder_menu_provider = lambda menu, entry_id: self.add_folder_actions(
-            menu, entry_id, rename=lambda: self.sidebar.tree.start_rename(entry_id))
+            menu, entry_id, rename=lambda: self.sidebar.tree.start_rename(entry_id),
+            delete=lambda: self._tree_delete(entry_id))
         self.file_view.renameRequested.connect(self.rename_entry)
         self.sidebar.renameRequested.connect(self.rename_entry)
         self.renameDone.connect(self._renamed)
         self.renameFailed.connect(lambda message: self.toast.show_message(message))
+        self.deleteChecked.connect(self._delete_checked)
+        self.deleteDone.connect(self._delete_done)
         # Each page's selection counts only while it is on screen.
         self.file_view.selectionChanged.connect(
             lambda ids: None if self.showing_search else self._selection_changed(ids))
@@ -468,6 +495,14 @@ class MainWindow(QMainWindow):
         for view in (self.file_view.view, self.sidebar.tree):
             QShortcut(QKeySequence(Qt.Key.Key_Backspace), view, activated=self.go_up,
                       context=Qt.ShortcutContext.WidgetShortcut)
+        # Del sends the focused view's selection to the Recycle Bin. Shift+Del does the same: the app never
+        # deletes permanently (SPEC §19). The playlist's own Del only removes tracks from the playlist.
+        for view, selected in ((self.file_view.view, self.file_view.selected_ids),
+                               (self.sidebar.tree, self.sidebar.tree.selected_ids),
+                               (self.search_view.view, self.search_view.selected_ids)):
+            for key in ("Del", "Shift+Del"):
+                QShortcut(QKeySequence(key), view, context=Qt.ShortcutContext.WidgetShortcut,
+                          activated=lambda view=view, selected=selected: self.delete_entries(selected(), view))
         self._update_navigation()
 
     def _update_navigation(self) -> None:
@@ -731,6 +766,8 @@ class MainWindow(QMainWindow):
         menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: self.copy_paths(ids))
         menu.addSeparator()
         menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain(ids))
+        menu.addSeparator()
+        menu.addAction("Delete\tDel", lambda: self.delete_entries(ids, self.search_view.view))
         row = self.search_view.row(ids[0])
         if len(ids) == 1 and row is not None and row.artist:
             menu.addSeparator()
@@ -1305,7 +1342,8 @@ class MainWindow(QMainWindow):
                 self.add_folder_actions(menu, self.folder_id, include_open=False)
             return menu
         if len(ids) == 1 and self.file_view.is_dir(ids[0]):
-            self.add_folder_actions(menu, ids[0], rename=lambda: self.file_view.start_rename(ids[0]))
+            self.add_folder_actions(menu, ids[0], rename=lambda: self.file_view.start_rename(ids[0]),
+                                    delete=lambda: self.delete_entries(ids, self.file_view.view))
             return menu
         open_action = menu.addAction("Open", lambda: self.open_files(ids))
         open_action.setEnabled(len(ids) == 1)
@@ -1323,9 +1361,12 @@ class MainWindow(QMainWindow):
         tools.setEnabled(any_audio)
         remove = menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain(ids))
         remove.setEnabled(any_audio)
+        menu.addSeparator()
+        menu.addAction("Delete\tDel", lambda: self.delete_entries(ids, self.file_view.view))
         return menu
 
-    def add_folder_actions(self, menu: QMenu, entry_id: int, include_open: bool = True, rename=None) -> None:
+    def add_folder_actions(self, menu: QMenu, entry_id: int, include_open: bool = True, rename=None,
+                           delete=None) -> None:
         if include_open:
             menu.addAction("Open", lambda: self.open_folder(entry_id))
         menu.addAction("Play folder", lambda: self.play_folder(entry_id, recursive=False))
@@ -1340,6 +1381,162 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("Tools…", lambda: self.open_tools([entry_id]))
         menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain([entry_id]))
+        if delete is not None and queries.parent_folder(self.library.conn, entry_id) is not None:
+            menu.addSeparator()
+            menu.addAction("Delete\tDel", delete)  # never a library root (Remove from library is below)
+
+    def _tree_delete(self, entry_id: int) -> None:
+        """Delete from the tree's menu: its selection if the clicked folder is in it, else that folder."""
+        selected = self.sidebar.tree.selected_ids()
+        self.delete_entries(selected if entry_id in selected else [entry_id], self.sidebar.tree)
+
+    # -- Delete to the Recycle Bin (SPEC §19) --
+
+    def delete_entries(self, ids: list[int], view: QWidget | None = None) -> None:
+        """Del, Shift+Del or Delete in a menu: the items go to the Recycle Bin after a confirmation, and nowhere
+        else. Refused, with nothing touched: a library root, an item a job or a save holds, and a place where
+        Windows can't recycle (checked off the UI thread, before asking)."""
+        if not self._library_open() or not ids:
+            return
+        conn = self.library.conn
+        items: list[DeleteItem] = []
+        for entry_id in dict.fromkeys(ids):
+            row = conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()
+            if row is None:
+                continue
+            path = path_of(conn, entry_id)
+            if queries.parent_folder(conn, entry_id) is None:
+                self.toast.show_message(f"{path} is a library folder. Use Remove from library to take it out of "
+                                        "the library.")
+                return
+            items.append(DeleteItem(entry_id, path, bool(row[0])))
+        # An item inside a selected folder goes with it (the tree can select a folder and its subfolder).
+        items = [i for i in items if not any(o.is_dir and o is not i and i.path.is_relative_to(o.path) for o in items)]
+        if not items:
+            return
+        try:
+            lock = self.library.locks.acquire([item.path for item in items], DELETE_OWNER)
+        except LockedError as e:
+            self.toast.show_message(f"{Path(e.path).name} is in use by {e.owner}. Try again when it has finished.")
+            return
+        request = DeleteRequest(items, lock, view, self._row_after(ids, view))
+        check = self.recycle_check
+
+        def run() -> None:
+            reasons = []
+            for item in items:
+                try:
+                    reason = check(item.path)
+                except OSError as e:
+                    reason = f"Windows couldn't check {item.path.name} ({e})"
+                if reason is not None:
+                    reasons.append((str(item.path), reason))
+            self.deleteChecked.emit(request, reasons)
+
+        self._shell.submit(run)
+
+    def _row_after(self, ids: list[int], view: QWidget | None) -> int | None:
+        """The row to select once these are gone: the first one after them, else the last one before (Explorer)."""
+        if view is self.file_view.view:
+            shown = self.file_view.visible_ids()
+        elif view is self.search_view.view:
+            shown = self.search_view.visible_ids()
+        else:
+            return None  # the tree: the open folder's own rule applies (SPEC §5)
+        chosen = set(ids)
+        places = [n for n, entry_id in enumerate(shown) if entry_id in chosen]
+        if not places:
+            return None
+        after = [i for i in shown[places[-1] + 1:] if i not in chosen]
+        before = [i for i in shown[:places[0]] if i not in chosen]
+        return after[0] if after else before[-1] if before else None
+
+    def _delete_checked(self, request: DeleteRequest, reasons: list[tuple[str, str]]) -> None:
+        if not self._library_open():
+            return
+        if reasons:
+            self.library.locks.release(request.lock)
+            path, reason = reasons[0]
+            is_dir = any(str(item.path) == path and item.is_dir for item in request.items)
+            self.toast.show_message(
+                f"MusicDesk only deletes to the Recycle Bin, and {reason}, so nothing was deleted. You can delete it "
+                "in File Explorer.", "Open in File Explorer",
+                lambda: self._shell.submit(lambda: self.show_in_explorer(path, is_dir)))
+            return
+        unsaved = self._unsaved_edits_in(request.items)
+        if not self.ask_delete(request.items, unsaved):
+            self.library.locks.release(request.lock)
+            return
+        if unsaved:
+            self.side_panel.metadata.discard_edits()  # the question said they would be lost
+        recycle = self.recycle
+
+        def run() -> None:
+            sent, failed = [], []
+            for item in request.items:  # one at a time, so a failure names its file and the others still go
+                try:
+                    recycle(item.path)
+                except OSError as e:  # CannotRecycle too: never deleted for good instead
+                    failed.append((item.path.name, e.strerror or str(e)))
+                else:
+                    sent.append(item)
+            self.deleteDone.emit(request, sent, failed)
+
+        self._shell.submit(run)
+
+    def _unsaved_edits_in(self, items: list[DeleteItem]) -> bool:
+        metadata = self.side_panel.metadata
+        if not metadata.dirty:
+            return False
+        edited = [metadata.path] if metadata.path is not None else metadata.paths
+        return any(path == item.path or (item.is_dir and path.is_relative_to(item.path))
+                   for path in edited for item in items)
+
+    def delete_question(self, items: list[DeleteItem], unsaved: bool) -> str:
+        """The confirmation's text (SPEC §19). A folder's file count comes from the index."""
+        if len(items) == 1 and not items[0].is_dir:
+            text = f"Send '{items[0].path.name}' to the Recycle Bin?"
+        elif len(items) == 1:
+            count = queries.file_count(self.library.conn, items[0].entry_id)
+            text = (f"Send the folder '{items[0].path.name}' and everything in it ({count} file"
+                    f"{'' if count == 1 else 's'}) to the Recycle Bin?")
+        else:
+            names = [item.path.name for item in items[:DELETE_NAMES]]
+            if len(items) > DELETE_NAMES:
+                names.append(f"and {len(items) - DELETE_NAMES} more")
+            text = f"Send these {len(items)} items to the Recycle Bin?\n\n" + "\n".join(names)
+        if unsaved:
+            text += "\n\nUnsaved tag edits on it will be lost."
+        return text
+
+    def ask_delete(self, items: list[DeleteItem], unsaved: bool) -> bool:
+        """Confirm a delete (replaced in tests). Cancel is the default, and Esc."""
+        box = QMessageBox(QMessageBox.Icon.Question, "Delete", self.delete_question(items, unsaved), parent=self)
+        send = box.addButton("Send to Recycle Bin", QMessageBox.ButtonRole.DestructiveRole)
+        cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(cancel)
+        box.setEscapeButton(cancel)
+        box.exec()
+        return box.clickedButton() is send
+
+    def _delete_done(self, request: DeleteRequest, sent: list[DeleteItem], failed: list[tuple[str, str]]) -> None:
+        if not self._library_open():
+            return
+        self.library.locks.release(request.lock)
+        for parent in dict.fromkeys(item.path.parent for item in sent):
+            self.library.indexer.request_path(str(parent))  # at once; the watcher would see it too, but later
+        if sent:
+            what = f"'{sent[0].path.name}'" if len(sent) == 1 else f"{len(sent)} items"
+            self.statusBar().showMessage(f"Sent {what} to the Recycle Bin.", STATUS_MS)
+        if failed:
+            shown = "; ".join(f"{name}: {why}" for name, why in failed[:5])
+            more = f" (and {len(failed) - 5} more)" if len(failed) > 5 else ""
+            self.toast.show_message(f"Not sent to the Recycle Bin: {shown}{more}", timeout_ms=15_000)
+        if request.next_id is not None and sent:
+            if request.view is self.file_view.view and not self.showing_search:
+                self.file_view.select_ids([request.next_id])
+            elif request.view is self.search_view.view and self.showing_search:
+                self.search_view.select_ids([request.next_id])
 
     # -- removing ReplayGain (SPEC §10 B) --
 

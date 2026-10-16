@@ -199,6 +199,15 @@ def folder_entry_ids(conn: sqlite3.Connection, folder_id: int, recursive: bool =
     return ids
 
 
+def file_count(conn: sqlite3.Connection, folder_id: int) -> int:
+    """The files anywhere under a folder, from the index, so no folder is walked (Delete's question, SPEC §19)."""
+    return conn.execute("""
+        WITH RECURSIVE sub(id) AS (
+            SELECT ? UNION ALL SELECT e.id FROM entries e JOIN sub ON e.parent_id = sub.id WHERE e.is_dir = 1)
+        SELECT COUNT(*) FROM entries WHERE is_dir = 0 AND parent_id IN (SELECT id FROM sub)""",
+                        (folder_id,)).fetchone()[0]
+
+
 def playlist_for_folder(conn: sqlite3.Connection, folder_id: int, recursive: bool = False) -> list[PlaylistEntry]:
     """Play folder (SPEC §14). Read from the index, so it is instant even on a slow drive."""
     return _entries(conn, folder_entry_ids(conn, folder_id, recursive))

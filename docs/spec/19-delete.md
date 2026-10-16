@@ -23,7 +23,7 @@ except that the app **only ever sends them to the Recycle Bin**. It never delete
   more").
 - When a file with unsaved Metadata edits is included, the dialog adds "Unsaved tag edits on it will be lost."
 - Buttons: **Send to Recycle Bin** and **Cancel**, with Cancel the default and Esc. The dialog goes through
-  `MainWindow.ask_delete(items)`, which tests replace.
+  `MainWindow.ask_delete(items, unsaved)`, which tests replace (its text comes from `delete_question`).
 
 **Refused, with the reason** (a toast; nothing in the selection is touched)
 - A library root: "<root> is a library folder. Use Remove from library to take it out of the library."
@@ -78,8 +78,8 @@ except that the app **only ever sends them to the Recycle Bin**. It never delete
   through it, so neither can delete permanently.
 
 **The run**
-- On the window's shell thread (send2trash initializes COM for each call), with one call for the whole
-  selection.
+- On the window's shell thread (send2trash initializes COM for each call). As built, it makes one call per item,
+  so a failure names its file and the others still go.
 - The status bar reports "Sent 5 items to the Recycle Bin." Per-item failures (for example a file open in another
   program) come in a toast, naming each file and the reason. The others still go.
 
@@ -107,3 +107,17 @@ confirmation, and never permanently.
   - the refresh and the selection afterwards;
   - Del in the playlist panel still only removing from the playlist;
   - Shift+Del.
+
+**As built (M8 task 2)** (`ui/main_window.py`, the "Delete to the Recycle Bin" section; `tests/ui/test_delete.py`):
+- `delete_entries(ids, view)` is the one entry point. It is reached from Del and Shift+Del (WidgetShortcuts on
+  the file list, the tree and the results) and from "Delete\tDel" in their menus. The tree's menu acts on the
+  tree's selection when the clicked folder is in it.
+- On the UI thread: a root refuses the whole selection; an item inside a selected folder is dropped (it goes with
+  the folder); then one `PathLocks` lock ("a delete") is taken on all the items, or the owner is named. The lock
+  is held until the report, and released on Cancel or a refusal.
+- On the shell thread: `can_recycle` runs on each item before the question (a slow network check never blocks
+  the window). Any reason refuses everything, with Open in File Explorer.
+- The folder count is `queries.file_count` (a recursive query on the index). Confirming with unsaved edits
+  discards them (`MetadataTab.discard_edits`), since the question said so.
+- Afterwards: `Indexer.request_path` on each parent folder. The row after the last deleted one (or before the
+  first) is selected in the list or the results. In the tree, the open folder's own rule applies.

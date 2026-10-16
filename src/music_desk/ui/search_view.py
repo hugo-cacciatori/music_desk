@@ -401,6 +401,10 @@ class SearchView(QWidget):
         rows = sorted(self.view.selectionModel().selectedRows(), key=lambda index: index.row())
         return [index.data(ENTRY_ID_ROLE) for index in rows]
 
+    def visible_ids(self) -> list[int]:
+        """Every result's entry id, top to bottom as shown (the selection after a delete)."""
+        return [self.model.index(row, 0).data(ENTRY_ID_ROLE) for row in range(self.model.rowCount())]
+
     def select_ids(self, entry_ids: list[int]) -> None:
         selection = self.view.selectionModel()
         selection.clearSelection()

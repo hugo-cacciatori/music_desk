@@ -3,9 +3,10 @@
 A Windows desktop app for looking after a local music library: browse it like File Explorer, edit tags, read
 lyrics, and tidy albums (rename files from their tags, apply ReplayGain).
 
-MusicDesk works on your files where they are. It never copies, moves or deletes music. Its only changes are the
-ones you ask for: tag edits, renames, ReplayGain tags, a `replaygain.log` per album, and the playlists you
-export. Junk files go to the Recycle Bin, and only when you tick that option and confirm.
+MusicDesk works on your files where they are. It never copies or moves music, and never deletes anything for
+good. Its only changes are the ones you ask for: tag edits, renames, ReplayGain tags, a `replaygain.log` per
+album, and the playlists you export. What you delete, and junk files when you tick that option, go to the
+Recycle Bin after you confirm.
 
 ## Features
 
@@ -21,6 +22,9 @@ export. Junk files go to the Recycle Bin, and only when you tick that option and
 - **Library search (Ctrl+K).** Type any part of a title, artist, album, file name or lyric line. Accents and
   case are ignored, and filters such as `artist:`, `year:`, `ext:`, `lrclib:notfound` or `rg:none` narrow it.
   The matching lyric line is shown in the results.
+- **Delete** files and folders (Del) from the file list, the folder tree or search results. They always go to
+  the Recycle Bin after you confirm, never deleted for good, and where Windows has no Recycle Bin (a network
+  share, a removable drive) MusicDesk refuses and offers File Explorer instead.
 - **Tools** for a folder or a selection:
   - **Rename from tags**, with masks such as `{track:02} {title}`. You see a preview first, `.lrc` files
     follow their audio file, and an optional junk cleanup sends files to the Recycle Bin.

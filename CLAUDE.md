@@ -23,8 +23,7 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
 - **Specified on 2026-10-16** (docs only, no app code yet): M9–M10 below. `resources/flac/` holds flac 1.5.0 (not
   bundled yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
-- **Next step:** M8's last "Done when" is a manual run, where Hugo deletes from a copied folder in the real app and
-  finds the items in the Recycle Bin. Then M9 task 1.
+- **M8 is complete** (Hugo's manual run is in SPEC §19). **Next step: M9 task 1** (`core/preview.py`).
 - **Watch for:** an intermittent failure in full runs, probably `tests/ui/test_watcher.py::test_live_folder_changes`
   (a Windows `PermissionError`; it passes alone). When a full run fails, keep its output
   (`uv run pytest > out.txt`) to name the test.

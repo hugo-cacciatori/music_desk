@@ -119,5 +119,11 @@ confirmation, and never permanently.
   the window). Any reason refuses everything, with Open in File Explorer.
 - The folder count is `queries.file_count` (a recursive query on the index). Confirming with unsaved edits
   discards them (`MetadataTab.discard_edits`), since the question said so.
+- **Manual run (2026-10-16, measured):** in the dev app (0.2.4, scratch app data), Hugo deleted a file from his
+  own library on F:, during its first scan. The root was added at 18:57:26, and the bin recorded the file as
+  deleted at 18:57:34, which includes finding the file and confirming. Hugo found it in the Recycle Bin. He saw it
+  appear there about 50 s later. Since the bin's own record is 8 s after the root, the delete itself wasn't held
+  up. The delay was after it (an open Recycle Bin window refreshing late, or the list row waiting for the scan
+  to serve its folder: inferred, not measured).
 - Afterwards: `Indexer.request_path` on each parent folder. The row after the last deleted one (or before the
   first) is selected in the list or the results. In the tree, the open folder's own rule applies.

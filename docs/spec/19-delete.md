@@ -52,6 +52,20 @@ except that the app **only ever sends them to the Recycle Bin**. It never delete
     **not in the Recycle Bin: deleted permanently, silently.** The inference holds.
   - Both checks flag the network path. `can_recycle` builds on them (the removable-drive, size and
     bin-turned-off cases were not measured).
+- **As built (M8 task 1)**, in `core/fsops.py`:
+  - `can_recycle(path)` returns None or a short reason.
+    - It finds the volume with `GetVolumePathNameW`. Anything but a fixed drive is refused: network,
+      removable, CD, RAM disk, unknown. Then `SHQueryRecycleBinW` must succeed on that root.
+    - It also reads the volume's Recycle Bin settings (HKCU `…\Explorer\BitBucket\Volume\{GUID}`, found with
+      `GetVolumeNameForVolumeMountPointW`). `NukeOnDelete=1` refuses, and so does a file bigger than
+      `MaxCapacity` MB. These two rules are inferred from what the settings mean, not measured. A folder's size
+      isn't checked, since that would mean walking it.
+    - Checked on this machine with real paths: `C:\` and `D:\` pass; `\\localhost\C$\…` ("a network
+      location") and the USB drive `I:\` ("a removable drive") are refused.
+  - `send_to_recycle_bin(path, check=…, send=…)` raises `CannotRecycle` (an `OSError`) with that reason, and
+    never calls send2trash then. Tests inject both.
+  - The junk cleanup (`rename.apply_plan`) reports such a file under "kept" ("can't be sent to the Recycle Bin:
+    <reason>") and leaves it in place.
 - Then add `fsops.can_recycle(path) -> str | None` (None, or the reason). Candidates to try, keeping the one the
   measurement proves:
   - `GetDriveTypeW` refusing DRIVE_REMOTE and DRIVE_REMOVABLE;

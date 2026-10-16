@@ -16,15 +16,14 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, session 12):** version 0.2.2 is on `main` (not pushed): the Start menu folder with
-  "Uninstall MusicDesk" (SPEC §13, measured). v0.2.1 is the latest GitHub release. M0–M7 are complete (Progress is
-  in HISTORY.md). 941 tests pass, slow ones included, and ruff is clean.
+- **State (2026-10-16, session 12):** version 0.2.3 is on `main` (not pushed). 0.2.2 added the Start menu folder
+  with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added `fsops.can_recycle`: nothing is sent where Windows
+  can't recycle (SPEC §19, measured on a network path). v0.2.1 is the latest GitHub release. M0–M7 are complete (Progress is
+  in HISTORY.md). 948 tests pass, slow ones included, and ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
 - **Specified on 2026-10-16** (docs only, no app code yet): M8–M10 below. `resources/flac/` holds flac 1.5.0 (not
   bundled yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
-- **Next step: M8 task 1, the code.** The measurement is done and recorded in SPEC §19: send2trash on a
-  `\\localhost\C$\…` path deletes permanently without error. Next: `fsops.can_recycle`, the refusal in
-  `send_to_recycle_bin`, and the junk cleanup keeping and reporting such files.
+- **Next step: M8 task 2** (Delete in the list, the tree and the results).
 - **Watch for:** an intermittent failure in full runs, probably `tests/ui/test_watcher.py::test_live_folder_changes`
   (a Windows `PermissionError`; it passes alone). When a full run fails, keep its output
   (`uv run pytest > out.txt`) to name the test.
@@ -44,7 +43,7 @@ musicdesk" finds it.
 
 **M8 Recycle Bin safety and Delete** (read SPEC §19, §5, and §10 A for the junk cleanup). This comes first: the
 junk cleanup already relies on recycling, and the split's originals will.
-- [ ] 1. Measure what send2trash does where Windows can't recycle. Send a scratch file under `\\localhost\C$\…`
+- [x] 1. Measure what send2trash does where Windows can't recycle. Send a scratch file under `\\localhost\C$\…`
       (show Hugo the exact commands first), then check the Recycle Bin, and record the measured result in §19.
       Add `fsops.can_recycle`; `send_to_recycle_bin` refuses when it fails; the junk cleanup keeps and reports
       such files. Tests use an injected check.
@@ -96,7 +95,10 @@ Done when:
      say why) instead of working around the block; tell him when he can switch back.
 3. Commit each finished task on `main`. Push, publish a release or install global tools only when Hugo asks.
    Project dependencies go in the project's virtual environment.
-4. Versions (Hugo, M7): a patch bump after each task, and a minor bump for a release (see Release).
+4. **Versions** (Hugo, M7; reminded 2026-10-16): don't forget them. Every finished task of the work plan bumps
+   the patch version (0.2.2 → 0.2.3) in its own commit, following "Version bump" below. A milestone that ends
+   with a release (M10: 0.3.0) bumps the minor version instead (see Release). Docs-only commits and measurements
+   don't bump.
 5. At the end of a session:
    - tick the finished tasks in the work plan;
    - rewrite Resume here (state and next step, a few lines, no history);

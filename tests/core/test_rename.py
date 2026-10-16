@@ -1,11 +1,13 @@
 """core/rename.py: validation, the plan (dry run) and apply, on the album/ and cleanup/ fixtures (SPEC §10)."""
 
+import functools
 import os
 import shutil
 
 import pytest
 
 from music_desk.core.cancel import CancelToken
+from music_desk.core.fsops import send_to_recycle_bin
 from music_desk.core.rename import RenameOptions, Status, apply_plan, plan_renames, sanitize, validate
 
 ALBUM = "album/Fixture Artist - Fixture Album"
@@ -244,3 +246,16 @@ def test_cancel_stops_between_items(fixture_copy):
     report = apply_plan(plan_renames(folder), recycle=Recorder(), cancel=token)
     assert report.cancelled and report.renamed == []
     assert (folder / "track2.flac").exists()
+
+
+def test_junk_that_cant_be_recycled_is_kept_and_reported(fixture_copy):
+    """Where Windows has no Recycle Bin (a network share, a removable drive), junk stays (SPEC §19)."""
+    folder = fixture_copy("cleanup")
+    sent = []
+    recycle = functools.partial(send_to_recycle_bin, check=lambda _p: "X: is a network location", send=sent.append)
+    report = apply_plan(plan_renames(folder, RenameOptions(cleanup=True)), recycle=recycle)
+    assert sent == [] and report.junk == [] and report.recycled == []
+    kept = [k for k in report.kept if "can't be sent to the Recycle Bin: X: is a network location" in k]
+    assert sorted(k.split(" (kept:")[0] for k in kept) == ["album.cue", "checksums.sfv", "info.nfo", "missing.cue",
+                                                           "notes.txt", "with_lyrics.lrc"]
+    assert (folder / "single_file_album" / "notes.txt").exists() and report.errors == []

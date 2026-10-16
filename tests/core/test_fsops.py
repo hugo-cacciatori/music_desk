@@ -1,10 +1,11 @@
 """core/fsops.py: reads that never block Explorer."""
 
 import os
+from pathlib import Path
 
 import pytest
 
-from music_desk.core.fsops import open_shared
+from music_desk.core.fsops import CannotRecycle, can_recycle, open_shared, send_to_recycle_bin
 from music_desk.core.tags import TaggedFile
 
 
@@ -46,3 +47,35 @@ def test_shared_reads_match_normal_reads(fixtures_dir, name):
     shared, normal = TaggedFile(path, shared=True), TaggedFile(path)
     assert shared.fields() == normal.fields()
     assert shared.stream_info() == normal.stream_info()
+
+
+# -- the Recycle Bin only (SPEC §19); the real bin is never used here --
+
+def test_send_to_recycle_bin_refuses_where_windows_cant_recycle(tmp_path):
+    sent = []
+    with pytest.raises(CannotRecycle, match="network location"):
+        send_to_recycle_bin(tmp_path / "a.txt", check=lambda _p: "X: is a network location", send=sent.append)
+    assert sent == []
+
+
+def test_send_to_recycle_bin_sends_when_the_check_passes(tmp_path):
+    sent = []
+    send_to_recycle_bin(tmp_path / "a.txt", check=lambda _p: None, send=sent.append)
+    assert sent == [str(tmp_path / "a.txt")]
+
+
+def test_cannot_recycle_is_an_os_error():
+    assert issubclass(CannotRecycle, OSError)  # callers that catch OSError never miss it
+
+
+def test_can_recycle_a_local_file(tmp_path):
+    path = tmp_path / "a.txt"
+    path.write_text("x", encoding="utf-8")
+    assert can_recycle(path) is None
+
+
+def test_cannot_recycle_on_a_network_path(tmp_path):
+    """Measured in M8 task 1: send2trash deletes such a file for good. Only reads (no file is sent)."""
+    drive, rest = str(tmp_path).split(":", 1)
+    reason = can_recycle(Path(rf"\\localhost\{drive}$" + rest))
+    assert reason is not None and "network location" in reason

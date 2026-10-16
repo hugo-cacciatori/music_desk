@@ -446,6 +446,9 @@ def apply_plan(plan: RenamePlan, recycle: Callable[[Path], None] = fsops.send_to
                     continue
                 try:
                     recycle(item.source)
+                except fsops.CannotRecycle as e:  # never deleted for good instead (SPEC §19)
+                    report.kept.append(f"{name} (kept: can't be sent to the Recycle Bin: {e})")
+                    continue
                 except OSError as e:
                     report.errors.append(f"{name}: could not be sent to the Recycle Bin ({e})")
                     continue

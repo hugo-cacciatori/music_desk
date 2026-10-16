@@ -19,7 +19,7 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - **State (2026-10-16, session 12):** version 0.2.3 is on `main` (not pushed). 0.2.2 added the Start menu folder
   with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added `fsops.can_recycle`: nothing is sent where Windows
   can't recycle (SPEC §19, measured on a network path). v0.2.1 is the latest GitHub release. M0–M7 are complete (Progress is
-  in HISTORY.md). 948 tests pass, slow ones included, and ruff is clean.
+  in HISTORY.md). 947 tests pass, slow ones included, and ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
 - **Specified on 2026-10-16** (docs only, no app code yet): M8–M10 below. `resources/flac/` holds flac 1.5.0 (not
   bundled yet), and a trial on a fixture copy measured a lossless split (SPEC §22).

@@ -13,6 +13,7 @@ from dataclasses import MISSING, asdict, dataclass, field, fields
 from pathlib import Path
 
 from music_desk import paths
+from music_desk.core import masks
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +25,9 @@ class Settings:
     # Lyrics
     lyrics_offline: bool = False
     lyrics_auto_save: bool = False
+    # File names (SPEC §21): how music files are named from their tags, wherever the app names one
+    name_masks: list[str] = field(default_factory=lambda: list(masks.DEFAULT_MASKS))
+    name_replacement: str = masks.DEFAULT_REPLACEMENT
     # Tools (SPEC §10): the cards' options, as core.rename / core.replaygain options_to_json write them
     rename_options: dict = field(default_factory=dict)
     replaygain_options: dict = field(default_factory=dict)
@@ -63,7 +67,20 @@ class Settings:
                 setattr(settings, f.name, value)
             else:
                 log.warning("settings: ignoring %s=%r (expected %s)", f.name, value, type(default).__name__)
+        settings._migrate_name_masks(data)
         return settings
+
+    def _migrate_name_masks(self, data: dict) -> None:
+        """Before 0.2.7 the masks and the replacement were Rename card options: an older file keeps the user's
+        ones. A list holding anything but text falls back to the defaults."""
+        old = data.get("rename_options") if isinstance(data.get("rename_options"), dict) else {}
+        if "name_masks" not in data and isinstance(old.get("masks"), list):
+            self.name_masks = old["masks"]
+        if "name_replacement" not in data and isinstance(old.get("replacement"), str):
+            self.name_replacement = old["replacement"]
+        if not all(isinstance(mask, str) for mask in self.name_masks):
+            log.warning("settings: ignoring name_masks=%r (expected a list of text)", self.name_masks)
+            self.name_masks = list(masks.DEFAULT_MASKS)
 
     def save(self) -> None:
         if self.path is None:

@@ -46,6 +46,21 @@ hint after a tag save (§7, §11) uses the *default* masks, not the user's.
   replacement as arguments, and TagIO passes the current setting with each read.
 - The **cue split** (§22): each track's fields come from the cue sheet, then go through the same masks.
 
+**As built (M10 task 1)**
+- `core/masks.py` holds `DEFAULT_MASKS`, `DEFAULT_REPLACEMENT`, `FIELDS`, `FORBIDDEN_CHARACTERS` and the
+  functions listed above. `core/rename.py` re-imports them (the parity tests import them from there),
+  `rename.validate` is `validate_masks` plus the new `validate_file_types`, and `inline_rename` and `replaygain`
+  take `FORBIDDEN_CHARACTERS` from `masks`.
+- `rename.options_to_json` no longer writes `masks` or `replacement`, and `options_from_json` ignores old ones.
+  `Settings.load` migrates them (`_migrate_name_masks`) when `name_masks` / `name_replacement` are absent.
+- `ui/tools/names_card.py` `FileNamesCard` is the editor, moved unchanged. `RenameCard(names)` builds its options
+  from it, and says "Fix the file names first." (`rename_card.FIX_FIRST`) while the masks are invalid; so does
+  Tidy. Both show the one-line `MASKS_LINE`. The live example moved to the File names card.
+- The hint: `metadata.suggested_name(tagged, masks, replacement)` returns None while the masks are invalid.
+  `read_snapshot` and `write_fields` take the masks, and `TagIO.name_masks` and `TagWriter.name_masks` (set by
+  the window from the settings, read on the UI thread with each request) pass them. The hint shown after a save
+  comes from `write_fields`' fresh snapshot, so the writer needed them too.
+
 **Tests**
 - An old settings.json with custom Rename masks migrates them.
 - The hint follows a custom mask.

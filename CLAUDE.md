@@ -16,18 +16,20 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, session 12):** version 0.2.6 is on `main` (not pushed). 0.2.2 added the Start menu folder
+- **State (2026-10-16, session 12):** version 0.2.7 is on `main` (not pushed). 0.2.2 added the Start menu folder
   with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added `fsops.can_recycle` (SPEC §19, measured on a
   network path). 0.2.4 added Delete to the Recycle Bin. 0.2.5 and 0.2.6 added the file preview (M9; text cap
-  512 KB and the wrap rule, measured in SPEC §20). v0.2.1 is the latest GitHub release. M0–M9 are complete
-  (Progress is in HISTORY.md). 994 tests pass, slow ones included, and ruff is clean.
+  512 KB and the wrap rule, measured in SPEC §20). 0.2.7 added the shared file name masks (M10 task 1, SPEC
+  §21). v0.2.1 is the latest GitHub release. M0–M9 are complete (Progress is in HISTORY.md). 1003 tests (1002 in the last full run, plus the known watcher flake passing alone)
+  pass, slow ones included, and ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Specified on 2026-10-16** (docs only, no app code yet): M10 below. `resources/flac/` holds flac 1.5.0 (not
-  bundled yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
-- **Next step: M10 task 1** (shared masks: `core/masks.py`, `Settings.name_masks`, the File names card).
-- **Watch for:** an intermittent failure in full runs, probably `tests/ui/test_watcher.py::test_live_folder_changes`
-  (a Windows `PermissionError`; it passes alone). When a full run fails, keep its output
-  (`uv run pytest > out.txt`) to name the test.
+- **Specified on 2026-10-16:** M10 tasks 2–5 below. `resources/flac/` holds flac 1.5.0 (not bundled yet), and a
+  trial on a fixture copy measured a lossless split (SPEC §22).
+- **Next step: M10 task 2** (`core/cue.py` and the split fixtures).
+- **Watch for:** an intermittent failure in full runs, `tests/ui/test_watcher.py::test_live_folder_changes`
+  (named by a kept output on 2026-10-16: `PermissionError: [WinError 5] Access is denied` on the test's own
+  `os.rename` of `lib\Artist`, right after copying a file into it; it passes alone). The cause isn't measured
+  yet: another handle on the folder (Defender, or the app's own scan), not something the change under test did.
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with
@@ -70,7 +72,7 @@ Done when:
 - nothing on the page can write.
 
 **M10 Shared masks and cue split** (read SPEC §21, §22, §13, and §10)
-- [ ] 1. Masks: `core/masks.py` (moved out of `rename.py`; the parity tests stay unchanged),
+- [x] 1. Masks: `core/masks.py` (moved out of `rename.py`; the parity tests stay unchanged),
       `Settings.name_masks` / `name_replacement` with the migration, the File names card, and the hint using the
       user's masks.
 - [ ] 2. `core/cue.py`: parsing, encodings, samples, boundaries and the hidden track, names and clashes, tags;
@@ -218,15 +220,15 @@ agree) and pyproject's `version`, then `uv lock`.
     src/music_desk/
       app.py, __main__.py   entry point: logging, the rsgain self-check, the window
       paths.py, logging_setup.py, settings.py (settings.json; playlist.json beside it), licenses.py
-      core/   (no Qt)  formats, tags, metadata, rename, inline_rename, replaygain, rsgain, lyrics, playlists,
-                       playlist_builder, fsops, path_locks, cancel; index/ (schema v3, store, scanner, queries,
-                       search, roots, lyrics_index, lyrics_import)
+      core/   (no Qt)  formats, tags, metadata, masks, rename, inline_rename, replaygain, rsgain, lyrics, preview,
+                       playlists, playlist_builder, fsops, path_locks, cancel; index/ (schema v3, store, scanner,
+                       queries, search, roots, lyrics_index, lyrics_import)
       services/ (Qt)   library (owns writer, indexer, watcher, lyrics service), indexer, watcher, lyrics_service,
                        lyrics_embedder, search_service, tag_io, tag_writer, jobs, rename_job, replaygain_job
       ui/              main_window, sidebar, folder_tree, file_view, address_bar, search_view, playlist_panel,
                        entry_drag, stall_watch, jobs_panel, about_dialog, toast;
-                       side_panel/ (panel, metadata_tab, lyrics_tab, folder_summary);
-                       tools/ (tools_page, rename_card, replaygain_card, rename_preview, rg_report)
+                       side_panel/ (panel, metadata_tab, lyrics_tab, folder_summary, file_preview);
+                       tools/ (tools_page, names_card, rename_card, replaygain_card, rename_preview, rg_report)
     resources/            rsgain/ (rsgain.exe 3.6), flac/ (flac 1.5.0, bundled from M10), icons/, licenses/
     tests/                conftest.py, reference/ (frozen scripts), fixtures/ (make_fixtures.py + generated/),
                           core/ (lrclib_fake.py, rsgain_fake.py), ui/ (conftest.py, browser_helpers.py)

@@ -7,14 +7,14 @@ covering the file. After a successful write, `on_written(path)` lets the index c
 import logging
 import os
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from music_desk.core import lyrics, metadata, replaygain
+from music_desk.core import lyrics, masks, metadata, replaygain
 from music_desk.core.lyrics import EmbedResult
 from music_desk.core.metadata import Snapshot
 from music_desk.core.path_locks import LockedError, PathLocks
@@ -75,6 +75,10 @@ class TagWriter(QObject):
         self._closed = False
         self._listener = self.locksChanged.emit  # called from any thread; queued to the UI
         locks.add_listener(self._listener)
+        # The user's file name masks and replacement (SPEC §21), for the rename hint in the fresh snapshot after
+        # a single-file save; the window sets it.
+        self.name_masks: Callable[[], tuple[Sequence[str], str]] = lambda: (masks.DEFAULT_MASKS,
+                                                                            masks.DEFAULT_REPLACEMENT)
 
     def locked_by(self, path: str | Path) -> str | None:
         """The job holding a lock on this file, if any (the writer's own short save locks don't count)."""
@@ -92,7 +96,7 @@ class TagWriter(QObject):
         if self._closed:
             self.written.emit(Loaded(token, None, None, "The app is closing."))
             return token
-        self._pool.submit(self._write, token, str(path), dict(changes))
+        self._pool.submit(self._write, token, str(path), dict(changes), self.name_masks())
         return token
 
     def write_many(self, items: list[tuple[str | Path, dict]]) -> int:
@@ -178,8 +182,8 @@ class TagWriter(QObject):
                     log.exception("index update after saving %s failed", path)
         self.lyricsEmbedded.emit(LyricsEmbedded(token, results))
 
-    def _write(self, token: int, path: str, changes: dict) -> None:
-        snapshot, error = self._write_one(path, changes)
+    def _write(self, token: int, path: str, changes: dict, name_masks: tuple[Sequence[str], str]) -> None:
+        snapshot, error = self._write_one(path, changes, name_masks)
         cover = decode_cover(snapshot.cover) if snapshot else None
         self.written.emit(Loaded(token, snapshot, cover, error))
 
@@ -193,11 +197,12 @@ class TagWriter(QObject):
                 saved.append(snapshot)
         self.batchWritten.emit(BatchWritten(token, saved, failed))
 
-    def _write_one(self, path: str, changes: dict) -> tuple[Snapshot | None, str | None]:
+    def _write_one(self, path: str, changes: dict, name_masks: tuple[Sequence[str], str] | None = None
+                   ) -> tuple[Snapshot | None, str | None]:
         name = os.path.basename(path)
         try:
             with self.locks.lock([path], SAVE_OWNER):
-                snapshot = metadata.write_fields(path, changes)
+                snapshot = metadata.write_fields(path, changes, *(name_masks or ()))
         except LockedError as e:
             return None, f"{name} is in use by {e.owner}. Try again when it has finished."
         except Exception as e:  # noqa: BLE001 - shown to the user; the fields stay dirty

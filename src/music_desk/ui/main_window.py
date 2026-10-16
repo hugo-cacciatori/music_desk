@@ -170,10 +170,12 @@ class MainWindow(QMainWindow):
         self.sidebar.model.only_music = self.settings.hide_folders_without_music
         self.file_view = FileView(conn)
         self.tag_io = TagIO(self)
+        self.tag_io.name_masks = self._name_masks
         self.tag_writer = TagWriter(
             library.locks if library is not None else PathLocks(),
             on_written=lambda path: self.library.indexer.update_file(path) if self._library_open() else None,
             parent=self)
+        self.tag_writer.name_masks = self._name_masks
         self.side_panel = SidePanel(self.tag_io, self.tag_writer, conn,
                                     lyrics_service=library.lyrics if library is not None else None)
         self.side_panel.lyrics.urlRequested.connect(self.open_url)
@@ -1169,6 +1171,10 @@ class MainWindow(QMainWindow):
             self._close_folder()
         else:
             self.open_folder(found[0], record=False)
+
+    def _name_masks(self) -> tuple[tuple[str, ...], str]:
+        """The shared file name masks and replacement (SPEC §21), for the rename hint."""
+        return tuple(self.settings.name_masks), self.settings.name_replacement
 
     def _library_open(self) -> bool:
         """False without a library, and once it is closed: queued signals can arrive after the shutdown."""

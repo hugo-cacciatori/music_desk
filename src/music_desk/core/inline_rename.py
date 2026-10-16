@@ -11,8 +11,8 @@ from pathlib import Path
 
 from music_desk.core.formats import AUDIO_EXTENSIONS
 from music_desk.core.fsops import is_same_file
+from music_desk.core.masks import FORBIDDEN_CHARACTERS
 from music_desk.core.path_locks import LockedError, PathLocks
-from music_desk.core.rename import FORBIDDEN_CHARACTERS
 
 RESERVED_NAMES = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(1, 10)),
                             *(f"LPT{n}" for n in range(1, 10))})

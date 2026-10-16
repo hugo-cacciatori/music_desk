@@ -51,3 +51,21 @@ def test_corrupt_file_gives_defaults(tmp_path):
 def test_unsaved_settings(tmp_path):
     Settings().save()  # no path: nothing is written
     assert list(tmp_path.iterdir()) == []
+
+
+def test_old_rename_masks_migrate_to_the_shared_setting(tmp_path):
+    """Before 0.2.7 the masks were a Rename card option (SPEC §21): an existing file keeps the user's masks."""
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"rename_options": {"masks": ["{disc}-{track:02} {title}"], "replacement": "_",
+                                                   "cleanup": True}}))
+    settings = Settings.load(path)
+    assert settings.name_masks == ["{disc}-{track:02} {title}"] and settings.name_replacement == "_"
+    path.write_text(json.dumps({"name_masks": ["{title}"], "rename_options": {"masks": ["{album}"]}}))
+    assert Settings.load(path).name_masks == ["{title}"]  # the shared setting wins once it exists
+
+
+def test_mistyped_masks_fall_back_to_the_defaults(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"name_masks": ["{title}", 3], "name_replacement": 5}))
+    settings = Settings.load(path)
+    assert settings.name_masks == ["{track:02} {title}", "{title}"] and settings.name_replacement == "-"

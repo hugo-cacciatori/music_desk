@@ -1,7 +1,9 @@
-"""The Tools page (SPEC §10): the Rename, ReplayGain and Tidy cards for one folder or a file selection.
+"""The Tools page (SPEC §10): the File names card (§21), then the Rename, ReplayGain and Tidy cards for one folder
+or a file selection.
 
 It takes the centre of the window, with a Back button, so the tree stays usable. The cards' options are the
-saved defaults (Settings.rename_options / replaygain_options), saved again as they change. The page itself runs
+saved defaults (Settings.name_masks / name_replacement, rename_options, replaygain_options), saved again as
+they change. The page itself runs
 nothing: `runRequested` hands the tool, its scope and the checked options to the window.
 """
 
@@ -14,6 +16,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QVB
 
 from music_desk.core import rename, replaygain
 from music_desk.settings import Settings
+from music_desk.ui.tools.names_card import FileNamesCard
 from music_desk.ui.tools.rename_card import RenameCard
 from music_desk.ui.tools.replaygain_card import ReplayGainCard, TidyCard
 
@@ -61,7 +64,10 @@ class ToolsPage(QWidget):
         header.addWidget(self.back_button)
         header.addWidget(self.heading, 1)
 
-        self.rename_card = RenameCard()
+        self.names_card = FileNamesCard()
+        self.names_card.set_masks(settings.name_masks, settings.name_replacement)
+        self.names_card.changed.connect(self._save_names)
+        self.rename_card = RenameCard(self.names_card)
         self.replaygain_card = ReplayGainCard()
         self.tidy_card = TidyCard(self.rename_card, self.replaygain_card)
         self.rename_card.set_options(rename.options_from_json(settings.rename_options))
@@ -74,7 +80,7 @@ class ToolsPage(QWidget):
 
         cards = QWidget()
         cards_layout = QVBoxLayout(cards)
-        for card in (self.rename_card, self.replaygain_card, self.tidy_card):
+        for card in (self.names_card, self.rename_card, self.replaygain_card, self.tidy_card):
             cards_layout.addWidget(card)
         cards_layout.addStretch(1)
         scroll = QScrollArea()
@@ -95,10 +101,10 @@ class ToolsPage(QWidget):
             self.heading.setText(f"<b>Tools</b> · {scope.folder}")
         self.rename_card.set_selection(scope.is_selection)
         self.replaygain_card.set_selection(scope.is_selection)
-        self.rename_card.set_example(None)
+        self.names_card.set_example(None)
 
     def set_example(self, fields: dict | None, extension: str) -> None:
-        self.rename_card.set_example(fields, extension)
+        self.names_card.set_example(fields, extension)
 
     def set_rsgain_unavailable(self, reason: str | None) -> None:
         self.replaygain_card.set_unavailable(reason)
@@ -121,6 +127,10 @@ class ToolsPage(QWidget):
             self.runRequested.emit(ToolRequest(
                 TIDY, self.scope, rename_options=self.rename_options(),
                 replaygain_options=self.replaygain_card.options(), discography=self.tidy_card.scope == "discography"))
+
+    def _save_names(self) -> None:
+        self.settings.name_masks = list(self.names_card.mask_list())
+        self.settings.name_replacement = self.names_card.replacement_text()
 
     def _save_rename(self) -> None:
         self.settings.rename_options = rename.options_to_json(self.rename_card.options())

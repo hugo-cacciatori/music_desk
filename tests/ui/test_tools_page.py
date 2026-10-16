@@ -27,55 +27,77 @@ def requests(page) -> list:
     return received
 
 
-# -- the Rename card --
+# -- the File names card (SPEC §21) and the Rename card --
+
+def test_file_names_card_comes_first_with_the_defaults(page):
+    names = page.names_card
+    assert names.y() < page.rename_card.y() < page.replaygain_card.y()  # first, above the tool cards
+    assert [names.masks.item(i).text() for i in range(names.masks.count())] == ["{track:02} {title}", "{title}"]
+    assert names.replacement.text() == "-" and not names.problems.isVisible()
+    assert "Split albums and the rename suggestion" in names.description.text()
+
 
 def test_rename_card_defaults(page):
     card = page.rename_card
     assert card.options() == rename.DEFAULT_OPTIONS
     assert card.run_button.isEnabled() and not card.problems.isVisible()
-    assert [card.masks.item(i).text() for i in range(card.masks.count())] == ["{track:02} {title}", "{title}"]
+    assert card.masks_line.text() == "File names: the masks in the File names card above."
     assert card.junk.text() == ".cue .lrc .nfo .sfv .txt"
 
 
-def test_rename_card_validation_is_inline(page):
-    card = page.rename_card
-    card.masks.item(0).setText("{track:02} {bogus}")
-    assert not card.run_button.isEnabled()
-    assert card.problems.text() == "• mask '{track:02} {bogus}': unknown field(s) bogus"
-    card.masks.item(0).setText("{track:02} {title}")
+def test_validation_is_inline(page):
+    names, card, tidy = page.names_card, page.rename_card, page.tidy_card
+    names.masks.item(0).setText("{track:02} {bogus}")
+    assert names.problems.text() == "• mask '{track:02} {bogus}': unknown field(s) bogus"
+    assert not card.run_button.isEnabled() and card.problems.text() == "• Fix the file names first."
+    assert not tidy.run_button.isEnabled() and tidy.problems.text() == "• Fix the file names first."
+    names.masks.item(0).setText("{track:02} {title}")
+    assert card.run_button.isEnabled() and tidy.run_button.isEnabled()
     card.junk.setText(".cue .m3u .jpg")
     card.junk.textEdited.emit(card.junk.text())
     assert card.problems.text() == ("• .m3u can't be junk: these are playlists\n"
                                     "• .jpg can't be junk: these are cover images")
-    card.replacement.setText("/")
-    card.replacement.textEdited.emit("/")
-    assert "• The replacement contains a character not allowed in file names" in card.problems.text()
+    names.replacement.setText("/")
+    names.replacement.textEdited.emit("/")
+    assert "• The replacement contains a character not allowed in file names" in names.problems.text()
+    names.reset()
     card.reset()
     assert card.run_button.isEnabled() and card.options() == rename.DEFAULT_OPTIONS
 
 
-def test_rename_card_masks_can_be_added_filled_and_removed(page):
-    card = page.rename_card
-    card.masks.setCurrentRow(1)
-    card.remove_mask.click()
-    assert card.options().masks == ("{track:02} {title}",)
-    card._add_mask()
-    card.insert("{artist}")
-    assert card.options().masks == ("{track:02} {title}", "{title} {artist}")
-    card.masks.clear()
-    card._edited()
-    assert card.problems.text() == "• No rename mask" and not card.run_button.isEnabled()
+def test_masks_can_be_added_filled_and_removed(page):
+    names = page.names_card
+    names.masks.setCurrentRow(1)
+    names.remove_mask.click()
+    assert page.rename_card.options().masks == ("{track:02} {title}",)
+    names._add_mask()
+    names.insert("{artist}")
+    assert page.rename_card.options().masks == ("{track:02} {title}", "{title} {artist}")
+    names.masks.clear()
+    names._edited()
+    assert names.problems.text() == "• No rename mask" and not page.rename_card.run_button.isEnabled()
 
 
-def test_rename_card_live_example(page):
-    card = page.rename_card
-    assert card.example.text() == ""
+def test_live_example(page):
+    names = page.names_card
+    assert names.example.text() == ""
     page.set_example({"track": 3, "title": "Who: Me?"}, ".FLAC")
-    assert card.example.text() == "Example: 03 Who- Me-.flac"  # the replacement character, the lowercased extension
-    card.masks.item(0).setText("{disc}-{track:02} {title}")  # no disc: the next mask
-    assert card.example.text() == "Example: Who- Me-.flac"
+    assert names.example.text() == "Example: 03 Who- Me-.flac"  # the replacement character, the lowercased ext
+    names.masks.item(0).setText("{disc}-{track:02} {title}")  # no disc: the next mask
+    assert names.example.text() == "Example: Who- Me-.flac"
     page.set_example({"genre": "Rock"}, ".mp3")
-    assert card.example.text() == "Example: the first file fits no mask and keeps its name."
+    assert names.example.text() == "Example: the first file fits no mask and keeps its name."
+
+
+def test_masks_are_the_shared_setting(qtbot):
+    settings = Settings(name_masks=["{album} - {title}"], name_replacement="_")
+    page = ToolsPage(settings)
+    qtbot.addWidget(page)
+    assert page.rename_card.options().masks == ("{album} - {title}",)
+    assert page.rename_card.options().replacement == "_"
+    page.names_card.masks.item(0).setText("{title}")
+    assert settings.name_masks == ["{title}"]
+    assert "masks" not in settings.rename_options  # saved once, as the shared setting
 
 
 def test_rename_card_for_a_selection(page):
@@ -144,7 +166,7 @@ def test_requests_carry_the_checked_options(page):
 
 def test_invalid_options_send_no_request(page):
     received = requests(page)
-    page.rename_card.masks.item(0).setText("{nope}")
+    page.names_card.masks.item(0).setText("{nope}")
     page.request(RENAME)
     page.request(TIDY)
     assert received == []
@@ -185,7 +207,7 @@ def test_window_opens_tools_for_a_folder_and_back(qtbot, window, service, librar
     window.open_tools([folder_id(service, album)])
     assert window.showing_tools and window.tools_page.scope.folder == album
     assert window.tools_page.scope.first_track == album / "01 First.flac"  # natural order
-    qtbot.waitUntil(lambda: window.tools_page.rename_card.example.text() == "Example: 01 First.flac")
+    qtbot.waitUntil(lambda: window.tools_page.names_card.example.text() == "Example: 01 First.flac")
     window.tools_page.back_button.click()
     assert not window.showing_tools
 

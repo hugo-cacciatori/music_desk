@@ -202,13 +202,13 @@ def test_no_tag_io_on_the_ui_thread(qtbot, panel, fixture_copy, monkeypatch):
     threads = []
     real_read, real_write = metadata.read_snapshot, metadata.write_fields
 
-    def read(path):
+    def read(path, *args):
         threads.append(threading.current_thread())
-        return real_read(path)
+        return real_read(path, *args)
 
-    def write(path, changes):
+    def write(path, changes, *args):
         threads.append(threading.current_thread())
-        return real_write(path, changes)
+        return real_write(path, changes, *args)
 
     monkeypatch.setattr(metadata, "read_snapshot", read)
     monkeypatch.setattr(metadata, "write_fields", write)

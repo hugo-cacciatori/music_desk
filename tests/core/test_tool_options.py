@@ -37,10 +37,12 @@ def test_the_boundaries_of_the_target_are_allowed():
 
 
 def test_options_round_trip_through_json():
-    custom_rename = rename.RenameOptions(masks=("{disc}-{track:02} {title}",), replacement="_", recursive=False,
-                                         cleanup=True, junk_extensions=frozenset({".nfo"}),
+    custom_rename = rename.RenameOptions(recursive=False, cleanup=True, junk_extensions=frozenset({".nfo"}),
                                          audio_extensions=frozenset({".flac", ".mp3"}))
     assert rename.options_from_json(rename.options_to_json(custom_rename)) == custom_rename
+    # The masks are the shared setting now (SPEC §21): not saved with the card, and old saved ones are ignored here.
+    assert "masks" not in rename.options_to_json(custom_rename)
+    assert rename.options_from_json({"masks": ["{title}"], "replacement": "_"}).masks == rename.DEFAULT_MASKS
     custom_rg = ReplayGainOptions(target=-18.0, safety_margin=0.5, subfolder_keywords=("extra",), log_file="rg.log")
     assert replaygain.options_from_json(replaygain.options_to_json(custom_rg)) == custom_rg
 

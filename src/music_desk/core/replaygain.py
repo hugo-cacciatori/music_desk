@@ -652,7 +652,7 @@ TARGET_RANGE = (-30.0, -5.0)  # rsgain's -l accepts -30 <= n <= -5
 def validate(options: ReplayGainOptions) -> list[str]:
     """The problems in the options (empty if they are fine). The script had no checks for its ReplayGain block;
     these keep a run from failing halfway (rsgain refusing the target, a log name Windows refuses...)."""
-    from music_desk.core.rename import FORBIDDEN_CHARACTERS  # the file-name rule, shared with the Rename tool
+    from music_desk.core.masks import FORBIDDEN_CHARACTERS  # the file-name rule, shared with the Rename tool
 
     problems = []
     low, high = TARGET_RANGE

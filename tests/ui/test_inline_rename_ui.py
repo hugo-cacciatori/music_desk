@@ -149,3 +149,17 @@ def test_rename_hint_after_a_save(qtbot, window, service, library_dir):
     assert (library_dir / "Artist" / "Album" / "01 Second Song.flac").exists()
     assert TaggedFile(library_dir / "Artist" / "Album" / "01 Second Song.flac").fields().title == "Second Song"
     wait_name(qtbot, window, "01 Second Song.flac")
+
+
+def test_the_rename_hint_follows_the_users_masks(qtbot, window, service, library_dir):
+    """The shared File names masks (SPEC §21), not the defaults."""
+    window.settings.name_masks = ["{title} [{track}]"]
+    window.open_folder(entry(service, "Artist", "Album"))
+    window.file_view.select_ids([entry(service, "Artist", "Album", "Track 2.flac")])
+    tab = window.side_panel.metadata
+    qtbot.waitUntil(lambda: tab.snapshot is not None, timeout=10000)
+    tab.edits["title"].setText("Second: Song")
+    tab.edits["title"].textEdited.emit("Second: Song")
+    with qtbot.waitSignal(tab.fileSaved, timeout=10000):
+        tab.save()
+    assert '"Second- Song [1].flac"' in tab.rename_hint.text()

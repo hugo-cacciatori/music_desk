@@ -6,7 +6,6 @@ the renames on a virtual copy of each folder, so "name taken" comes out exactly 
 """
 
 import re
-import string
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -15,9 +14,18 @@ from pathlib import Path
 from music_desk.core import fsops
 from music_desk.core.cancel import CancelToken
 from music_desk.core.formats import AUDIO_EXTENSIONS
-from music_desk.core.tags import NUMBER_FIELDS, RENAME_TEXT_FIELDS, TaggedFile
-
-FORBIDDEN_CHARACTERS = re.compile(r"[/\\?%*:|\"<>\x7F\x00-\x1F]")
+from music_desk.core.masks import (  # noqa: F401 - re-exported: the parity tests import them from here
+    DEFAULT_MASKS,
+    DEFAULT_REPLACEMENT,
+    FORBIDDEN_CHARACTERS,
+    choose_name,
+    mask_fields,
+    mask_values,
+    missing_from,
+    sanitize,
+    validate_masks,
+)
+from music_desk.core.tags import TaggedFile
 
 PLAYLIST_EXTENSIONS = frozenset({".m3u", ".m3u8", ".pls"})
 IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png"})
@@ -28,8 +36,8 @@ DEFAULT_JUNK_EXTENSIONS = frozenset({".cue", ".nfo", ".sfv", ".txt", ".lrc"})  #
 class RenameOptions:
     """The script's configuration block. Defaults are the script's, except the file types and the junk list."""
 
-    masks: tuple[str, ...] = ("{track:02} {title}", "{title}")
-    replacement: str = "-"
+    masks: tuple[str, ...] = DEFAULT_MASKS  # filled from the shared setting when a run starts (SPEC §21)
+    replacement: str = DEFAULT_REPLACEMENT
     recursive: bool = True
     cleanup: bool = False
     junk_extensions: frozenset[str] = DEFAULT_JUNK_EXTENSIONS
@@ -38,41 +46,18 @@ class RenameOptions:
 
 
 # ---------------------------------------------------------------------------
-# Configuration checks
+# Configuration checks (the masks themselves live in core/masks.py, shared app-wide: SPEC §21)
 # ---------------------------------------------------------------------------
-
-def mask_fields(mask: str) -> list[str]:
-    """List the field names used by a mask."""
-    return [name for _, name, _, _ in string.Formatter().parse(mask) if name is not None]
-
 
 def validate(options: RenameOptions) -> list[str]:
     """The problems in the options (empty if they are fine): the script's validate_config, plus the cleanup
     protections of SPEC §10."""
+    return validate_masks(options.masks, options.replacement) + validate_file_types(options)
+
+
+def validate_file_types(options: RenameOptions) -> list[str]:
+    """The problems in everything but the masks: the file types and the cleanup protections."""
     problems = []
-    if not options.masks:
-        problems.append("No rename mask")
-
-    sample = {name: 1 for name in NUMBER_FIELDS} | {name: "x" for name in RENAME_TEXT_FIELDS}
-    for mask in options.masks:
-        try:
-            literal_text = "".join(text for text, _, _, _ in string.Formatter().parse(mask))
-            unknown = [name for name in mask_fields(mask) if name not in sample]
-        except ValueError as e:
-            problems.append(f"mask {mask!r}: {e}")
-            continue
-        if unknown:
-            problems.append(f"mask {mask!r}: unknown field(s) {', '.join(unknown)}")
-            continue
-        if not mask_fields(mask):
-            problems.append(f"mask {mask!r}: uses no field")
-        if FORBIDDEN_CHARACTERS.search(literal_text):
-            problems.append(f"mask {mask!r}: contains a character not allowed in file names")
-        try:
-            mask.format(**sample)
-        except (ValueError, TypeError, IndexError, KeyError) as e:
-            problems.append(f"mask {mask!r}: invalid format ({e})")
-
     for name, extensions in (("Music file types", options.audio_extensions),
                              ("Junk file types", options.junk_extensions)):
         for extension in extensions:
@@ -85,37 +70,7 @@ def validate(options: RenameOptions) -> list[str]:
         overlap = junk & protected
         if overlap:
             problems.append(f"{', '.join(sorted(overlap))} can't be junk: these are {label}")
-
-    if FORBIDDEN_CHARACTERS.search(options.replacement):
-        problems.append("The replacement contains a character not allowed in file names")
     return problems
-
-
-# ---------------------------------------------------------------------------
-# Names
-# ---------------------------------------------------------------------------
-
-def sanitize(text: str, replacement: str = "-") -> str:
-    """Replace the characters that are not allowed in file names."""
-    return FORBIDDEN_CHARACTERS.sub(replacement, text)
-
-
-def mask_values(rename_fields: dict, replacement: str) -> dict:
-    """The script's read_fields: numbers as they are, text sanitized."""
-    return {name: sanitize(value, replacement) if isinstance(value, str) else value
-            for name, value in rename_fields.items()}
-
-
-def choose_name(fields: dict, masks: Iterable[str]) -> tuple[str, int] | None:
-    """(new_stem, mask_index) for the first mask whose fields are all present, or None."""
-    for index, mask in enumerate(masks):
-        if all(name in fields for name in mask_fields(mask)):
-            return mask.format(**fields), index
-    return None
-
-
-def missing_from(mask: str, fields: dict) -> str:
-    return ", ".join(name for name in mask_fields(mask) if name not in fields)
 
 
 # ---------------------------------------------------------------------------
@@ -555,9 +510,9 @@ def _apply_rename(item: PlanItem, report: RenameReport) -> None:
 # ---------------------------------------------------------------------------
 
 def options_to_json(options: RenameOptions) -> dict:
+    """The card's own options. The masks and the replacement are the shared Settings.name_masks and
+    name_replacement (SPEC §21): older settings files kept them here, and Settings.load migrates them."""
     return {
-        "masks": list(options.masks),
-        "replacement": options.replacement,
         "recursive": options.recursive,
         "cleanup": options.cleanup,
         "junk_extensions": sorted(options.junk_extensions),
@@ -579,10 +534,7 @@ def options_from_json(data) -> RenameOptions:
         value = data.get(key)
         return value if isinstance(value, bool) else fallback
 
-    replacement = data.get("replacement")
     return RenameOptions(
-        masks=tuple(strings("masks", list(default.masks))),
-        replacement=replacement if isinstance(replacement, str) else default.replacement,
         recursive=flag("recursive", default.recursive),
         cleanup=flag("cleanup", default.cleanup),
         junk_extensions=frozenset(strings("junk_extensions", sorted(default.junk_extensions))),

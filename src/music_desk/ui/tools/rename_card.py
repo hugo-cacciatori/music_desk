@@ -1,23 +1,20 @@
 """The Rename card of the Tools page (SPEC §10 A): the options of core.rename, checked as they are typed.
 
 The card only collects options and validates them (core.rename.validate: the script's validate_config plus the
-cleanup protections); Preview stays disabled until they pass. The preview and the run come from the window.
+cleanup protections); Preview stays disabled until they pass. The preview and the run come from the window. The
+masks are the File names card's (SPEC §21): this card only shows where they are.
 """
 
 import re
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QCheckBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
-    QMenu,
     QPushButton,
     QToolButton,
     QVBoxLayout,
@@ -36,8 +33,8 @@ SELECTION_DESCRIPTION = (
     "Characters not allowed in file names are replaced. A file is never renamed over another one; files that fit "
     "no mask keep their name. A .lrc file with the same name follows its music file. Junk files are never "
     "touched when renaming a selection.")
-MASK_FIELDS = ("track:02", "track", "track_total", "disc", "disc_total", "title", "artist", "albumartist", "album",
-               "year", "genre", "composer")
+FIX_FIRST = "Fix the file names first."  # what the cards that use the masks say while they are invalid
+MASKS_LINE = "File names: the masks in the File names card above."
 
 
 def parse_extensions(text: str) -> frozenset[str]:
@@ -99,45 +96,18 @@ class Card(QFrame):
 
 
 class RenameCard(Card):
-    changed = Signal()  # the options changed (valid or not)
+    changed = Signal()  # the options changed (valid or not), the shared masks included
     runRequested = Signal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, names, parent: QWidget | None = None) -> None:
+        """`names` is the File names card (ui.tools.names_card), whose masks a run uses."""
         super().__init__("Rename files from tags", DESCRIPTION, parent)
+        self.names = names
         self._loading = False
-        self._example_fields: dict | None = None
-        self._example_ext = ""
         self.selection = False
 
-        self.masks = QListWidget()
-        self.masks.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-        self.masks.setMaximumHeight(110)
-        self.masks.model().rowsMoved.connect(self._edited)
-        self.masks.itemChanged.connect(self._edited)
-        self.add_mask = QPushButton("Add")
-        self.add_mask.clicked.connect(self._add_mask)
-        self.remove_mask = QPushButton("Remove")
-        self.remove_mask.clicked.connect(self._remove_mask)
-        self.insert_field = QToolButton()
-        self.insert_field.setText("Insert field")
-        self.insert_field.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        menu = QMenu(self.insert_field)
-        for name in MASK_FIELDS:
-            menu.addAction(f"{{{name}}}", lambda n=name: self.insert(f"{{{n}}}"))
-        self.insert_field.setMenu(menu)
-        mask_buttons = QVBoxLayout()
-        for widget in (self.add_mask, self.remove_mask, self.insert_field):
-            mask_buttons.addWidget(widget)
-        mask_buttons.addStretch(1)
-        masks_row = QHBoxLayout()
-        masks_row.addWidget(self.masks, 1)
-        masks_row.addLayout(mask_buttons)
-        self.example = QLabel()
-        self.example.setWordWrap(True)
-
-        self.replacement = QLineEdit()
-        self.replacement.setMaximumWidth(80)
-        self.replacement.textEdited.connect(self._edited)
+        self.masks_line = QLabel(MASKS_LINE)
+        self.masks_line.setWordWrap(True)
         self.recursive = QCheckBox("Include subfolders")
         self.recursive.toggled.connect(self._edited)
         self.cleanup = QCheckBox("Send junk files to the Recycle Bin")
@@ -156,9 +126,7 @@ class RenameCard(Card):
         advanced_form.addRow("Music file types:", self.audio)
 
         form = QFormLayout()
-        form.addRow("Masks (first match wins):", masks_row)
-        form.addRow("", self.example)
-        form.addRow("Replace invalid characters with:", self.replacement)
+        form.addRow(self.masks_line)
         form.addRow("", self.recursive)
         form.addRow("", self.cleanup)
         form.addRow("Junk file types:", self.junk)
@@ -174,22 +142,21 @@ class RenameCard(Card):
         self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)
         self.buttons.addWidget(self.reset_button)
+        names.changed.connect(self._edited)
         self.set_options(rename.DEFAULT_OPTIONS)
 
     # -- options --
 
     def options(self) -> RenameOptions:
-        masks = tuple(self.masks.item(i).text() for i in range(self.masks.count()))
-        return RenameOptions(masks=masks, replacement=self.replacement.text(), recursive=self.recursive.isChecked(),
-                             cleanup=self.cleanup.isChecked(), junk_extensions=parse_extensions(self.junk.text()),
+        """The options for a run: this card's, with the File names card's masks and replacement."""
+        return RenameOptions(masks=self.names.mask_list(), replacement=self.names.replacement_text(),
+                             recursive=self.recursive.isChecked(), cleanup=self.cleanup.isChecked(),
+                             junk_extensions=parse_extensions(self.junk.text()),
                              audio_extensions=parse_extensions(self.audio.text()))
 
     def set_options(self, options: RenameOptions) -> None:
+        """The card's own options (the masks in `options` are ignored: they are the shared setting)."""
         self._loading = True
-        self.masks.clear()
-        for mask in options.masks:
-            self._new_item(mask)
-        self.replacement.setText(options.replacement)
         self.recursive.setChecked(options.recursive)
         self.cleanup.setChecked(options.cleanup)
         self.junk.setText(format_extensions(options.junk_extensions))
@@ -201,13 +168,16 @@ class RenameCard(Card):
         self.set_options(rename.DEFAULT_OPTIONS)
 
     def problems_list(self) -> list[str]:
-        return rename.validate(self.options())
+        """What stops a run: the file names first (said once, the File names card lists the details), then this
+        card's own options."""
+        own = rename.validate_file_types(self.options())
+        return ([FIX_FIRST] if not self.names.valid else []) + own
 
     @property
     def valid(self) -> bool:
         return not self.problems_list()
 
-    # -- scope and example --
+    # -- scope --
 
     def set_selection(self, selection: bool) -> None:
         """A file selection: only those files and their sidecars are renamed, never junk (SPEC §10)."""
@@ -219,59 +189,10 @@ class RenameCard(Card):
         self.selection_note.setText("Subfolders and junk files don't apply to a selection." if selection else "")
         self.selection_note.setVisible(selection)
 
-    def set_example(self, fields: dict | None, extension: str = "") -> None:
-        """The first file's rename fields (core.tags rename_fields), for the live example."""
-        self._example_fields, self._example_ext = fields, extension
-        self._update_example()
-
-    def _update_example(self) -> None:
-        if self._example_fields is None:
-            self.example.setText("")
-            return
-        options = self.options()
-        try:
-            values = rename.mask_values(self._example_fields, options.replacement)
-            choice = rename.choose_name(values, options.masks)
-        except (ValueError, KeyError, IndexError, TypeError):
-            choice = None
-        if choice is None:
-            self.example.setText("Example: the first file fits no mask and keeps its name.")
-        else:
-            self.example.setText(f"Example: {choice[0]}{self._example_ext.lower()}")
-
-    # -- editing --
-
-    def _new_item(self, text: str) -> QListWidgetItem:
-        item = QListWidgetItem(text)
-        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsDragEnabled)
-        self.masks.addItem(item)
-        return item
-
-    def _add_mask(self) -> None:
-        item = self._new_item("{title}")
-        self.masks.setCurrentItem(item)
-        self.masks.editItem(item)
-        self._edited()
-
-    def _remove_mask(self) -> None:
-        row = self.masks.currentRow()
-        if row >= 0:
-            self.masks.takeItem(row)
-            self._edited()
-
-    def insert(self, text: str) -> None:
-        """Append a field to the selected mask (or to a new one)."""
-        item = self.masks.currentItem() or self._new_item("")
-        self.masks.setCurrentItem(item)
-        item.setText(f"{item.text()} {text}".strip() if item.text() and not item.text().endswith(" ") else
-                     item.text() + text)
-
     def _edited(self, *_args) -> None:
         if self._loading:
             return
         problems = self.problems_list()
         self.show_problems(problems)
         self.run_button.setEnabled(not problems)
-        self.remove_mask.setEnabled(self.masks.count() > 0)
-        self._update_example()
         self.changed.emit()

@@ -3,10 +3,11 @@ loudness values and cover, and the write of the changed fields. Plain Python: th
 thread, never on its own."""
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from music_desk.core import preview
+from music_desk.core import masks, preview
 from music_desk.core.formats import format_for
 from music_desk.core.fsops import open_shared
 from music_desk.core.tags import Fields, TaggedFile
@@ -82,18 +83,14 @@ def _size(size: int) -> str:
     return ""
 
 
-def suggested_name(tagged: TaggedFile) -> str | None:
-    """What the Rename tool's default masks would name this file, if that differs from its name."""
-    from music_desk.core.rename import DEFAULT_OPTIONS, choose_name, mask_values
-
-    if not tagged.info.tags:
+def suggested_name(tagged: TaggedFile, name_masks: Sequence[str] = masks.DEFAULT_MASKS,
+                   replacement: str = masks.DEFAULT_REPLACEMENT) -> str | None:
+    """What the user's file name masks (SPEC §21) would name this file, if that differs from its name. None
+    while the masks are invalid: the File names card says so."""
+    if not tagged.info.tags or masks.validate_masks(name_masks, replacement):
         return None
-    fields = mask_values(tagged.rename_fields(), DEFAULT_OPTIONS.replacement)
-    choice = choose_name(fields, DEFAULT_OPTIONS.masks)
-    if choice is None:
-        return None
-    name = f"{choice[0]}{tagged.path.suffix.lower()}"
-    return None if name == tagged.path.name else name
+    name = masks.name_for(tagged.rename_fields(), name_masks, replacement, tagged.path.suffix)
+    return None if name is None or name == tagged.path.name else name
 
 
 def decode_text(data: bytes) -> str:
@@ -137,8 +134,10 @@ def folder_cover(folder: Path) -> tuple[bytes, str] | None:
     return None
 
 
-def read_snapshot(path: str | Path) -> Snapshot:
-    """Everything the tab shows. Raises OSError/ValueError (mutagen errors included) for unreadable files."""
+def read_snapshot(path: str | Path, name_masks: Sequence[str] = masks.DEFAULT_MASKS,
+                  replacement: str = masks.DEFAULT_REPLACEMENT) -> Snapshot:
+    """Everything the tab shows, with the rename hint from these masks. Raises OSError/ValueError (mutagen errors
+    included) for unreadable files."""
     path = Path(path)
     stat = path.stat()
     tagged = TaggedFile(path, shared=True)
@@ -150,7 +149,7 @@ def read_snapshot(path: str | Path) -> Snapshot:
     if tagged.info.family.value == "ID3" and tags is not None and hasattr(tags, "version"):
         id3_version = f"2.{tags.version[1]}"
     sidecar = lrc_sidecar(path)
-    suggestion = suggested_name(tagged)
+    suggestion = suggested_name(tagged, name_masks, replacement)
     return Snapshot(
         path=path, size=stat.st_size, mtime=stat.st_mtime, editable=tagged.info.tags,
         family=tagged.info.family.value, container=tagged.info.container, fields=tagged.fields(),
@@ -169,7 +168,8 @@ COVER_EXTENSIONS = (".jpg", ".jpeg", ".png")
 JPEG_MAGIC, PNG_MAGIC = bytes([0xFF, 0xD8]), bytes([0x89]) + b"PNG"
 
 
-def write_fields(path: str | Path, changes: dict) -> Snapshot:
+def write_fields(path: str | Path, changes: dict, name_masks: Sequence[str] = masks.DEFAULT_MASKS,
+                 replacement: str = masks.DEFAULT_REPLACEMENT) -> Snapshot:
     """Write only the changed fields (None clears one) and, under COVER, the embedded front cover (other
     pictures are kept), keeping everything else and the ID3 version; return the fresh snapshot."""
     if changes:
@@ -183,7 +183,7 @@ def write_fields(path: str | Path, changes: dict) -> Snapshot:
             else:
                 tagged.set_cover(changes[COVER])
         tagged.save()
-    return read_snapshot(path)
+    return read_snapshot(path, name_masks, replacement)
 
 
 def folder_picture(folder: str | Path, first_track: str | Path | None) -> tuple[bytes, str] | None:

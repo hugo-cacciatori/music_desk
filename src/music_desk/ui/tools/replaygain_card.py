@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core import replaygain
 from music_desk.core.replaygain import ReplayGainOptions
-from music_desk.ui.tools.rename_card import Card
+from music_desk.ui.tools.rename_card import FIX_FIRST, MASKS_LINE, Card
 
 DESCRIPTION = (
     "Measures loudness with rsgain at the target level, lowers any track gain that would clip, sets the album "
@@ -219,6 +219,7 @@ class TidyCard(Card):
         self.note = QLabel()
         self.note.setWordWrap(True)
         form = QFormLayout()
+        form.addRow(QLabel(MASKS_LINE, wordWrap=True))
         form.addRow("Scope:", scope_row)
         self.body.addLayout(form)
         self.body.addWidget(self.note)
@@ -236,7 +237,9 @@ class TidyCard(Card):
 
     def update_state(self, *_args) -> None:
         problems = []
-        if not self.rename_card.valid:
+        if not self.rename_card.names.valid:
+            problems.append(FIX_FIRST)
+        elif not self.rename_card.valid:
             problems.append("The Rename card's options need fixing.")
         if not self.replaygain_card.valid:
             problems.append("The ReplayGain card's options need fixing.")

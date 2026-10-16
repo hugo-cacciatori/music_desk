@@ -168,6 +168,32 @@ deleting the split's own `.partial` files from the same run.
   MD5, and a cut in the wrong place would still pass the end-to-end MD5. That's why the proof also checks each
   track's length, and why the split fixtures use audio that never repeats (a sweep or seeded noise).
 
+## As built (M10 task 2): `core/cue.py`
+- `read_cue_sheet(path, encoding=None)` / `parse_cue(text)` → `CueSheet`: album fields, `files`, audio `tracks`
+  (`CueTrack`: number, file, title, performer, songwriter, ISRC, `index00`/`index01` in CD frames), `data_tracks`
+  skipped, the encoding's name and `fell_back`. Keywords are matched ignoring case, values may be unquoted, and
+  unknown lines are ignored. A track without INDEX 01 or a malformed time raises `CueError`.
+- `ENCODINGS` is the picker's list (codec, label); None is Auto, which uses `preview.decode`.
+- `read_source(path)` → `SourceInfo` (format, rate, samples, channels, bits, the FLAC MD5, the album-level tags,
+  the front cover).
+  - FLAC is read with mutagen, WAV with Python's `wave` (a float WAV is refused), and AIFF from its COMM chunk
+    (Python 3.13 dropped `aifc`).
+  - Any other extension is refused by name, as the spec says.
+- `plan_album(cue, masks, replacement, encoding, is_silent, read_info)` → `AlbumPlan`, with the tracks
+  (`PlannedTrack`: number, start/end sample, rename fields, ISRC, name, path) or a `refusal`, plus warnings.
+  - `is_silent(source, start, end)` is the job's flac decode (task 3). Without it, a pregap of 2 s or more is
+    kept as track 0: no sample is lost either way.
+  - `name_tracks` gives the names and checks clashes against the folder, ignoring case.
+- **Added: paths too long for Windows.** A track whose full path would exceed 259 characters (MAX_PATH less its
+  terminator) refuses the album, naming the track and suggesting shorter masks.
+  - The reason: Hugo's example sheet has a 128-character title, and a deep library folder could push a track
+    past what Windows tools reliably open.
+  - Inferred (MAX_PATH is a known Windows limit), not measured with flac or players.
+- **Hugo's own EAC sheet** (pasted 2026-10-16) is a fixture (`split/sheets/eac_example.cue`). It plans 11
+  tracks, its two INDEX 00 gaps stay at the end of tracks 4 and 10, and every sample lands in one track.
+- The split fixtures are 16-bit mono chirps (`CHIRP`, a rising pitch), generated with `make_fixtures.py split`
+  and byte-identical across runs.
+
 ## Tests
 - **Fixtures** (`make_fixtures.py`, ffmpeg, dev-only; non-repeating audio):
   - a FLAC image with an INDEX 00 gap and a 3 s audible hidden track;
@@ -177,7 +203,8 @@ deleting the split's own `.partial` files from the same run.
   - a data track;
   - a multi-FILE sheet;
   - a sheet longer than its audio;
-  - an APE-named source (refused);
+  - an APE-named source (refused; made in `tmp_path` by its test, since the tag parity test reads every audio
+    fixture and a fake .ape breaks it);
   - a name clash.
 - **Core, with a fake runner:** parsing, encodings, samples from times, the boundaries and hidden-track rules,
   names and clashes, tags, refusals, and the partial-file cleanup on cancel and on failure.

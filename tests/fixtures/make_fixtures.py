@@ -446,12 +446,134 @@ def make_preview() -> None:
     (out / "utf16.lrc").write_bytes(b"\xff\xfe" + crlf("[00:01.00]Première ligne\n").encode("utf-16-le"))
 
 
+# A chirp whose pitch keeps rising: no two stretches of it are alike, so a cut one sample off changes the tracks'
+# MD5s (the repeating tone of cleanup/ can't catch that, SPEC §22).
+CHIRP = "0.25*sin(2*PI*t*(200+150*t))"
+SILENT_THEN_CHIRP = f"if(lt(t,3),0,{CHIRP})"
+
+SPLIT_SHEET = """REM GENRE "Test Rock"
+REM DATE 2024
+REM DISCNUMBER 1
+REM TOTALDISCS 2
+REM DISCID 8C0B6A0B
+REM COMMENT "ExactAudioCopy v1.6"
+PERFORMER "Fixture Artist"
+TITLE "Split Album"
+FILE "Fixture Artist - Split Album.flac" WAVE
+  TRACK 01 AUDIO
+    TITLE "Opening"
+    SONGWRITER "A. Writer"
+    ISRC GBAYE2400001
+    INDEX 01 00:03:00
+  TRACK 02 AUDIO
+    TITLE "Second Song"
+    FLAGS DCP
+    INDEX 00 00:06:00
+    INDEX 01 00:06:37
+  TRACK 03 AUDIO
+    TITLE "Duet"
+    PERFORMER "Fixture Artist & Guest"
+    INDEX 01 00:09:00
+"""
+
+# Hugo's own EAC sheet (pasted on 2026-10-16): the kind of sheet the split is for. Two INDEX 00 gaps, REM lines
+# the split doesn't use, and a 128-character title.
+EAC_EXAMPLE = """REM DATE 2026
+REM DISCID 7D0BCA0B
+REM COMMENT "ExactAudioCopy v1.8"
+PERFORMER "Gloryhammer"
+TITLE "Space 1993: Wrath of Kor-Virliath"
+FILE "Gloryhammer - Space 1993- Wrath of Kor-Virliath.flac" WAVE
+""" + "".join(
+    f'  TRACK {n:02} AUDIO\n    TITLE "{title}"\n    PERFORMER "Gloryhammer"\n'
+    + (f"    INDEX 00 {gap}\n" if gap else "") + f"    INDEX 01 {start}\n"
+    for n, (title, gap, start) in enumerate([
+        ("Ultra Portam Astralem", None, "00:00:00"),
+        ("Ultimate Sacrifice", None, "01:37:26"),
+        ("On a Quest for Aberdeen", None, "05:29:18"),
+        ("Die with a Sword in My Hand", None, "09:22:17"),
+        ("Silver Talon", "13:22:51", "13:23:19"),
+        ("Starfighters of Leuchars", None, "16:19:24"),
+        ("Warriors of Auchtermuchty", None, "21:00:27"),
+        ("Pax Galactica", None, "25:04:19"),
+        ("Demonic Devotion", None, "29:59:05"),
+        ("Hammer of Fate", None, "33:43:53"),
+        ("The Celestial Warhost of the Dundonian Empire Marches to Space Against the Dark Sorcerer (Final Assault "
+         "on Battlemoon X-22)", "37:37:51", "37:38:41"),
+    ], 1))
+
+
+def two_track_sheet(file: str, second: str = "00:03:00", extra: str = "") -> str:
+    return (f'PERFORMER "Fixture Artist"\nTITLE "Split Album"\nFILE "{file}" WAVE\n'
+            f'  TRACK 01 AUDIO\n    TITLE "One"\n    INDEX 01 00:00:00\n'
+            f'  TRACK 02 AUDIO\n    TITLE "Two"\n    INDEX 01 {second}\n{extra}')
+
+
+def make_split() -> None:
+    """split/: single-file albums for the cue split (SPEC §22), with audio that never repeats."""
+    base = OUT / "split"
+    flac, wav = [*ENCODERS["tone.flac"], "-sample_fmt", "s16"], ENCODERS["tone.wav"]  # 16-bit, as CD rips
+
+    # A 3 s audible hidden track before track 1, an INDEX 00 gap, per-track performer, songwriter and ISRC, and
+    # album values plus a front cover in the source's own tags.
+    album = base / "hidden_track"
+    encode(album / "Fixture Artist - Split Album.flac", flac, seconds=12, source=CHIRP)
+    audio = FLAC(album / "Fixture Artist - Split Album.flac")
+    write_vorbis(audio, {"album": "Source Album", "albumartist": "Source Artist", "year": "1999"})
+    cover = OUT / "cover.jpg"
+    audio = FLAC(album / "Fixture Artist - Split Album.flac")
+    audio.add_picture(edge_picture(cover.read_bytes(), 3))
+    audio.save()
+    write_text(album / "Split Album.cue", SPLIT_SHEET)
+
+    # A silent 3 s pregap: it joins track 1.
+    pregap = base / "silent_pregap"
+    encode(pregap / "image.flac", flac, seconds=9, source=SILENT_THEN_CHIRP)
+    write_text(pregap / "image.cue", two_track_sheet("image.flac", "00:06:00").replace(
+        "INDEX 01 00:00:00", "INDEX 01 00:03:00"))
+
+    # A WAV image.
+    encode(base / "wav_image" / "image.wav", wav, seconds=6, source=CHIRP)
+    write_text(base / "wav_image" / "image.cue", two_track_sheet("image.wav"))
+
+    # A data track (skipped), a sheet longer than its audio, a name clash, several FILE lines. The APE source is
+    # made by its test: a fake .ape here would break the tag parity test, which reads every audio fixture.
+    encode(base / "data_track" / "image.flac", flac, seconds=6, source=CHIRP)
+    write_text(base / "data_track" / "image.cue", two_track_sheet(
+        "image.flac", extra="  TRACK 03 MODE1/2352\n    INDEX 01 00:05:00\n"))
+    encode(base / "too_long" / "image.flac", flac, seconds=6, source=CHIRP)
+    write_text(base / "too_long" / "image.cue", two_track_sheet("image.flac", "00:08:00"))
+    encode(base / "name_clash" / "image.flac", flac, seconds=6, source=CHIRP)
+    write_text(base / "name_clash" / "image.cue", two_track_sheet("image.flac"))
+    shutil.copy2(OUT / "formats" / "tone.flac", base / "name_clash" / "02 Two.flac")
+    encode(base / "multi_file" / "a.flac", flac, seconds=2, source=CHIRP)
+    encode(base / "multi_file" / "b.flac", flac, seconds=2, source=CHIRP)
+    write_text(base / "multi_file" / "album.cue", two_track_sheet("a.flac") + 'FILE "b.flac" WAVE\n'
+               '  TRACK 03 AUDIO\n    INDEX 01 00:00:00\n')
+
+    # Sheets on their own, in the encodings rippers wrote.
+    sheets = base / "sheets"
+    write_text(sheets / "eac_example.cue", EAC_EXAMPLE)
+    accented = 'PERFORMER "Björk"\nTITLE "Début"\nFILE "x.flac" WAVE\n  TRACK 01 AUDIO\n    TITLE "Café Noël"\n' \
+               '    INDEX 01 00:00:00\n  TRACK 02 AUDIO\n    TITLE "Crème brûlée"\n    INDEX 01 00:01:00\n'
+    sheets.mkdir(parents=True, exist_ok=True)
+    (sheets / "cp1252.cue").write_bytes(accented.replace("\n", "\r\n").encode("cp1252"))
+    (sheets / "bom.cue").write_bytes(b"\xef\xbb\xbf" + accented.replace("\n", "\r\n").encode("utf-8"))
+    japanese = ('PERFORMER "宇多田ヒカル"\nTITLE "初恋"\nFILE "x.flac" WAVE\n'
+                '  TRACK 01 AUDIO\n    TITLE "誰かの願いが叶うころ"\n    INDEX 01 00:00:00\n'
+                '  TRACK 02 AUDIO\n    TITLE "花束を君に"\n    INDEX 01 00:01:00\n')
+    (sheets / "sjis.cue").write_bytes(japanese.replace("\n", "\r\n").encode("shift_jis"))
+
+
 def main() -> None:
     if sys.argv[1:] == ["preview"]:  # only the text fixtures: uv run python tests/fixtures/make_fixtures.py preview
         make_preview()
         return
     global FFMPEG
     FFMPEG = find_ffmpeg()
+    if sys.argv[1:] == ["split"]:  # only the split fixtures (they use cover.jpg and formats/tone.flac)
+        make_split()
+        return
     make_jpeg(OUT / "cover.jpg", "blue")
     make_formats()
     make_album()
@@ -459,6 +581,7 @@ def main() -> None:
     make_edge()
     make_replaygain()
     make_preview()
+    make_split()
     count = sum(1 for p in OUT.rglob("*") if p.is_file())
     print(f"{count} fixture files in {OUT}")
 

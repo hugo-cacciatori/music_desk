@@ -19,6 +19,9 @@
   - `generated/preview/` (M9) holds text in the encodings album folders use: an EAC-style UTF-16 LE log, a UTF-8
     BOM text, a UTF-8 cue, a cp1252 text, a CP437 `.nfo` and a UTF-16 `.lrc`. `make_fixtures.py preview`
     regenerates only these, without ffmpeg.
+  - `generated/split/` (M10) holds single-file albums for the cue split: 16-bit chirps that never repeat, an
+    audible hidden track, a silent pregap, a WAV image, refusals, and sheets in several encodings with Hugo's EAC
+    sheet. `make_fixtures.py split` regenerates only these (it needs ffmpeg).
   - ffmpeg can encode FLAC, Vorbis, Opus, MP3, MP2, WAV, AIFF, AAC and ALAC in M4A, WavPack, TTA and WMA. It can't
     encode APE, TAK, Musepack, OptimFROG or DSF/DFF, and Speex depends on the build. They have no fixture: getting
     sample files was dropped (Hugo, 2026-10-15), so they stay supported through mutagen, untested with a real file.

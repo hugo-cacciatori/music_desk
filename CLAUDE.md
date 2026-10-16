@@ -16,17 +16,17 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, session 12):** version 0.2.7 is on `main` (not pushed). 0.2.2 added the Start menu folder
+- **State (2026-10-16, session 12):** version 0.2.8 is on `main` (not pushed). 0.2.2 added the Start menu folder
   with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added `fsops.can_recycle` (SPEC §19, measured on a
   network path). 0.2.4 added Delete to the Recycle Bin. 0.2.5 and 0.2.6 added the file preview (M9; text cap
-  512 KB and the wrap rule, measured in SPEC §20). 0.2.7 added the shared file name masks (M10 task 1, SPEC
-  §21). v0.2.1 is the latest GitHub release. M0–M9 are complete (Progress is in HISTORY.md). Of 1003 tests,
-  1002 passed in the last full run, slow ones included; the known watcher flake (below) passed alone. Ruff is
-  clean.
+  512 KB and the wrap rule, measured in SPEC §20). 0.2.7 added the shared file name masks (M10 task 1, §21).
+  0.2.8 added `core/cue.py`, the split plan, with Hugo's EAC sheet as a fixture (M10 task 2, §22). v0.2.1 is the
+  latest GitHub release. M0–M9 are complete (Progress is in HISTORY.md). 1027 tests pass, slow ones included,
+  and ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Specified on 2026-10-16:** M10 tasks 2–5 below. `resources/flac/` holds flac 1.5.0 (not bundled yet), and a
+- **Specified on 2026-10-16:** M10 tasks 3–5 below. `resources/flac/` holds flac 1.5.0 (not bundled yet), and a
   trial on a fixture copy measured a lossless split (SPEC §22).
-- **Next step: M10 task 2** (`core/cue.py` and the split fixtures).
+- **Next step: M10 task 3** (bundle flac, its self-check, the runner, the proof and `is_silent`, `slow` tests).
 - **Watch for:** an intermittent failure in full runs, `tests/ui/test_watcher.py::test_live_folder_changes`
   (named by a kept output on 2026-10-16: `PermissionError: [WinError 5] Access is denied` on the test's own
   `os.rename` of `lib\Artist`, right after copying a file into it; it passes alone). The cause isn't measured
@@ -76,7 +76,7 @@ Done when:
 - [x] 1. Masks: `core/masks.py` (moved out of `rename.py`; the parity tests stay unchanged),
       `Settings.name_masks` / `name_replacement` with the migration, the File names card, and the hint using the
       user's masks.
-- [ ] 2. `core/cue.py`: parsing, encodings, samples, boundaries and the hidden track, names and clashes, tags;
+- [x] 2. `core/cue.py`: parsing, encodings, samples, boundaries and the hidden track, names and clashes, tags;
       the split fixtures, with audio that never repeats.
 - [ ] 3. flac: bundle `resources/flac` (PyInstaller spec, `licenses.py`, `resources/licenses/`, About), the
       `flac --version` self-check, the runner and the proof, `slow` tests.

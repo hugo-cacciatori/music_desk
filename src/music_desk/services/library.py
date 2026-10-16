@@ -57,8 +57,15 @@ class LibraryService(QObject):
         self._closed = False
         self.refresh_online()  # roots unplugged since the last run show as offline at once
         self._run(self._sync_watches)  # after the online check: same worker, so in order
-        for root in self.roots():  # the startup rescan; an offline root is skipped by the scanner
+        self.rescan_all()  # the startup rescan
+
+    def rescan_all(self) -> int:
+        """Queue an incremental rescan of every root (startup, File › Rescan library); an offline root is skipped
+        by the scanner. Returns the number of roots."""
+        current = self.roots()
+        for root in current:
             self.indexer.scan_root(root.id)
+        return len(current)
 
     @property
     def closed(self) -> bool:

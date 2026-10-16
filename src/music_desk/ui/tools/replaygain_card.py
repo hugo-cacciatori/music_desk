@@ -26,10 +26,10 @@ DESCRIPTION = (
     "Measures loudness with rsgain at the target level, lowers any track gain that would clip, sets the album "
     "gain to the lowest track gain and the album peak to the highest track peak, and writes 'LUFS Target : X' in "
     "the comment. It then copies the album values into the lite/bonus/CD2 subfolders, plus the track values into "
-    "'lite' subfolders for files with the same name. A report is appended to replaygain.log in the album folder.")
+    "'lite' subfolders for files with the same name. Its report replaces replaygain.log in the album folder.")
 DISCOGRAPHY_NOTE = (
     "Discography: every folder below that holds music is an album (its lite/bonus/CD2 subfolders go with it). "
-    "Then every album is leveled to the lowest album gain, and a summary goes to replaygain.log in this folder.")
+    "Then every album is leveled to the lowest album gain, and a summary replaces replaygain.log in this folder.")
 TIDY_DESCRIPTION = (
     "Renames the music files from their tags (the Rename card's options), then runs ReplayGain on the final names "
     "(the ReplayGain card's options). This is the script run without flags. The preview covers the rename step "

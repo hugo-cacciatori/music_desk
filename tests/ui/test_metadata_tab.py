@@ -140,6 +140,15 @@ def test_raw_aac_is_read_only(qtbot, panel, fixture_copy):
     assert tab.changes() == {}
 
 
+def test_wma_has_no_track_total(qtbot, panel, fixture_copy):
+    """SPEC §1: WMA has no standard track total, so the field is disabled with the reason."""
+    tab = load(qtbot, panel, fixture_copy("formats/tone.wma"))
+    assert not tab.edits["track_total"].isEnabled() and "WMA" in tab.edits["track_total"].toolTip()
+    assert tab.edits["track"].isEnabled() and tab.edits["disc_total"].isEnabled()
+    tab = load(qtbot, panel, fixture_copy("formats/tone.flac"))
+    assert tab.edits["track_total"].isEnabled()
+
+
 def test_details_and_folder_cover(qtbot, panel, fixture_copy, fixtures_dir):
     path = fixture_copy("formats/tone.flac")
     shutil.copy2(fixtures_dir / "cover.jpg", path.parent / "Folder.JPG")

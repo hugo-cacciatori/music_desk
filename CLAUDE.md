@@ -11,6 +11,18 @@ milestone, read the SPEC sections listed under it in Progress. A new session mus
 two files alone.
 
 ## Resume here
+**Session 11, last (2026-10-16): the SPEC review, version 0.2.1.** Hugo asked for a full check of `docs/SPEC.md`
+against the code. Every milestone was built; these gaps were found and fixed:
+- the ReplayGain card still said the report "is appended" to replaygain.log (it replaces it since 0.1.x);
+- WMA's track total wasn't disabled (a save failed instead): `metadata_tab.WMA_TRACK_TOTAL`, also for a
+  multi-selection holding a .wma (`test_wma_has_no_track_total`);
+- File › Rescan library was missing: `LibraryService.rescan_all`, `MainWindow.rescan_library` /
+  `rescan_library_action` (`test_rescan_library_rescans_every_root`);
+- the event-loop stall log of §18 was missing: `ui/stall_watch.py` `StallWatch`, on when running from source
+  (`tests/ui/test_stall_watch.py`).
+Outdated SPEC lines were brought in line (§1, §2, §4, §5 menus, §10 B and the junk list, §16 icons, §18). Committed
+on `main`, not pushed, setup not rebuilt (0.2.0 stays the published release). 941 tests pass, ruff is clean.
+
 **Current state (2026-10-16, end of session 11): M7 is complete, and so is the project as planned (M0–M7).**
 Version 0.2.0 is on `main`, pushed, and published as the GitHub release v0.2.0 with
 `MusicDesk-Setup-0.2.0.exe` (Hugo's go, 2026-10-16). The README has the playlist builder. M7's "Done when" was
@@ -861,6 +873,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 | 2026-10-16 | ReplayGain (Hugo): `replaygain.log` holds the last run only (replaced each run; the script appended). ReplayGain tags can be removed from tracks and folders; "the ReplayGain tags" are every REPLAYGAIN_* value plus the comment lines written from the card's template (any target), while other comment lines and the log files stay. Details in SPEC §10 B and §17. |
 | 2026-10-16 | Drag and drop as built: drags carry entry ids in an app-only format, as a copy only, so nothing outside the app can take them. The folder tree allows a multi-selection (Ctrl/Shift+click) for dragging; its current folder is still the one open. Versions (Hugo): a bump after each step, 0.1.1 for drag and drop, 0.1.2 for export and play, 0.2.0 for the release. Details in SPEC §15. |
 | 2026-10-16 | Export and play as built: Play, Export… and Relative paths (ticked by default, remembered) sit under the playlist's footer. The export suggests Playlist.m3u8 in the last export folder, else Music, and is written off the UI thread. Tracks gone from the library are left out, and the status bar says how many. The export is a Ground rule 1 exception. Details in SPEC §15. |
+| 2026-10-16 | SPEC review (Hugo): the context menus' "Tools…" replaces the planned per-tool items (recorded in §5); icons are Qt's standard ones (§16); the stall log runs only from source. Version 0.2.1 holds the fixes. |
 | 2026-10-15 | Installer as built: all users in Program Files by default (Hugo: install in Program Files), with Inno Setup's "only for me" choice; 64-bit only; licence page; the uninstaller asks before deleting the app data (default No, kept when silent). Inno Setup itself is installed in `C:\Program Files\Inno Setup 6`. Details in SPEC §13. |
 | 2026-10-15 | MusicDesk is licensed GPL-3.0-or-later (Hugo): compatible with mutagen (GPL-2.0-or-later) and Qt (LGPL-3.0). `LICENSE` holds the GPL-3.0 text, `pyproject.toml` declares it, About says it. Details in SPEC §13. |
 | 2026-10-15 | The name stays MusicDesk (Hugo). The icon is drawn by `packaging/make_icon.py` (no image editor, reproducible) and embedded in the exe with a version resource. No theme setting: Qt follows Windows' light and dark (checked). FFmpeg inside rsgain is an LGPL build with Fraunhofer FDK AAC; the LGPL-2.1 text and FDK AAC's notice are shipped. Details in SPEC §13. |
@@ -929,7 +942,7 @@ Commands (from the project root):
           rename_job.py, replaygain_job.py
         ui/
           main_window.py, sidebar.py, folder_tree.py, file_view.py, address_bar.py, search_view.py,
-          playlist_panel.py, entry_drag.py, jobs_panel.py, about_dialog.py, toast.py
+          playlist_panel.py, entry_drag.py, stall_watch.py, jobs_panel.py, about_dialog.py, toast.py
           side_panel/       panel.py, metadata_tab.py, lyrics_tab.py, folder_summary.py
           tools/            tools_page.py, rename_card.py, replaygain_card.py, rename_preview.py, rg_report.py
       resources/rsgain/     rsgain.exe 3.6 + DLLs + presets + licenses (the only copy left)

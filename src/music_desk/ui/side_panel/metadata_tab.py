@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from music_desk.core.formats import TagFamily
 from music_desk.core.metadata import COVER, COVER_EXTENSIONS, LARGE_COVER, Snapshot, embedded_cover
 from music_desk.core.tags import Fields
 from music_desk.services.tag_io import ImageRead, Loaded, LoadedMany, TagIO
@@ -41,6 +42,7 @@ TEXT_FIELDS = (("title", "Title"), ("artist", "Artist"), ("albumartist", "Album 
 LATER_TEXT_FIELDS = (("year", "Year"), ("genre", "Genre"), ("composer", "Composer"), ("comment", "Comment"))
 NUMBER_FIELDS = ("track", "track_total", "disc", "disc_total")
 PER_TRACK_FIELDS = ("title", "track")  # and the lyrics: one file at a time (SPEC §7)
+WMA_TRACK_TOTAL = "WMA has no standard field for the track total, so it can't be set on .wma files."
 SHARED_FIELDS = ("artist", "albumartist", "album", "track_total", "disc", "disc_total", "year", "genre", "composer",
                  "comment")
 MULTIPLE = object()  # the files of a multi-selection differ on this field
@@ -476,11 +478,14 @@ class MetadataTab(QWidget):
         can_tag = any(s.editable for s in files)
         editable = can_tag and self.locked_by is None
         tooltip = f"Read-only while {self.locked_by} is running." if self.locked_by else ""
+        wma = any(s.family == TagFamily.ASF for s in files)  # WMA has no standard track total (SPEC §1)
         for key, edit in self.edits.items():
             per_track_in_multi = self.multi and key in PER_TRACK_FIELDS
-            edit.setEnabled(can_tag and not per_track_in_multi)
+            no_field = wma and key == "track_total"
+            edit.setEnabled(can_tag and not per_track_in_multi and not no_field)
             edit.setReadOnly(not editable)
-            edit.setToolTip("Edited one file at a time." if per_track_in_multi else tooltip)
+            edit.setToolTip("Edited one file at a time." if per_track_in_multi else WMA_TRACK_TOTAL if no_field
+                            else tooltip)
             if key in self.clear_actions:
                 self.clear_actions[key].setEnabled(editable)
         self.lyrics.setEnabled(can_tag and not self.multi)

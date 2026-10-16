@@ -265,6 +265,8 @@ class MainWindow(QMainWindow):
         self.add_folder_action.triggered.connect(self.add_folder)
         file_menu = self.menuBar().addMenu("&File")
         file_menu.addAction(self.add_folder_action)
+        self.rescan_library_action = file_menu.addAction("&Rescan library", self.rescan_library)
+        self.rescan_library_action.setEnabled(self.library is not None)
         file_menu.addSeparator()
         file_menu.addAction("E&xit", self.close)
         view_menu = self.menuBar().addMenu("&View")
@@ -1573,6 +1575,15 @@ class MainWindow(QMainWindow):
             return
         self._keep_open_folder()  # its root may have been removed, or merged into a new one
         self.sidebar.set_roots(self.library.roots())
+
+    def rescan_library(self) -> None:
+        """Every library folder, incrementally: only new or changed files are read again (SPEC §4)."""
+        if not self._library_open():
+            return
+        count = self.library.rescan_all()
+        self.statusBar().showMessage(
+            f"Rescanning {count} library folder{'s' if count != 1 else ''}…" if count
+            else "The library is empty. Add a folder first (File > Add folder…).", STATUS_MS)
 
     def choose_folder(self) -> str:
         return QFileDialog.getExistingDirectory(self, "Add a music folder to the library")

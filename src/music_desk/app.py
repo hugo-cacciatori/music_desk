@@ -12,6 +12,7 @@ from music_desk.paths import app_data_dir, icon_path, library_db_path, rsgain_pa
 from music_desk.services.library import LibraryService
 from music_desk.settings import Settings
 from music_desk.ui.main_window import APP_TITLE, MainWindow
+from music_desk.ui.stall_watch import StallWatch
 
 log = logging.getLogger(__name__)
 
@@ -73,6 +74,8 @@ def main() -> int:
 
     window = MainWindow(library, settings)
     window.show()
+    if not getattr(sys, "frozen", False):  # running from source: log UI-thread stalls (SPEC §18)
+        StallWatch(app)
 
     check = RsgainCheck()
     check.signals.finished.connect(window.show_rsgain_version)

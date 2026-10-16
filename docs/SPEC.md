@@ -85,13 +85,15 @@ Field mapping:
 | Cover        | picture block / METADATA_BLOCK_PICTURE     | APIC type 3         | covr     | Cover Art (Front)  | WM/Picture        |
 | ReplayGain   | REPLAYGAIN_*                               | TXXX:REPLAYGAIN_*   | ----:com.apple.iTunes:REPLAYGAIN_* | REPLAYGAIN_* | REPLAYGAIN_* |
 
-WMA has no standard track total, so that field is disabled for .wma, with a tooltip explaining why.
+WMA has no standard track total, so that field is disabled for .wma, with a tooltip explaining why (as built in
+0.2.1: also when a multi-file selection holds a .wma file).
 
 ## 2. Data and storage
 - `%LOCALAPPDATA%\MusicDesk\` holds:
   - `library.db` (index and lyrics cache), `settings.json`, `logs\app.log` (rotating);
   - `playlists\` (temporary .m3u8 files; the last 20 are kept).
-- Nothing is stored inside music folders except tags, renames and `replaygain.log`.
+- Nothing is stored inside music folders except tags, renames, `replaygain.log` and the playlists the user
+  exports (§15), where the user saves them.
 - Schema sketch:
   - `roots(id, path, added_at, last_scan, online)`
   - `entries(id, root_id, parent_id, name, is_dir, ext, size, mtime, scan_gen)`, indexed on `parent_id`, with
@@ -158,8 +160,9 @@ Indexing runs in the background.
   If profiling shows GIL contention, switch to a process pool. Results reach the DB writer in batches. The same
   pass notes whether a same-stem `.lrc` sidecar exists.
 - Priority: the folder on screen is scanned and tag-read first.
-- Rescans are incremental: at startup, F5 (current folder) and "Rescan library". Entries that disappeared are
-  removed using the `scan_gen` marker.
+- Rescans are incremental: at startup, F5 (current folder) and File › Rescan library (every root,
+  `LibraryService.rescan_all`, added in 0.2.1). Entries that disappeared are removed during each folder's
+  reconciliation (as built below).
 - Live updates: watchdog events are debounced (500 ms) and coalesced per folder, then that folder is reconciled.
   Where the watcher fails (network or some removable drives), a folder is revalidated each time it is opened.
 - Stale-while-revalidate: opening a folder shows its indexed content at once, then a quick scandir of that one
@@ -227,10 +230,12 @@ Explorer-like, with no copy, paste, delete or new.
   back/forward buttons move through history. Typing selects by name. Ctrl/Shift extend the selection. F5 rescans
   the folder. Ctrl+F filters the current folder as you type.
 - **File context menu:** Open with default app, Play selection (§14), Open in File Explorer
-  (`explorer /select,"<path>"`), Rename (F2), Rename from tags…, Copy path.
+  (`explorer /select,"<path>"`), Rename (F2), Tools…, Remove ReplayGain tags…, Copy path.
 - **Folder context menu:** Open, Play folder, Play folder and subfolders, Open in File Explorer, Rename (F2),
-  Tidy album…, Rename from tags…, ReplayGain (album)…, ReplayGain (discography)…, Rescan, Remove from library
-  (roots only).
+  Tools…, Remove ReplayGain tags…, Rescan, Remove from library (roots only).
+  - As built (M5): the planned per-tool items (Tidy album…, Rename from tags…, ReplayGain (album)… and
+    (discography)…) became one "Tools…", which opens the Tools page with the folder or selection as its scope
+    (§10).
 - **Advantages over Explorer:**
   - Folders open instantly from the index, even on slow USB or network drives.
   - Library-wide search over file names, tags and lyrics.
@@ -689,7 +694,7 @@ happen to which files.
 - **Cleanup protections**, so the cleanup never works against the rest of the app:
   - Validation refuses these extensions in the junk list:
     - every audio extension in §1 (the script already refused overlaps);
-    - playlists: .m3u .m3u8 .pls, which players use and M7 imports;
+    - playlists: .m3u .m3u8 .pls, which players use (and the playlist builder exports, §15);
     - cover images: .jpg .jpeg .png, since `folder.jpg`, `cover.jpg` and `front.jpg` are cover sources (§7).
   - The ReplayGain log (its configured file name, `replaygain.log` by default) is never junk, whatever its
     extension.
@@ -727,7 +732,7 @@ happen to which files.
 - "Measures loudness with rsgain at the target level, lowers any track gain that would clip, sets the album gain
   to the lowest track gain and the album peak to the highest track peak, and writes 'LUFS Target : X' in the
   comment. It then copies the album values into the lite/bonus/CD2 subfolders, plus the track values into 'lite'
-  subfolders for files with the same name. A report is appended to replaygain.log in the album folder."
+  subfolders for files with the same name. Its report replaces replaygain.log in the album folder."
 - **The log holds the last run only** (Hugo, 2026-10-16; a deliberate change from the script, which appended):
   each run replaces the album's `replaygain.log`. Within one discography run, the leveling line follows that
   run's report in the same file. The discography summary replaces the artist folder's log, unless that folder
@@ -1182,7 +1187,8 @@ import of existing playlists): one playlist in progress, built by dragging music
   - `FileListModel` (QAbstractTableModel) plus a proxy with precomputed natural-sort keys.
   - Incremental changes use `dataChanged`/`rowsInserted`/`rowsRemoved`, never a full reset, so selection and
     scroll stay put.
-- Icons come from the app's own set (folder, audio, image, other). QFileIconProvider is too slow for big folders.
+- Icons come from a small fixed set (folder, audio, other: Qt's standard icons), never QFileIconProvider, which is
+  too slow for big folders.
 - Every long task takes a `CancelToken`.
 - On shutdown, workers stop gracefully, the DB writer flushes, and a running rsgain is killed, with its job marked
   cancelled.
@@ -1296,7 +1302,9 @@ replaced them).
   values.
 - `slow` marker: the real bundled rsgain on fixtures, for every format rsgain supports.
 - Performance: a synthetic tree of 100k entries checks index time and UI responsiveness. Debug builds log any
-  event-loop stall above 50 ms through a QTimer watchdog.
+  event-loop stall above 50 ms through a QTimer watchdog (as built in 0.2.1: `ui/stall_watch.py` `StallWatch`, a
+  20 ms timer that logs how late it fires, turned on by `app.main` when running from source, not in the
+  installed exe).
 - Manual checklist per milestone, on a copied album:
   - browse while indexing; edit tags, including multi-file edits and the cover; rename a file and a folder;
   - preview and run each tool, including the cleanup protections, then compare `replaygain.log` with a script run;

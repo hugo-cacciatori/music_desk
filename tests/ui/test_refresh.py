@@ -68,3 +68,16 @@ def test_a_tool_refresh_covers_the_subtree_during_a_root_scan(qtbot, window, ser
         "SELECT 1 FROM entries WHERE parent_id = ? AND name = 'replaygain.log'", (cd2,)).fetchone() is not None,
         timeout=3000)
     assert service.indexer.busy
+
+
+def test_rescan_library_rescans_every_root(qtbot, window, service, library_dir):
+    """File › Rescan library (SPEC §4): every root, incrementally; a file added behind the app's back shows up."""
+    queued = []
+    original = service.indexer.scan_root
+    service.indexer.scan_root = lambda root_id: (queued.append(root_id), original(root_id))
+    (library_dir / "Artist" / "Album" / "notes.txt").write_text("x", encoding="utf-8")
+    window.rescan_library_action.trigger()
+    assert queued == [root.id for root in service.roots()]
+    assert window.statusBar().currentMessage() == "Rescanning 1 library folder…"
+    qtbot.waitUntil(lambda: service.conn.execute("SELECT 1 FROM entries WHERE name = 'notes.txt'").fetchone()
+                    is not None, timeout=10000)

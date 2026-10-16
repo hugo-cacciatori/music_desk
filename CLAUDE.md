@@ -16,14 +16,16 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, session 12):** version 0.2.4 is on `main` (not pushed). 0.2.2 added the Start menu folder
+- **State (2026-10-16, session 12):** version 0.2.5 is on `main` (not pushed). 0.2.2 added the Start menu folder
   with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added `fsops.can_recycle` (SPEC §19, measured on a
-  network path). 0.2.4 added Delete to the Recycle Bin (M8 task 2). v0.2.1 is the latest GitHub release. M0–M7
-  are complete (Progress is in HISTORY.md). 962 tests pass, slow ones included, and ruff is clean.
+  network path). 0.2.4 added Delete to the Recycle Bin. 0.2.5 added `core/preview.py` (M9 task 1). v0.2.1 is the
+  latest GitHub release. M0–M8 are complete (Progress is in HISTORY.md). 975 tests pass, slow ones included,
+  and ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Specified on 2026-10-16** (docs only, no app code yet): M9–M10 below. `resources/flac/` holds flac 1.5.0 (not
-  bundled yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
-- **M8 is complete** (Hugo's manual run is in SPEC §19). **Next step: M9 task 1** (`core/preview.py`).
+- **Specified on 2026-10-16** (docs only, no app code yet): M9 task 2 and M10 below. `resources/flac/` holds flac
+  1.5.0 (not bundled yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
+- **Next step: M9 task 2** (the Preview page: `TagIO.read_preview`, `FilePreview`, the refresh, the stall
+  measurement). Its image fixtures are still to make (with ffmpeg, as `make_jpeg` does).
 - **Watch for:** an intermittent failure in full runs, probably `tests/ui/test_watcher.py::test_live_folder_changes`
   (a Windows `PermissionError`; it passes alone). When a full run fails, keep its output
   (`uv run pytest > out.txt`) to name the test.
@@ -58,7 +60,7 @@ Done when:
 - a manual run on a copied folder sends the items to the real Recycle Bin, and Hugo finds them there.
 
 **M9 File preview** (read SPEC §20, §7)
-- [ ] 1. `core/preview.py` (`read_text`, the encodings; `decode_text` with UTF-16), with fixtures and tests.
+- [x] 1. `core/preview.py` (`read_text`, the encodings; `decode_text` with UTF-16), with fixtures and tests.
 - [ ] 2. The Preview page: `TagIO.read_preview`, `FilePreview` as the side panel's third page, the refresh, and
       the stall measurement for 1 MB of text.
 

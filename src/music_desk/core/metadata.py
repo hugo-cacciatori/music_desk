@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from music_desk.core import preview
 from music_desk.core.formats import format_for
 from music_desk.core.fsops import open_shared
 from music_desk.core.tags import Fields, TaggedFile
@@ -96,12 +97,10 @@ def suggested_name(tagged: TaggedFile) -> str | None:
 
 
 def decode_text(data: bytes) -> str:
-    """A text file of unknown encoding: UTF-8 (with or without a BOM), else Windows-1252, the usual encoding of
-    .lrc files written by older Windows tools. Undecodable bytes become U+FFFD rather than failing."""
-    try:
-        return data.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        return data.decode("cp1252", errors="replace")
+    """A text file of unknown encoding: a UTF-8 or UTF-16 BOM, else UTF-8, else Windows-1252, the usual encoding
+    of .lrc files written by older Windows tools. Undecodable bytes become U+FFFD rather than failing. The same
+    rule as the file preview (SPEC §20)."""
+    return preview.decode(data)[0]
 
 
 def lrc_sidecar(path: Path) -> tuple[str, str] | None:

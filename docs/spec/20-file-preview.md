@@ -55,6 +55,15 @@ shows it in the side panel, read-only, instead of "<name> isn't an audio file."
   correctly.
 - A cut inside a multi-byte character is decoded with replacement, never an error.
 
+- **As built (M9 task 1)**, `core/preview.py`:
+  - `kind(path)` returns "text", "image" or None, from `TEXT_TYPES` and `IMAGE_TYPES` (`PREVIEW_TYPES` is both).
+    The caps are `TEXT_LIMIT` (1 MB) and `IMAGE_LIMIT` (50 MB).
+  - `decode(data, legacy, cut)` returns the text and an encoding name: "UTF-8 (BOM)", "UTF-16 LE", "UTF-16 BE",
+    "UTF-8", "Windows-1252" or "CP437 (DOS)".
+  - A UTF-8 character split at the end counts as UTF-8 only when the cap cut the file (`cut`). A whole cp1252
+    file ending in "é" (0xE9, a UTF-8 lead byte) would otherwise read as UTF-8; a test caught this.
+  - `read_text` turns CRLF into LF. `metadata.decode_text` is `decode(data)[0]`.
+
 **Refresh**
 - When the indexer reports the file's folder updated and the file's size or modified time changed (a log being
   written), the preview reloads, keeping the scroll position when it can.

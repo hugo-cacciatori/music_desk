@@ -404,7 +404,52 @@ def make_replaygain() -> None:
     make_jpeg(b / "Scans" / "back.jpg", "gray")
 
 
+EAC_LOG = """Exact Audio Copy V1.6 from 23. November 2020
+
+EAC extraction logfile from 16. October 2026, 14:02
+
+Fixture Artist / Café Album
+
+Used drive  : HL-DT-STBD-RE  WH16NS40   Adapter: 1  ID: 0
+
+Track  1
+
+     Filename C:\\Rips\\01 Première.wav
+
+     Peak level 98.0 %
+     Copy CRC 1A2B3C4D
+     Copy OK
+
+No errors occurred
+
+==== Log checksum 0000 ====
+"""
+
+NFO = """\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557
+\u2551 FIXTURE  \u2551
+\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d
+Release : Caf\u00e9 Album
+Quality : \u2591\u2592\u2593\u2588 lossless
+"""
+
+
+def make_preview() -> None:
+    """Text files in the encodings their writers use, for the file preview (SPEC §20). No ffmpeg needed."""
+    out = OUT / "preview"
+    out.mkdir(parents=True, exist_ok=True)
+    crlf = lambda text: text.replace("\n", "\r\n")  # noqa: E731
+    (out / "eac.log").write_bytes(b"\xff\xfe" + crlf(EAC_LOG).encode("utf-16-le"))  # EAC: UTF-16 LE with a BOM
+    (out / "bom.txt").write_bytes(b"\xef\xbb\xbf" + crlf("Notes with a BOM: déjà vu\n").encode("utf-8"))
+    (out / "utf8.cue").write_bytes(crlf('PERFORMER "Fixture Artist"\nTITLE "Café Album"\n').encode("utf-8"))
+    (out / "cp1252.txt").write_bytes(crlf("Café à la crème \u2014 Noël\n").encode("cp1252"))
+    (out / "release.nfo").write_bytes(crlf(NFO).encode("cp437"))
+    (out / "utf16.lrc").write_bytes(b"\xff\xfe" + crlf("[00:01.00]Première ligne\n").encode("utf-16-le"))
+
+
 def main() -> None:
+    if sys.argv[1:] == ["preview"]:  # only the text fixtures: uv run python tests/fixtures/make_fixtures.py preview
+        make_preview()
+        return
     global FFMPEG
     FFMPEG = find_ffmpeg()
     make_jpeg(OUT / "cover.jpg", "blue")
@@ -413,6 +458,7 @@ def main() -> None:
     make_cleanup()
     make_edge()
     make_replaygain()
+    make_preview()
     count = sum(1 for p in OUT.rglob("*") if p.is_file())
     print(f"{count} fixture files in {OUT}")
 

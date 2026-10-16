@@ -1,3 +1,3 @@
 """MusicDesk: browse a music library, edit tags, tidy albums and find lyrics."""
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"

@@ -20,10 +20,62 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   release v0.2.1 (`MusicDesk-Setup-0.2.1.exe`). M0–M7 are complete (Progress is in HISTORY.md). 941 tests pass,
   slow ones included, and ruff is clean.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Next step:** none planned. New work starts from Hugo's feedback.
+- **Specified on 2026-10-16** (docs only, no app code yet): Delete to the Recycle Bin, the file preview, and the
+  shared masks with the cue split, as M8–M10 below. Also set up: `resources/flac/` holds flac 1.5.0 (not bundled
+  yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
+- **Next step: M8 task 1.**
 - **Watch for:** an intermittent failure in full runs, probably `tests/ui/test_watcher.py::test_live_folder_changes`
   (a Windows `PermissionError`; it passes alone). When a full run fails, keep its output
   (`uv run pytest > out.txt`) to name the test.
+
+## Work plan
+Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with
+0.3.0 and a release. Tick tasks as they are done.
+
+**M8 Recycle Bin safety and Delete** (read SPEC §19, §5, and §10 A for the junk cleanup). This comes first: the
+junk cleanup already relies on recycling, and the split's originals will.
+- [ ] 1. Measure what send2trash does where Windows can't recycle. Send a scratch file under `\\localhost\C$\…`
+      (show Hugo the exact commands first), then check the Recycle Bin, and record the measured result in §19.
+      Add `fsops.can_recycle`; `send_to_recycle_bin` refuses when it fails; the junk cleanup keeps and reports
+      such files. Tests use an injected check.
+- [ ] 2. Delete: Del, Shift+Del and the menu item in the list, the tree and the results, through `ask_delete`;
+      locks, refresh, the selection afterwards, and the playlist's Del unchanged.
+
+Done when:
+- a multi-selection of files and folders goes to the Recycle Bin exactly as confirmed (tests with an injected
+  recycler);
+- roots, locked items and places that can't recycle are refused;
+- §19 records the measured network-path behaviour;
+- a manual run on a copied folder sends the items to the real Recycle Bin, and Hugo finds them there.
+
+**M9 File preview** (read SPEC §20, §7)
+- [ ] 1. `core/preview.py` (`read_text`, the encodings; `decode_text` with UTF-16), with fixtures and tests.
+- [ ] 2. The Preview page: `TagIO.read_preview`, `FilePreview` as the side panel's third page, the refresh, and
+      the stall measurement for 1 MB of text.
+
+Done when:
+- every listed type previews;
+- an EAC UTF-16 log, a cp1252 text and a CP437 `.nfo` read correctly;
+- showing the capped text stays under the 50 ms stall target (measured);
+- nothing on the page can write.
+
+**M10 Shared masks and cue split** (read SPEC §21, §22, §13, and §10)
+- [ ] 1. Masks: `core/masks.py` (moved out of `rename.py`; the parity tests stay unchanged),
+      `Settings.name_masks` / `name_replacement` with the migration, the File names card, and the hint using the
+      user's masks.
+- [ ] 2. `core/cue.py`: parsing, encodings, samples, boundaries and the hidden track, names and clashes, tags;
+      the split fixtures, with audio that never repeats.
+- [ ] 3. flac: bundle `resources/flac` (PyInstaller spec, `licenses.py`, `resources/licenses/`, About), the
+      `flac --version` self-check, the runner and the proof, `slow` tests.
+- [ ] 4. UI: the Split card, "Split into tracks…" (menus, `.cue` preview), the preview page with its encoding
+      picker, the job (lock, Stop, partial cleanup, recycling, ReplayGain afterwards) and its report.
+- [ ] 5. README, version 0.3.0, the installer, and the GitHub release (Hugo's go).
+
+Done when:
+- every split fixture gets its expected result;
+- the slow test proves the per-track lengths and the MD5 on the FLAC and WAV images, and fails on a one-sample
+  shift;
+- the installed app splits a copied album with its bundled flac.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task.
@@ -50,9 +102,15 @@ Code and tests cite these by number; keep the numbering.
      asks before replacing a file);
    - sending junk files to the **Recycle Bin**, only when the user ticks that option in the Rename tool and
      confirms. Audio files, playlists, cover images, the ReplayGain log, cue sheets of single-file albums and
-     `.lrc` files not yet in the tags are never junk (SPEC §10).
+     `.lrc` files not yet in the tags are never junk (SPEC §10);
+   - (M8) sending the files and folders the user selects to the **Recycle Bin** with Delete, after a
+     confirmation (SPEC §19);
+   - (M10) creating the track files of a cue split, never over an existing file, and deleting that run's own
+     `.partial` files; its originals go to the Recycle Bin only when the user ticks it (SPEC §22).
 
-   For anything else, the app offers "Open in File Explorer". Drags inside the app carry entry ids only (never
+   Nothing is ever deleted permanently: everything removed goes to the Recycle Bin, and only where Windows can
+   recycle (`fsops.can_recycle`, SPEC §19). The only exception is the split's own `.partial` files. For anything
+   else, the app offers "Open in File Explorer". Drags inside the app carry entry ids only (never
    file URLs) and only copy, because a drop of files in Explorer would move them. The app's own files (index,
    settings, logs, temporary playlists) live only in `%LOCALAPPDATA%\MusicDesk\`.
 2. The UI thread never blocks. All scanning, tag reading and writing, rsgain runs and LRCLIB calls happen in
@@ -62,7 +120,7 @@ Code and tests cite these by number; keep the numbering.
    against them.
 4. `core/` never imports Qt. It is plain Python and unit-tested.
 5. rsgain is bundled in `resources/rsgain/` and resolved through `paths.resource_path()`. Its path is never
-   configurable.
+   configurable. The same goes for flac in `resources/flac/` (M10).
 6. Development and tests never touch a real library. Use the fixtures or copies.
 
 ## Standing decisions
@@ -73,9 +131,7 @@ The full log is `docs/DECISIONS.md`. These apply to all work:
 - **Stack:** Python 3.13, PySide6-Essentials 6.12.0 (no Addons: no WebEngine, no PDF), mutagen for every tag
   read and write, SQLite (WAL, FTS5 trigram), watchdog, natsort (Explorer order), send2trash, urllib. uv with
   hatchling and a `src/` layout; pytest, pytest-qt, ruff; PyInstaller one-folder plus Inno Setup. tinytag
-  2.0.0 is test-only (parity).
-- Rejected stacks: Electron or Tauri (a Python sidecar, and browser drag and drop has no paths), C#/WinUI (a
-  rewrite), Tkinter or Flet (weak large-tree virtualization).
+  2.0.0 is test-only (parity). The stacks considered and rejected are in HISTORY.md ("Stack").
 - **Licence:** GPL-3.0-or-later. Every bundled third-party component is listed in `music_desk/licenses.py`, with
   its text in `resources/licenses/` (SPEC §13).
 - **Repo:** public on GitHub, `hugo-cacciatori/music_desk`, branch `main`.
@@ -105,10 +161,7 @@ The full log is `docs/DECISIONS.md`. These apply to all work:
   2.1 s, worst stall 45 ms while indexing and 47 ms while browsing, reopening a folder 3–4 ms.
 - Re-measured on 2026-10-15: about 3.5 s of indexing and stalls of 50–80 ms, with rare outliers (150–233 ms).
   The pre-M4 code measured the same that day, so this is the machine, not a regression.
-- Scanner: 10k entries in 1.3 s for a first scan (500 tag reads), 0.15 s for a rescan; 100k entries in 3.4 s for
-  phase A.
-- Search: 5,000 tracks with 1.5 KB of lyrics each take the worker about 1 s at the 5,000-row cap, and the UI
-  thread about 20 ms plus a repaint.
+- Other timings: search in SPEC §6, the scanner in HISTORY.md.
 
 ## Environment (checked 2026-10-15)
 - Windows 11 Pro. Shells: PowerShell 5.1 (primary) and Git Bash.
@@ -158,7 +211,7 @@ agree) and pyproject's `version`, then `uv lock`.
                        entry_drag, stall_watch, jobs_panel, about_dialog, toast;
                        side_panel/ (panel, metadata_tab, lyrics_tab, folder_summary);
                        tools/ (tools_page, rename_card, replaygain_card, rename_preview, rg_report)
-    resources/            rsgain/ (rsgain.exe 3.6), icons/, licenses/
+    resources/            rsgain/ (rsgain.exe 3.6), flac/ (flac 1.5.0, bundled from M10), icons/, licenses/
     tests/                conftest.py, reference/ (frozen scripts), fixtures/ (make_fixtures.py + generated/),
                           core/ (lrclib_fake.py, rsgain_fake.py), ui/ (conftest.py, browser_helpers.py)
     packaging/            music_desk.spec, launcher.py, installer.iss, build_installer.py, make_icon.py,

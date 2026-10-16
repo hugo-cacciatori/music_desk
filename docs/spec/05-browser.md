@@ -1,5 +1,5 @@
 # 5. Browser
-Explorer-like, with no copy, paste, delete or new.
+Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only (§19, from M8).
 
     ┌──────────────────────────────────────────────────────────────────────────────────────────┐
     │ ← → ↑ ⟳   H: › Music › Radiohead › OK Computer        [Filter folder]  [⌕ Search library] │
@@ -27,9 +27,11 @@ Explorer-like, with no copy, paste, delete or new.
   back/forward buttons move through history. Typing selects by name. Ctrl/Shift extend the selection. F5 rescans
   the folder. Ctrl+F filters the current folder as you type.
 - **File context menu:** Open with default app, Play selection (§14), Open in File Explorer
-  (`explorer /select,"<path>"`), Rename (F2), Tools…, Remove ReplayGain tags…, Copy path.
+  (`explorer /select,"<path>"`), Rename (F2), Tools…, Remove ReplayGain tags…, Copy path, Delete (Del, §19).
+  A single-file album's `.cue` or audio file also gets "Split into tracks…" (§22).
 - **Folder context menu:** Open, Play folder, Play folder and subfolders, Open in File Explorer, Rename (F2),
-  Tools…, Remove ReplayGain tags…, Rescan, Remove from library (roots only).
+  Tools…, Remove ReplayGain tags…, Rescan, Delete (Del, §19; not on roots), Remove from library (roots only).
+- New items arrive with their milestones: Delete with M8, Split into tracks… with M10.
   - As built (M5): the planned per-tool items (Tidy album…, Rename from tags…, ReplayGain (album)… and
     (discography)…) became one "Tools…", which opens the Tools page with the folder or selection as its scope
     (§10).

@@ -6,7 +6,8 @@
       Indexer:       scandir walker → tag-reader pool → DbWriter
       Watcher:       watchdog → debounce → Indexer.reconcile(folder)
       LyricsService: priority queue → 4 LRCLIB workers → DbWriter (+ TagWriter if auto-embed)
-      JobRunner:     one thread per job → core.rename / core.replaygain (one rsgain at a time) → progress signals
+      JobRunner:     one thread per job → core.rename / core.replaygain (one rsgain at a time) / core.cue split
+                     (one flac at a time, §22) → progress signals
       TagWriter:     serial writes with per-path locks; jobs take the same locks for their folders
 
 - Threads talk to the UI only through queued signals. Progress signals are throttled to at most 10 per second.

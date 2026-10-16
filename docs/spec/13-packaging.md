@@ -3,7 +3,7 @@
   `sys._MEIPASS` when frozen, else the project's `resources/`.
 - **No ffmpeg at runtime.** `rsgain.exe` (3.8 MB) has its FFmpeg decoders built in; its folder only adds the MSVC
   runtime DLLs. So the app never calls ffmpeg, and the installer doesn't ship it. ffmpeg is a dev-only tool for
-  regenerating the test fixtures (§18).
+  regenerating the test fixtures (§18). The cue split uses flac.exe instead (below).
 - How rsgain is called:
   - `subprocess.Popen([...], cwd=album_folder, creationflags=CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS)`
     with UTF-8 pipes, read incrementally in the job's worker thread.
@@ -12,6 +12,21 @@
     one call.
   - rsgain prints ANSI colour codes, which are stripped as in the script's `strip_ansi`.
 - Startup self-check: if `rsgain --version` fails, the ReplayGain tools are disabled with an explanation.
+- **flac** (from M10, for the cue split, §22): `resources/flac/` holds `flac.exe` and `libFLAC.dll` from the
+  official FLAC 1.5.0 Win64 build (`flac-1.5.0-win.zip` from github.com/xiph/flac/releases, SHA-256
+  `53f1500f…0dde`, checked against the release notes on 2026-10-16), with `COPYING.GPL.txt`, `COPYING.Xiph.txt`
+  and a `README.txt`. flac.exe needs only libFLAC.dll (Xiph's build notes).
+  - Chosen over an LGPL FFmpeg build (77–170 MB zipped) because Hugo's single-file albums are FLAC or WAV, which
+    flac reads (with AIFF, W64 and RF64). It adds about 0.9 MB.
+  - Licences: the flac program is GPL-2.0-or-later and libFLAC is under Xiph's BSD-like licence, both compatible
+    with the app's GPL-3.0-or-later. They join `resources/licenses/`, `licenses.py` `COMPONENTS` and About in
+    M10 task 3.
+  - Resolved through `paths.resource_path("flac/flac.exe")`, never configurable (as rsgain, Ground rule 5). The
+    PyInstaller spec bundles `resources/flac` (M10 task 3).
+  - Startup self-check: `flac --version` (expected "flac 1.5.0"). If it fails, the Split card and "Split into
+    tracks…" are disabled with the reason.
+  - It is called like rsgain: `CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS`, output read by the job's
+    thread, and killed on Stop.
 - PyInstaller one-folder `--windowed` build with icon and version info (as built at M6 task 4:
   `resources/icons/music_desk.ico`, drawn by `packaging/make_icon.py` (a blue rounded square with two white beamed
   notes, 16 to 256 px), is the exe's icon and every window's; `packaging/version_info.txt` is the exe's version

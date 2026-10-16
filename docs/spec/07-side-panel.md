@@ -1,7 +1,8 @@
 # 7. Side panel and Metadata tab
 The side panel sits on the right; it is resizable and collapsible. Tabs: **Metadata** | **Lyrics** (§8). With a
 folder selected, the panel shows a folder summary instead: track count, duration, formats, ReplayGain and lyrics
-coverage, cover, a Play button and tool shortcuts.
+coverage, cover, a Play button and tool shortcuts. With one text or image file selected (a log, a cue sheet, a
+cover scan…), it shows a read-only preview of it instead (§20, from M9).
 
 **Metadata tab:**
 - Header: the cover (the embedded front cover, else `folder.jpg`, `cover.jpg` or `front.jpg` in the folder, else a
@@ -26,7 +27,8 @@ coverage, cover, a Play button and tool shortcuts.
   and the fields stay dirty. Files locked by a running job are read-only, with a tooltip naming the job.
 - Preserve the ID3 version on save (v2.3 stays v2.3) and leave all other frames and fields untouched.
 - After a save, the index row updates. If the name no longer matches the rename masks, a hint offers
-  "Rename to '03 New Title.flac'?".
+  "Rename to '03 New Title.flac'?". From M10 the hint uses the shared masks of the File names card (§21), not
+  the defaults.
 - The ReplayGain tool writes `LUFS Target : <x>` into Comment. Users may edit it, and the next tool run
   overwrites it.
 - As built (M3 task 1):

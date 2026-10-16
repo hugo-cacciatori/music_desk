@@ -2,8 +2,9 @@
 - `%LOCALAPPDATA%\MusicDesk\` holds:
   - `library.db` (index and lyrics cache), `settings.json`, `logs\app.log` (rotating);
   - `playlists\` (temporary .m3u8 files; the last 20 are kept).
-- Nothing is stored inside music folders except tags, renames, `replaygain.log` and the playlists the user
-  exports (§15), where the user saves them.
+- Nothing is stored inside music folders except tags, renames, `replaygain.log`, the playlists the user exports
+  (§15), where the user saves them, and the tracks of a cue split (§22). Nothing is removed from them except by
+  sending it to the Recycle Bin, after a confirmation (junk cleanup §10, Delete §19, a split's originals §22).
 - Schema sketch:
   - `roots(id, path, added_at, last_scan, online)`
   - `entries(id, root_id, parent_id, name, is_dir, ext, size, mtime, scan_gen)`, indexed on `parent_id`, with

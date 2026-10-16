@@ -18,5 +18,5 @@ Applies to files and folders.
   - The index entry keeps its id, so the selection and the panel follow. The folder scan also recognizes a
     rename (same kind, extension, size and mtime, unambiguous), so renames made in Explorer keep the entry and
     its tags too.
-  - The hint after a save uses the Rename tool's default masks, and only appears when the name they give differs
+  - The hint after a save uses the Rename tool's default masks (from M10, the shared masks of §21), and only appears when the name they give differs
     from the file's.

@@ -4,6 +4,10 @@ on the current folder) or the folder summary. The **Tools page** is non-modal an
 button, so browsing stays possible. Each card starts with a plain-language paragraph saying exactly what will
 happen to which files.
 
+From M10 the page shows, in order: the **File names** card (the shared masks, §21), then Rename, ReplayGain, Tidy
+and **Split albums (cue)** (§22). The masks and the replacement below move to the File names card; the Rename and
+Tidy cards keep their other options.
+
 **A. Rename files from tags**
 - "Renames every music file in this folder (and its subfolders) from its tags, using the first mask whose fields
   are all present. Characters not allowed in file names are replaced. A file is never renamed over another one;
@@ -42,7 +46,9 @@ happen to which files.
   files and renamed sidecars are listed separately, the table can be filtered by status, and the counts match the
   script's summary.
 - **Apply** executes exactly the previewed plan and re-checks each item; a file changed since the preview is
-  skipped with a warning. Junk files go to the Recycle Bin after a confirmation dialog that lists them. The result
+  skipped with a warning. Junk files go to the Recycle Bin after a confirmation dialog that lists them. From M8,
+  a junk file that can't be recycled (a network share, a removable drive: §19) is kept and reported, never
+  deleted permanently. The result
   summary has the same sections as the script.
 - Also works on a file selection, renaming only the selected files and their sidecars. A selection run never
   sends junk to the Recycle Bin.

@@ -29,3 +29,7 @@ Rules:
 | 16 | [16-architecture.md](spec/16-architecture.md) | Threads, signals, models, shutdown |
 | 17 | [17-porting.md](spec/17-porting.md) | What was ported from the scripts, preserved behaviours, deliberate changes |
 | 18 | [18-testing.md](spec/18-testing.md) | Test layers, fixtures, parity, slow tests, performance |
+| 19 | [19-delete.md](spec/19-delete.md) | Delete to the Recycle Bin (M8), and the recyclability check |
+| 20 | [20-file-preview.md](spec/20-file-preview.md) | Read-only preview of text and image files in the side panel (M9) |
+| 21 | [21-name-masks.md](spec/21-name-masks.md) | The shared file name masks and the File names card (M10) |
+| 22 | [22-cue-split.md](spec/22-cue-split.md) | Cutting single-file albums into FLAC tracks from their .cue, with flac.exe (M10) |

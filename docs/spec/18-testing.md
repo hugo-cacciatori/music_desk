@@ -7,7 +7,9 @@
   - tiny 1-second files per format, with varied tags: missing title, ID3v2.3, lowercase TXXX ReplayGain,
     lite/bonus/CD2 subfolders, a name clash;
   - cleanup cases: a single-file album with its .cue, a per-track .cue, .lrc sidecars with and without a lyrics
-    tag, `replaygain.log`, `folder.jpg`, a `.m3u`.
+    tag, `replaygain.log`, `folder.jpg`, a `.m3u`;
+  - from M9 and M10: preview texts in several encodings (§20), and the cue split cases (§22), whose audio must
+    never repeat, so that a cut in the wrong place changes a track's MD5.
 
   Tests copy them to `tmp_path`.
 - Fixture generation:
@@ -20,7 +22,10 @@
 - Parity: run the reference functions and the ported core on identical copies of FLAC/MP3 fixtures, then compare
   file names, tags and RunLog text with timestamps and durations masked. Other formats get their own expected
   values.
-- `slow` marker: the real bundled rsgain on fixtures, for every format rsgain supports.
+- `slow` marker: the real bundled rsgain on fixtures, for every format rsgain supports, and (from M10) the real
+  bundled flac on the cue split fixtures.
+- Never in tests: the real Recycle Bin (inject a recorder; §19 adds an injected `can_recycle`), the real network,
+  a real dialog, or a real library.
 - Performance: a synthetic tree of 100k entries checks index time and UI responsiveness. Debug builds log any
   event-loop stall above 50 ms through a QTimer watchdog (as built in 0.2.1: `ui/stall_watch.py` `StallWatch`, a
   20 ms timer that logs how late it fires, turned on by `app.main` when running from source, not in the

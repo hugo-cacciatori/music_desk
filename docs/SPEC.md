@@ -23,7 +23,7 @@ Rules:
 | 10 | [10-tools.md](spec/10-tools.md) | Tools page: Rename (junk rules, .cue/.lrc), ReplayGain, Tidy, jobs panel |
 | 11 | [11-inline-rename.md](spec/11-inline-rename.md) | F2 renames, sidecars, Undo, the rename hint |
 | 12 | [12-settings.md](spec/12-settings.md) | No Settings dialog; where each preference lives; About |
-| 13 | [13-packaging.md](spec/13-packaging.md) | rsgain, PyInstaller, the installer, licences |
+| 13 | [13-packaging.md](spec/13-packaging.md) | rsgain, flac, PyInstaller, the installer (uninstall shortcut), licences |
 | 14 | [14-playback.md](spec/14-playback.md) | Default app, temporary .m3u8 playlists |
 | 15 | [15-playlist-builder.md](spec/15-playlist-builder.md) | The playlist builder panel, drag and drop, export |
 | 16 | [16-architecture.md](spec/16-architecture.md) | Threads, signals, models, shutdown |

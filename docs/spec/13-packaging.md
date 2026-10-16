@@ -32,7 +32,8 @@
   notes, 16 to 256 px), is the exe's icon and every window's; `packaging/version_info.txt` is the exe's version
   resource, kept equal to `music_desk.__version__` by `tests/test_packaging.py`). Light and dark follow Windows
   through Qt (checked with screenshots); there is no theme setting. An Inno Setup installer puts it in
-  `%ProgramFiles%\MusicDesk` with a Start menu shortcut. Uninstalling keeps `%LOCALAPPDATA%` data unless the user
+  `%ProgramFiles%\MusicDesk` with a Start menu shortcut (from the uninstall-shortcut task: a MusicDesk folder in
+  the Start menu, with "Uninstall MusicDesk" beside it, below). Uninstalling keeps `%LOCALAPPDATA%` data unless the user
   ticks the option.
 - As built (M6 task 5), the installer (`packaging/installer.iss`, built with `packaging/build_installer.py`):
   - `dist/installer/MusicDesk-Setup-<version>.exe` (about 33 MB) installs `dist/MusicDesk/` for all users in
@@ -50,6 +51,46 @@
     in place for Hugo.
   - `tests/test_packaging.py` checks the script's fixed points (AppId, folders, licence, icon, files, the
     uninstaller's data rule).
+- **Uninstalling from the Start menu** (Hugo, 2026-10-16; the "Installer: uninstall shortcut" task):
+  - **The need:** Hugo uninstalls by pressing the Windows key, typing the app's name, and clicking Uninstall on the
+    result. For classic desktop apps, that button opens Settings › Installed apps, where he has to find the app
+    again. His fallback is "Open file location" on the search result, hoping to find an uninstaller in the folder
+    it opens.
+  - **Why the button can't do it:** since Windows 11 22H2 build 22621.2361 (KB5030310, September 2023), Start's
+    Uninstall on a Win32 app always routes to Settings. Only MSIX-packaged apps still get a direct uninstall
+    prompt. This comes from secondary sources ([Eleven Forum's guide](https://www.elevenforum.com/t/uninstall-apps-in-windows-11.2346/));
+    Hugo sees the same behaviour with 0.2.1. MSIX was rejected: it needs a paid signing certificate or the
+    Microsoft Store, it moves the app's data into a package folder deleted on uninstall (losing the "keep my
+    data?" question), and it replaces the Program Files install.
+  - **What the installer does instead:** the Start menu shortcut goes into a **MusicDesk folder** (`{group}`, which
+    follows the all-users or only-for-me choice), next to an **Uninstall MusicDesk** shortcut:
+
+        [Icons]
+        Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+        Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"; \
+          Comment: "Removes MusicDesk. Your music folders are not touched."
+
+    - "Open file location" on the search result then opens that folder, with the uninstaller in it.
+    - Typing "uninstall musicdesk" in Start should find the shortcut and start the uninstaller directly. This is
+      expected from how Start indexes shortcuts, and is checked below.
+    - The uninstaller itself is unchanged: UAC for an all-users install, then the question about the app's data.
+  - **Upgrades:** 0.1.0–0.2.x put a loose `MusicDesk.lnk` at the top of the Start menu's Programs folder. The new
+    setup deletes it (`[InstallDelete] Type: files; Name: "{autoprograms}\{#AppName}.lnk"`), so Start doesn't list
+    MusicDesk twice.
+    - Taskbar pins are copies of the shortcut and keep working.
+    - A pin on the Start menu may disappear with the old shortcut (inferred). If it does, re-pinning is needed once,
+      and the release notes say so.
+  - The desktop shortcut (optional task) is unchanged.
+  - **Known trade-off:** Microsoft's Start guidelines advise against uninstall shortcuts. Hugo prefers the shortcut
+    (2026-10-16), and Inno Setup's documentation shows exactly this entry.
+  - **Checks:**
+    - `tests/test_packaging.py` asserts both `[Icons]` entries and the `[InstallDelete]` line.
+    - On this machine, a per-user install over a scratch 0.2.1 per-user install shows the MusicDesk folder with
+      both entries and no loose shortcut.
+    - "Open file location" opens that folder.
+    - The search "uninstall musicdesk" finds the shortcut (record the result here as measured).
+    - The shortcut starts the uninstaller.
+    - Hugo's own Program Files install is upgraded only with the next release, on his go.
 - Licenses to ship: rsgain (BSD-2-Clause), CRCpp, and the FFmpeg libraries built into rsgain (LGPL, checked
   below). Also Qt/PySide6 (LGPL) and mutagen (GPL-2.0-or-later).
 - As built (M6 task 3): the texts are in `resources/licenses/` (bundled as `resources/licenses`, listed in its

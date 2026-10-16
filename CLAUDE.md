@@ -22,8 +22,8 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
 - **Specified on 2026-10-16** (docs only, no app code yet): Delete to the Recycle Bin, the file preview, and the
   shared masks with the cue split, as M8–M10 below. Also set up: `resources/flac/` holds flac 1.5.0 (not bundled
-  yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
-- **Next step: M8 task 1.**
+  yet), and a trial on a fixture copy measured a lossless split (SPEC §22). Then the uninstall shortcut (§13).
+- **Next step: the uninstall shortcut task, then M8 task 1.**
 - **Watch for:** an intermittent failure in full runs, probably `tests/ui/test_watcher.py::test_live_folder_changes`
   (a Windows `PermissionError`; it passes alone). When a full run fails, keep its output
   (`uv run pytest > out.txt`) to name the test.
@@ -31,6 +31,15 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with
 0.3.0 and a release. Tick tasks as they are done.
+
+**Installer: uninstall shortcut** (read SPEC §13, "Uninstalling from the Start menu"). Small, so it goes first; it
+reaches Hugo with the next setup he asks for.
+- [ ] 1. `installer.iss`: the shortcut in a MusicDesk Start menu folder with "Uninstall MusicDesk", and the old loose
+      shortcut deleted on upgrade; `test_packaging.py`; the README's Install section says how to uninstall.
+
+Done when: a per-user install over a scratch 0.2.1 install shows the folder with both shortcuts and no loose one,
+"Open file location" leads there, the shortcut starts the uninstaller, and §13 records whether typing "uninstall
+musicdesk" finds it.
 
 **M8 Recycle Bin safety and Delete** (read SPEC §19, §5, and §10 A for the junk cleanup). This comes first: the
 junk cleanup already relies on recycling, and the split's originals will.

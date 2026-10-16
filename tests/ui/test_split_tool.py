@@ -21,7 +21,7 @@ SOURCE = "Fixture Artist - Split Album.flac"
 @pytest.fixture
 def library_dir(tmp_path, fixtures_dir):
     lib = tmp_path / "lib"
-    for name in (HIDDEN, "wav_image", "name_clash"):
+    for name in (HIDDEN, "wav_image", "too_long"):
         shutil.copytree(fixtures_dir / "split" / name, lib / "Albums" / name)
     sjis = lib / "Albums" / "sjis"
     sjis.mkdir()
@@ -114,8 +114,8 @@ def test_preview_then_split(qtbot, window, service, library_dir, recycled):
     albums = library_dir / "Albums"
     page = preview(qtbot, window, service, albums)
     names = {p.cue.parent.name: p for p in page.plans}
-    assert set(names) == {HIDDEN, "wav_image", "name_clash", "sjis"}
-    assert names["name_clash"].refusal.startswith("Nothing is ever overwritten")
+    assert set(names) == {HIDDEN, "wav_image", "too_long", "sjis"}
+    assert names["too_long"].refusal.startswith("Track 2 starts after the end of the audio")
     assert page.apply_button.text() == "Split 3 albums"
     assert page.summary.text().startswith("3 albums → 8 tracks. 1 album left alone.")
     assert "stay where they are" in page.summary.text()
@@ -215,9 +215,6 @@ def test_split_into_tracks_from_the_menu_and_the_cue_preview(qtbot, window, serv
     texts = lambda ids: [a.text() for a in window.list_menu(ids).actions()]  # noqa: E731
     sheet, source = file_id(service, album / "Split Album.cue"), file_id(service, album / SOURCE)
     assert "Split into tracks…" in texts([sheet]) and "Split into tracks…" in texts([source])
-    clash = library_dir / "Albums" / "name_clash"
-    window.open_folder(folder_id(service, clash))
-    assert "Split into tracks…" not in texts([file_id(service, clash / "02 Two.flac")])  # not the album file
 
     window.split_album(album / SOURCE)
     page = window.split_preview

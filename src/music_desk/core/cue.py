@@ -19,6 +19,7 @@ from music_desk.core.tags import TaggedFile
 
 FRAMES_PER_SECOND = 75
 HIDDEN_TITLE = "Hidden track"
+FALLBACK_NAME = "Track"  # a track no mask fits is named "03 Track.flac"
 HIDDEN_KEEP_SECONDS = 2  # audio before track 1 shorter than this (or silent) joins track 1
 MAX_PATH = 259  # characters in a full path that Windows tools reliably open (MAX_PATH less its terminator)
 SUPPORTED = {".flac": "FLAC", ".wav": "WAV", ".aif": "AIFF", ".aiff": "AIFF"}
@@ -290,7 +291,8 @@ class AlbumPlan:
     refusal: str | None = None  # why the album is left alone; None when it can be split
     warnings: list[str] = field(default_factory=list)
     ticked: frozenset[int] | None = None  # the track numbers to write (0 is a hidden track); None for all
-    problems: list[tuple[int, str]] = field(default_factory=list)  # (track number, why): no mask fits, a clash
+    problems: list[tuple[int, str]] = field(default_factory=list)  # (track number, why): a path too long
+    notes: list[tuple[int, str]] = field(default_factory=list)  # (track number, how its name was changed)
 
     def is_ticked(self, number: int) -> bool:
         return self.ticked is None or number in self.ticked
@@ -421,10 +423,11 @@ def plan_sheet(sheet: CueSheet, cue: str | Path, name_masks: Sequence[str], repl
 
 def name_tracks(plan: AlbumPlan, name_masks: Sequence[str], replacement: str,
                 existing: Iterable[str] | None = None) -> str | None:
-    """Give each track its file name with the shared masks (SPEC §21). Returns why the album can't be split, or
-    None, and lists each track's problem in `plan.problems`. Nothing is ever overwritten: a ticked track's name
-    taken in the folder, or given to two ticked tracks, refuses the album. Unticked tracks are named when a mask
-    fits them, and not checked."""
+    """Give each track its file name with the shared masks (SPEC §21). Nothing is ever overwritten, and the
+    split never refuses over a name (Hugo, 2026-10-17): a ticked track whose name is taken, in the folder or by
+    an earlier ticked track, gets " (2)", " (3)"…, and a track no mask fits is named from its number ("03
+    Track.flac"). `plan.notes` says which names changed and why. Returns why the album can't be split (a path
+    too long for Windows, no track ticked), or None. Unticked tracks are named, and not checked."""
     folder = plan.cue.parent
     if existing is None:
         try:
@@ -432,31 +435,27 @@ def name_tracks(plan: AlbumPlan, name_masks: Sequence[str], replacement: str,
         except OSError:
             existing = []
     taken = {name.casefold() for name in existing}
-    seen: dict[str, int] = {}
-    clashes, refusals = [], []
-    plan.problems = []
+    planned: set[str] = set()  # the ticked tracks' names so far
+    refusals = []
+    plan.problems, plan.notes = [], []
     for track in plan.tracks:
         ticked = plan.is_ticked(track.number)
         name = masks.name_for(track.fields, name_masks, replacement, ".flac")
         if name is None:
-            track.name, track.path = "", None
+            missing = masks.missing_from(name_masks[0], masks.mask_values(track.fields, replacement))
+            name = f"{track.number:02d} {FALLBACK_NAME}.flac"
             if ticked:
-                missing = masks.missing_from(name_masks[0], masks.mask_values(track.fields, replacement))
-                refusals.append(f"Track {track.number} fits no file name mask (missing: {missing}).")
-                plan.problems.append((track.number, f"No file name mask fits (missing: {missing})."))
-            continue
+                plan.notes.append((track.number, f"No file name mask fits (missing: {missing}), so it's named "
+                                                 f"{name}."))
+        if ticked:
+            free = free_name(name, taken | planned)
+            if free != name:
+                why = "another ticked track has that name" if name.casefold() in planned else "it already exists"
+                plan.notes.append((track.number, f"{name} is taken ({why}), so it's named {free}."))
+                name = free
+            planned.add(name.casefold())
         track.name, track.path = name, folder / name
-        if not ticked:
-            continue
-        key = name.casefold()
-        if key in seen:
-            clashes.append(f"tracks {seen[key]} and {track.number} would both be named {name}")
-            plan.problems.append((track.number, f"Track {seen[key]} would have the same name."))
-        elif key in taken:
-            clashes.append(f"{name} (track {track.number}) already exists")
-            plan.problems.append((track.number, f"{name} already exists, and nothing is ever overwritten."))
-        seen.setdefault(key, track.number)
-        if len(str(track.path)) > MAX_PATH:
+        if ticked and len(str(track.path)) > MAX_PATH:
             refusals.append(f"Track {track.number}'s file would have a path of {len(str(track.path))} characters, "
                             f"longer than Windows tools can open ({MAX_PATH}): {name}. Shorten the masks or move "
                             "the album.")
@@ -464,11 +463,21 @@ def name_tracks(plan: AlbumPlan, name_masks: Sequence[str], replacement: str,
                                                 f"than Windows tools can open ({MAX_PATH})."))
     if refusals:
         return refusals[0]
-    if clashes:
-        return "Nothing is ever overwritten, and these names clash: " + "; ".join(clashes) + "."
     if not plan.written:
         return "No track is ticked."
     return None
+
+
+def free_name(name: str, taken: set[str]) -> str:
+    """`name`, or "name (2).ext", "name (3).ext"… (Explorer's style for copies): the first one not in `taken`
+    (casefolded names)."""
+    if name.casefold() not in taken:
+        return name
+    stem, ext = os.path.splitext(name)
+    n = 2
+    while f"{stem} ({n}){ext}".casefold() in taken:
+        n += 1
+    return f"{stem} ({n}){ext}"
 
 
 def find_albums(folder: str | Path, recursive: bool = True) -> list[Path]:

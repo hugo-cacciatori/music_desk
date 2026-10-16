@@ -172,7 +172,6 @@ def test_a_wav_image_and_a_data_track(split_dir):
 @pytest.mark.parametrize(("folder", "refusal"), [
     ("too_long", "Track 2 starts after the end of the audio (0:08.00 of 0:06.00)."),
     ("multi_file", "Not a single-file album: the sheet names several files."),
-    ("name_clash", "Nothing is ever overwritten, and these names clash: 02 Two.flac (track 2) already exists."),
 ])
 def test_refusals(split_dir, folder, refusal):
     cue_path = next((split_dir / folder).glob("*.cue"))
@@ -202,7 +201,7 @@ def test_more_refusals(tmp_path):
     assert sheet(two) == "Track 2 doesn't start after track 1: the times must increase."
     no_title = head + '  TRACK 01 AUDIO\n    TITLE "One"\n    INDEX 01 00:00:00\n' \
                       '  TRACK 02 AUDIO\n    INDEX 01 00:01:00\n'
-    assert sheet(no_title, masks=("{track:02} {title}",)) == "Track 2 fits no file name mask (missing: title)."
+    assert sheet(no_title, masks=("{track:02} {title}",)) is None  # named from its number (below)
     assert sheet("not a cue sheet\n").startswith("Not a single-file album: the sheet names no file")
 
 
@@ -211,9 +210,10 @@ def test_two_tracks_given_one_name(tmp_path):
     (tmp_path / "a.cue").write_text('FILE "a.flac" WAVE\n  TRACK 01 AUDIO\n    TITLE "Same"\n    INDEX 01 00:00:00\n'
                                     '  TRACK 02 AUDIO\n    TITLE "Same"\n    INDEX 01 00:01:00\n', encoding="utf-8")
     info = cue.SourceInfo("FLAC", 44100, 10 * 44100, 2, 16)
-    refusal = plan(tmp_path / "a.cue", masks=("{title}",), read_info=lambda _p: info).refusal
-    assert refusal == ("Nothing is ever overwritten, and these names clash: tracks 1 and 2 would both be named "
-                       "Same.flac.")
+    result = plan(tmp_path / "a.cue", masks=("{title}",), read_info=lambda _p: info)
+    assert result.refusal is None and [t.name for t in result.tracks] == ["Same.flac", "Same (2).flac"]
+    assert result.notes == [(2, "Same.flac is taken (another ticked track has that name), so it's named "
+                                "Same (2).flac.")]
 
 
 def test_a_path_too_long_for_windows(tmp_path):
@@ -283,17 +283,22 @@ def test_an_edited_sheet_in_memory_is_planned(split_dir):
     assert result.tracks[-1].name == "03 Renamed.flac" and path.read_text(encoding="utf-8").count("Renamed") == 0
 
 
-def test_unticked_tracks_are_not_checked_for_clashes_or_masks(split_dir):
+def test_a_taken_name_gets_a_number_and_unticked_tracks_are_not_checked(split_dir):
+    """Nothing is ever overwritten, and the split never refuses over a name (Hugo, 2026-10-17)."""
     path = split_dir / "name_clash" / "image.cue"  # "02 Two.flac" is already in the folder
     sheet = cue.read_cue_sheet(path)
-    clash = cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-")
-    assert clash.refusal.startswith("Nothing is ever overwritten")
-    assert clash.problems == [(2, "02 Two.flac already exists, and nothing is ever overwritten.")]
+    taken = cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-")
+    assert taken.refusal is None and [t.name for t in taken.tracks] == ["01 One.flac", "02 Two (2).flac"]
+    assert taken.notes == [(2, "02 Two.flac is taken (it already exists), so it's named 02 Two (2).flac.")]
     fine = cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-", ticked={1})
-    assert fine.refusal is None and fine.problems == [] and fine.tracks[1].name == "02 Two.flac"
+    assert fine.refusal is None and fine.notes == [] and fine.tracks[1].name == "02 Two.flac"  # not checked
 
     sheet.tracks[1].title = ""  # no default mask fits track 2 now: they all need its title
-    assert cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-", ticked={1}).refusal is None
-    unfit = cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-")
-    assert unfit.refusal == "Track 2 fits no file name mask (missing: title)." and unfit.tracks[1].name == ""
-    assert unfit.problems == [(2, "No file name mask fits (missing: title).")]
+    untitled = cue.plan_sheet(sheet, path, DEFAULT_MASKS, "-")
+    assert untitled.refusal is None and untitled.tracks[1].name == "02 Track.flac"
+    assert untitled.notes == [(2, "No file name mask fits (missing: title), so it's named 02 Track.flac.")]
+
+
+def test_free_name():
+    assert cue.free_name("a.cue", set()) == "a.cue"
+    assert cue.free_name("A.cue", {"a.cue", "a (2).cue"}) == "A (3).cue"

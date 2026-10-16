@@ -8,6 +8,7 @@ Times, track numbers and values are parsed from the lines each time they are ask
 state, as the .cue is the split's only source of truth.
 """
 
+import os
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ from music_desk.core.cue import (
     _file_name,
     _value,
     frames_from_time,
+    free_name,
     parse_cue,
     samples_from_frames,
 )
@@ -32,7 +34,6 @@ _UNDECODED = re.compile("[\udc80-\udcff]")
 _BOMS = ((b"\xef\xbb\xbf", "utf-8", "UTF-8 (BOM)"), (b"\xff\xfe", "utf-16-le", "UTF-16 LE"),
          (b"\xfe\xff", "utf-16-be", "UTF-16 BE"))
 UTF8_BOM = b"\xef\xbb\xbf"
-PARTIAL = ".partial"
 
 # field -> (tag, quoted). A tag is a line's keyword, with REM's second word and INDEX's number.
 ALBUM_FIELDS: dict[str, tuple[str, bool]] = {
@@ -421,34 +422,33 @@ def format_cue(doc: CueDocument) -> bytes:
 
 
 def save_cue(doc: CueDocument, path: str | Path, recycle: Callable[[Path], None] | None = None,
-             check: Callable[[Path], str | None] | None = None) -> None:
-    """Save (over the sheet's own file) and Save as (a new file, or one the user agreed to replace): write
-    "<name>.partial", send the file it replaces to the Recycle Bin, then rename the new one into place. Refused,
-    with nothing written, where Windows can't recycle (fsops.CannotRecycle). A Ground rule 1 exception (SPEC §22).
-    Raises CueEncodingError, OSError."""
+             check: Callable[[Path], str | None] | None = None, overwrite_for_good: bool = False) -> None:
+    """Save (over the sheet's own file) and Save as (a new file, or one the user agreed to replace). The file it
+    replaces goes to the Recycle Bin first, then the sheet is written in its place (Hugo, 2026-10-17: no
+    .partial step). Where Windows can't recycle it, CannotRecycle is raised unless the user agreed to overwrite
+    it for good (`overwrite_for_good`). A Ground rule 1 exception (SPEC §22). Raises CueEncodingError, OSError,
+    with nothing changed on disk when the bytes can't be made."""
     path = Path(path)
     data = format_cue(doc)
-    check = check or fsops.can_recycle
-    recycle = recycle or (lambda p: fsops.send_to_recycle_bin(p, check))
-    partial = path.with_name(path.name + PARTIAL)
-    if partial.exists():
-        raise FileExistsError(f"{partial.name} already exists, maybe left by an earlier save. Delete it in File "
-                              "Explorer, then save again.")
-    replaces = path.exists()
-    if replaces:
+    if path.exists():
+        check = check or fsops.can_recycle
         reason = check(path)
-        if reason is not None:
+        if reason is None:
+            (recycle or (lambda p: fsops.send_to_recycle_bin(p, check)))(path)
+        elif not overwrite_for_good:
             raise fsops.CannotRecycle(reason)
-    partial.write_bytes(data)
-    try:
-        if replaces:
-            recycle(path)
-        partial.rename(path)
-    except OSError as e:
-        # Ground rule 1 deletes nothing for good but the split's own .partial files: this one stays, named.
-        raise OSError(e.errno, f"{e.strerror or e}. The new version stays in {partial.name}, and the old one "
-                               f"wasn't replaced.", str(path)) from e
+    path.write_bytes(data)
     doc.path, doc.saved = path, data
+
+
+def numbered_path(path: str | Path) -> Path:
+    """Save as onto a name the user chose not to replace: "image (2).cue", "image (3).cue"…, the first free."""
+    path = Path(path)
+    try:
+        taken = {name.casefold() for name in os.listdir(path.parent)}
+    except OSError:
+        taken = set()
+    return path.with_name(free_name(path.name, taken))
 
 
 # ---------------------------------------------------------------------------

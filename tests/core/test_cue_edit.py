@@ -11,6 +11,7 @@ from music_desk.core.cue_edit import (
     CueEncodingError,
     format_cue,
     format_time,
+    numbered_path,
     parse_document,
     read_document,
     save_cue,
@@ -311,17 +312,18 @@ def test_save_recycles_the_old_version(sheet_file):
     assert not document.modified and sorted(p.name for p in sheet_file.parent.iterdir()) == ["image.cue"]
 
 
-def test_save_is_refused_where_windows_cant_recycle(sheet_file):
+def test_where_windows_cant_recycle_save_asks_to_overwrite_for_good(sheet_file):
     document = read_document(sheet_file)
     document.set_track(1, "title", "Second")
     bin_ = Bin(refuse="D:\\ is a network location, which has no Recycle Bin")
     with pytest.raises(CannotRecycle, match="network location"):
         save_cue(document, sheet_file, bin_.recycle, bin_.check)
-    assert sheet_file.read_bytes() == SHEET.encode() and not bin_.recycled
-    assert sorted(p.name for p in sheet_file.parent.iterdir()) == ["image.cue"] and document.modified
+    assert sheet_file.read_bytes() == SHEET.encode() and not bin_.recycled and document.modified
+    save_cue(document, sheet_file, bin_.recycle, bin_.check, overwrite_for_good=True)  # the user agreed
+    assert b"Second" in sheet_file.read_bytes() and not bin_.recycled and not document.modified
 
 
-def test_save_as_a_new_file_and_over_another(sheet_file):
+def test_save_as_a_new_file_over_another_or_numbered(sheet_file):
     document = read_document(sheet_file)
     document.set_album("date", "2001")
     bin_ = Bin()
@@ -335,29 +337,10 @@ def test_save_as_a_new_file_and_over_another(sheet_file):
     save_cue(document, replaced, bin_.recycle, bin_.check)
     assert bin_.recycled == [(replaced, b"old")] and document.path == replaced
 
-
-def test_a_failed_recycle_keeps_the_old_sheet(sheet_file):
-    document = read_document(sheet_file)
-    document.set_track(1, "title", "Second")
-
-    def fail(path):
-        raise CannotRecycle("it went wrong")
-
-    with pytest.raises(OSError, match="The new version stays in image.cue.partial, and the old one wasn't "
-                                      "replaced"):
-        save_cue(document, sheet_file, fail, lambda _p: None)
-    assert sheet_file.read_bytes() == SHEET.encode()
-    # Nothing is deleted for good (Ground rule 1): the new version stays beside it, and the error names it.
-    assert sorted(p.name for p in sheet_file.parent.iterdir()) == ["image.cue", "image.cue.partial"]
-
-
-def test_a_leftover_partial_is_never_overwritten(sheet_file):
-    leftover = sheet_file.with_name("image.cue.partial")
-    leftover.write_bytes(b"someone's")
-    document = read_document(sheet_file)
-    with pytest.raises(FileExistsError):
-        save_cue(document, sheet_file, Bin().recycle, Bin().check)
-    assert leftover.read_bytes() == b"someone's" and sheet_file.read_bytes() == SHEET.encode()
+    kept = numbered_path(sheet_file)  # Save as onto image.cue, not replacing it
+    assert kept.name == "image (2).cue"
+    save_cue(document, kept, bin_.recycle, bin_.check)
+    assert sheet_file.read_bytes() == SHEET.encode() and numbered_path(sheet_file).name == "image (3).cue"
 
 
 def test_an_encoding_problem_writes_nothing(sheet_file):

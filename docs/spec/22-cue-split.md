@@ -95,10 +95,15 @@ which FLAC can't hold, is refused the same way. **The tracks are always FLAC.**
   lyrics and ReplayGain values described the whole file.
 - Track and track total are the sheet's numbering, whatever tracks are ticked: extracting only track 3 of 11
   gives a file tagged 3 of 11.
-- Names: the shared masks (§21) over those fields, sanitized, with `.flac`. When no mask fits a ticked track (say
-  it has no title and every mask needs one), the page marks it, naming the missing field, and Split is disabled.
-- **Nothing is ever overwritten.** A ticked track's name taken by an existing file, or given to two ticked tracks,
-  is marked as a clash and Split is disabled. Unticked tracks are not checked.
+- Names: the shared masks (§21) over those fields, sanitized, with `.flac`. **The split never refuses over a
+  name** (Hugo, 2026-10-17); the cue itself has no constraint on titles:
+  - a ticked track no mask fits (say it has no title and every mask needs one) is named from its number:
+    `03 Track.flac`;
+  - **nothing is ever overwritten:** a ticked track's name taken by an existing file, or by an earlier ticked
+    track, gets a number in Explorer's style: `03 Duet (2).flac`, then `(3)`…;
+  - the page shows the final names, with a note on each one that changed and why. Unticked tracks are not
+    checked.
+  - Still refused, naming the track: a path longer than Windows tools reliably open (below, "As built").
 
 ## In the app
 Redesigned with Hugo on 2026-10-16, replacing the 0.2.10 Tools card (see "Replaced" below). There is **one way
@@ -131,11 +136,12 @@ in**, and **one page with every control**; you can't split without going through
   - a hidden track (above) shows as row 0, with its tick.
 - **Live validation:** a bad value is marked on its cell, with the reason as a tooltip and in a line under the
   table: a malformed time, start times that don't increase, a time past the end of the audio, a gap after its
-  track's start, fewer than two tracks, a ticked track no mask fits, a name clash. **Save and Split are disabled**
-  while anything is invalid. If the File names masks themselves are invalid, the page says "Fix the file names
-  first (Tools page)." and Split is disabled.
+  track's start, fewer than two tracks, a double quote in a value. **Save and Split are disabled** while
+  anything is invalid. Names never disable Save (Hugo, 2026-10-17: they aren't cue data); a path too long
+  disables Split only. If the File names masks themselves are invalid, the page says "Fix the file names first
+  (Tools page)." and Split is disabled.
 - **Ticks:** every track is ticked when the page opens. Unticked tracks still set the boundaries; they are just
-  not written. The clash check and the free-space check cover the ticked tracks only.
+  not written. The name numbering and the free-space check cover the ticked tracks only.
 - **Options**, at their defaults each time the page opens (nothing is remembered):
   - **Send the album file and its .cue to the Recycle Bin once the tracks are verified**: off. Enabled only when
     every track is ticked, since otherwise the unticked audio would be lost; the tooltip says so.
@@ -157,13 +163,14 @@ in**, and **one page with every control**; you can't split without going through
   digits, values quoted (as EAC writes them), indented as EAC does.
 - Encoding: the one the sheet was read with, BOM included. If a character doesn't fit (a Japanese title in a
   Windows-1252 sheet), Save asks to write UTF-8 with a BOM instead, naming the characters.
-- **Save** overwrites the selected `.cue`. It confirms "Replace Fixture Album.cue? Its current version goes to the
-  Recycle Bin." Then it writes `<name>.cue.partial`, sends the old file to the Recycle Bin through
-  `fsops.send_to_recycle_bin` and its check (§19), and renames the new one into place. Where Windows can't
-  recycle, Save is refused with the reason and Save as… is offered. A folder locked by a job (`PathLocks`)
-  refuses it, as tag saves are refused.
-- **Save as…** opens a Save dialog in the `.cue`'s folder. Windows' dialog asks before replacing a file; a
-  replaced file goes to the Recycle Bin first, as for Save. The page then works on the new file.
+- **Save** overwrites the selected `.cue`, as any editor's Save does (Hugo, 2026-10-17: no `.partial` step). Its
+  old version goes to the Recycle Bin first, through `fsops.send_to_recycle_bin` and its check (§19), so a
+  mistaken save can be undone from the bin; then the sheet is written in its place. Where Windows can't recycle
+  (a network drive), Save asks "Overwrite <name> for good? This drive has no Recycle Bin." first. A folder
+  locked by a job (`PathLocks`) refuses it, as tag saves are refused.
+- **Save as…** opens a Save dialog in the `.cue`'s folder. On a name that exists, the app asks: **Replace** (the
+  old file goes to the Recycle Bin first, as for Save) or **Keep both**, which saves as `image (2).cue`, then
+  `(3)`… (Hugo, 2026-10-17). The page then works on the new file.
 - Saving refreshes the folder in the browser and the side panel's preview.
 
 ## The job
@@ -207,7 +214,8 @@ in**, and **one page with every control**; you can't split without going through
 
 **Ground rule 1** gains three exceptions: creating the track files of a split (never overwriting a file), deleting
 the split's own `.partial` files from the same run, and saving a cue sheet from the Split page (Save and Save as,
-the replaced version going to the Recycle Bin).
+the replaced version going to the Recycle Bin; overwritten for good only where Windows has no Recycle Bin and the
+user agreed).
 
 ## Measured on 2026-10-16 (setup, before any app code)
 - The official flac 1.5.0 Win64 build (SHA-256 checked against the release notes) cut a scratch copy of
@@ -296,13 +304,16 @@ the replaced version going to the Recycle Bin).
   - `validate(doc, info)` → `Problem(row, column, message, blocks_save)` per bad cell: a missing or malformed
     time, a gap after its start, starts that don't increase, a start past the end of the audio, fewer than two
     tracks, a double quote in a quoted value, a disc number that isn't a number.
-  - `save_cue(doc, path, recycle, check)` is Save and Save as: it refuses an existing `<name>.partial` and,
-    before writing anything, a file Windows can't recycle (`CannotRecycle`); then it writes the `.partial`,
-    recycles the file it replaces, and renames. If the recycle or the rename still fails, the `.partial` stays
-    and the error names it (Ground rule 1 deletes nothing else for good; open question to Hugo).
+  - `save_cue(doc, path, recycle, check, overwrite_for_good)` is Save and Save as: the file it replaces goes
+    to the Recycle Bin, then the sheet is written in its place. Where Windows can't recycle it raises
+    `CannotRecycle`, unless the user agreed to overwrite for good. `numbered_path(path)` is Save as's "Keep
+    both" (`image (2).cue`). (Revised on 2026-10-17: the first build wrote a `.partial` first.)
 - **Ticks:** `cue.plan_sheet(sheet, cue_path, masks, replacement, ticked=…)` plans an in-memory sheet (the
   page's, with unsaved edits); `plan_album` reads the file and calls it. `AlbumPlan.tracks` keeps every track
-  (they set the boundaries), `written` is the ticked ones, `all_ticked` says whether every one is. Each track
+  (they set the boundaries), `written` is the ticked ones, `all_ticked` says whether every one is. Names
+  (revised 2026-10-17): `name_tracks` numbers a taken name (`cue.free_name`, Explorer's "name (2).ext") and
+  names a track no mask fits from its number (`03 Track.flac`), with a note per changed name in `plan.notes`;
+  only a path too long is a problem (`plan.problems`) and refuses the album. Each track
   has its `row` in the sheet (None for a hidden track). Clashes, unfit masks and too-long paths are checked
   for ticked tracks only and listed per track in `plan.problems`; an unticked track that no mask fits gets no
   name.

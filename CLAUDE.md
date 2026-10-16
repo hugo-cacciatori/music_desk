@@ -19,7 +19,7 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - **State (2026-10-17, session 13):** 0.2.13 is on `main` (not pushed): search by name (0.2.11), the Action menu
   (0.2.12) and the cue split core (M10 task 5). All 1104 tests passed in the last full run, slow ones included.
   Ruff is clean. The last GitHub release is v0.2.10.
-- **Left to Hugo:** the two Open questions (before task 6), opening an exported playlist in a real player,
+- **Left to Hugo:** opening an exported playlist in a real player,
   and a mouse drag in the installed app.
 - **Next step: M10 task 6** (0.2.14), then task 7 (0.3.0 and the release). Give
   Hugo full manual steps for the installed-app check (memory: manual-check-instructions).
@@ -100,7 +100,8 @@ Code and tests cite these by number; keep the numbering.
    - (M10) creating the track files of a cue split's ticked tracks, never over an existing file, and deleting
      that run's own `.partial` files; its originals go to the Recycle Bin only when the user ticks it (SPEC §22);
    - (M10) saving a cue sheet from the Split page: Save overwrites the selected `.cue` after its old version
-     goes to the Recycle Bin, Save as creates a `.cue` (a replaced one goes to the Recycle Bin first; SPEC §22).
+     goes to the Recycle Bin, Save as creates a `.cue` (a replaced one goes to the Recycle Bin first). Where
+     Windows has no Recycle Bin, a `.cue` is overwritten only after the user agrees to lose it (SPEC §22).
 
    This list grows when a feature needs to create or overwrite files: it is specified with Hugo, gets a row in
    DECISIONS.md and an entry here (Hugo, 2026-10-16).
@@ -198,8 +199,4 @@ agree) and pyproject's `version`, then `uv lock`.
 `tests/` (`reference/`, `fixtures/`, `core/`, `ui/`), `packaging/`, `docs/`. File by file: SPEC §16 "Project layout".
 
 ## Open questions
-- (M10 task 6) Should naming problems (a ticked track no mask fits, a name clash, a path too long) disable Save
-  as well as Split? SPEC §22 lists them among the problems that disable both, but they aren't cue data: the core
-  keeps them apart (`plan.problems` vs `validate`).
-- (M10 task 5) When a cue save's recycle or rename fails after its check passed, may the save delete its own
-  `.cue.partial` (a new Ground rule 1 exception)? As built, it stays and the error names it.
+None.

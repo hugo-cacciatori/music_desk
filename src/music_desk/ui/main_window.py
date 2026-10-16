@@ -79,6 +79,9 @@ FIND_QUERIES = (  # the Lyrics menu's Find entries: (menu text, search query)
     ("Find songs without lyrics in their tags", "lyricstag:no lyricstag:lrc"),
     ("Find songs LRCLIB can't look up (no artist or title)", "lrclib:notags"),
 )
+ACTION_QUERIES = (  # the Action menu's entries over the whole library: (menu text, search query)
+    ("Show tracks without ReplayGain tags", "rg:none"),
+)
 STATUS_MS = 8000
 PAUSED_NOTE = " (paused while ReplayGain runs)"
 DELETE_OWNER = "a delete"  # its PathLocks owner, as other jobs see it
@@ -345,6 +348,10 @@ class MainWindow(QMainWindow):
         for text, query in FIND_QUERIES:
             lyrics_menu.addAction(text, lambda q=query: self.find(q))
         lyrics_menu.setEnabled(library is not None)
+        action_menu = self.menuBar().addMenu("&Action")  # actions over the whole library (SPEC §5)
+        for text, query in ACTION_QUERIES:
+            action_menu.addAction(text, lambda q=query: self.find(q))
+        action_menu.setEnabled(library is not None)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About MusicDesk", self.open_about)
         self.embedder = None
@@ -701,7 +708,7 @@ class MainWindow(QMainWindow):
         self.search_field.selectAll()
 
     def find(self, query: str) -> None:
-        """A ready-made search over the whole library (the Lyrics menu's Find entries)."""
+        """A ready-made search over the whole library (the Lyrics menu's Find entries, the Action menu)."""
         if not self._library_open():
             return
         self.open_search()

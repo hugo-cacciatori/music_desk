@@ -36,7 +36,7 @@ Done when: with tag reading held back (a stub reader), a file's and a folder's n
 found through the tag and through the LRCLIB text; the page shows no chips and no scope box; the suite passes.
 
 **Action menu** (Hugo, 2026-10-16; read SPEC §5 "Action menu").
-- [ ] 1. The Action menu between Lyrics and Help, with "Show tracks without ReplayGain tags" (`rg:none` through
+- [x] 1. The Action menu between Lyrics and Help, with "Show tracks without ReplayGain tags" (`rg:none` through
       `MainWindow.find`); a test that it opens the search with that query.
 
 Done when: the menu shows, and its entry lists exactly the fixture tracks without ReplayGain tags.

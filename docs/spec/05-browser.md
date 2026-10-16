@@ -97,3 +97,5 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
     listed (`rg:partial` stays typeable).
   - It is on demand: the smart-views reasoning above still keeps it out of the sidebar, but Hugo wants the list
     as an explicit action.
+  - As built (0.2.12): `main_window.ACTION_QUERIES`, as `FIND_QUERIES` for the Lyrics menu. Tested in
+    `tests/ui/test_action_menu.py` against the files' own tags.

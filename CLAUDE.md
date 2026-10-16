@@ -14,9 +14,8 @@ two files alone.
 **Current state (2026-10-16, session 10):**
 - **The ReplayGain slowness fixes are complete on this machine** (Progress, "ReplayGain slowness fixes"): a test
   now covers the page's elapsed time; the full suite passes (878, slow tests included, none skipped); the setup
-  is rebuilt (`dist/installer/MusicDesk-Setup-0.1.0.exe`, same version, upgrades in place). Left: Hugo's check
-  on his `F:` drive (install the new setup, run ReplayGain while indexing, time the album).
-- `main` has five commits not pushed (d586acd onwards).
+  is rebuilt (`dist/installer/MusicDesk-Setup-0.1.0.exe`, same version, upgrades in place). Hugo confirmed on
+  his `F:` drive: an album takes a few seconds again. Everything is pushed.
 
 **Earlier (2026-10-15, end of session 9):**
 - **M7 task 1 is done (the core).** `core/playlist_builder.py` `Builder` of `Item(entry_id, path)`: add (at a
@@ -659,8 +658,7 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** Hugo's ReplayGain check on his drive (Progress, "ReplayGain slowness fixes"). If ReplayGain is
-fast now, resume M7 task 2; if not, keep digging there first (rsgain's speed alone was fine). Then:
+**Next step:** M7 task 2, the playlist panel (Progress). Then:
 - **M7, the playlist builder**: designed with Hugo (SPEC §15). Task 1 (the core) is done; next is task 2, the
   panel (`ui/playlist_panel.py`), building on SPEC §15 "As built (M7 task 1)".
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
@@ -985,8 +983,8 @@ Done when:
       pipe (all lines arrive at exit), so long albums looked frozen.
 - [x] The ReplayGain card's number fields ignore the mouse wheel (`NoWheelSpinBox`).
 - [x] Rebuilt the setup (2026-10-16) after a test for the elapsed time and a full green run (878 tests).
-- [ ] Hugo's check on his drive: install the new setup, run ReplayGain on an album while the status bar shows
-      indexing, and confirm the "(paused while ReplayGain runs)" note, the ticking time and an album in seconds.
+- [x] Hugo's check on his drive (2026-10-16): with the new setup, ReplayGain on an album takes a few seconds
+      again. The cause is confirmed: indexing read the same drive meanwhile.
 
 **M7 Playlist builder** (read SPEC §15, designed with Hugo on 2026-10-15; also §5 and §14)
 - [x] Core (`core/playlists.py`, no Qt): the builder's model (entry ids, the natural import order, insert at a

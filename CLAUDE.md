@@ -24,13 +24,24 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   Save as), ticks the tracks to extract, holds the options and starts the job. The `.cue` is the only source of
   truth: no split state in the app.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Next step: M10 task 5** (the editable sheet in `core/cue.py`, 0.2.11), then task 6 (the Split page, 0.2.12),
-  then task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
+- **Search redesigned with Hugo (2026-10-16, docs only, SPEC §6):** folders and audio files are found by name
+  before their tags are read; the chips and the "Only in" box are to be removed; lyrics are always searched.
+- **Next step: Search task 1** (0.2.11), then M10 task 5 (the editable sheet, 0.2.12), task 6 (the Split page,
+  0.2.13) and task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
   manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with
 0.3.0 and a release. Tick tasks as they are done.
+
+**Search: names at once** (added by Hugo on 2026-10-16; read SPEC §6). Small, so it goes first.
+- [ ] 1. `text_search` finds folders and audio files by name before their tags are read (a LEFT JOIN to
+      `tracks`, folders or audio extensions only, tag filters keep needing tags); folder rows (icon, Enter opens,
+      folder summary, Play skips them); remove the chips and the scope box with their wiring (`search_view.py`,
+      `search_service.py`, `main_window.py`); "N of M results".
+
+Done when: with tag reading held back (a stub reader), a file's and a folder's names are found; a lyrics word is
+found through the tag and through the LRCLIB text; the page shows no chips and no scope box; the suite passes.
 
 **Installer: uninstall shortcut** (read SPEC §13, "Uninstalling from the Start menu"). Small, so it goes first; it
 reaches Hugo with the next setup he asks for.

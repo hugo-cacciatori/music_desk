@@ -72,7 +72,9 @@ replaced them).
   - accents are ignored (except in 1–2 character ASCII queries, §6 "As built");
   - every audio file under the roots is searchable;
   - the file name, album artist and genre are searched too;
-  - a track with a lyrics tag is also searched by its LRCLIB text (the app looks every track up).
+  - a track with a lyrics tag is also searched by its LRCLIB text (the app looks every track up);
+  - folders, and audio files whose tags aren't read yet, are found by name (Hugo, 2026-10-16);
+  - the status chips (All, With lyrics, Missing) are dropped (Hugo, 2026-10-16).
 
   The parity test (`tests/core/test_search_parity.py`) compares the songs whose title, artist and album are the
   same on both sides (the page showed file-name fallbacks), with LRCLIB text only on keys without a lyrics tag.

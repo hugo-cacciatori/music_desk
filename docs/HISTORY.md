@@ -939,6 +939,24 @@ found through the tag and through the LRCLIB text; the page shows no chips and n
 
 Done when: the menu shows, and its entry lists exactly the fixture tracks without ReplayGain tags.
 
+**M10 Shared masks and cue split** (read SPEC §21, §22, §13, and §10)
+- Tasks 1–4 are done (0.2.7–0.2.10, HISTORY.md). Tasks 5 and 6 replace the 0.2.10 Split card (SPEC §22).
+- [x] 5. Core: the editable sheet, `format_cue` and its round trip, Save / Save as, planning with ticked tracks,
+      the per-track proof (SPEC §22 "Planned").
+- [x] 6. UI: remove the 0.2.10 card, menus, folder scan and `Settings.split_options`; the button on every `.cue`
+      preview; the Split page; the one-album job and report (SPEC §22 "In the app", "Replaced").
+- [x] 7. README, version 0.3.0 and the installer build (0.3.0 pushed 2026-10-17; the release and the
+      installed-app check are not part of the task: Hugo, 2026-10-17).
+
+Done when:
+- every split fixture gets its expected result, and every fixture sheet saved unedited is byte-identical;
+- the slow test proves the per-track lengths and the MD5 on the FLAC and WAV images, and fails on a one-sample
+  shift; extracting only track 3 proves its length and MD5 against the source's range;
+- Save sends the old `.cue` to the (injected) Recycle Bin, and is refused where Windows can't recycle.
+
+Optional, for later (not needed for completion): the installed app, on a copied album, saves a sheet with one
+start time moved and splits it with its bundled flac.
+
 ## Former CLAUDE.md sections (as of 2026-10-16)
 
 **Session protocol:**

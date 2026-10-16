@@ -16,36 +16,21 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 13):** 0.3.0 is on `main` and pushed, not released (Hugo, 2026-10-17: no release
-  for now). Its installer is built (`dist/installer/MusicDesk-Setup-0.3.0.exe`). M10 tasks 5 and 6 are done (the
-  Split page). All 1114 tests passed in the last full run, slow ones included.
-- **Left to Hugo:** the installed-app split check of task 7 (he chose not to run it on 2026-10-17), the release
-  when he wants it; opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Next step:** M11 (not urgent) or M12 (to specify with Hugo); task 7's release on Hugo's go. Give Hugo full
-  manual steps for checks (memory: manual-check-instructions).
+- **State (2026-10-17, session 13):** 0.3.0 is on `main` and pushed, not released. M10 is complete (the Split
+  page); its installer is built (`dist/installer/MusicDesk-Setup-0.3.0.exe`). All 1114 tests passed in the last
+  full run, slow ones included.
+- **Optional, for later (Hugo):** installed-app checks: the split on a copied album (M10), an exported playlist
+  in a real player, a mouse drag. A release when he asks.
+- **Next step:** M11 (not urgent, when Hugo says so) or M12 (to specify with Hugo first). Give Hugo full manual
+  steps for checks (memory: manual-check-instructions).
 
 ## Work plan
-Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with
-0.3.0 and a release. Tick tasks as they are done.
+Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …). Tick tasks as
+they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
+of it (see Session protocol 5).
 
-**M10 Shared masks and cue split** (read SPEC §21, §22, §13, and §10)
-- Tasks 1–4 are done (0.2.7–0.2.10, HISTORY.md). Tasks 5 and 6 replace the 0.2.10 Split card (SPEC §22).
-- [x] 5. Core: the editable sheet, `format_cue` and its round trip, Save / Save as, planning with ticked tracks,
-      the per-track proof (SPEC §22 "Planned").
-- [x] 6. UI: remove the 0.2.10 card, menus, folder scan and `Settings.split_options`; the button on every `.cue`
-      preview; the Split page; the one-album job and report (SPEC §22 "In the app", "Replaced").
-- [ ] 7. README, version 0.3.0, the installer, and the GitHub release (Hugo's go).
-
-Done when:
-- every split fixture gets its expected result, and every fixture sheet saved unedited is byte-identical;
-- the slow test proves the per-track lengths and the MD5 on the FLAC and WAV images, and fails on a one-sample
-  shift; extracting only track 3 proves its length and MD5 against the source's range;
-- Save sends the old `.cue` to the (injected) Recycle Bin, and is refused where Windows can't recycle;
-- the installed app, on a copied album, saves a sheet with one start time moved and splits it with its bundled
-  flac.
-
-**M11 Maintenance** (Hugo, 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Not urgent: after
-M10, or between tasks when Hugo says so. Neither changes what the app does.
+**M11 Maintenance** (Hugo, 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Not urgent: when
+Hugo says so. The split's controller already exists (0.2.14). Neither changes what the app does.
 - [ ] 1. Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), findings fixed.
 - [ ] 2. Split `ui/main_window.py` (2,043 lines at 0.2.10) into one controller per feature: tools (Rename,
       ReplayGain, Tidy), split, delete, search. Behaviour and tests unchanged.
@@ -68,10 +53,13 @@ every option from the need; it replaces the Lyrics menu's Find entries. No tasks
 3. Commit each finished task on `main`. Push, publish a release or install global tools only when Hugo asks.
    Project dependencies go in the project's virtual environment.
 4. **Versions** (Hugo, M7; reminded 2026-10-16): don't forget them. Every finished task of the work plan bumps
-   the patch version (0.2.2 → 0.2.3) in its own commit, following "Version bump" below. A milestone that ends
-   with a release (M10: 0.3.0) bumps the minor version instead (see Release). Docs-only commits and measurements
-   don't bump.
-5. At the end of a session:
+   the patch version (0.2.2 → 0.2.3) in its own commit, following "Version bump" below. The last task of a
+   milestone may bump the minor version instead (M10: 0.3.0). Docs-only commits and measurements don't bump.
+5. **Releases and installed-app checks are never required** (Hugo, 2026-10-17). No task, milestone or "Done
+   when" waits on a GitHub release or on an end-to-end check in the installed app: a release happens only when
+   Hugo asks, and installed-app checks are optional, listed as "for later" and in Resume here, never blocking a
+   tick. Plan them that way from the start.
+6. At the end of a session:
    - tick the finished tasks in the work plan;
    - rewrite Resume here (state and next step, a few lines, no history);
    - add the new decisions to `docs/DECISIONS.md` and update the spec sections they touch;
@@ -190,7 +178,7 @@ From the project root:
 
 **Version bump:** `music_desk.__version__`, `packaging/version_info.txt` (`tests/test_packaging.py` checks they
 agree) and pyproject's `version`, then `uv lock`.
-**Release** (Hugo's go): bump the version, run `uv run python packaging/build_installer.py`, then
+**Release** (only when Hugo asks, never a task's condition): bump the version if needed, run `uv run python packaging/build_installer.py`, then
 `gh release create v<version> dist/installer/MusicDesk-Setup-<version>.exe`.
 
 ## Project layout

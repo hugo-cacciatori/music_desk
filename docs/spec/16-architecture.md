@@ -29,7 +29,7 @@
 - The plan: one controller per feature, each a `QObject` that gets the window's shared parts (library, settings,
   toast, status bar, shell thread, jobs list, the centre stack) and owns its pages, runner and signals:
   - `ui/controllers/tools.py`: the Tools page, Rename, ReplayGain and Tidy (previews, jobs, reports);
-  - `ui/controllers/split.py`: the Split preview, its job, "Split into tracks…";
+  - `ui/controllers/split.py`: the Split page (§22), its save, its job and report;
   - `ui/controllers/delete.py`: `delete_entries`, its checks, question and refresh;
   - `ui/controllers/search.py`: the search page and its service.
 - `MainWindow` keeps its layout, navigation, selection, the side panel and the menus, and delegates. Menu

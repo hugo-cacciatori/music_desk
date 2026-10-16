@@ -34,9 +34,9 @@ shows it in the side panel, read-only, instead of "<name> isn't an audio file."
   - An image that can't be decoded shows "Can't show this image: <reason>" (the fixtures' 3-byte `cover.jpg`
     is such a case).
   - Files over 50 MB aren't decoded: "Too large to preview (80 MB). Open it instead."
-- A **single-file album's `.cue`** (the rule of §10 A) also gets **Split into tracks…** (§22). It is added with
-  M10, not before.
-- Always read-only: nothing on the page writes, renames or deletes.
+- **Every `.cue`** also gets a **Split into tracks…** button, the only way into the cue split (§22; Hugo,
+  2026-10-16). It opens the Split page in the centre area, where the sheet can be edited and saved.
+- Always read-only: nothing on the page writes, renames or deletes (editing happens on the Split page).
 
 **Reading** (Ground rule 2)
 - On the TagIO worker: `TagIO.read_preview(path)` emits `previewRead(PreviewRead(token, …))`. A token per request

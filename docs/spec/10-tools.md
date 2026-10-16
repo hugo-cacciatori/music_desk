@@ -4,8 +4,8 @@ on the current folder) or the folder summary. The **Tools page** is non-modal an
 button, so browsing stays possible. Each card starts with a plain-language paragraph saying exactly what will
 happen to which files.
 
-From M10 the page shows, in order: the **File names** card (the shared masks, §21), then Rename, ReplayGain, Tidy
-and **Split albums (cue)** (§22). The masks and the replacement below move to the File names card; the Rename and
+From M10 the page shows, in order: the **File names** card (the shared masks, §21), then Rename, ReplayGain and
+Tidy. The cue split isn't a card: it starts from a `.cue`'s preview and has its own page (§22, Hugo, 2026-10-16). The masks and the replacement below move to the File names card; the Rename and
 Tidy cards keep their other options.
 
 **A. Rename files from tags**

@@ -33,9 +33,9 @@ hint after a tag save (§7, §11) uses the *default* masks, not the user's.
   - the replacement;
   - the live example from the first track of the scope.
 - Its text: "How MusicDesk names music files from their tags: the first mask whose fields are all present is
-  used. Rename, Split albums and the rename suggestion after you save tags all use these masks."
-- Inline validation. While it fails, Run on the Rename, Tidy and Split cards is disabled, and those cards say "Fix
-  the file names first."
+  used. Rename, the cue split and the rename suggestion after you save tags all use these masks."
+- Inline validation. While it fails, Run on the Rename and Tidy cards and Split on the Split page (§22) are
+  disabled, and they say "Fix the file names first."
 - It has its own "Reset to defaults", and saves on every change, as the cards do.
 - The Rename and Tidy cards lose their mask editor and replacement, and show one line instead: "File names: the
   masks in the File names card above."

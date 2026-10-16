@@ -29,7 +29,9 @@
   file names, tags and RunLog text with timestamps and durations masked. Other formats get their own expected
   values.
 - `slow` marker: the real bundled rsgain on fixtures, for every format rsgain supports, and (from M10) the real
-  bundled flac on the cue split fixtures.
+  bundled flac on the cue split fixtures, including a split of one ticked track (§22).
+- Cue sheets saved unedited from the Split page must be byte-identical to every fixture sheet (§22, the round
+  trip).
 - Never in tests: the real Recycle Bin (inject a recorder; §19 adds an injected `can_recycle`), the real network,
   a real dialog, or a real library.
 - Performance: a synthetic tree of 100k entries checks index time and UI responsiveness. Debug builds log any

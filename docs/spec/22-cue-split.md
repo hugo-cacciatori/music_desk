@@ -1,7 +1,11 @@
 # 22. Cue split
-Specified with Hugo on 2026-10-16 (M10). Some albums are ripped as **one audio file plus a `.cue` sheet** that
-says where each track starts. The app cuts such a file into one FLAC file per track, named with the shared masks
-(§21) and tagged from the sheet, and proves the cut lost nothing.
+Specified with Hugo on 2026-10-16 (M10), redesigned with him the same day (see "In the app"). Some albums are
+ripped as **one audio file plus a `.cue` sheet** that says where each track starts. From one selected `.cue`, the
+app shows a Split page where the sheet can be edited, then cuts the file into one FLAC file per ticked track, named
+with the shared masks (§21) and tagged from the sheet, and proves the cut lost nothing.
+
+**The `.cue` is the split's only source of truth** (Hugo, 2026-10-16). The app stores no split state: no
+remembered options, no remembered edits. Edits are kept only by saving them into a `.cue`.
 
 ## The cue sheet
 A `.cue` is a small text file. An example, as EAC writes them:
@@ -43,10 +47,10 @@ A `.cue` is a small text file. An example, as EAC writes them:
 | `INDEX 00 mm:ss:ff` | where the gap before it starts | not a cut point (see below) |
 | `PREGAP`, `POSTGAP` | silence that isn't in the file | ignored |
 
-**Which albums qualify:** the single-file album rule the Rename tool already uses (§10 A, `rename.folder_facts`).
-That is a sheet whose FILE lines all name one audio file present in the folder, with at least two tracks. Other
-sheets (one FILE per track, missing files) are listed as "not a single-file album" and left alone. Cue sheets
-embedded inside FLAC files are not read (not chosen, 2026-10-16).
+**Which sheets can be split:** a sheet whose FILE lines all name one audio file present in the `.cue`'s folder,
+with at least two tracks (the single-file album rule of §10 A). Any `.cue` opens the Split page, so a wrong FILE
+line can be fixed there; other sheets (one FILE per track, a missing file) can be edited and saved, but Split stays
+disabled with the reason. Cue sheets embedded inside FLAC files are not read (not chosen, 2026-10-16).
 
 **Sources:** FLAC, WAV and AIFF, which is what flac.exe reads (Hugo's images are FLAC or WAV, 2026-10-16). Any
 other format is refused, naming it: "APE isn't supported: the split reads FLAC, WAV and AIFF." 32-bit float WAV,
@@ -60,18 +64,19 @@ which FLAC can't hold, is refused the same way. **The tracks are always FLAC.**
 - **Audio before track 1's INDEX 01** (a hidden track, or an extra pregap) is prepended to track 1 when it is
   under 2 s or is digital silence. Otherwise it becomes track 0, titled "Hidden track", named with the masks like
   the others. Silence is checked by decoding just that range.
-- Every sample of the source ends up in exactly one track, in order, which the proof below checks.
-- Refused, naming the reason: times that don't increase, a time past the end of the audio, and fewer than two
-  audio tracks.
+- Every sample of the source belongs to exactly one track, in order. With every track ticked, the proof below
+  checks that nothing was lost; with some unticked, it checks each written track against its range.
+- Not splittable, naming the reason: times that don't increase, a time past the end of the audio, and fewer than
+  two audio tracks. On the Split page these are live validation errors (below).
 
 ## Text encoding
 - Cue sheets have no declared encoding. **Auto** tries a BOM (UTF-8, UTF-16), then UTF-8, then Windows-1252, the
   same order as the file preview (§20).
-- Old Cyrillic, Japanese or Chinese sheets come out garbled that way. The split preview therefore has a picker per
-  album, with Auto (naming what it chose), UTF-8, Windows-1252 (Western), Windows-1251 (Cyrillic), Shift-JIS
-  (Japanese), GBK (Chinese, simplified), Big5 (Chinese, traditional) and EUC-KR (Korean). Changing it re-reads that
-  album's titles and names before anything is written.
-- When Auto had to fall back to Windows-1252, the album shows "If the titles look wrong, pick the cue sheet's
+- Old Cyrillic, Japanese or Chinese sheets come out garbled that way. The Split page therefore has a picker, with
+  Auto (naming what it chose), UTF-8, Windows-1252 (Western), Windows-1251 (Cyrillic), Shift-JIS (Japanese), GBK
+  (Chinese, simplified), Big5 (Chinese, traditional) and EUC-KR (Korean). Changing it re-reads the sheet; with
+  unsaved edits it asks first, since they would be lost.
+- When Auto had to fall back to Windows-1252, the page shows "If the titles look wrong, pick the cue sheet's
   encoding."
 - Parsing happens in `core/cue.py` (no Qt): `read_cue_sheet(path, encoding=None) -> CueSheet` (album fields,
   tracks with their fields and INDEX times, the FILE name, the encoding used, warnings). `rename.read_cue` stays
@@ -88,73 +93,121 @@ which FLAC can't hold, is refused the same way. **The tracks are always FLAC.**
 - Album-level values missing from the sheet are taken from the source file's own tags (album, album artist, year,
   genre). The source's embedded **front cover** is copied into every track. Nothing else is copied: its comment,
   lyrics and ReplayGain values described the whole file.
-- Names: the shared masks (§21) over those fields, sanitized, with `.flac`. When no mask fits a track (say a
-  track has no title and every mask needs one), the album is refused, naming the track and the missing field.
-- **Nothing is ever overwritten.** A name taken by an existing file, or given to two tracks of the album, refuses
-  the album and lists the clashes.
+- Track and track total are the sheet's numbering, whatever tracks are ticked: extracting only track 3 of 11
+  gives a file tagged 3 of 11.
+- Names: the shared masks (§21) over those fields, sanitized, with `.flac`. When no mask fits a ticked track (say
+  it has no title and every mask needs one), the page marks it, naming the missing field, and Split is disabled.
+- **Nothing is ever overwritten.** A ticked track's name taken by an existing file, or given to two ticked tracks,
+  is marked as a clash and Split is disabled. Unticked tracks are not checked.
 
 ## In the app
-- **The "Split albums (cue)" card**, the last card on the Tools page (§10), after File names, Rename,
-  ReplayGain and Tidy:
-  - Its text: "Cuts each single-file album (one audio file and its .cue) in this folder into one FLAC file per
-    track, named with the File names masks and tagged from the cue sheet. The new files are checked to be
-    identical to the original, sample for sample. The original files stay unless you choose otherwise."
-  - Scope: the folder, with **Include subfolders** (on).
-  - Options:
-    - **Send the album file and its .cue to the Recycle Bin once the tracks are verified**: off (Hugo's
-      choice);
-    - **Then run ReplayGain on each album**: off. It is enabled only when the option above is ticked, since
-      ReplayGain measures every audio file in the folder and would count the album file too. The tooltip says
-      so. ReplayGain uses the ReplayGain card's options.
-  - The options are remembered (`Settings.split_options`).
-  - **Run split…** is disabled while the masks are invalid, or when flac's self-check failed (§13).
-- **"Split into tracks…"** in the file menu of a single-file album's `.cue` or audio file, and in the `.cue`
-  preview (§20). It opens the preview for that album with the card's saved options.
-- **The preview page** ("Split: check the tracks"), like the rename preview (§10):
-  - one block per album: the source (format, length), the cue and its encoding picker, then a table (#, Start,
-    Length, New name, Title, Artist), the warnings, and the refusal reason when there is one;
-  - a summary line: "5 albums → 58 tracks. 1 album refused." and what happens afterwards (the originals, and
-    ReplayGain);
-  - buttons: **Split N albums** and **← Back to options**.
+Redesigned with Hugo on 2026-10-16, replacing the 0.2.10 Tools card (see "Replaced" below). There is **one way
+in**, and **one page with every control**; you can't split without going through it.
+
+**The entry point**
+- The side panel's preview of any `.cue` (§20) shows a **Split into tracks…** button. The side panel previews
+  only a single selected file, so this is "one `.cue` selected". There is no menu entry, and nothing on the Tools
+  page.
+- It opens the **Split page** in the centre area, non-modal with a back button, as the Tools page does (§10), so
+  browsing stays possible. One Split page at a time: opening another `.cue` while the page has unsaved edits asks
+  first.
+
+**The Split page**, top to bottom:
+- **Source:** the FILE line, editable. It must name a FLAC, WAV or AIFF file in the `.cue`'s folder. Then its
+  format and length, or why it can't be split ("APE isn't supported: the split reads FLAC, WAV and AIFF.", "File
+  not found", "This sheet names 11 files: only single-file albums can be split").
+- **Encoding:** the picker (above).
+- **Album fields**, editable: performer, title, genre (`REM GENRE`), date (`REM DATE`), disc and total discs
+  (`REM DISCNUMBER`, `REM TOTALDISCS`), catalog, songwriter, and **Other lines**: the album-level lines that have
+  no field of their own (`REM DISCID`, `REM COMMENT`, unknown lines), editable as text.
+- **The track table**, one row per track:
+  - columns: tick, #, Start (`mm:ss:ff`), Gap (INDEX 00, optional), Length (computed), Title, Performer,
+    Songwriter, ISRC, Flags, and New name (computed live from the masks, §21);
+  - the selected track's **Other lines** (INDEX 02 and later, PREGAP, POSTGAP, REM, unknown lines) show in a box
+    under the table, editable as text;
+  - **Add track** inserts a track after the selected one, starting halfway through it; **Delete track** removes
+    the selected tracks. A deleted track's audio joins the previous track (gaps go to the previous track), or the
+    next one when it was track 1. Tracks are renumbered 1…N after each change;
+  - a hidden track (above) shows as row 0, with its tick.
+- **Live validation:** a bad value is marked on its cell, with the reason as a tooltip and in a line under the
+  table: a malformed time, start times that don't increase, a time past the end of the audio, a gap after its
+  track's start, fewer than two tracks, a ticked track no mask fits, a name clash. **Save and Split are disabled**
+  while anything is invalid. If the File names masks themselves are invalid, the page says "Fix the file names
+  first (Tools page)." and Split is disabled.
+- **Ticks:** every track is ticked when the page opens. Unticked tracks still set the boundaries; they are just
+  not written. The clash check and the free-space check cover the ticked tracks only.
+- **Options**, at their defaults each time the page opens (nothing is remembered):
+  - **Send the album file and its .cue to the Recycle Bin once the tracks are verified**: off. Enabled only when
+    every track is ticked, since otherwise the unticked audio would be lost; the tooltip says so.
+  - **Then run ReplayGain on the album**: off. Enabled only when the option above is ticked, since ReplayGain
+    measures every audio file in the folder and would count the album file too. It uses the ReplayGain card's
+    options.
+- **Buttons:** **Save**, **Save as…**, **Split N tracks** (disabled by invalid values, no ticked track, or a
+  failed flac self-check, §13), **Stop** while the job runs, then the report on the page.
+- **Unsaved edits:**
+  - Split with unsaved edits asks "Save the cue sheet first?" (Save, Save as…, Cancel), so the tracks always
+    match a `.cue` on disk. The ticks and options aren't cue data and need no save.
+  - Leaving the page (back, another `.cue`, closing the app) with unsaved edits asks to save or discard them.
+
+**Saving the sheet** (a Ground rule 1 exception, added 2026-10-16)
+- The sheet is written from the page's model. **Lines that weren't edited are written exactly as they were read**:
+  their order, spelling, case and unknown lines. An unedited sheet saved is byte-identical to the original. Line
+  endings follow the file's own (CRLF or LF).
+- Edited and new lines: times as `mm:ss:ff` with two digits each (minutes may have more), track numbers with two
+  digits, values quoted (as EAC writes them), indented as EAC does.
+- Encoding: the one the sheet was read with, BOM included. If a character doesn't fit (a Japanese title in a
+  Windows-1252 sheet), Save asks to write UTF-8 with a BOM instead, naming the characters.
+- **Save** overwrites the selected `.cue`. It confirms "Replace Fixture Album.cue? Its current version goes to the
+  Recycle Bin." Then it writes `<name>.cue.partial`, sends the old file to the Recycle Bin through
+  `fsops.send_to_recycle_bin` and its check (§19), and renames the new one into place. Where Windows can't
+  recycle, Save is refused with the reason and Save as… is offered. A folder locked by a job (`PathLocks`)
+  refuses it, as tag saves are refused.
+- **Save as…** opens a Save dialog in the `.cue`'s folder. Windows' dialog asks before replacing a file; a
+  replaced file goes to the Recycle Bin first, as for Save. The page then works on the new file.
+- Saving refreshes the folder in the browser and the side panel's preview.
 
 ## The job
-- It runs in the Jobs panel (§10) as kind **Split**, holding a `PathLocks` folder lock owned by "the Split tool",
-  so tag saves, renames and other jobs on that tree are refused meanwhile. Unsaved Metadata edits in the folder ask
-  first, as the other tools do.
-- It handles one album at a time, with one flac process (`CREATE_NO_WINDOW`, below-normal priority, as rsgain
-  in `core/rsgain.py`). flac comes from `paths.resource_path("flac/flac.exe")`.
-- **Free space:** before each album, the drive must have free space at least equal to the source's size, or the
-  album is refused.
-- **For each track:** `flac -8 -V --silent --skip=<first sample> [--until=<end sample>] -o "<new name>.partial"
-  <source>`. `-V` makes flac decode what it wrote and compare it while encoding.
-- **The proof**, before any file gets its real name:
-  1. each track's sample count equals its planned length (this catches a cut in the wrong place);
-  2. the MD5 of all the tracks' decoded audio, end to end (`flac -d -c --force-raw-format --endian=little
-     --sign=signed`, read in order), equals the source's. That is the FLAC STREAMINFO MD5, or for WAV/AIFF, or a
-     FLAC without an MD5, the hash of the source's decoded audio.
+- It runs in the Jobs panel (§10) as kind **Split**, for one album, holding a `PathLocks` folder lock owned by
+  "the Split tool", so tag saves, renames and other jobs in that folder are refused meanwhile. Unsaved Metadata
+  edits in the folder ask first, as the other tools do. The page's controls are read-only while it runs.
+- One flac process at a time (`CREATE_NO_WINDOW`, below-normal priority, as rsgain in `core/rsgain.py`). flac
+  comes from `paths.resource_path("flac/flac.exe")`.
+- **Free space:** the drive must have free space at least equal to the ticked tracks' share of the source's size,
+  or the split is refused.
+- **For each ticked track:** `flac -8 -V --silent --skip=<first sample> [--until=<end sample>] -o
+  "<new name>.partial" <source>`. `-V` makes flac decode what it wrote and compare it while encoding.
+- **The proof**, before any file gets its real name, for each ticked track:
+  1. its sample count equals its planned length (this catches a cut in the wrong place);
+  2. the MD5 of its decoded audio (`flac -d -c --force-raw-format --endian=little --sign=signed`) equals the MD5
+     of the same range of the source, decoded by flac (`FlacRunner.decode_range`).
+
+  When every track is ticked, the MD5 of all the tracks end to end must also equal the source's: the FLAC
+  STREAMINFO MD5, or for WAV/AIFF, or a FLAC without an MD5, the hash of the source's decoded audio.
 - **Then:**
   - each `.partial` is renamed to its final name (checked free again);
   - the tags and the cover are written through `TaggedFile`;
-  - if ticked, the album file and its `.cue` go to the Recycle Bin together, through `fsops.send_to_recycle_bin`
-    and its safety check (§19). If they can't be recycled, they stay and the report says why.
+  - if ticked (only possible with every track ticked), the album file and its `.cue` go to the Recycle Bin
+    together, through `fsops.send_to_recycle_bin` and its safety check (§19). If they can't be recycled, they
+    stay and the report says why.
 - **Stop:** it kills flac and deletes this run's `.partial` files, and only those (their exact paths are
-  recorded). Once an album's renames have started, Stop takes effect after that album.
-- **Failure:** a failed proof or a flac error leaves the album untouched. Its `.partial` files are deleted, and
+  recorded). Once the renames have started, Stop takes effect after them.
+- **Failure:** a failed proof or a flac error leaves the folder untouched. The `.partial` files are deleted, and
   the report gives flac's message.
-- **Split + ReplayGain** is one job across two steps, as Tidy is (§10): `process_album` on each verified album
-  whose originals were recycled.
-- **Afterwards:** `MainWindow.refresh_after_tool` on the scope.
-- **The report:**
-  - "Done: 5 albums split into 58 tracks, all identical to their originals.";
-  - per album: the tracks written, the proof's result, and what happened to the originals;
-  - refused albums with their reasons;
+- **Split + ReplayGain** is one job across two steps, as Tidy is (§10): `process_album` on the folder once the
+  originals reached the Recycle Bin.
+- **Afterwards:** `MainWindow.refresh_after_tool` on the folder.
+- **The report**, on the Split page:
+  - "Done: 11 tracks split, all identical to the original." or "Done: 3 of 11 tracks split, each identical to its
+    part of the original.";
+  - the tracks written, the proof's result, and what happened to the originals;
   - the ReplayGain report when it ran.
 
-  The jobs panel reads, for example, "Running (2 of 5): Kid A", "Done: 5 albums split", "Done, but 1 album was
-  refused", or "Stopped: 2 albums split, nothing left half-done".
+  The jobs panel reads, for example, "Running (2 of 3): Kid A", "Done: 3 tracks split", or "Stopped: nothing left
+  half-done".
 
-**Ground rule 1** gains two exceptions: creating the track files of a split (never overwriting a file), and
-deleting the split's own `.partial` files from the same run.
+**Ground rule 1** gains three exceptions: creating the track files of a split (never overwriting a file), deleting
+the split's own `.partial` files from the same run, and saving a cue sheet from the Split page (Save and Save as,
+the replaced version going to the Recycle Bin).
 
 ## Measured on 2026-10-16 (setup, before any app code)
 - The official flac 1.5.0 Win64 build (SHA-256 checked against the release notes) cut a scratch copy of
@@ -198,7 +251,7 @@ deleting the split's own `.partial` files from the same run.
 - **Bundled:** `packaging/music_desk.spec` ships `resources/flac`, and `paths.flac_path()` finds it. The licences
   are `flac-GPL-2.0.txt` and `libFLAC-Xiph-BSD.txt` in `resources/licenses/` and two `COMPONENTS` rows.
 - **Self-check:** `app.ToolCheck` (formerly `RsgainCheck`) runs `rsgain --version`, then `flac --version`, off
-  the UI thread. `MainWindow.show_flac_version` keeps the result for the Split card (task 4) and About ("Cue
+  the UI thread. `MainWindow.show_flac_version` keeps the result for the Split button and About ("Cue
   split: flac 1.5.0", or "flac unavailable"). There's no status-bar label (lean UI).
 - **`core/flac.py` `FlacRunner`:**
   - `encode(source, start, end, output)` runs `flac -8 -V --silent --skip --until -o`.
@@ -219,7 +272,29 @@ deleting the split's own `.partial` files from the same run.
     silent and joined track 1.
   - Moving one boundary by one sample failed the proof on both length and MD5, and left the folder as it was.
 
-## As built (M10 task 4): the card, the preview, the job
+## Planned (M10 tasks 5 and 6): the editable sheet and the Split page
+- **Core (`core/cue.py`, no Qt):**
+  - The sheet model keeps **every line** of the file in order, each with its raw text: the parsed fields read
+    from it, and the raw text written back unchanged unless that line was edited. Unknown lines are kept as they
+    are. The BOM, the encoding and the line-ending style are part of the model.
+  - Edits: set an album or track field (which rewrites or adds that one line), set a track's INDEX 00/01, set the
+    FILE name, set an "Other lines" block, add a track after another, delete tracks, renumber.
+  - `validate(sheet, source_info, masks, replacement, ticked)` lists the problems per cell (above).
+  - `format_cue(sheet) -> bytes`, and `save_cue(sheet, path, recycle)` / Save as through `.partial` and the
+    Recycle Bin (above). Round trip: `format_cue(read(path))` equals the file's bytes for every fixture sheet.
+  - `plan_album` plans from an in-memory sheet (not a path) and a set of ticked track numbers; the proof gains
+    the per-track MD5 against `decode_range`, and the end-to-end check runs only with every track ticked.
+- **UI:** `ui/split_page.py` (the page, in the centre stack); the controller of §16 owns it, its save and its
+  job. `FilePreview.splitRequested` is shown on every `.cue`.
+
+## Replaced on 2026-10-16 (shipped in 0.2.10, removed by M10 task 6)
+These notes describe the 0.2.10 code that the Split page replaces. Removed: the Split card and its Tools page
+wiring, `cue.find_albums` and the folder scan, the multi-album preview (`AlbumBlock`s and the summary), the
+"Split into tracks…" menu entries (on `.cue` and on audio files), `SplitOptions`' JSON and
+`Settings.split_options` (dropped when the settings load). Kept and adapted: `finish_album`, `write_tags`,
+`SplitRunner` (one album, one job), the report. Delete this section once task 6 is built.
+
+### As built (M10 task 4): the card, the preview, the job
 - **Core:**
   - `split.finish_album(plan, cut, recycle_originals, recycle)` checks every final name is still free; if one
     was taken meanwhile, nothing is renamed and the `.partial` files go. Otherwise it renames them, writes the
@@ -264,7 +339,17 @@ deleting the split's own `.partial` files from the same run.
   - a name clash.
 - **Core, with a fake runner:** parsing, encodings, samples from times, the boundaries and hidden-track rules,
   names and clashes, tags, refusals, and the partial-file cleanup on cancel and on failure.
+- **The editable sheet (task 5):** every fixture sheet saved unedited is byte-identical (UTF-8 with BOM, cp1252,
+  Shift-JIS, LF and CRLF); each edit changes only its own line; add, delete and renumber; validation per cell;
+  the UTF-8 question when a character doesn't fit; Save and Save as with an injected recycler (the old version
+  recycled, refused where it can't recycle, a replaced file recycled).
+- **Ticks (task 5):** planning only track 3 of a fixture keeps the boundaries and the tags' 3 of N; the clash and
+  free-space checks ignore unticked tracks.
 - **`slow`, with the real flac:** the proof passes on the FLAC and WAV images, and fails when a boundary is
-  shifted by one sample.
-- **UI:** the card's options and their enabling, the preview and its encoding picker, the job with the lock, Stop,
-  recycling through an injected recycler (never the real bin), and ReplayGain chaining.
+  shifted by one sample; extracting only track 3 proves its length and MD5 against the source's range, and fails
+  on a one-sample shift.
+- **UI (task 6):** the button on every `.cue` preview; the page's fields, table, Add and Delete, validation marks
+  and the disabled buttons; the options' enabling (recycling only with every track ticked); the encoding picker
+  and the unsaved-edits questions (Split, back, another `.cue`, quit); the job with the lock, Stop, recycling
+  through an injected recycler (never the real bin), and ReplayGain chaining; no split key in the saved
+  settings.

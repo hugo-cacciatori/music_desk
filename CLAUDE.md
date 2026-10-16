@@ -16,23 +16,17 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, session 12):** version 0.2.10 is on `main`, pushed, and published as the GitHub release
-  v0.2.10 (Hugo's go; `MusicDesk-Setup-0.2.10.exe`, built by Hugo). 0.2.2 added the Start menu folder with "Uninstall MusicDesk" (SPEC §13, measured). 0.2.3 added
-  `fsops.can_recycle` (§19, measured on a network path). 0.2.4 added Delete to the Recycle Bin. 0.2.5 and 0.2.6
-  added the file preview (M9; text cap 512 KB and the wrap rule, measured in §20). 0.2.7 added the shared file
-  name masks (M10 task 1, §21). 0.2.8 added `core/cue.py`, the split plan (task 2). 0.2.9 bundles flac, with
-  `core/flac.py` and `core/split.py` (task 3). 0.2.10 adds the Split card, its preview and job, and "Split into
-  tracks…" (task 4, §22). M0–M9 are complete (Progress is in
-  HISTORY.md). All 1060 tests passed in the last full run, slow ones included. Ruff is clean.
+- **State (2026-10-16, session 12):** 0.2.10 is on `main`, pushed, and published as the GitHub release v0.2.10.
+  M0–M9 are complete (Progress, and how 0.2.2–0.2.10 were built, are in HISTORY.md and DECISIONS.md). All 1060
+  tests passed in the last full run, slow ones included. Ruff is clean.
+- **Cue split redesigned with Hugo (2026-10-16, docs only, SPEC §22):** the 0.2.10 Split card goes. The split
+  starts only from a `.cue`'s preview ("Split into tracks…"), on one Split page that edits the sheet (Save /
+  Save as), ticks the tracks to extract, holds the options and starts the job. The `.cue` is the only source of
+  truth: no split state in the app.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Next step: M10 task 5**: README, version 0.3.0, the installer, and the GitHub release (on Hugo's go). M10's
-  last "Done when": the installed app splits a copied album with its bundled flac. That is also the first run
-  of the frozen build's flac. Give Hugo full manual steps (memory: manual-check-instructions).
-- **Watcher flake, solved (2026-10-16, measured):** `test_live_folder_changes` failed 2 runs in 17 with
-  "Access is denied" on its folder rename. The cause was the app's own tag read of the new file: Windows
-  refuses to rename a folder while any file under it is open, even with FILE_SHARE_DELETE (SPEC §7). It hit
-  7 runs in 100, and 0 in 100 with tag reading stubbed out. The test now waits for the tag read and retries
-  the rename for up to 2 s: 0 failures in 40 runs alone.
+- **Next step: M10 task 5** (the editable sheet in `core/cue.py`, 0.2.11), then task 6 (the Split page, 0.2.12),
+  then task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
+  manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with
@@ -84,13 +78,23 @@ Done when:
       `flac --version` self-check, the runner and the proof, `slow` tests.
 - [x] 4. UI: the Split card, "Split into tracks…" (menus, `.cue` preview), the preview page with its encoding
       picker, the job (lock, Stop, partial cleanup, recycling, ReplayGain afterwards) and its report.
-- [ ] 5. README, version 0.3.0, the installer, and the GitHub release (Hugo's go).
+      *Redesigned with Hugo on 2026-10-16 (SPEC §22): the card, the folder scan, the menus and the saved options
+      go; tasks 5 and 6 replace them.*
+- [ ] 5. Core: the editable sheet (every line kept, field and time edits, add/delete/renumber, per-cell
+      validation), `format_cue` and its byte-identical round trip, Save / Save as through `.partial` and the
+      Recycle Bin, planning from an in-memory sheet with ticked tracks, the per-track proof.
+- [ ] 6. UI: remove the Split card, the menu entries, `find_albums`, the multi-album preview and
+      `Settings.split_options`; "Split into tracks…" on every `.cue` preview; the Split page (fields, track
+      table, encoding, ticks, options, Save / Save as, the unsaved-edits questions); the one-album job and report.
+- [ ] 7. README, version 0.3.0, the installer, and the GitHub release (Hugo's go).
 
 Done when:
-- every split fixture gets its expected result;
+- every split fixture gets its expected result, and every fixture sheet saved unedited is byte-identical;
 - the slow test proves the per-track lengths and the MD5 on the FLAC and WAV images, and fails on a one-sample
-  shift;
-- the installed app splits a copied album with its bundled flac.
+  shift; extracting only track 3 proves its length and MD5 against the source's range;
+- Save sends the old `.cue` to the (injected) Recycle Bin, and is refused where Windows can't recycle;
+- the installed app, on a copied album, saves a sheet with one start time moved and splits it with its bundled
+  flac.
 
 **M11 Maintenance** (added by Hugo on 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Worthwhile,
 not urgent: after M10, or between tasks when Hugo says so. Neither changes what the app does.
@@ -138,8 +142,13 @@ Code and tests cite these by number; keep the numbering.
      `.lrc` files not yet in the tags are never junk (SPEC §10);
    - (M8) sending the files and folders the user selects to the **Recycle Bin** with Delete, after a
      confirmation (SPEC §19);
-   - (M10) creating the track files of a cue split, never over an existing file, and deleting that run's own
-     `.partial` files; its originals go to the Recycle Bin only when the user ticks it (SPEC §22).
+   - (M10) creating the track files of a cue split's ticked tracks, never over an existing file, and deleting
+     that run's own `.partial` files; its originals go to the Recycle Bin only when the user ticks it (SPEC §22);
+   - (M10) saving a cue sheet from the Split page: Save overwrites the selected `.cue` after its old version
+     goes to the Recycle Bin, Save as creates a `.cue` (a replaced one goes to the Recycle Bin first; SPEC §22).
+
+   This list grows when a feature needs to create or overwrite files: it is specified with Hugo, gets a row in
+   DECISIONS.md and an entry here (Hugo, 2026-10-16).
 
    Nothing is ever deleted permanently: everything removed goes to the Recycle Bin, and only where Windows can
    recycle (`fsops.can_recycle`, SPEC §19). The only exception is the split's own `.partial` files. For anything
@@ -165,6 +174,8 @@ The full log is `docs/DECISIONS.md`. These apply to all work:
   read and write, SQLite (WAL, FTS5 trigram), watchdog, natsort (Explorer order), send2trash, urllib. uv with
   hatchling and a `src/` layout; pytest, pytest-qt, ruff; PyInstaller one-folder plus Inno Setup. tinytag
   2.0.0 is test-only (parity). The stacks considered and rejected are in HISTORY.md ("Stack").
+- **Cue split** (Hugo, 2026-10-16): the `.cue` is the only source of truth. The app stores no split state (no
+  remembered options or edits); edits are kept only by saving them into a `.cue`. SPEC §22.
 - **Licence:** GPL-3.0-or-later. Every bundled third-party component is listed in `music_desk/licenses.py`, with
   its text in `resources/licenses/` (SPEC §13).
 - **Repo:** public on GitHub, `hugo-cacciatori/music_desk`, branch `main`.

@@ -23,8 +23,8 @@
     `libFLAC-Xiph-BSD.txt` in `resources/licenses/`, two `COMPONENTS` rows, and About.
   - Resolved through `paths.flac_path()` (`resources/flac/flac.exe`), never configurable (as rsgain, Ground rule
     5). The PyInstaller spec bundles `resources/flac`, as built in M10 task 3.
-  - Startup self-check: `flac --version` (expected "flac 1.5.0"). If it fails, the Split card and "Split into
-    tracks…" are disabled with the reason.
+  - Startup self-check: `flac --version` (expected "flac 1.5.0"). If it fails, the Split page's Split button is
+    disabled with the reason (editing and saving the sheet still work).
   - It is called like rsgain: `CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS`, output read by the job's
     thread, and killed on Stop.
 - PyInstaller one-folder `--windowed` build with icon and version info (as built at M6 task 4:

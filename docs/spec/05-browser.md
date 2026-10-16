@@ -28,10 +28,10 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
   the folder. Ctrl+F filters the current folder as you type.
 - **File context menu:** Open with default app, Play selection (§14), Open in File Explorer
   (`explorer /select,"<path>"`), Rename (F2), Tools…, Remove ReplayGain tags…, Copy path, Delete (Del, §19).
-  A single-file album's `.cue` or audio file also gets "Split into tracks…" (§22).
+  There is no split entry: the split starts from a `.cue`'s preview (§20, §22; Hugo, 2026-10-16).
 - **Folder context menu:** Open, Play folder, Play folder and subfolders, Open in File Explorer, Rename (F2),
   Tools…, Remove ReplayGain tags…, Rescan, Delete (Del, §19; not on roots), Remove from library (roots only).
-- New items arrive with their milestones: Delete with M8, Split into tracks… with M10.
+- New items arrive with their milestones: Delete with M8.
   - As built (M5): the planned per-tool items (Tidy album…, Rename from tags…, ReplayGain (album)… and
     (discography)…) became one "Tools…", which opens the Tools page with the folder or selection as its scope
     (§10).

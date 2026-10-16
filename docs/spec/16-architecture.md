@@ -36,3 +36,26 @@
   entries call the controllers.
 - Nothing visible changes. The `ask_*` / `confirm_*` methods tests replace move with their controller, so the
   tests that replace them change only where they reach (for example `window.split.ask_…`).
+
+## Project layout
+As of 0.2.10 (moved from CLAUDE.md on 2026-10-16).
+
+    CLAUDE.md, README.md, LICENSE (GPL-3.0), pyproject.toml, uv.lock
+    docs/                 SPEC.md (index), spec/NN-*.md, DECISIONS.md, HISTORY.md
+    src/music_desk/
+      app.py, __main__.py   entry point: logging, the rsgain self-check, the window
+      paths.py, logging_setup.py, settings.py (settings.json; playlist.json beside it), licenses.py
+      core/   (no Qt)  formats, tags, metadata, masks, rename, inline_rename, replaygain, rsgain, lyrics, preview,
+                       playlists, playlist_builder, fsops, path_locks, cancel; index/ (schema v3, store, scanner,
+                       queries, search, roots, lyrics_index, lyrics_import)
+      services/ (Qt)   library (owns writer, indexer, watcher, lyrics service), indexer, watcher, lyrics_service,
+                       lyrics_embedder, search_service, tag_io, tag_writer, jobs, rename_job, replaygain_job
+      ui/              main_window, sidebar, folder_tree, file_view, address_bar, search_view, playlist_panel,
+                       entry_drag, stall_watch, jobs_panel, about_dialog, toast;
+                       side_panel/ (panel, metadata_tab, lyrics_tab, folder_summary, file_preview);
+                       tools/ (tools_page, names_card, rename_card, replaygain_card, rename_preview, rg_report)
+    resources/            rsgain/ (rsgain.exe 3.6), flac/ (flac 1.5.0, bundled from M10), icons/, licenses/
+    tests/                conftest.py, reference/ (frozen scripts), fixtures/ (make_fixtures.py + generated/),
+                          core/ (lrclib_fake.py, rsgain_fake.py), ui/ (conftest.py, browser_helpers.py)
+    packaging/            music_desk.spec, launcher.py, installer.iss, build_installer.py, make_icon.py,
+                          version_info.txt

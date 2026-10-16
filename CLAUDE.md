@@ -11,98 +11,42 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   lists, not the whole spec.
 - `docs/DECISIONS.md`: every dated decision. New decisions get a row there, and their spec section is updated at
   the same time.
-- `docs/HISTORY.md`: how M0–M7 were built (session notes, checklists, measurements). Read it only to find out
+- `docs/HISTORY.md`: how M0–M10 were built (session notes, finished work plan blocks, measurements). Read it only to find out
   why something is the way it is.
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, session 12):** 0.2.10 is on `main`, pushed, and published as the GitHub release v0.2.10.
-  M0–M9 are complete (Progress, and how 0.2.2–0.2.10 were built, are in HISTORY.md and DECISIONS.md). All 1060
-  tests passed in the last full run, slow ones included. Ruff is clean.
-- **Cue split redesigned with Hugo (2026-10-16, docs only, SPEC §22):** the 0.2.10 Split card goes. The split
-  starts only from a `.cue`'s preview ("Split into tracks…"), on one Split page that edits the sheet (Save /
-  Save as), ticks the tracks to extract, holds the options and starts the job. The `.cue` is the only source of
-  truth: no split state in the app.
+- **State (2026-10-16, session 12):** 0.2.10 is on `main` and published as the GitHub release v0.2.10. M0–M9 are
+  complete. All 1060 tests passed in the last full run, slow ones included. Ruff is clean. Since then, docs only:
+  the search, the Action menu and the cue split were redesigned with Hugo (SPEC §5, §6, §22; DECISIONS.md).
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Search redesigned with Hugo (2026-10-16, docs only, SPEC §6):** folders and audio files are found by name
-  before their tags are read; the chips and the "Only in" box are to be removed; lyrics are always searched.
-- **Next step: Search task 1** (0.2.11), then the Action menu (0.2.12), M10 task 5 (the editable sheet, 0.2.13),
-  task 6 (the Split page, 0.2.14) and task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
+- **Next step: Search task 1** (0.2.11), then the Action menu (0.2.12), M10 task 5 (0.2.13), task 6 (0.2.14) and
+  task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
   manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with
 0.3.0 and a release. Tick tasks as they are done.
 
-**Search: names at once** (added by Hugo on 2026-10-16; read SPEC §6). Small, so it goes first.
-- [ ] 1. `text_search` finds folders and audio files by name before their tags are read (a LEFT JOIN to
-      `tracks`, folders or audio extensions only, tag filters keep needing tags); folder rows (icon, Enter opens,
-      folder summary, Play skips them); remove the chips and the scope box with their wiring (`search_view.py`,
-      `search_service.py`, `main_window.py`); "N of M results".
+**Search: names at once** (Hugo, 2026-10-16; read SPEC §6). Small, so it goes first.
+- [ ] 1. `text_search` finds folders and audio files by name before their tags are read; folder rows; remove the
+      chips and the scope box with their wiring; "N of M results" (SPEC §6 "What is searched").
 
 Done when: with tag reading held back (a stub reader), a file's and a folder's names are found; a lyrics word is
 found through the tag and through the LRCLIB text; the page shows no chips and no scope box; the suite passes.
 
-**Action menu** (added by Hugo on 2026-10-16; read SPEC §5 "Action menu").
+**Action menu** (Hugo, 2026-10-16; read SPEC §5 "Action menu").
 - [ ] 1. The Action menu between Lyrics and Help, with "Show tracks without ReplayGain tags" (`rg:none` through
       `MainWindow.find`); a test that it opens the search with that query.
 
 Done when: the menu shows, and its entry lists exactly the fixture tracks without ReplayGain tags.
 
-**Installer: uninstall shortcut** (read SPEC §13, "Uninstalling from the Start menu"). Small, so it goes first; it
-reaches Hugo with the next setup he asks for.
-- [x] 1. `installer.iss`: the shortcut in a MusicDesk Start menu folder with "Uninstall MusicDesk", and the old loose
-      shortcut deleted on upgrade; `test_packaging.py`; the README's Install section says how to uninstall.
-
-Done when: a per-user install over a scratch 0.2.1 install shows the folder with both shortcuts and no loose one,
-"Open file location" leads there, the shortcut starts the uninstaller, and §13 records whether typing "uninstall
-musicdesk" finds it.
-
-**M8 Recycle Bin safety and Delete** (read SPEC §19, §5, and §10 A for the junk cleanup). This comes first: the
-junk cleanup already relies on recycling, and the split's originals will.
-- [x] 1. Measure what send2trash does where Windows can't recycle. Send a scratch file under `\\localhost\C$\…`
-      (show Hugo the exact commands first), then check the Recycle Bin, and record the measured result in §19.
-      Add `fsops.can_recycle`; `send_to_recycle_bin` refuses when it fails; the junk cleanup keeps and reports
-      such files. Tests use an injected check.
-- [x] 2. Delete: Del, Shift+Del and the menu item in the list, the tree and the results, through `ask_delete`;
-      locks, refresh, the selection afterwards, and the playlist's Del unchanged.
-
-Done when:
-- a multi-selection of files and folders goes to the Recycle Bin exactly as confirmed (tests with an injected
-  recycler);
-- roots, locked items and places that can't recycle are refused;
-- §19 records the measured network-path behaviour;
-- a manual run on a copied folder sends the items to the real Recycle Bin, and Hugo finds them there.
-
-**M9 File preview** (read SPEC §20, §7)
-- [x] 1. `core/preview.py` (`read_text`, the encodings; `decode_text` with UTF-16), with fixtures and tests.
-- [x] 2. The Preview page: `TagIO.read_preview`, `FilePreview` as the side panel's third page, the refresh, and
-      the stall measurement for 1 MB of text.
-
-Done when:
-- every listed type previews;
-- an EAC UTF-16 log, a cp1252 text and a CP437 `.nfo` read correctly;
-- showing the capped text stays under the 50 ms stall target (measured);
-- nothing on the page can write.
-
 **M10 Shared masks and cue split** (read SPEC §21, §22, §13, and §10)
-- [x] 1. Masks: `core/masks.py` (moved out of `rename.py`; the parity tests stay unchanged),
-      `Settings.name_masks` / `name_replacement` with the migration, the File names card, and the hint using the
-      user's masks.
-- [x] 2. `core/cue.py`: parsing, encodings, samples, boundaries and the hidden track, names and clashes, tags;
-      the split fixtures, with audio that never repeats.
-- [x] 3. flac: bundle `resources/flac` (PyInstaller spec, `licenses.py`, `resources/licenses/`, About), the
-      `flac --version` self-check, the runner and the proof, `slow` tests.
-- [x] 4. UI: the Split card, "Split into tracks…" (menus, `.cue` preview), the preview page with its encoding
-      picker, the job (lock, Stop, partial cleanup, recycling, ReplayGain afterwards) and its report.
-      *Redesigned with Hugo on 2026-10-16 (SPEC §22): the card, the folder scan, the menus and the saved options
-      go; tasks 5 and 6 replace them.*
-- [ ] 5. Core: the editable sheet (every line kept, field and time edits, add/delete/renumber, per-cell
-      validation), `format_cue` and its byte-identical round trip, Save / Save as through `.partial` and the
-      Recycle Bin, planning from an in-memory sheet with ticked tracks, the per-track proof.
-- [ ] 6. UI: remove the Split card, the menu entries, `find_albums`, the multi-album preview and
-      `Settings.split_options`; "Split into tracks…" on every `.cue` preview; the Split page (fields, track
-      table, encoding, ticks, options, Save / Save as, the unsaved-edits questions); the one-album job and report.
+- Tasks 1–4 are done (0.2.7–0.2.10, HISTORY.md). Tasks 5 and 6 replace the 0.2.10 Split card (SPEC §22).
+- [ ] 5. Core: the editable sheet, `format_cue` and its round trip, Save / Save as, planning with ticked tracks,
+      the per-track proof (SPEC §22 "Planned").
+- [ ] 6. UI: remove the 0.2.10 card, menus, folder scan and `Settings.split_options`; the button on every `.cue`
+      preview; the Split page; the one-album job and report (SPEC §22 "In the app", "Replaced").
 - [ ] 7. README, version 0.3.0, the installer, and the GitHub release (Hugo's go).
 
 Done when:
@@ -113,10 +57,9 @@ Done when:
 - the installed app, on a copied album, saves a sheet with one start time moved and splits it with its bundled
   flac.
 
-**M11 Maintenance** (added by Hugo on 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Worthwhile,
-not urgent: after M10, or between tasks when Hugo says so. Neither changes what the app does.
-- [ ] 1. Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), with its findings
-      fixed. It catches callers left behind when a signature changes; see SPEC §18 for what it wouldn't catch.
+**M11 Maintenance** (Hugo, 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Not urgent: after
+M10, or between tasks when Hugo says so. Neither changes what the app does.
+- [ ] 1. Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), findings fixed.
 - [ ] 2. Split `ui/main_window.py` (2,043 lines at 0.2.10) into one controller per feature: tools (Rename,
       ReplayGain, Tidy), split, delete, search. Behaviour and tests unchanged.
 
@@ -125,9 +68,8 @@ Done when:
 - `main_window.py` holds the window, its layout and the browsing; each feature's flow lives in its controller;
 - the full suite passes unchanged, apart from tests that reached into moved internals.
 
-**M12 Advanced search** (added by Hugo on 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first,
-reconsidering every option from the need (the Lyrics menu's Find entries don't really answer one). It replaces
-those Find entries. No tasks yet.
+**M12 Advanced search** (Hugo, 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first, reconsidering
+every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task.
@@ -147,6 +89,11 @@ those Find entries. No tasks yet.
    - rewrite Resume here (state and next step, a few lines, no history);
    - add the new decisions to `docs/DECISIONS.md` and update the spec sections they touch;
    - move answered questions out of Open questions.
+   - move each finished work plan block (all its tasks ticked) to HISTORY.md "Progress checklists" in the same
+     commit; the work plan holds only unfinished blocks;
+   - keep Resume here to about 5 lines (state, what's left to Hugo, next step), with no history;
+   - check `wc -c CLAUDE.md`: over 15 KB, move finished or look-up material out (never rules, conventions or
+     open tasks); if it's still over, tell Hugo the size and what takes the room.
 
 ## Ground rules
 Code and tests cite these by number; keep the numbering.
@@ -221,12 +168,9 @@ The full log is `docs/DECISIONS.md`. These apply to all work:
 - A run that takes 30 s or more before starting is pytest deleting an old 100k-file temp tree, not a hang.
 - The UI tests open real windows; some rely on window focus, so they don't run offscreen.
 
-## Measurements (this machine)
-- M2 "Done when" (`tests/ui/test_responsiveness.py`, slow; 500 folders, 10,000 files, 1,000 tracks): indexing
-  2.1 s, worst stall 45 ms while indexing and 47 ms while browsing, reopening a folder 3–4 ms.
-- Re-measured on 2026-10-15: about 3.5 s of indexing and stalls of 50–80 ms, with rare outliers (150–233 ms).
-  The pre-M4 code measured the same that day, so this is the machine, not a regression.
-- Other timings: search in SPEC §6, the scanner in HISTORY.md.
+## Measurements
+The responsiveness figures for this machine (M2, re-measured 2026-10-15) are in SPEC §18 "Performance";
+search in SPEC §6, the scanner in HISTORY.md.
 
 ## Environment (checked 2026-10-15)
 - Windows 11 Pro. Shells: PowerShell 5.1 (primary) and Git Bash.
@@ -262,25 +206,9 @@ agree) and pyproject's `version`, then `uv lock`.
 `gh release create v<version> dist/installer/MusicDesk-Setup-<version>.exe`.
 
 ## Project layout
-    CLAUDE.md, README.md, LICENSE (GPL-3.0), pyproject.toml, uv.lock
-    docs/                 SPEC.md (index), spec/NN-*.md, DECISIONS.md, HISTORY.md
-    src/music_desk/
-      app.py, __main__.py   entry point: logging, the rsgain self-check, the window
-      paths.py, logging_setup.py, settings.py (settings.json; playlist.json beside it), licenses.py
-      core/   (no Qt)  formats, tags, metadata, masks, rename, inline_rename, replaygain, rsgain, lyrics, preview,
-                       playlists, playlist_builder, fsops, path_locks, cancel; index/ (schema v3, store, scanner,
-                       queries, search, roots, lyrics_index, lyrics_import)
-      services/ (Qt)   library (owns writer, indexer, watcher, lyrics service), indexer, watcher, lyrics_service,
-                       lyrics_embedder, search_service, tag_io, tag_writer, jobs, rename_job, replaygain_job
-      ui/              main_window, sidebar, folder_tree, file_view, address_bar, search_view, playlist_panel,
-                       entry_drag, stall_watch, jobs_panel, about_dialog, toast;
-                       side_panel/ (panel, metadata_tab, lyrics_tab, folder_summary, file_preview);
-                       tools/ (tools_page, names_card, rename_card, replaygain_card, rename_preview, rg_report)
-    resources/            rsgain/ (rsgain.exe 3.6), flac/ (flac 1.5.0, bundled from M10), icons/, licenses/
-    tests/                conftest.py, reference/ (frozen scripts), fixtures/ (make_fixtures.py + generated/),
-                          core/ (lrclib_fake.py, rsgain_fake.py), ui/ (conftest.py, browser_helpers.py)
-    packaging/            music_desk.spec, launcher.py, installer.iss, build_installer.py, make_icon.py,
-                          version_info.txt
+`src/music_desk/`: `core/` (no Qt; `index/` is the SQLite index), `services/` (Qt workers), `ui/` (`side_panel/`,
+`tools/`), plus `app.py`, `paths.py`, `settings.py`, `licenses.py`. `resources/` (rsgain, flac, icons, licences),
+`tests/` (`reference/`, `fixtures/`, `core/`, `ui/`), `packaging/`, `docs/`. File by file: SPEC §16 "Project layout".
 
 ## Open questions
 None.

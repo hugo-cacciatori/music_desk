@@ -733,7 +733,7 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
   deduplication, the breaker pausing and resuming, offline mode, and a restart resuming the pending tracks.
 - All five M4 tasks are done; only the real run of "Done when" is left.
 
-## Progress checklists, M0–M7 (all done)
+## Progress checklists (finished work plan blocks)
 Tick tasks as they're done (`[x]`). A milestone is complete when its "Done when" holds.
 
 **M0 Skeleton** (read SPEC §13 and §16)
@@ -875,6 +875,57 @@ Done when: folders dragged from the tree (a multi-selection) land in natural ord
 by keyboard and by a header sort, and export to a relative .m3u8 that a player opens; the playlist survives a
 restart.
 
+Moved from CLAUDE.md's work plan on 2026-10-16 (finished blocks, verbatim):
+
+**Installer: uninstall shortcut** (read SPEC §13, "Uninstalling from the Start menu"). Small, so it goes first; it
+reaches Hugo with the next setup he asks for.
+- [x] 1. `installer.iss`: the shortcut in a MusicDesk Start menu folder with "Uninstall MusicDesk", and the old loose
+      shortcut deleted on upgrade; `test_packaging.py`; the README's Install section says how to uninstall.
+
+Done when: a per-user install over a scratch 0.2.1 install shows the folder with both shortcuts and no loose one,
+"Open file location" leads there, the shortcut starts the uninstaller, and §13 records whether typing "uninstall
+musicdesk" finds it.
+
+**M8 Recycle Bin safety and Delete** (read SPEC §19, §5, and §10 A for the junk cleanup). This comes first: the
+junk cleanup already relies on recycling, and the split's originals will.
+- [x] 1. Measure what send2trash does where Windows can't recycle. Send a scratch file under `\\localhost\C$\…`
+      (show Hugo the exact commands first), then check the Recycle Bin, and record the measured result in §19.
+      Add `fsops.can_recycle`; `send_to_recycle_bin` refuses when it fails; the junk cleanup keeps and reports
+      such files. Tests use an injected check.
+- [x] 2. Delete: Del, Shift+Del and the menu item in the list, the tree and the results, through `ask_delete`;
+      locks, refresh, the selection afterwards, and the playlist's Del unchanged.
+
+Done when:
+- a multi-selection of files and folders goes to the Recycle Bin exactly as confirmed (tests with an injected
+  recycler);
+- roots, locked items and places that can't recycle are refused;
+- §19 records the measured network-path behaviour;
+- a manual run on a copied folder sends the items to the real Recycle Bin, and Hugo finds them there.
+
+**M9 File preview** (read SPEC §20, §7)
+- [x] 1. `core/preview.py` (`read_text`, the encodings; `decode_text` with UTF-16), with fixtures and tests.
+- [x] 2. The Preview page: `TagIO.read_preview`, `FilePreview` as the side panel's third page, the refresh, and
+      the stall measurement for 1 MB of text.
+
+Done when:
+- every listed type previews;
+- an EAC UTF-16 log, a cp1252 text and a CP437 `.nfo` read correctly;
+- showing the capped text stays under the 50 ms stall target (measured);
+- nothing on the page can write.
+
+**M10 Shared masks and cue split**, tasks 1–4 (0.2.7–0.2.10):
+- [x] 1. Masks: `core/masks.py` (moved out of `rename.py`; the parity tests stay unchanged),
+      `Settings.name_masks` / `name_replacement` with the migration, the File names card, and the hint using the
+      user's masks.
+- [x] 2. `core/cue.py`: parsing, encodings, samples, boundaries and the hidden track, names and clashes, tags;
+      the split fixtures, with audio that never repeats.
+- [x] 3. flac: bundle `resources/flac` (PyInstaller spec, `licenses.py`, `resources/licenses/`, About), the
+      `flac --version` self-check, the runner and the proof, `slow` tests.
+- [x] 4. UI: the Split card, "Split into tracks…" (menus, `.cue` preview), the preview page with its encoding
+      picker, the job (lock, Stop, partial cleanup, recycling, ReplayGain afterwards) and its report.
+      *Redesigned with Hugo on 2026-10-16 (SPEC §22): the card, the folder scan, the menus and the saved options
+      go; tasks 5 and 6 replace them.*
+
 ## Former CLAUDE.md sections (as of 2026-10-16)
 
 **Session protocol:**
@@ -951,6 +1002,8 @@ Commands (from the project root):
     uv run python packaging/make_icon.py                        # redraw resources/icons/ after changing the icon
 
 ## Project layout
+An early version; the current one is in SPEC §16 "Project layout".
+
     music_desk/             C:\Code\music_desk
       CLAUDE.md, pyproject.toml, uv.lock, README.md, LICENSE (GPL-3.0)
       docs/SPEC.md          detailed feature spec

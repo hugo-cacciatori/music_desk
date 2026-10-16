@@ -38,6 +38,11 @@
   event-loop stall above 50 ms through a QTimer watchdog (as built in 0.2.1: `ui/stall_watch.py` `StallWatch`, a
   20 ms timer that logs how late it fires, turned on by `app.main` when running from source, not in the
   installed exe).
+- Measured on this machine (moved from CLAUDE.md on 2026-10-16):
+  - M2 "Done when" (`tests/ui/test_responsiveness.py`, slow; 500 folders, 10,000 files, 1,000 tracks): indexing
+    2.1 s, worst stall 45 ms while indexing and 47 ms while browsing, reopening a folder 3–4 ms.
+  - Re-measured on 2026-10-15: about 3.5 s of indexing and stalls of 50–80 ms, with rare outliers (150–233 ms).
+    The pre-M4 code measured the same that day, so this is the machine, not a regression.
 - Manual checklist per milestone, on a copied album:
   - browse while indexing; edit tags, including multi-file edits and the cover; rename a file and a folder;
   - preview and run each tool, including the cleanup protections, then compare `replaygain.log` with a script run;

@@ -29,7 +29,8 @@
 - The plan: one controller per feature, each a `QObject` that gets the window's shared parts (library, settings,
   toast, status bar, shell thread, jobs list, the centre stack) and owns its pages, runner and signals:
   - `ui/controllers/tools.py`: the Tools page, Rename, ReplayGain and Tidy (previews, jobs, reports);
-  - `ui/controllers/split.py`: the Split page (§22), its save, its job and report;
+  - `ui/controllers/split.py`: the Split page (§22), its save, its job and report (built with M10 task 6,
+    0.2.14);
   - `ui/controllers/delete.py`: `delete_entries`, its checks, question and refresh;
   - `ui/controllers/search.py`: the search page and its service.
 - `MainWindow` keeps its layout, navigation, selection, the side panel and the menus, and delegates. Menu
@@ -38,7 +39,7 @@
   tests that replace them change only where they reach (for example `window.split.ask_…`).
 
 ## Project layout
-As of 0.2.10 (moved from CLAUDE.md on 2026-10-16).
+As of 0.2.14 (moved from CLAUDE.md on 2026-10-16).
 
     CLAUDE.md, README.md, LICENSE (GPL-3.0), pyproject.toml, uv.lock
     docs/                 SPEC.md (index), spec/NN-*.md, DECISIONS.md, HISTORY.md
@@ -46,12 +47,14 @@ As of 0.2.10 (moved from CLAUDE.md on 2026-10-16).
       app.py, __main__.py   entry point: logging, the rsgain self-check, the window
       paths.py, logging_setup.py, settings.py (settings.json; playlist.json beside it), licenses.py
       core/   (no Qt)  formats, tags, metadata, masks, rename, inline_rename, replaygain, rsgain, lyrics, preview,
-                       playlists, playlist_builder, fsops, path_locks, cancel; index/ (schema v3, store, scanner,
+                       playlists, playlist_builder, fsops, path_locks, cancel, cue, cue_edit, flac, split; index/ (schema v3, store, scanner,
                        queries, search, roots, lyrics_index, lyrics_import)
       services/ (Qt)   library (owns writer, indexer, watcher, lyrics service), indexer, watcher, lyrics_service,
-                       lyrics_embedder, search_service, tag_io, tag_writer, jobs, rename_job, replaygain_job
+                       lyrics_embedder, search_service, tag_io, tag_writer, jobs, rename_job, replaygain_job,
+                       split_job
       ui/              main_window, sidebar, folder_tree, file_view, address_bar, search_view, playlist_panel,
-                       entry_drag, stall_watch, jobs_panel, about_dialog, toast;
+                       entry_drag, stall_watch, jobs_panel, about_dialog, toast, split_page;
+                       controllers/ (split);
                        side_panel/ (panel, metadata_tab, lyrics_tab, folder_summary, file_preview);
                        tools/ (tools_page, names_card, rename_card, replaygain_card, rename_preview, rg_report)
     resources/            rsgain/ (rsgain.exe 3.6), flac/ (flac 1.5.0, bundled from M10), icons/, licenses/

@@ -32,7 +32,7 @@ Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2
 - Tasks 1–4 are done (0.2.7–0.2.10, HISTORY.md). Tasks 5 and 6 replace the 0.2.10 Split card (SPEC §22).
 - [x] 5. Core: the editable sheet, `format_cue` and its round trip, Save / Save as, planning with ticked tracks,
       the per-track proof (SPEC §22 "Planned").
-- [ ] 6. UI: remove the 0.2.10 card, menus, folder scan and `Settings.split_options`; the button on every `.cue`
+- [x] 6. UI: remove the 0.2.10 card, menus, folder scan and `Settings.split_options`; the button on every `.cue`
       preview; the Split page; the one-album job and report (SPEC §22 "In the app", "Replaced").
 - [ ] 7. README, version 0.3.0, the installer, and the GitHub release (Hugo's go).
 

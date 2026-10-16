@@ -1,0 +1,463 @@
+"""The Split page (SPEC §22): one cue sheet, every control. It shows what the controller gives it and reports what
+the user does; the editing, saving and the job live in ui/controllers/split.py.
+
+Top to bottom: the source (the FILE line), the encoding picker, the album fields and their other lines, the
+track table (a tick per track, the editable values, the computed length and new name, validation marks), the
+selected track's other lines, Add and Delete, the options, then Save, Save as…, Split and Stop. While the job
+runs the editor is read-only; afterwards the report replaces it.
+"""
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QBrush, QColor
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QComboBox,
+    QGridLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from music_desk.core.cue import ENCODINGS, FRAMES_PER_SECOND, AlbumPlan
+from music_desk.core.cue_edit import CueDocument, Problem, format_time
+
+# The table's columns: (key, header). Keys are cue_edit.TRACK_FIELDS' where the cell is editable.
+COLUMNS = (("tick", ""), ("number", "#"), ("start", "Start"), ("gap", "Gap"), ("length", "Length"),
+           ("title", "Title"), ("performer", "Performer"), ("songwriter", "Songwriter"), ("isrc", "ISRC"),
+           ("flags", "Flags"), ("name", "New name"))
+COLUMN = {key: i for i, (key, _header) in enumerate(COLUMNS)}
+EDITABLE = ("start", "gap", "title", "performer", "songwriter", "isrc", "flags")
+ALBUM_LABELS = (("performer", "Performer"), ("title", "Title"), ("genre", "Genre"), ("date", "Date"),
+                ("disc", "Disc"), ("disc_total", "Total discs"), ("catalog", "Catalog"),
+                ("songwriter", "Songwriter"))
+BAD = QColor(255, 205, 205)
+TICK_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsSelectable
+RECYCLE_TEXT = "Send the album file and its .cue to the Recycle Bin once the tracks are verified"
+RECYCLE_TIP = "Only when every track is ticked: otherwise the unticked audio would be lost."
+REPLAYGAIN_TIP = ("ReplayGain measures every audio file in the album's folder, so it would count the album file "
+                  "too. It runs only once the originals are in the Recycle Bin, with the ReplayGain card's options.")
+
+
+def frames_text(samples: int, rate: int) -> str:
+    return format_time(samples * FRAMES_PER_SECOND // rate) if rate else ""
+
+
+class SplitPage(QWidget):
+    backRequested = Signal()
+    saveRequested = Signal()
+    saveAsRequested = Signal()
+    splitRequested = Signal()
+    stopRequested = Signal()
+    doneRequested = Signal()
+    encodingPicked = Signal(object)  # a codec, None for Auto
+    fileEdited = Signal(str)
+    albumEdited = Signal(str, str)  # field, value
+    albumOtherEdited = Signal(str)
+    trackEdited = Signal(int, str, str)  # sheet row, field, value
+    trackOtherEdited = Signal(int, str)  # sheet row, text
+    tickToggled = Signal(int, bool)  # track number (0: a hidden track), ticked
+    addRequested = Signal(object)  # the sheet row to add after, or None
+    deleteRequested = Signal(list)  # sheet rows
+    optionsChanged = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.state = "empty"  # loading, editing, running, result, error
+        self.rows: list[tuple[int | None, int]] = []  # per table row: (sheet row or None for a hidden track, number)
+        self._refreshing = False
+        self._table_stale = False  # a refresh came while a cell was being edited
+
+        self.back_button = QPushButton("← Back")
+        self.back_button.clicked.connect(self.backRequested)
+        self.heading = QLabel()
+        self.heading.setWordWrap(True)
+        self.heading.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        header = QHBoxLayout()
+        header.addWidget(self.back_button)
+        header.addWidget(self.heading, 1)
+
+        # -- the source and the encoding --
+        self.file_edit = QLineEdit()
+        self.file_edit.setToolTip("The FILE line: a FLAC, WAV or AIFF file in the .cue's folder.")
+        self.file_edit.textEdited.connect(self.fileEdited)
+        self.source_note = QLabel()
+        self.source_note.setWordWrap(True)
+        self.encoding = QComboBox()
+        self.encoding.setToolTip("The cue sheet's text encoding: pick another if the titles look garbled.")
+        for codec, label in ENCODINGS:
+            self.encoding.addItem(label, codec)
+        self.encoding.activated.connect(lambda i: self.encodingPicked.emit(self.encoding.itemData(i)))
+        self.encoding_note = QLabel("If the titles look wrong, pick the cue sheet's encoding.")
+        self.encoding_note.hide()
+        source_row = QGridLayout()
+        source_row.addWidget(QLabel("Source:"), 0, 0)
+        source_row.addWidget(self.file_edit, 0, 1)
+        source_row.addWidget(QLabel("Encoding:"), 0, 2)
+        source_row.addWidget(self.encoding, 0, 3)
+        source_row.addWidget(self.source_note, 1, 1)
+        source_row.addWidget(self.encoding_note, 1, 2, 1, 2)
+        source_row.setColumnStretch(1, 1)
+
+        # -- the album --
+        self.album_edits: dict[str, QLineEdit] = {}
+        album = QGridLayout()
+        for i, (key, label) in enumerate(ALBUM_LABELS):
+            edit = QLineEdit()
+            edit.textEdited.connect(lambda text, key=key: self.albumEdited.emit(key, text))
+            self.album_edits[key] = edit
+            album.addWidget(QLabel(f"{label}:"), i // 2, (i % 2) * 2)
+            album.addWidget(edit, i // 2, (i % 2) * 2 + 1)
+        album.setColumnStretch(1, 1)
+        album.setColumnStretch(3, 1)
+        self.album_other = QPlainTextEdit()
+        self.album_other.setToolTip("The album lines with no field of their own (REM DISCID, REM COMMENT, …).")
+        self.album_other.setMaximumHeight(60)
+        self.album_other.textChanged.connect(
+            lambda: None if self._refreshing else self.albumOtherEdited.emit(self.album_other.toPlainText()))
+        album.addWidget(QLabel("Other lines:"), 4, 0, Qt.AlignmentFlag.AlignTop)
+        album.addWidget(self.album_other, 4, 1, 1, 3)
+
+        # -- the tracks --
+        self.table = QTableWidget(0, len(COLUMNS))
+        self.table.setHorizontalHeaderLabels([header for _key, header in COLUMNS])
+        self.table.verticalHeader().hide()
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked
+                                   | QAbstractItemView.EditTrigger.EditKeyPressed
+                                   | QAbstractItemView.EditTrigger.AnyKeyPressed)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        for key, width in (("tick", 28), ("number", 32), ("start", 80), ("gap", 80), ("length", 80),
+                           ("title", 200), ("performer", 140), ("songwriter", 110), ("isrc", 110), ("flags", 50)):
+            self.table.setColumnWidth(COLUMN[key], width)
+        self.table.itemChanged.connect(self._item_changed)
+        self.table.itemSelectionChanged.connect(self._selection_changed)
+        self.track_other = QPlainTextEdit()
+        self.track_other.setToolTip("The selected track's other lines (INDEX 02 and later, PREGAP, POSTGAP, REM, …).")
+        self.track_other.setMaximumHeight(60)
+        self.track_other.textChanged.connect(self._track_other_changed)
+        self.add_button = QPushButton("Add track")
+        self.add_button.setToolTip("A new track after the selected one, starting halfway through it.")
+        self.add_button.clicked.connect(lambda: self.addRequested.emit(self._selected_rows()[-1]
+                                                                       if self._selected_rows() else None))
+        self.delete_button = QPushButton("Delete track")
+        self.delete_button.setToolTip("Its audio joins the track before it (or the next one, for track 1).")
+        self.delete_button.clicked.connect(lambda: self.deleteRequested.emit(self._selected_rows()))
+        track_buttons = QHBoxLayout()
+        track_buttons.addWidget(QLabel("Other lines of the selected track:"))
+        track_buttons.addStretch(1)
+        track_buttons.addWidget(self.add_button)
+        track_buttons.addWidget(self.delete_button)
+        self.problems = QLabel()
+        self.problems.setWordWrap(True)
+        self.problems.setStyleSheet("color: #c42b1c;")
+        self.notes = QLabel()
+        self.notes.setWordWrap(True)
+
+        # -- the options and the buttons --
+        self.recycle = QCheckBox(RECYCLE_TEXT)
+        self.recycle.setToolTip(RECYCLE_TIP)
+        self.replaygain = QCheckBox("Then run ReplayGain on the album")
+        self.replaygain.setToolTip(REPLAYGAIN_TIP)
+        for box in (self.recycle, self.replaygain):
+            box.toggled.connect(self._option_toggled)
+        self.save_button = QPushButton("Save")
+        self.save_button.clicked.connect(self.saveRequested)
+        self.save_as_button = QPushButton("Save as…")
+        self.save_as_button.clicked.connect(self.saveAsRequested)
+        self.split_button = QPushButton("Split")
+        self.split_button.clicked.connect(self.splitRequested)
+        self.split_note = QLabel()
+        self.split_note.setWordWrap(True)
+
+        self.editor = QWidget()
+        editor = QVBoxLayout(self.editor)
+        editor.setContentsMargins(0, 0, 0, 0)
+        editor.addLayout(source_row)
+        editor.addLayout(album)
+        editor.addWidget(self.table, 1)
+        editor.addLayout(track_buttons)
+        editor.addWidget(self.track_other)
+        editor.addWidget(self.problems)
+        editor.addWidget(self.notes)
+        editor.addWidget(self.recycle)
+        editor.addWidget(self.replaygain)
+
+        self.busy = QProgressBar()
+        self.busy.setRange(0, 0)
+        self.busy.setMaximumWidth(120)
+        self.busy.setTextVisible(False)
+        self.message = QLabel()
+        self.message.setWordWrap(True)
+        self.report = QPlainTextEdit()
+        self.report.setReadOnly(True)
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.clicked.connect(self.stopRequested)
+        self.done_button = QPushButton("Done")
+        self.done_button.clicked.connect(self.doneRequested)
+        buttons = QHBoxLayout()
+        for button in (self.save_button, self.save_as_button, self.split_button, self.stop_button):
+            buttons.addWidget(button)
+        buttons.addWidget(self.split_note, 1)
+        buttons.addWidget(self.busy)
+        buttons.addWidget(self.done_button)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(header)
+        layout.addWidget(self.message)
+        layout.addWidget(self.editor, 1)
+        layout.addWidget(self.report, 1)
+        layout.addLayout(buttons)
+        self._show("empty", "")
+
+    # -- states --
+
+    def show_loading(self, path) -> None:
+        self.heading.setText(f"<b>Split</b> · {path}")
+        self.report.clear()
+        self._show("loading", "Reading the cue sheet…")
+
+    def show_error(self, text: str) -> None:
+        self._show("error", text)
+
+    def show_running(self) -> None:
+        self._show("running", "Splitting… Files in this folder can't be edited meanwhile.")
+
+    def set_progress(self, done: int, total: int, name: str) -> None:
+        if self.state == "running" and name != "done":
+            self.message.setText(f"Splitting ({done + 1} of {total}): {name}…")
+
+    def show_result(self, text: str, heading: str | None = None) -> None:
+        if heading:
+            self.heading.setText(heading)
+        self.report.setPlainText(text)
+        self._show("result", "")
+
+    def _show(self, state: str, message: str) -> None:
+        self.state = state
+        self.message.setText(message)
+        self.message.setVisible(bool(message))
+        editing = state in ("editing", "running")
+        self.editor.setVisible(editing)
+        self.editor.setEnabled(state == "editing")
+        self.report.setVisible(state == "result")
+        self.busy.setVisible(state in ("loading", "running"))
+        for button in (self.save_button, self.save_as_button, self.split_button):
+            button.setVisible(editing)
+        self.split_note.setVisible(state == "editing")
+        self.stop_button.setVisible(state == "running")
+        self.done_button.setVisible(state in ("result", "error"))
+        self.back_button.setVisible(state != "running")
+
+    # -- what the controller shows --
+
+    def show_document(self, doc: CueDocument, path, auto_label: str | None) -> None:
+        """The sheet's values, after it was read or edited. Fields being typed in keep their cursor."""
+        self.heading.setText(f"<b>Split</b> · {path}")
+        self._refreshing = True
+        try:
+            _set_text(self.file_edit, doc.file)
+            album = doc.album()
+            for key, edit in self.album_edits.items():
+                _set_text(edit, album[key])
+            if self.album_other.toPlainText() != album["other"]:
+                self.album_other.setPlainText(album["other"])
+            self.encoding.setItemText(0, f"Auto ({auto_label})" if auto_label else "Auto")
+            self.encoding_note.setVisible(doc.fell_back)
+        finally:
+            self._refreshing = False
+        if self.state != "editing" and self.state != "running":
+            self._show("editing", "")
+
+    def set_encoding(self, codec) -> None:
+        self.encoding.setCurrentIndex(max(0, self.encoding.findData(codec)))
+
+    def show_tracks(self, doc: CueDocument, plan: AlbumPlan | None, ticked: set[int], problems: list[Problem],
+                    hidden: bool = False) -> None:
+        """The table: the sheet's tracks, a hidden track's row 0 (`hidden`: the last plan that had tracks found
+        one, so the rows don't move while a bad value is fixed), the plan's lengths and names, the ticks, and each
+        bad cell marked with its reason."""
+        if self.table.state() == QAbstractItemView.State.EditingState:
+            self._table_stale = True
+            self._pending = (doc, plan, ticked, problems, hidden)
+            return
+        self._table_stale = False
+        views = doc.tracks()
+        planned = {t.row: t for t in plan.tracks} if plan is not None else {}
+        rows: list[tuple[int | None, int]] = ([(None, 0)] if hidden else []) + [
+            (v.row, v.number if v.number is not None else v.row + 1) for v in views]
+        rate = plan.info.rate if plan is not None and plan.info is not None else 0
+        marks: dict[tuple[int | None, str], list[str]] = {}
+        for problem in problems:
+            if problem.row is not None:
+                marks.setdefault((problem.row, problem.column), []).append(problem.message)
+        selected = self._selected_rows()
+        self._refreshing = True
+        self.table.blockSignals(True)
+        try:
+            self.rows = rows
+            self.table.setRowCount(len(rows))
+            for r, (sheet_row, number) in enumerate(rows):
+                track = planned.get(sheet_row)
+                values = views[sheet_row].values if sheet_row is not None else {}
+                cells = {
+                    "number": str(number),
+                    "start": values.get("start", frames_text(track.start, rate) if track else ""),
+                    "gap": values.get("gap", ""),
+                    "length": frames_text(track.length, rate) if track and rate else "",
+                    "title": values.get("title", track.fields.get("title", "") if track else ""),
+                    "performer": values.get("performer", ""),
+                    "songwriter": values.get("songwriter", ""),
+                    "isrc": values.get("isrc", ""),
+                    "flags": values.get("flags", ""),
+                    "name": track.name if track else "",
+                }
+                tick = QTableWidgetItem()
+                tick.setFlags(TICK_FLAGS)
+                tick.setCheckState(Qt.CheckState.Checked if number in ticked else Qt.CheckState.Unchecked)
+                self.table.setItem(r, COLUMN["tick"], tick)
+                for key, text in cells.items():
+                    item = QTableWidgetItem(text)
+                    flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+                    if key in EDITABLE and sheet_row is not None:
+                        flags |= Qt.ItemFlag.ItemIsEditable
+                    item.setFlags(flags)
+                    reasons = marks.get((sheet_row, key), []) if sheet_row is not None else []
+                    if reasons:
+                        item.setBackground(QBrush(BAD))
+                        item.setToolTip("\n".join(reasons))
+                    elif key == "name" and track is not None:
+                        note = next((n for num, n in (plan.notes if plan else []) if num == track.number), "")
+                        item.setToolTip(note)
+                    self.table.setItem(r, COLUMN[key], item)
+            self._select_rows(selected)
+        finally:
+            self.table.blockSignals(False)
+            self._refreshing = False
+        self._selection_changed(doc)
+
+    def show_problems(self, problems: list[Problem], plan: AlbumPlan | None, source_text: str,
+                      source_bad: bool) -> None:
+        """The album fields' marks, the line under the table, the plan's notes and the source line."""
+        album_marks: dict[str, list[str]] = {}
+        for problem in problems:
+            if problem.row is None and problem.column in self.album_edits:
+                album_marks.setdefault(problem.column, []).append(problem.message)
+        for key, edit in self.album_edits.items():
+            edit.setStyleSheet("background: #ffcdcd;" if key in album_marks else "")
+            edit.setToolTip("\n".join(album_marks.get(key, [])))
+        messages = list(dict.fromkeys(p.message for p in problems))
+        if plan is not None:
+            messages += [message for _number, message in plan.problems]
+        self.problems.setText("\n".join(messages[:6]) + ("\n…" if len(messages) > 6 else ""))
+        self.problems.setVisible(bool(messages))
+        notes = [f"Track {number}: {note}" for number, note in plan.notes] if plan is not None else []
+        if plan is not None:
+            notes += plan.warnings
+        self.notes.setText("\n".join(notes))
+        self.notes.setVisible(bool(notes))
+        self.source_note.setText(source_text)
+        self.source_note.setStyleSheet("color: #c42b1c;" if source_bad else "")
+
+    def set_buttons(self, *, save: bool, save_as: bool, split: bool, split_text: str, split_note: str,
+                    recycle_enabled: bool, replaygain_enabled: bool, can_delete: bool) -> None:
+        self.save_button.setEnabled(save)
+        self.save_as_button.setEnabled(save_as)
+        self.split_button.setEnabled(split)
+        self.split_button.setText(split_text)
+        self.split_note.setText(split_note)
+        self.recycle.blockSignals(True)
+        self.replaygain.blockSignals(True)
+        if not recycle_enabled:
+            self.recycle.setChecked(False)
+        if not replaygain_enabled or not self.recycle.isChecked():
+            self.replaygain.setChecked(False)
+        self.recycle.setEnabled(recycle_enabled)
+        self.replaygain.setEnabled(replaygain_enabled and self.recycle.isChecked())
+        self.recycle.blockSignals(False)
+        self.replaygain.blockSignals(False)
+        self.delete_button.setEnabled(can_delete)
+
+    def reset_options(self) -> None:
+        for box in (self.recycle, self.replaygain):
+            box.blockSignals(True)
+            box.setChecked(False)
+            box.blockSignals(False)
+
+    # -- what the user does --
+
+    def _item_changed(self, item: QTableWidgetItem) -> None:
+        if self._refreshing or item.row() >= len(self.rows):
+            return
+        sheet_row, number = self.rows[item.row()]
+        key = COLUMNS[item.column()][0]
+        if key == "tick":
+            self.tickToggled.emit(number, item.checkState() == Qt.CheckState.Checked)
+        elif key in EDITABLE and sheet_row is not None:
+            self.trackEdited.emit(sheet_row, key, item.text())
+        if self._table_stale:
+            self.show_tracks(*self._pending)
+
+    def _selected_rows(self) -> list[int]:
+        """The selected rows' sheet rows (a hidden track has none)."""
+        rows = sorted({index.row() for index in self.table.selectionModel().selectedRows()})
+        return [self.rows[r][0] for r in rows if r < len(self.rows) and self.rows[r][0] is not None]
+
+    def _select_rows(self, sheet_rows: list[int]) -> None:
+        selection = self.table.selectionModel()
+        selection.clearSelection()
+        flags = selection.SelectionFlag.Select | selection.SelectionFlag.Rows
+        for r, (sheet_row, _number) in enumerate(self.rows):
+            if sheet_row in sheet_rows:
+                selection.select(self.table.model().index(r, 0), flags)
+
+    def _selection_changed(self, doc: CueDocument | None = None) -> None:
+        self._doc = doc if isinstance(doc, CueDocument) else getattr(self, "_doc", None)
+        rows = self._selected_rows()
+        self._refreshing = True
+        try:
+            if len(rows) == 1 and self._doc is not None and rows[0] < len(self._doc.tracks()):
+                text = "\n".join(line.strip() for line in self._doc.tracks()[rows[0]].other.split("\n"))
+                if self.track_other.toPlainText() != text:
+                    self.track_other.setPlainText(text)
+                self.track_other.setEnabled(True)
+            else:
+                self.track_other.setPlainText("")
+                self.track_other.setEnabled(False)
+        finally:
+            self._refreshing = False
+
+    def _track_other_changed(self) -> None:
+        rows = self._selected_rows()
+        if not self._refreshing and len(rows) == 1:
+            self.trackOtherEdited.emit(rows[0], self.track_other.toPlainText())
+
+    def _option_toggled(self, _checked: bool) -> None:
+        if not self.recycle.isChecked():
+            self.replaygain.blockSignals(True)
+            self.replaygain.setChecked(False)
+            self.replaygain.blockSignals(False)
+        self.replaygain.setEnabled(self.recycle.isChecked() and self.recycle.isEnabled())
+        self.optionsChanged.emit()
+
+    # -- for tests --
+
+    def cell(self, row: int, key: str) -> QTableWidgetItem:
+        return self.table.item(row, COLUMN[key])
+
+    def column_texts(self, key: str) -> list[str]:
+        return [self.table.item(r, COLUMN[key]).text() for r in range(self.table.rowCount())]
+
+
+def _set_text(edit: QLineEdit, text: str) -> None:
+    if edit.text() != text:
+        edit.setText(text)

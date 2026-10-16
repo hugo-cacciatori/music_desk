@@ -326,58 +326,52 @@ user agreed).
   extracting only track 3 (its length and MD5 against its range) and track 2 one sample off (moving only its
   start fails on the length; moving its start and end keeps the length and fails on the MD5).
 
-## Planned (M10 tasks 5 and 6; task 5 built above): the editable sheet and the Split page
-- **Core (`core/cue.py`, no Qt):**
-  - The sheet model keeps **every line** of the file in order, each with its raw text: the parsed fields read
-    from it, and the raw text written back unchanged unless that line was edited. Unknown lines are kept as they
-    are. The BOM, the encoding and the line-ending style are part of the model.
-  - Edits: set an album or track field (which rewrites or adds that one line), set a track's INDEX 00/01, set the
-    FILE name, set an "Other lines" block, add a track after another, delete tracks, renumber.
-  - `validate(sheet, source_info, masks, replacement, ticked)` lists the problems per cell (above).
-  - `format_cue(sheet) -> bytes`, and `save_cue(sheet, path, recycle)` / Save as through `.partial` and the
-    Recycle Bin (above). Round trip: `format_cue(read(path))` equals the file's bytes for every fixture sheet.
-  - `plan_album` plans from an in-memory sheet (not a path) and a set of ticked track numbers; the proof gains
-    the per-track MD5 against `decode_range`, and the end-to-end check runs only with every track ticked.
-- **UI:** `ui/split_page.py` (the page, in the centre stack); the controller of §16 owns it, its save and its
-  job. `FilePreview.splitRequested` is shown on every `.cue`.
-
-## Replaced on 2026-10-16 (shipped in 0.2.10, removed by M10 task 6)
-These notes describe the 0.2.10 code that the Split page replaces. Removed: the Split card and its Tools page
-wiring, `cue.find_albums` and the folder scan, the multi-album preview (`AlbumBlock`s and the summary), the
-"Split into tracks…" menu entries (on `.cue` and on audio files), `SplitOptions`' JSON and
-`Settings.split_options` (dropped when the settings load). Kept and adapted: `finish_album`, `write_tags`,
-`SplitRunner` (one album, one job), the report. Delete this section once task 6 is built.
-
-### As built (M10 task 4): the card, the preview, the job
-- **Core:**
-  - `split.finish_album(plan, cut, recycle_originals, recycle)` checks every final name is still free; if one
-    was taken meanwhile, nothing is renamed and the `.partial` files go. Otherwise it renames them, writes the
-    tags (`write_tags`: the fields through `TaggedFile`, the cover, ISRC as a Vorbis comment) and recycles the
-    album file then its .cue. A refusal (`CannotRecycle` included) keeps both and says why.
-  - `cue.find_albums(folder, recursive)` lists the sheets in Explorer's order. `split.SplitOptions` and its
-    JSON are `Settings.split_options`.
-- **`services/split_job.py` `SplitRunner`:**
-  - `plan(folder, recursive, masks, replacement, cues, source)` plans on its worker, with flac's silence
-    check, and `replan(cue, encoding, …)` serves the picker.
-  - `run(folder, plans, options, rg_options)` takes the "the Split tool" lock. Then, per album: `cut_album`,
-    `finish_album`, and ReplayGain when asked.
-  - ReplayGain is `replaygain.process_album` inside the same job (as Tidy chains its steps), only when both
-    originals reached the Recycle Bin; otherwise the report says why it didn't run.
-  - Background indexing pauses while the job runs, as for ReplayGain. Tests inject `recycle` and `scanner`.
-- **UI:**
-  - `ui/tools/split_card.py` `SplitCard` is last on the Tools page. Its ReplayGain box is enabled only with
-    recycling, and a saved ReplayGain option is always off without it.
-  - Run is disabled by invalid masks, a failed flac self-check (`ToolsPage.set_flac_unavailable`, from
-    `MainWindow.show_flac_version`), or a file selection (the card works on folders).
-  - `ui/tools/split_preview.py` `SplitPreview` shows `AlbumBlock`s: the source, an encoding picker that
-    re-reads that album, a track table, warnings or the refusal. Then the summary, Split N albums, Stop, and
-    the report (`report_text`, and `short_result` for the jobs panel).
-- **"Split into tracks…":**
-  - In the file list's menu, on one `.cue`, or on an audio file that looks like an album file **from the
-    index alone**: a .cue beside it with the same stem, or the folder's only audio file next to a .cue (no
-    file is read on the UI thread). The preview then says if it isn't one.
-  - On a `.cue` preview, a **Split into tracks…** button (`FilePreview.splitRequested`).
-  - Both open the preview for that album with the card's saved options.
+## As built (M10 task 6, 0.2.14): the Split page and its job
+- **The way in:** the side panel's `.cue` preview button (`FilePreview.splitRequested`) calls
+  `SplitController.open(path)`. The same sheet opened again comes back as it was left (browsing elsewhere keeps
+  the page and its unsaved edits); another sheet asks first about unsaved edits; while a split runs, its page is
+  shown instead. There is no menu entry and nothing on the Tools page.
+- **`ui/controllers/split.py` `SplitController`** (the first of §16's controllers; `window.split`): it owns the
+  page, the runner, the open `CueDocument`, the ticks and the job.
+  - Each edit goes to the document, then `validate` runs at once on the UI thread (pure Python), and the plan
+    follows 150 ms after typing pauses, on the runner's worker (`cue.plan_sheet` with the ticks). While a value
+    can't be parsed there is no plan: lengths and new names stay empty and Split is disabled.
+  - Ticks are kept per sheet row (and the hidden track's), so they follow Add and Delete. Whether the table has
+    a hidden track's row 0 comes from the last plan that had tracks, so rows don't move while a value is fixed.
+  - Buttons: Save needs unsaved edits and no sheet problem; Save as needs no sheet problem; Split needs a plan
+    of the latest edit with no refusal, a ticked track, valid masks ("Fix the file names first (Tools page).")
+    and flac (`set_unavailable`, from `MainWindow.show_flac_version`). The reasons show beside Split. The
+    recycling option is enabled only with every track ticked, ReplayGain only with recycling; both start
+    unticked each time the page opens.
+  - Saving: `save_cue` with the runner's recycler. A character the encoding can't hold asks `confirm_utf8`; a
+    drive without a Recycle Bin asks `confirm_overwrite_for_good`; a folder locked by a job refuses it. Save as
+    asks `choose_cue_file`, then `ask_replace_or_keep` on an existing name (Keep both: `numbered_path`), and
+    the page then works on the new file. Saving refreshes the folder (`refresh_after_tool`).
+  - Unsaved edits: `ask_leave` (Save, Discard, Cancel) on Back, another sheet and quitting
+    (`MainWindow.closeEvent`); `ask_save_first` (Save, Save as…, Cancel) on Split, which then splits once the
+    saved sheet is planned; `confirm_discard_for_encoding` on another encoding.
+  - The job: `_unsaved_edits_under` first (Metadata edits in the folder), then `SplitRunner.run` under the
+    folder lock, a Split job in the jobs panel ("Running (2 of 4): <album>", then "4 tracks split", "nothing
+    left half-done" or the error), indexing paused meanwhile, `refresh_after_tool` afterwards. The report
+    replaces the editor (`report_text`); Done closes the page, and the jobs panel shows the report again.
+- **`ui/split_page.py` `SplitPage`:** the widgets only (source and encoding, album fields and other lines, the
+  table with ticks and marks, the selected track's other lines, Add / Delete, the options, the buttons, the
+  report). Bad cells get a red background and their reason as a tooltip; the reasons are listed under the
+  table, with the plan's naming notes ("02 Two.flac is taken (it already exists), so it's named 02 Two
+  (2).flac.").
+- **`services/split_job.py` `SplitRunner`:** `load(path, encoding)` reads the document on its worker,
+  `plan(sheet, cue, masks, replacement, ticked)` plans it (the source's info and the silence checks are cached
+  per file version, so planning again after an edit doesn't decode again), and `run(plan, options, rg_options)`
+  cuts, proves, finishes and runs ReplayGain for one album. `split.cut_album` gained `on_track` for the
+  progress.
+- **Kept from 0.2.10:** `split.finish_album` (final names checked free again, tags through `write_tags` with the
+  cover and the ISRC as a Vorbis comment, the originals recycled album file first) and ReplayGain chained in
+  the same job only once both originals reached the Recycle Bin.
+- **Removed:** the Split card and its Tools page wiring, `cue.find_albums` and the folder scan, the
+  multi-album preview, the "Split into tracks…" menu entries, `SplitOptions.recursive` and its JSON, and
+  `Settings.split_options` (an old settings file's key is ignored, and gone at the next save).
+- **Tests:** `tests/ui/test_split_tool.py`, with the real flac on copied fixtures and a recorder for the Recycle
+  Bin.
 
 ## Tests
 - **Fixtures** (`make_fixtures.py`, ffmpeg, dev-only; non-repeating audio):

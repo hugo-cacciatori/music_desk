@@ -25,23 +25,10 @@ PARTIAL = ".partial"
 
 @dataclass(frozen=True)
 class SplitOptions:
-    """The Split card's options (SPEC §22), saved as Settings.split_options."""
+    """The Split page's options (SPEC §22), at their defaults each time the page opens: nothing is remembered."""
 
-    recursive: bool = True
-    recycle: bool = False  # the album file and its .cue, once the tracks are proved (Hugo: off)
+    recycle: bool = False  # the album file and its .cue, once the tracks are proved; only with every track ticked
     replaygain: bool = False  # only with `recycle`: ReplayGain measures every audio file in the folder
-
-
-def options_to_json(options: SplitOptions) -> dict:
-    return {"recursive": options.recursive, "recycle": options.recycle, "replaygain": options.replaygain}
-
-
-def options_from_json(data) -> SplitOptions:
-    """Saved options; a missing or mistyped value falls back to its default."""
-    data = data if isinstance(data, dict) else {}
-    default = SplitOptions()
-    flag = lambda key: data[key] if isinstance(data.get(key), bool) else getattr(default, key)  # noqa: E731
-    return SplitOptions(recursive=flag("recursive"), recycle=flag("recycle"), replaygain=flag("replaygain"))
 
 
 def partial_path(track: PlannedTrack) -> Path:
@@ -68,8 +55,10 @@ def is_silent(runner, cancel: CancelToken | None = None) -> Callable[[Path, int,
 
 
 def cut_album(plan: AlbumPlan, runner, cancel: CancelToken | None = None,
-              free_space: Callable[[Path], int] = lambda folder: shutil.disk_usage(folder).free) -> CutResult:
-    """Write and prove this album's ticked tracks as .partial files. Nothing else in the folder is touched."""
+              free_space: Callable[[Path], int] = lambda folder: shutil.disk_usage(folder).free,
+              on_track: Callable[[int, int, PlannedTrack], None] | None = None) -> CutResult:
+    """Write and prove this album's ticked tracks as .partial files. Nothing else in the folder is touched.
+    `on_track(done, total, track)` is called before each track is written."""
     if plan.refusal is not None or plan.source is None or plan.info is None:
         return CutResult(error=plan.refusal or "The album wasn't planned.")
     if not plan.written:
@@ -88,7 +77,9 @@ def cut_album(plan: AlbumPlan, runner, cancel: CancelToken | None = None,
 
     written: list[Path] = []
     try:
-        for track in plan.written:
+        for done, track in enumerate(plan.written):
+            if on_track is not None:
+                on_track(done, len(plan.written), track)
             output = partial_path(track)
             written.append(output)  # recorded first: a flac killed mid-way may leave it behind
             end = None if track.end == plan.info.samples else track.end

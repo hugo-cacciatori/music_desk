@@ -255,16 +255,13 @@ def test_originals_that_cant_be_recycled_stay(album):
     assert (album / "image.flac").exists() and (album / "image.cue").exists()
 
 
-def test_find_albums_and_options(tmp_path):
-    for path in ("b/album.cue", "a/2.cue", "a/10.cue", "top.CUE", "a/notes.txt"):
-        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / path).write_text("", encoding="utf-8")
-    assert [p.relative_to(tmp_path).as_posix() for p in cue.find_albums(tmp_path)] == [
-        "top.CUE", "a/2.cue", "a/10.cue", "b/album.cue"]
-    assert [p.name for p in cue.find_albums(tmp_path, recursive=False)] == ["top.CUE"]
-    options = split.SplitOptions(recursive=False, recycle=True, replaygain=True)
-    assert split.options_from_json(split.options_to_json(options)) == options
-    assert split.options_from_json({"recycle": "yes"}) == split.SplitOptions()
+def test_progress_is_reported_before_each_track(album):
+    seen = []
+    plan = ticked_plan(album, {1, 3})
+    split.cut_album(plan, FakeRunner(), free_space=lambda _f: 10**9,
+                    on_track=lambda done, total, track: seen.append((done, total, track.number)))
+    assert seen == [(0, 2, 1), (1, 2, 3)]
+
 
 
 # -- ticked tracks (the Split page) --

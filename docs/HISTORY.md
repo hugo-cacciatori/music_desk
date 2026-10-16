@@ -926,6 +926,19 @@ Done when:
       *Redesigned with Hugo on 2026-10-16 (SPEC §22): the card, the folder scan, the menus and the saved options
       go; tasks 5 and 6 replace them.*
 
+**Search: names at once** (Hugo, 2026-10-16; read SPEC §6). Small, so it goes first.
+- [x] 1. `text_search` finds folders and audio files by name before their tags are read; folder rows; remove the
+      chips and the scope box with their wiring; "N of M results" (SPEC §6 "What is searched").
+
+Done when: with tag reading held back (a stub reader), a file's and a folder's names are found; a lyrics word is
+found through the tag and through the LRCLIB text; the page shows no chips and no scope box; the suite passes.
+
+**Action menu** (Hugo, 2026-10-16; read SPEC §5 "Action menu").
+- [x] 1. The Action menu between Lyrics and Help, with "Show tracks without ReplayGain tags" (`rg:none` through
+      `MainWindow.find`); a test that it opens the search with that query.
+
+Done when: the menu shows, and its entry lists exactly the fixture tracks without ReplayGain tags.
+
 ## Former CLAUDE.md sections (as of 2026-10-16)
 
 **Session protocol:**

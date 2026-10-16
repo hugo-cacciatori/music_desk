@@ -16,30 +16,16 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 13):** 0.2.11 is on `main` (not pushed): search finds folders and audio files by
-  name before their tags are read; the chips and scope box are gone. M0–M9 are complete. All 1062 tests passed
-  in the last full run, slow ones included. Ruff is clean. The last GitHub release is v0.2.10.
+- **State (2026-10-17, session 13):** 0.2.12 is on `main` (not pushed): search finds names before tags (0.2.11)
+  and the Action menu lists tracks without ReplayGain tags (0.2.12). M0–M9 are complete. All 1065 tests passed in
+  the last full run, slow ones included. Ruff is clean. The last GitHub release is v0.2.10.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Next step: the Action menu** (0.2.12), then M10 task 5 (0.2.13), task 6 (0.2.14) and
-  task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
+- **Next step: M10 task 5** (0.2.13), then task 6 (0.2.14) and task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
   manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …); M10 ends with
 0.3.0 and a release. Tick tasks as they are done.
-
-**Search: names at once** (Hugo, 2026-10-16; read SPEC §6). Small, so it goes first.
-- [x] 1. `text_search` finds folders and audio files by name before their tags are read; folder rows; remove the
-      chips and the scope box with their wiring; "N of M results" (SPEC §6 "What is searched").
-
-Done when: with tag reading held back (a stub reader), a file's and a folder's names are found; a lyrics word is
-found through the tag and through the LRCLIB text; the page shows no chips and no scope box; the suite passes.
-
-**Action menu** (Hugo, 2026-10-16; read SPEC §5 "Action menu").
-- [x] 1. The Action menu between Lyrics and Help, with "Show tracks without ReplayGain tags" (`rg:none` through
-      `MainWindow.find`); a test that it opens the search with that query.
-
-Done when: the menu shows, and its entry lists exactly the fixture tracks without ReplayGain tags.
 
 **M10 Shared masks and cue split** (read SPEC §21, §22, §13, and §10)
 - Tasks 1–4 are done (0.2.7–0.2.10, HISTORY.md). Tasks 5 and 6 replace the 0.2.10 Split card (SPEC §22).

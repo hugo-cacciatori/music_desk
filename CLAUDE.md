@@ -20,8 +20,8 @@ against the code. Every milestone was built; these gaps were found and fixed:
   `rescan_library_action` (`test_rescan_library_rescans_every_root`);
 - the event-loop stall log of §18 was missing: `ui/stall_watch.py` `StallWatch`, on when running from source
   (`tests/ui/test_stall_watch.py`).
-Outdated SPEC lines were brought in line (§1, §2, §4, §5 menus, §10 B and the junk list, §16 icons, §18). Committed
-on `main`, not pushed, setup not rebuilt (0.2.0 stays the published release). 941 tests pass, ruff is clean.
+Outdated SPEC lines were brought in line (§1, §2, §4, §5 menus, §10 B and the junk list, §16 icons, §18). Pushed, and
+published as the GitHub release v0.2.1 with `MusicDesk-Setup-0.2.1.exe` (Hugo's go, 2026-10-16). 941 tests pass, ruff is clean.
 
 **Current state (2026-10-16, end of session 11): M7 is complete, and so is the project as planned (M0–M7).**
 Version 0.2.0 is on `main`, pushed, and published as the GitHub release v0.2.0 with

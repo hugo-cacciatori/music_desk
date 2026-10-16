@@ -1074,6 +1074,27 @@ import of existing playlists): one playlist in progress, built by dragging music
   foobar2000, or whatever is associated with `.m3u8`.
 - The playlist is kept across restarts in the app's data (`%LOCALAPPDATA%\MusicDesk`), until it is cleared.
 
+**As built (M7 task 2): the panel** (`ui/playlist_panel.py`).
+- `PlaylistPanel` (title, list, footer) wraps `PlaylistModel` over a `Builder`. It is the splitter's third pane,
+  between the centre and the side panel.
+  - `MainWindow.set_playlist_visible` takes its width (`Settings.playlist_width`, 300 px by default) from the
+    centre only, and gives it back when hidden. The splitter's state is saved with the panel hidden; its
+    visibility, width and column layout (`playlist_visible`, `playlist_width`, `playlist_header`) are kept apart.
+  - The toggle is a checkable toolbar action, "Playlist builder", also in the View menu (Ctrl+Shift+P).
+- Columns as listed above. The defaults #, Title, Artist and Duration fit the 300 px without scrolling. The
+  header menu shows any other column; Title always stays.
+- A header click sorts the playlist itself, missing tracks last. **"#" sorts by the order tracks were added in**,
+  so it undoes a sort by another column. Sorts give the same order however often they are asked, since
+  `QTreeView.sortByColumn` asks twice.
+- A track not in the index shows its file name as the title, dimmed, with a tooltip. The footer reads "N tracks ·
+  duration", plus "· n not in the library". The placeholder is painted on the empty list.
+- The playlist is saved in `playlist.json` next to `settings.json`, 0.5 s after each change and when the window
+  closes, and restored at start. `PlaylistModel.refresh` follows the index (folder updates and finished scans,
+  1 s debounced): renames update paths through the ids, and a rebuilt index finds tracks again by path.
+- Found with the new toolbar button: a long path made the address bar push the search field into the toolbar's
+  overflow menu. The breadcrumb now shrinks (minimum 160 px), hiding its leading folders as Explorer does; the
+  open folder always shows, and the tooltip and Ctrl+L give the whole path.
+
 **As built (M7 task 1): the core.**
 - `core/playlist_builder.py` `Builder`: an ordered list of `Item(entry_id, path)`.
   - The id keeps an item valid through in-app renames. The path finds it again after an index rebuild, and keeps

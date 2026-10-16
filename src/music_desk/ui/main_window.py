@@ -40,6 +40,7 @@ from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
 from music_desk.core.index.search import ALL, LIMIT
 from music_desk.core.index.store import path_of
 from music_desk.core.path_locks import LockedError, PathLocks
+from music_desk.core.playlist_builder import Builder
 from music_desk.licenses import licenses_dir
 from music_desk.services import jobs as jobs_module
 from music_desk.services.jobs import JobList
@@ -56,6 +57,7 @@ from music_desk.ui.about_dialog import AboutDialog
 from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.file_view import FileView
 from music_desk.ui.jobs_panel import JobsPanel
+from music_desk.ui.playlist_panel import PlaylistPanel
 from music_desk.ui.search_view import SearchView
 from music_desk.ui.search_view import sort_keys as search_sort_keys
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
@@ -224,18 +226,31 @@ class MainWindow(QMainWindow):
         self.center.addWidget(self.tools_page)
         self.center.addWidget(self.rename_preview)
         self.center.addWidget(self.rg_view)
+        # The playlist builder (SPEC §15): a narrow column between the centre and the side panel, hidden until asked.
+        self.playlist_panel = PlaylistPanel(conn)
+        self.playlist_file: Path | None = (self.settings.path.with_name("playlist.json")
+                                           if self.settings.path is not None else None)  # None: not kept (tests)
+        self._playlist_save = QTimer(self, singleShot=True, interval=500)
+        self._playlist_save.timeout.connect(self.save_playlist)
+        self.playlist_panel.model.changed.connect(self._playlist_save.start)
+        self._playlist_refresh = QTimer(self, singleShot=True, interval=1000)  # the index changed: rows follow
+        self._playlist_refresh.timeout.connect(self.playlist_panel.model.refresh)
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.center)
+        self.splitter.addWidget(self.playlist_panel)
         self.splitter.addWidget(self.side_panel)
         self.splitter.setStretchFactor(1, 1)
         self.splitter.setCollapsible(1, False)
-        self.splitter.setSizes([260, 640, 340])
+        self.splitter.setCollapsible(2, False)
+        self.playlist_panel.hide()
+        self.splitter.setSizes([260, 640, 0, 340])
         self._selected_ids: list[int] = []
         self._restoring_selection = False
         self.setCentralWidget(self.splitter)
         self._build_navigation(conn)
         self._restore_state()
+        self._restore_playlist()
 
         self.add_folder_action = QAction("&Add folder…", self, shortcut=QKeySequence("Ctrl+O"))
         self.add_folder_action.triggered.connect(self.add_folder)
@@ -252,6 +267,7 @@ class MainWindow(QMainWindow):
         self.jobs_action.setText("&Jobs panel")
         self.jobs_action.setShortcut(QKeySequence("Ctrl+J"))
         view_menu.addAction(self.jobs_action)
+        view_menu.addAction(self.playlist_action)
         lyrics_menu = self.menuBar().addMenu("&Lyrics")
         self.offline_action = QAction("&Offline mode (no LRCLIB lookups)", self, checkable=True)
         self.offline_action.setChecked(self.settings.lyrics_offline)
@@ -417,6 +433,11 @@ class MainWindow(QMainWindow):
         self.tools_action.setToolTip("Rename from tags, ReplayGain and Tidy, for the selection or this folder")
         self.tools_action.triggered.connect(lambda: self.open_tools(self.file_view.selected_ids()))
         toolbar.addAction(self.tools_action)
+        self.playlist_action = QAction("Playlist builder", self, checkable=True,
+                                       shortcut=QKeySequence("Ctrl+Shift+P"))
+        self.playlist_action.setToolTip("Show or hide the playlist builder (Ctrl+Shift+P)")
+        self.playlist_action.toggled.connect(self.set_playlist_visible)
+        toolbar.addAction(self.playlist_action)
         self.search_field = QLineEdit()
         self.search_field.setPlaceholderText("Search library (Ctrl+K)")
         self.search_field.setClearButtonEnabled(True)
@@ -567,6 +588,7 @@ class MainWindow(QMainWindow):
     def folder_updated(self, entry_id: int) -> None:
         if not self._library_open():
             return
+        self._refresh_playlist_later()
         self._keep_open_folder()
         self.sidebar.model.refresh(entry_id)
         if entry_id == self.folder_id:
@@ -1076,6 +1098,7 @@ class MainWindow(QMainWindow):
     def scan_finished(self, _report: ScanReport) -> None:
         if not self._library_open():
             return
+        self._refresh_playlist_later()
         self._keep_open_folder()
         self.sidebar.model.refresh_loaded()
         if self.folder_id is not None:
@@ -1131,7 +1154,51 @@ class MainWindow(QMainWindow):
         if found and found[1]:
             self.open_folder(found[0])
 
+    # -- the playlist builder (SPEC §15) --
+
+    def set_playlist_visible(self, visible: bool) -> None:
+        """Show or hide the panel. It takes its width from the centre only, so the tree and the side panel keep
+        theirs (the list scrolls sideways if its columns no longer fit), and gives it back when hidden."""
+        if visible == self.playlist_panel.isVisible():
+            return
+        sizes = self.splitter.sizes()
+        if visible:
+            width = min(max(self.settings.playlist_width, 200), max(0, sizes[1] - 200))
+            sizes[1] -= width
+            sizes[2] = width
+            self.playlist_panel.show()
+        else:
+            if sizes[2] > 0:
+                self.settings.playlist_width = sizes[2]
+            sizes[1] += sizes[2]
+            sizes[2] = 0
+            self.playlist_panel.hide()
+        self.splitter.setSizes(sizes)
+        self.settings.playlist_visible = visible
+        if self.playlist_action.isChecked() != visible:
+            self.playlist_action.setChecked(visible)
+
+    def _restore_playlist(self) -> None:
+        self.playlist_panel.restore_layout(self.settings.playlist_header)
+        if self.playlist_file is not None:
+            self.playlist_panel.model.set_builder(Builder.load(self.playlist_file))
+        if self.settings.playlist_visible:
+            self.set_playlist_visible(True)
+
+    def save_playlist(self) -> None:
+        if self.playlist_file is not None:
+            self.playlist_panel.model.builder.save(self.playlist_file)
+
+    def _refresh_playlist_later(self) -> None:
+        if self.playlist_panel.model.rowCount():
+            self._playlist_refresh.start()
+
     def save_state(self) -> None:
+        visible = self.playlist_panel.isVisible()
+        if visible:  # the splitter's state is saved without the panel; its width and visibility are kept apart
+            self.set_playlist_visible(False)
+            self.settings.playlist_visible = True
+        self.settings.playlist_header = self.playlist_panel.save_layout()
         self.settings.window_geometry = base64.b64encode(bytes(self.saveGeometry())).decode("ascii")
         self.settings.splitter_state = base64.b64encode(bytes(self.splitter.saveState())).decode("ascii")
         self.settings.file_list_header = self.file_view.save_layout()
@@ -1155,6 +1222,8 @@ class MainWindow(QMainWindow):
         self.rg_runner.close()  # a running rsgain is killed; its album is reported as cancelled
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
+        self._playlist_save.stop()
+        self.save_playlist()
         if self.search_service is not None:
             self.search_service.close()
         self.save_state()

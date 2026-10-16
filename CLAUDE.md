@@ -12,6 +12,15 @@ two files alone.
 
 ## Resume here
 **Current state (2026-10-16, session 10):**
+- **M7 task 2 is done (the panel).** Details in SPEC §15, "As built (M7 task 2)": `ui/playlist_panel.py`
+  (`PlaylistPanel`, `PlaylistModel`, `PlaylistView`, `COLUMNS`); `MainWindow.set_playlist_visible`,
+  `playlist_action`, `save_playlist`, `playlist_file` (None in tests without a settings path); `Settings.playlist_*`.
+  Also fixed: the address bar shrinks (hiding leading folders) so a long path can't push the search field into
+  the toolbar's overflow. Tests: `tests/ui/test_playlist_panel.py`, plus a navigation test. 888 tests pass (slow
+  included). Checked visually with real fonts (empty placeholder, filled list).
+  - **The intermittent failure** seen twice in full runs is probably `tests/ui/test_watcher.py::
+    test_live_folder_changes` (a Windows `PermissionError`, seen once in a stopped `-x` run; it passes alone and in
+    the saved full run). Investigate if it shows up again.
 - **The ReplayGain slowness fixes are complete on this machine** (Progress, "ReplayGain slowness fixes"): a test
   now covers the page's elapsed time; the full suite passes (878, slow tests included, none skipped); the setup
   is rebuilt (`dist/installer/MusicDesk-Setup-0.1.0.exe`, same version, upgrades in place). Hugo confirmed on
@@ -658,7 +667,9 @@ two files alone.
     then subfolders), `write_temp_playlist(entries, directory=paths.playlists_dir(), keep=20)` (UTF-8 `.m3u8`, CRLF,
     `play-<timestamp>.m3u8`, prunes only `play-*.m3u8`). New `fsops.natural_key` and `paths.playlists_dir()`.
 
-**Next step:** M7 task 2, the playlist panel (Progress). Then:
+**Next step:** M7 task 3, drag and drop into and within the panel (Progress, SPEC §15 "Adding music" and
+"Arranging it"). The panel's model already has `add(items, position)`, and the Builder has `move_rows` and
+`move_to`. Then:
 - **M7, the playlist builder**: designed with Hugo (SPEC §15). Task 1 (the core) is done; next is task 2, the
   panel (`ui/playlist_panel.py`), building on SPEC §15 "As built (M7 task 1)".
 - A new release: bump `music_desk.__version__`, `packaging/version_info.txt` (tests/test_packaging.py checks they
@@ -990,7 +1001,7 @@ Done when:
 - [x] Core (`core/playlists.py`, no Qt): the builder's model (entry ids, the natural import order, insert at a
       position, skip duplicates, move, remove, sort by a field), saving and restoring it in the app's data,
       and the `.m3u8` export with relative or absolute paths (another drive falls back to absolute). Tests.
-- [ ] The panel (`ui/playlist_panel.py`): a narrow vertical column between the file list and the side panel,
+- [x] The panel (`ui/playlist_panel.py`): a narrow vertical column between the file list and the side panel,
       shown or hidden by the toolbar's checkable "Playlist builder" button and View › Playlist builder
       (Ctrl+Shift+P). Opening it takes only the file list's width. Columns with a header menu, header-click
       sort that reorders the playlist, the empty-state placeholder, the footer (count, duration), missing

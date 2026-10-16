@@ -3,7 +3,7 @@ of their subfolders. Clicking the empty part of the bar, or Ctrl+L, turns it int
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
     QFrame,
@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
 )
 
 SEPARATOR = "›"
+MIN_WIDTH = 160  # the breadcrumb shrinks to this, hiding its leading folders
+PREFERRED_WIDTH = 520
 
 
 class _Crumbs(QFrame):
@@ -56,6 +58,9 @@ class AddressBar(QStackedWidget):
         self.addWidget(self.line)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(self.line.sizeHint().height() + 4)
+        # It may shrink below its breadcrumb's width (the leading folders are then hidden, as in Explorer), so a
+        # long path never pushes the search field or the other toolbar buttons into the overflow menu.
+        self.setMinimumWidth(MIN_WIDTH)
         self.buttons: list[QToolButton] = []
 
     # -- location --
@@ -74,7 +79,34 @@ class AddressBar(QStackedWidget):
             self._add_button(label, entry_id)
         if segments:
             self._add_button(SEPARATOR, None, menu_for=segments[-1][0])
+        self.crumbs.setToolTip(path)
         self.setCurrentWidget(self.crumbs)
+        self._fit()
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt's name
+        hint = super().sizeHint()
+        return QSize(min(hint.width(), PREFERRED_WIDTH), hint.height())
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt's name
+        super().resizeEvent(event)
+        self._fit()
+
+    def _fit(self) -> None:
+        """Hide the leading folders (each with its "›") until the rest fits; the last folder always stays.
+        Up, the text mode (Ctrl+L) and the tooltip still give the whole path."""
+        if not self.buttons:
+            return
+        available = self.width() - 8
+        widths = [button.sizeHint().width() for button in self.buttons]
+        first = 0
+        while first < len(self.buttons) - 2 and sum(widths[first:]) > available:
+            first += 2  # a segment and the separator after it
+        for n, button in enumerate(self.buttons):
+            button.setVisible(n >= first)
+
+    def hidden_segments(self) -> int:
+        """How many leading folders are hidden for lack of room (tests)."""
+        return sum(1 for n, button in enumerate(self.buttons) if n % 2 == 0 and button.isHidden())
 
     def segment_labels(self) -> list[str]:
         return [label for _id, label in self._segments]

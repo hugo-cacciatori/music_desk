@@ -173,3 +173,15 @@ def test_f5_rescans_the_open_folder(qtbot, window, service, monkeypatch):
     window.activateWindow()
     qtbot.keyClick(window, Qt.Key.Key_F5)
     assert scanned == [album]
+
+
+def test_a_long_path_never_pushes_the_toolbar_into_its_overflow(qtbot, window, service):
+    """The breadcrumb hides its leading folders when space runs short (found with the playlist builder's button,
+    2026-10-16: a long path had pushed the search field into the toolbar's overflow menu)."""
+    window.open_folder(entry(service, "Other", "Fixture Artist - Fixture Album", "lite"))
+    window.resize(900, 600)
+    qtbot.waitUntil(lambda: window.address_bar.hidden_segments() > 0, timeout=3000)
+    assert window.search_field.isVisible() and window.search_field.width() >= 150
+    assert window.address_bar.buttons[-2].isVisible()  # the open folder itself always shows
+    window.resize(2400, 600)
+    qtbot.waitUntil(lambda: window.address_bar.hidden_segments() == 0, timeout=3000)

@@ -35,7 +35,7 @@ except that the app **only ever sends them to the Recycle Bin**. It never delete
   Recycle Bin, and <drive> has none, so nothing was deleted. You can delete it in File Explorer.", with **Open in
   File Explorer**.
 
-**Why the last check is needed** (the finding of 2026-10-16; inferred from the code, to be measured in M8 task 1)
+**Why the last check is needed** (the finding of 2026-10-16; inferred from the code, then measured below)
 - send2trash, which `fsops.send_to_recycle_bin` uses, sets `FOF_NOCONFIRMATION`. Its own progress sink says
   that refusing an item that can't be recycled "does not actual[ly] stop" the operation.
 - Where Windows can't recycle, the file would therefore be deleted for good, silently. This also concerns the
@@ -43,6 +43,15 @@ except that the app **only ever sends them to the Recycle Bin**. It never delete
 - **M8 task 1 measures it.** Send a scratch file under `\\localhost\C$\…` (a network path, which has no
   Recycle Bin), then check whether it is gone and absent from the bin. Show Hugo the exact command first. Record
   the result here, labelled as measured.
+- **Measured on 2026-10-16** (send2trash in the project venv, a scratch file each, then the bin listed through
+  `Shell.Application` namespace 10):
+  - local control `C:\…\probe-local-….txt`: `GetDriveTypeW("C:\")` FIXED, `SHQueryRecycleBinW` S_OK;
+    send2trash returned, the file was gone and **in the Recycle Bin**.
+  - the same folder as `\\localhost\C$\…\probe-unc-….txt`: `GetDriveTypeW` on its root REMOTE,
+    `SHQueryRecycleBinW` 0x80070003 (path not found); send2trash **returned without error**, the file was gone and
+    **not in the Recycle Bin: deleted permanently, silently.** The inference holds.
+  - Both checks flag the network path. `can_recycle` builds on them (the removable-drive, size and
+    bin-turned-off cases were not measured).
 - Then add `fsops.can_recycle(path) -> str | None` (None, or the reason). Candidates to try, keeping the one the
   measurement proves:
   - `GetDriveTypeW` refusing DRIVE_REMOTE and DRIVE_REMOVABLE;

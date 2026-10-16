@@ -22,8 +22,9 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
 - **Specified on 2026-10-16** (docs only, no app code yet): M8–M10 below. `resources/flac/` holds flac 1.5.0 (not
   bundled yet), and a trial on a fixture copy measured a lossless split (SPEC §22).
-- **Next step: M8 task 1.** A probe script (send2trash on a local file and on a `\\localhost\C$\…` path) was
-  written in session 12's scratchpad but not run; rewrite it if it is gone, and show Hugo the commands first.
+- **Next step: M8 task 1, the code.** The measurement is done and recorded in SPEC §19: send2trash on a
+  `\\localhost\C$\…` path deletes permanently without error. Next: `fsops.can_recycle`, the refusal in
+  `send_to_recycle_bin`, and the junk cleanup keeping and reporting such files.
 - **Watch for:** an intermittent failure in full runs, probably `tests/ui/test_watcher.py::test_live_folder_changes`
   (a Windows `PermissionError`; it passes alone). When a full run fails, keep its output
   (`uv run pytest > out.txt`) to name the test.

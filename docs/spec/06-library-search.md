@@ -16,7 +16,8 @@
   removed, with nothing in their place. The row under the search box keeps the count and Play results.
 - **Why names were missing (read in the code, 2026-10-16):** the walk already stores each entry's name in the
   `search` table, but `text_search` joined every result to `tracks`, which a file only gets once its tags are
-  read, and a folder never. Whether the tag read also slows the search worker was not measured.
+  read, and a folder never. Whether the tag read also slows the search worker was not measured. Fixed in 0.2.11
+  (below, "Matching").
 - Field filters:
   - `artist:` `album:` `year:` `genre:` `ext:opus`
   - `lyricstag:yes|no|lrc`
@@ -87,18 +88,19 @@ checks this subsection first.
     "opus" or ".opus". `lyricstag:` follows the ♪ column (yes = a tag, lrc = only a sidecar, no = neither).
     `lrclib:` follows the LRCLIB column (`error` = a key whose lookup failed this session, from the lyrics
     service; `notags` = no artist or title, never looked up). `rg:` takes none, partial or full.
-- **Matching** (`text_search`): tracks only (to change: folders and audio files by name before their tags are
-  read, through a LEFT JOIN to `tracks` and `is_dir = 1 OR ext IN audio`; Hugo, 2026-10-16). Every part of 3 or more characters goes into one FTS5 `MATCH`
+- **Matching** (`text_search`, 0.2.11): folders (not a root's top entry, whose name is the root path) and audio
+  files by extension, read or not: `tracks` is a LEFT JOIN, so a name is found from the walk on. A filter on
+  tags (`TAG_FILTERS`) adds `t.entry_id IS NOT NULL`, so `rg:none` never takes a folder's or an unread file's
+  missing tags for "none". Every part of 3 or more characters goes into one FTS5 `MATCH`
   (FTS5 allows one per table per query), as a quoted phrase with column filters; shorter parts use `LIKE` over
   the same columns. For a short non-ASCII part, a Python function `md_contains` folds both sides, since SQLite's
   LIKE folds ASCII only. Known limit: a 1–2 character ASCII query keeps accents ("jo" doesn't find "Jóga").
-- **Chips** (removed, Hugo 2026-10-16; delete this paragraph once built): With lyrics = the key is found or instrumental; Missing = every other track (pending, not found,
-  no tags, unreadable). An empty query with All shows the prompt; an empty query with another chip lists every
-  track it covers, as the page did.
 - **Order and cap:** every match is sorted in Python by (folder path, name), natural order (a folder's files
-  before its subfolders'), then cut at 5,000; the count reads "N of M tracks". The header can sort by any
+  before its subfolders'; a folder row sorts by its parent, among its siblings' files), then cut at 5,000; the
+  count reads "N of M results". The header can sort by any
   column; the Folder column's order is the result order (the default).
-- **Rows** (`result_rows`): file list rows plus the folder path, highlight spans for Title and Artist (free text,
+- **Rows** (`result_rows`): file list rows (a folder's track count and date left out, so its tag columns are
+  empty; the Title column sorts a folder with the empty titles) plus the folder path, highlight spans for Title and Artist (free text,
   and the `artist:` values) and the snippet: the first line of the LRCLIB text, else of the tags' lyrics
   (timestamps stripped), containing a part that matches none of name, title, artist, album artist, album or
   genre. `fold()` (NFD, marks dropped, casefold, with offsets) places the highlights; `fold_text()` is the fast
@@ -112,11 +114,13 @@ checks this subsection first.
   - The query field is in the toolbar ("Search library (Ctrl+K)"). Typing opens the page and runs after 120 ms.
     Enter in the field moves to the results; Esc (field or results) returns to the file list as it was. The
     query is kept for the next Ctrl+K.
-  - Under it: the chips, "Only in <folder> and below" (the folder open when the search started), the count and
-    Play results. (The chips and "Only in" removed, Hugo 2026-10-16: only the count and Play results stay.) Columns: Name, Title, Artist, Lyrics (the snippet), Album, Folder (elided on the left), then
+  - Under it: the count and Play results (the chips and "Only in <folder> and below" were removed in 0.2.11).
+    Columns: Name, Title, Artist, Lyrics (the snippet), Album, Folder (elided on the left), then
     the file list's other columns. The model sorts itself (no sort proxy) and isn't editable;
     since M7 task 3 its rows drag as entry ids into the playlist (§15).
-  - Enter or a double-click goes to the file's folder with the file selected. The context menu has Go to folder,
+  - Enter or a double-click goes to the file's folder with the file selected, or opens a folder row's folder.
+    Play results plays the audio files, read or not (`queries._entries` picks them by extension), and skips
+    folders. The context menu has Go to folder,
     Open, Play selection, Open in File Explorer, Copy path(s), and "Filter by <artist>"; Ctrl+click on an artist
     does the same (the page's artist checkboxes).
   - Opening the search switches the side panel to the Lyrics tab once. A result's selection drives the side

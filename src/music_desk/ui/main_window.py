@@ -37,7 +37,7 @@ from music_desk.core import cue, fsops, inline_rename, playlists, rename
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
-from music_desk.core.index.search import ALL, LIMIT
+from music_desk.core.index.search import LIMIT
 from music_desk.core.index.store import path_of
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.core.playlist_builder import Builder
@@ -255,7 +255,6 @@ class MainWindow(QMainWindow):
         self._rg_job: int | None = None
         # Library search (SPEC §6): the query is typed in the toolbar, the results replace the file list.
         self.search_view = SearchView()
-        self.search_view.optionsChanged.connect(self._run_search)
         self.search_view.resultActivated.connect(self.go_to_result)
         self.search_view.menuRequested.connect(lambda ids, pos: self.result_menu(ids).exec(pos))
         self.search_view.playRequested.connect(self.play_selection)
@@ -268,7 +267,7 @@ class MainWindow(QMainWindow):
         self.search_limit = LIMIT  # lowered in tests
         self._search_token: int | None = None
         self.search_shown: int | None = None
-        self._search_request: tuple | None = None  # (text, scope, chip) of the query running, and shown
+        self._search_request: str | None = None  # the query running, and shown
         self._shown_request: tuple | None = None
         self._search_timer = QTimer(self, singleShot=True, interval=120)  # runs as you type, debounced
         self._search_timer.timeout.connect(self._run_search)
@@ -694,8 +693,6 @@ class MainWindow(QMainWindow):
                 return
             if self.rename_preview.state == "planning":
                 self.rename_runner.cancel()
-            name = Path(self.folder_path).name or self.folder_path if self.folder_path else ""
-            self.search_view.set_scope_folder(self.folder_id, name)
             self.center.setCurrentWidget(self.search_view)
             self.side_panel.tabs.setCurrentWidget(self.side_panel.lyrics)  # the page's detail pane: the lyrics
             self._show_selection(self.search_view.selected_ids())
@@ -711,8 +708,6 @@ class MainWindow(QMainWindow):
         if not self.showing_search:
             return  # unsaved tag edits, and Cancel
         self.search_field.setText(query)
-        self.search_view.scope_box.setChecked(False)
-        self.search_view.set_chip(ALL)
         self._run_search()
 
     def close_search(self) -> None:
@@ -741,10 +736,9 @@ class MainWindow(QMainWindow):
         self._search_timer.stop()
         if not self._library_open() or not self.showing_search or self.search_service is None:
             return
-        self._search_request = (self.search_field.text(), self.search_view.scope, self.search_view.chip)
+        self._search_request = self.search_field.text()
         self._search_token = self.search_service.search(
-            self.search_field.text(), scope=self.search_view.scope, chip=self.search_view.chip,
-            error_keys=self.library.lyrics.error_keys(), limit=self.search_limit)
+            self.search_field.text(), error_keys=self.library.lyrics.error_keys(), limit=self.search_limit)
 
     def _refresh_search_later(self) -> None:
         if self.showing_search:
@@ -756,7 +750,7 @@ class MainWindow(QMainWindow):
         self.search_shown = results.token  # the results on screen (tests wait for it)
         in_place = self._search_request == self._shown_request  # run again after the index changed
         self._shown_request = self._search_request
-        if results.query.empty and self.search_view.chip == ALL and not results.error:
+        if results.query.empty and not results.error:
             self.search_view.show_prompt()
         else:
             self.search_view.show_results(results.rows, results.total, results.query.errors, results.error,
@@ -771,20 +765,22 @@ class MainWindow(QMainWindow):
             self._run_search()
 
     def go_to_result(self, entry_id: int) -> None:
-        """Enter or a double-click on a result: its folder, with the file selected."""
+        """Enter or a double-click on a result: its folder, with the file selected; a folder result opens."""
         row = self.search_view.row(entry_id)
         if row is None or not self._library_open():
             return
-        if not self._folder_exists(row.folder_id):
-            self.statusBar().showMessage(f"{row.folder} is no longer in the library.", STATUS_MS)
+        folder_id, folder = (entry_id, str(Path(row.folder, row.name))) if row.is_dir else (row.folder_id, row.folder)
+        if not self._folder_exists(folder_id):
+            self.statusBar().showMessage(f"{folder} is no longer in the library.", STATUS_MS)
             return
         if not self.side_panel.can_leave():
             return
         self._leave_search()
         self.center.setCurrentWidget(self.file_view)
-        if row.folder_id != self.folder_id:
-            self.open_folder(row.folder_id)
-        self.file_view.select_ids([entry_id])
+        if folder_id != self.folder_id:
+            self.open_folder(folder_id)
+        if not row.is_dir:
+            self.file_view.select_ids([entry_id])
         self.file_view.view.setFocus()
 
     def result_menu(self, ids: list[int]) -> QMenu:

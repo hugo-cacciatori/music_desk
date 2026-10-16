@@ -1,4 +1,4 @@
-"""Library search in the window (SPEC §6): Ctrl+K, the debounced query, the count, chips, filters and scope,
+"""Library search in the window (SPEC §6): Ctrl+K, the debounced query, the count, filters, folder rows,
 highlights and snippets, going to a result, Esc, the side panel as the detail pane, and Play results."""
 
 import threading
@@ -7,9 +7,9 @@ import pytest
 from browser_helpers import entry
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QAbstractButton, QCheckBox
 
 from music_desk.core.index.lyrics_index import record_lyrics
-from music_desk.core.index.search import MISSING, WITH_LYRICS
 from music_desk.ui.side_panel.lyrics_tab import FOUND_STATE
 
 ALBUM = "Fixture Artist - Fixture Album"
@@ -69,7 +69,7 @@ def test_typing_runs_after_a_pause_and_counts(qtbot, window):
     assert window._search_timer.isActive()  # debounced: nothing runs on each key
     search(qtbot, window)
     assert names(window) == ["01 First.flac", "clash.flac", "01 First.flac"]
-    assert window.search_view.count_label.text() == "3 tracks"
+    assert window.search_view.count_label.text() == "3 of 3 results"
     assert window.search_view.column_texts("folder")[0].endswith(ALBUM)
     assert window.search_view.play_button.isEnabled()
 
@@ -93,18 +93,11 @@ def test_cap_and_total(qtbot, window):
     assert window.search_view.model.rowCount() == 2 and total.startswith("2 of ")
 
 
-def test_chips(qtbot, window, lyrics):
-    search(qtbot, window, "fixture artist")
-    everything = len(names(window))
-    window.search_view.set_chip(WITH_LYRICS)
-    search(qtbot, window)
-    assert sorted(names(window)) == sorted(["01 First.flac", "clash.flac", "01 First.flac", "track6.FLAC"])
-    window.search_view.set_chip(MISSING)
-    search(qtbot, window)
-    assert len(names(window)) == everything - 4
-    window.search_field.clear()
-    search(qtbot, window, "")  # an empty query with a chip: every track it covers, as the page did
-    assert window.search_view.model.rowCount() == everything - 4
+def test_no_chips_and_no_scope_box(qtbot, window):
+    search(qtbot, window, "fixture")
+    buttons = [b.text() for b in window.search_view.findChildren(QAbstractButton)]
+    assert buttons == ["Play results"]  # no All / With lyrics / Missing
+    assert not window.search_view.findChildren(QCheckBox)  # no "Only in <folder> and below"
 
 
 def test_filters_and_errors(qtbot, window):
@@ -115,16 +108,31 @@ def test_filters_and_errors(qtbot, window):
     assert len(names(window)) == 3  # the bad filter is ignored, the rest runs
 
 
-def test_scope(qtbot, window, service):
-    window.open_folder(entry(service, "Artist"))
-    search(qtbot, window, "tone")
-    assert len(names(window)) == 4
-    assert window.search_view.scope_box.text() == "Only in Artist and below"
-    search(qtbot, window, "fixture")
-    everywhere = len(names(window))
-    window.search_view.scope_box.setChecked(True)
-    search(qtbot, window)
-    assert len(names(window)) == 4 < everywhere
+def test_a_folder_result(qtbot, window, service, tmp_path):
+    album = entry(service, "Other", ALBUM)
+    search(qtbot, window, "fixture album")
+    assert names(window)[0] == ALBUM
+    view = window.search_view
+    row = view.row(album)
+    assert row.is_dir and view.column_texts("folder")[0].endswith("Other")
+    assert [view.column_texts(key)[0] for key in ("title", "artist", "album", "track", "rg")] == [""] * 5
+    view.select_ids([album])
+    panel = window.side_panel
+    assert panel.stack.currentWidget() is panel.summary and panel.summary.summary.id == album  # its summary
+
+    recorder = Recorder()
+    window.launch = recorder
+    window.playlist_dir = tmp_path / "playlists"
+    view.play_button.click()  # the audio files among the results, not the folder
+    qtbot.waitUntil(lambda: len(recorder.calls) == 1, timeout=10000)
+    text = next((tmp_path / "playlists").glob("play-*.m3u8")).read_text(encoding="utf-8")
+    paths = [line for line in text.splitlines() if line and not line.startswith("#")]
+    assert len(paths) == len(names(window)) - 1 and all(p.endswith((".flac", ".mp3", ".FLAC")) for p in paths)
+
+    view.select_ids([album])
+    view.focus_results()
+    QTest.keyClick(view.view, Qt.Key.Key_Return)  # opens the folder itself
+    assert not window.showing_search and window.folder_id == album
 
 
 def test_artist_filter_from_a_result(qtbot, window, service):

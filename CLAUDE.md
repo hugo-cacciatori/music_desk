@@ -29,7 +29,7 @@ Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2
 0.3.0 and a release. Tick tasks as they are done.
 
 **Search: names at once** (Hugo, 2026-10-16; read SPEC §6). Small, so it goes first.
-- [ ] 1. `text_search` finds folders and audio files by name before their tags are read; folder rows; remove the
+- [x] 1. `text_search` finds folders and audio files by name before their tags are read; folder rows; remove the
       chips and the scope box with their wiring; "N of M results" (SPEC §6 "What is searched").
 
 Done when: with tag reading held back (a stub reader), a file's and a folder's names are found; a lyrics word is

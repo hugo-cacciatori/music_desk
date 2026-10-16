@@ -1,5 +1,6 @@
 """Library search (SPEC §6): seek_lyrics' songs.html rule (any substring of the title, artist, album or lyrics,
-ignoring case) over the whole index, plus field filters, the status chips and a folder scope. Plain Python, no Qt.
+ignoring case) over the whole index, plus field filters. Folders and audio files are found by name as soon as the
+folder walk lists them, before their tags are read. Plain Python, no Qt.
 
 Free text is matched through the trigram FTS5 `search` table (schema v3), so any substring of 3 or more
 characters uses the index; shorter text falls back to LIKE over the same columns.
@@ -14,6 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from music_desk.core.formats import AUDIO_EXTENSIONS
 from music_desk.core.fsops import natural_key
 from music_desk.core.index.queries import LISTING_SELECT, FileRow, listing_fields
 from music_desk.core.index.store import consistent_read
@@ -30,7 +32,7 @@ VALUE_FIELDS = {
 }
 FIELDS = (*TEXT_FIELDS, "year", "ext", *VALUE_FIELDS)
 
-ALL, WITH_LYRICS, MISSING = "all", "with lyrics", "missing"  # the script's status chips
+TAG_FILTERS = ("artist", "album", "genre", "year", *VALUE_FIELDS)  # only audio files whose tags are read
 LIMIT = 5000
 FTS_MIN = 3  # trigram needs 3 characters; shorter text is matched with LIKE
 
@@ -165,8 +167,9 @@ _LRCLIB_STATE = f"""CASE
     ELSE 'pending' END"""
 _RG_COUNT = ("((t.rg_track_gain IS NOT NULL) + (t.rg_track_peak IS NOT NULL) + (t.rg_album_gain IS NOT NULL)"
              " + (t.rg_album_peak IS NOT NULL))")
-_WITH_LYRICS = (f"(t.read_error IS NULL AND t.lyrics_key IS NOT NULL"
-                f" AND coalesce(l.status, '') IN ('{FOUND}', '{INSTRUMENTAL}'))")  # never NULL: NOT must work
+# The results: folders (not a root's top entry, whose name is the root path) and audio files, read or not.
+_RESULTS = (f"((e.is_dir = 1 AND e.parent_id IS NOT NULL) OR e.ext IN "
+            f"({', '.join(repr(ext) for ext in sorted(AUDIO_EXTENSIONS))}))")
 
 
 def _md_contains(text, needle) -> int:
@@ -197,11 +200,13 @@ def _value_condition(name: str, value: str, params: list) -> str:
     raise ValueError(name)
 
 
-def text_search(conn: sqlite3.Connection, query: SearchQuery, *, scope: int | None = None, chip: str = ALL,
+def text_search(conn: sqlite3.Connection, query: SearchQuery, *,
                 error_keys: set[str] | frozenset[str] = frozenset(), columns: tuple[str, ...] = FREE_COLUMNS,
                 limit: int = LIMIT) -> SearchResult:
-    """The tracks matching a query, under a folder when `scope` is given. `error_keys` are the lyrics keys whose
-    last lookup failed this session (`lrclib:error`). `columns` narrows the free text (the parity test)."""
+    """The folders and audio files matching a query. Their names are searchable from the folder walk on, their
+    tags and lyrics once read: `tracks` is a LEFT JOIN, and a filter on tags limits the results to read files.
+    `error_keys` are the lyrics keys whose last lookup failed this session (`lrclib:error`). `columns` narrows
+    the free text (the parity test)."""
     conn.create_function("md_contains", 2, _md_contains, deterministic=True)
     # Atoms are (columns, text); a group ORs its atoms; groups are ANDed.
     groups: list[list[tuple[tuple[str, ...], str]]] = [[(columns, part)] for part in query.text]
@@ -226,22 +231,16 @@ def text_search(conn: sqlite3.Connection, query: SearchQuery, *, scope: int | No
         values = query.filters.get(name)
         if values:
             where.append("(" + " OR ".join(_value_condition(name, v, params) for v in values) + ")")
-    if chip == WITH_LYRICS:
-        where.append(_WITH_LYRICS)
-    elif chip == MISSING:
-        where.append(f"NOT {_WITH_LYRICS}")
-    cte = ""
-    if scope is not None:
-        cte = ("WITH RECURSIVE sub(id) AS (SELECT :scope UNION ALL "
-               "SELECT c.id FROM entries c JOIN sub ON c.parent_id = sub.id WHERE c.is_dir = 1) ")
-        where.append("e.parent_id IN sub")
+    if any(query.filters.get(name) for name in TAG_FILTERS):
+        where.append("t.entry_id IS NOT NULL")  # rg:none must not take a folder's missing tags for "none"
+    where.append(_RESULTS)
     if match:
         where.insert(0, "search MATCH :match")
-    sql = (f"{cte}SELECT e.id, e.parent_id, e.name FROM search JOIN entries e ON e.id = search.rowid "
-           f"JOIN tracks t ON t.entry_id = e.id LEFT JOIN lyrics l ON l.key = t.lyrics_key"
-           + (" WHERE " + " AND ".join(where) if where else ""))
+    sql = ("SELECT e.id, e.parent_id, e.name FROM search JOIN entries e ON e.id = search.rowid "
+           "LEFT JOIN tracks t ON t.entry_id = e.id LEFT JOIN lyrics l ON l.key = t.lyrics_key"
+           " WHERE " + " AND ".join(where))
     # Positional and named parameters can't be mixed: number the positional ones.
-    named = {"match": " AND ".join(match), "scope": scope, "errors": json.dumps(sorted(error_keys))}
+    named = {"match": " AND ".join(match), "errors": json.dumps(sorted(error_keys))}
     numbered = iter(range(len(params)))
     sql = re.sub(r"\?", lambda _m: f":p{next(numbered)}", sql)
     named.update({f"p{i}": value for i, value in enumerate(params)})
@@ -291,7 +290,8 @@ class _Folders:
 
 @dataclass(frozen=True)
 class SearchRow(FileRow):
-    """A search result: a file list row, plus its folder and what to highlight."""
+    """A search result (a folder or an audio file): a file list row, plus its parent folder and what to
+    highlight."""
 
     folder_id: int = 0
     folder: str = ""
@@ -339,6 +339,8 @@ def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery,
             if entry_id not in rows or entry_id not in extra:
                 continue
             fields = listing_fields(rows[entry_id])
+            if fields["is_dir"]:
+                fields.update(n_tracks=None, mtime=None)  # a folder row: its name and parent, nothing else
             parent_id, albumartist, name, genre, tag_lyrics, lrclib = extra[entry_id]
             meta = (name, fields["title"], fields["artist"], albumartist, fields["album"], genre)
             lyric_only = [n for n in free if not any(_contains(n, text) for text in meta)]

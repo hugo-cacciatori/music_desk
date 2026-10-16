@@ -6,10 +6,13 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from music_desk.core.formats import AUDIO_EXTENSIONS
 from music_desk.core.fsops import natural_key
 from music_desk.core.index.store import consistent_read, path_of
 from music_desk.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND
 from music_desk.core.playlists import PlaylistEntry
+
+_AUDIO_SQL = ", ".join(f"'{ext}'" for ext in sorted(AUDIO_EXTENSIONS))
 
 
 @dataclass(frozen=True)
@@ -157,12 +160,14 @@ def folder_path_ids(conn: sqlite3.Connection, entry_id: int) -> list[int]:
 
 
 def _entries(conn: sqlite3.Connection, ids: list[int]) -> list[PlaylistEntry]:
-    """Playlist entries from the index (no file is read), in the order given, audio files only."""
+    """Playlist entries from the index (no file is read), in the order given, audio files only: by extension, so
+    a file whose tags aren't read yet plays too (without its duration and tags)."""
     if not ids:
         return []
     marks = ", ".join("?" * len(ids))
     rows = {r[0]: r for r in conn.execute(
-        f"SELECT t.entry_id, t.duration, t.artist, t.title FROM tracks t WHERE t.entry_id IN ({marks})", ids)}
+        f"SELECT e.id, t.duration, t.artist, t.title FROM entries e LEFT JOIN tracks t ON t.entry_id = e.id "
+        f"WHERE e.id IN ({marks}) AND e.is_dir = 0 AND e.ext IN ({_AUDIO_SQL})", ids)}
     folder_paths: dict[int, str] = {}
     entries = []
     for entry_id in ids:

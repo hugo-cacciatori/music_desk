@@ -1,5 +1,5 @@
 """The library search page (SPEC §6): seek_lyrics' songs.html search box inside the app. The query is typed in
-the toolbar's search field; this page shows the status chips, the scope, the count and the results, with the
+the toolbar's search field; this page shows the count and the results (folders and audio files), with the
 match highlighted in the Title, Artist and Lyrics cells. The side panel is the detail pane.
 """
 
@@ -8,32 +8,29 @@ from PySide6.QtGui import QColor, QFont, QFontMetrics, QKeySequence, QPainter, Q
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QButtonGroup,
-    QCheckBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from music_desk.core.fsops import natural_key
-from music_desk.core.index.search import ALL, LIMIT, MISSING, WITH_LYRICS, SearchRow
+from music_desk.core.index.search import LIMIT, SearchRow
 from music_desk.ui.entry_drag import EntryDragView
 from music_desk.ui.file_view import COLUMNS, ENTRY_ID_ROLE, Column, FileListModel
 
 HIGHLIGHT_ROLE = Qt.ItemDataRole.UserRole + 10  # ((start, end), ...) in the cell's text
-CHIPS = ((ALL, "All"), (WITH_LYRICS, "With lyrics"), (MISSING, "Missing"))
 
 _BY_KEY = {column.key: column for column in COLUMNS}
 # Folder sorts by the result order (natural folder, then name order), which is also the default order.
 SEARCH_COLUMNS: tuple[Column, ...] = (
     _BY_KEY["name"],
-    _BY_KEY["title"],
+    # A folder row's Title is empty (not its track count), and sorts with the other empty titles.
+    Column("title", "Title", lambda r: r.title or "", lambda r: (not r.title, natural_key(r.title or ""))),
     _BY_KEY["artist"],
     Column("snippet", "Lyrics", lambda r: r.snippet, lambda r: natural_key(r.snippet)),
     _BY_KEY["album"],
@@ -241,8 +238,7 @@ def _pieces(text: str, spans) -> list[tuple[str, bool]]:
 class SearchView(QWidget):
     """The results page. The window owns the query and runs it; this page reports what the user does."""
 
-    optionsChanged = Signal()  # a chip or the scope changed: run the query again
-    resultActivated = Signal(int)  # Enter or a double-click: go to the file in its folder
+    resultActivated = Signal(int)  # Enter or a double-click: go to the file in its folder, or open the folder
     selectionChanged = Signal(list)  # entry ids
     menuRequested = Signal(list, QPoint)
     playRequested = Signal(list)  # the shown results, in view order
@@ -252,33 +248,16 @@ class SearchView(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.model = SearchResultsModel(self)
-        self.scope_id: int | None = None
 
-        self.chips = QButtonGroup(self)
-        self.chips.setExclusive(True)
-        chips_row = QHBoxLayout()
-        chips_row.setSpacing(4)
-        for n, (chip, label) in enumerate(CHIPS):
-            button = QToolButton()
-            button.setText(label)
-            button.setCheckable(True)
-            button.setChecked(n == 0)
-            button.setProperty("chip", chip)
-            self.chips.addButton(button, n)
-            chips_row.addWidget(button)
-        self.chips.idClicked.connect(lambda _id: self.optionsChanged.emit())
-        self.scope_box = QCheckBox()
-        self.scope_box.toggled.connect(lambda _on: self.optionsChanged.emit())
-        self.scope_box.hide()
-        chips_row.addSpacing(12)
-        chips_row.addWidget(self.scope_box)
-        chips_row.addStretch(1)
+        count_row = QHBoxLayout()
+        count_row.setSpacing(4)
+        count_row.addStretch(1)
         self.count_label = QLabel()
-        chips_row.addWidget(self.count_label)
+        count_row.addWidget(self.count_label)
         self.play_button = QPushButton("Play results")
         self.play_button.setEnabled(False)
         self.play_button.clicked.connect(lambda: self.playRequested.emit(self.shown_ids()))
-        chips_row.addWidget(self.play_button)
+        count_row.addWidget(self.play_button)
         self.note = QLabel()
         self.note.setWordWrap(True)
         self.note.hide()
@@ -319,35 +298,10 @@ class SearchView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        layout.addLayout(chips_row)
+        layout.addLayout(count_row)
         layout.addWidget(self.note)
         layout.addWidget(self.view)
         self.show_prompt()
-
-    # -- options --
-
-    @property
-    def chip(self) -> str:
-        return self.chips.checkedButton().property("chip")
-
-    def set_chip(self, chip: str) -> None:
-        for button in self.chips.buttons():
-            if button.property("chip") == chip:
-                button.setChecked(True)
-        self.optionsChanged.emit()
-
-    def set_scope_folder(self, folder_id: int | None, name: str) -> None:
-        """The folder "this folder and below" means (the folder open when the search started)."""
-        self.scope_id = folder_id
-        self.scope_box.blockSignals(True)
-        self.scope_box.setChecked(False)
-        self.scope_box.blockSignals(False)
-        self.scope_box.setText(f"Only in {name} and below")
-        self.scope_box.setVisible(folder_id is not None)
-
-    @property
-    def scope(self) -> int | None:
-        return self.scope_id if self.scope_box.isChecked() else None
 
     # -- results --
 
@@ -355,17 +309,16 @@ class SearchView(QWidget):
         self.model.clear()
         self.count_label.setText("")
         self.play_button.setEnabled(False)
-        self._set_note("Type to search titles, artists, albums, file names and lyrics. Filters: artist: album: "
-                       "year: genre: ext: lyricstag:yes|no|lrc lrclib:synced|plain|instrumental|notfound|pending|"
-                       "error|notags rg:none|partial|full, and \"quoted text\".")
+        self._set_note("Type to search folder and file names, titles, artists, albums and lyrics. Filters: "
+                       "artist: album: year: genre: ext: lyricstag:yes|no|lrc lrclib:synced|plain|instrumental|"
+                       "notfound|pending|error|notags rg:none|partial|full, and \"quoted text\".")
 
     def show_results(self, rows: list[SearchRow], total: int, errors: tuple[str, ...] = (),
                      failure: str | None = None, *, keys: list[tuple] | None = None, in_place: bool = False) -> None:
         """`keys` from sort_keys() (computed off the UI thread); `in_place` for the same query run again."""
         self.model.set_rows(rows, keys, in_place=in_place)
         shown = len(rows)
-        noun = "track" if total == 1 else "tracks"
-        text = f"{shown:,} of {total:,} {noun}" if shown < total else f"{total:,} {noun}"
+        text = f"{shown:,} of {total:,} results"
         if shown < total and shown >= LIMIT:
             text += f" (showing the first {LIMIT:,})"
         self.count_label.setText(text)
@@ -377,7 +330,7 @@ class SearchView(QWidget):
         self.note.setVisible(bool(text))
 
     def shown_ids(self) -> list[int]:
-        """Every result, top to bottom as shown (Play results follows the view's sort order)."""
+        """Every result, top to bottom as shown (Play results follows the view's sort order; it skips folders)."""
         return [row.id for row in self.model.rows]
 
     def column_texts(self, key: str) -> list[str]:

@@ -29,11 +29,9 @@ def test_each_entry_opens_its_search(qtbot, window, service, text, query):
     key = "fixture artist\x1fsixth"
     service.writer.submit(lambda conn: record_lyrics(conn, key, {"status": "not_found",
                                                                  "checked": "2026-10-15"})).result()
-    window.search_view.scope_box.setChecked(True)
     menu_action(window, text).trigger()
     search(qtbot, window)
     assert window.showing_search and window.search_field.text() == query
-    assert window.search_view.scope is None and window.search_view.chip == "all"
     shown = set(names(window))
     if query == "lrclib:notfound":
         assert shown == {"track6.FLAC"}

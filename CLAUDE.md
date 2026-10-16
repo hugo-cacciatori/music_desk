@@ -92,6 +92,18 @@ Done when:
   shift;
 - the installed app splits a copied album with its bundled flac.
 
+**M11 Maintenance** (added by Hugo on 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Worthwhile,
+not urgent: after M10, or between tasks when Hugo says so. Neither changes what the app does.
+- [ ] 1. Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), with its findings
+      fixed. It would have caught the wrong-argument calls to `read_snapshot` in M10 task 1.
+- [ ] 2. Split `ui/main_window.py` (2,043 lines at 0.2.10) into one controller per feature: tools (Rename,
+      ReplayGain, Tidy), split, delete, search. Behaviour and tests unchanged.
+
+Done when:
+- pyright passes (basic mode) in the full test run, and ruff is clean;
+- `main_window.py` holds the window, its layout and the browsing; each feature's flow lives in its controller;
+- the full suite passes unchanged, apart from tests that reached into moved internals.
+
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task.
 2. Hugo's global rule: before running anything destructive (deleting files, etc.), tell him the exact command

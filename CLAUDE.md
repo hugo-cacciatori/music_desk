@@ -16,11 +16,11 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-16, session 12):** 0.2.10 is on `main` and published as the GitHub release v0.2.10. M0–M9 are
-  complete. All 1060 tests passed in the last full run, slow ones included. Ruff is clean. Since then, docs only:
-  the search, the Action menu and the cue split were redesigned with Hugo (SPEC §5, §6, §22; DECISIONS.md).
+- **State (2026-10-17, session 13):** 0.2.11 is on `main` (not pushed): search finds folders and audio files by
+  name before their tags are read; the chips and scope box are gone. M0–M9 are complete. All 1062 tests passed
+  in the last full run, slow ones included. Ruff is clean. The last GitHub release is v0.2.10.
 - **Left to Hugo:** opening an exported playlist in a real player, and a mouse drag in the installed app.
-- **Next step: Search task 1** (0.2.11), then the Action menu (0.2.12), M10 task 5 (0.2.13), task 6 (0.2.14) and
+- **Next step: the Action menu** (0.2.12), then M10 task 5 (0.2.13), task 6 (0.2.14) and
   task 7 (0.3.0 and the release). Give Hugo full manual steps for the installed-app check (memory:
   manual-check-instructions).
 

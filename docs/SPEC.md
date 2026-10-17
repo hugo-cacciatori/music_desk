@@ -39,3 +39,4 @@ Rules:
 | 24 | [24-hover-texts.md](spec/24-hover-texts.md) | A short hover text on every button and control; status-bar tips in menus (M15) |
 | 25 | [25-scroll-wheel.md](spec/25-scroll-wheel.md) | The mouse wheel never changes an input's value (Ground rule 7, M14) |
 | 26 | [26-advanced-search.md](spec/26-advanced-search.md) | The Advanced search window (album lists to fix by hand), and the lyrics-tag features M12 retires |
+| 27 | [27-tag-encodings.md](spec/27-tag-encodings.md) | Reading Japanese, Chinese and Korean text from ID3 frames marked Latin-1 (M16) |

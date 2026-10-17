@@ -3,8 +3,8 @@ Designed with Hugo on 2026-10-15. It replaces the earlier sketch (named playlist
 import of existing playlists): one playlist in progress, built by dragging music in.
 
 **Opening it**
-- A checkable **Playlist builder** button in the toolbar, and View › Playlist builder (Ctrl+Shift+P), show or
-  hide it.
+- A checkable **Playlist builder** button in the toolbar (Ctrl+Shift+P) shows or hides it. (View › Playlist
+  builder was retired with the View menu in M16.)
 - It is a narrow vertical panel (about 300 px, scrolling vertically) between the file list and the side panel.
   Opening it takes only the file list's spare width. The folder tree, the side panel and every column keep
   their sizes; if the columns no longer fit, the list scrolls sideways. Closing it gives the space back.
@@ -86,7 +86,7 @@ player, and dragging songs and folders into the builder with the mouse works.
   - `MainWindow.set_playlist_visible` takes its width (`Settings.playlist_width`, 300 px by default) from the
     centre only, and gives it back when hidden. The splitter's state is saved with the panel hidden; its
     visibility, width and column layout (`playlist_visible`, `playlist_width`, `playlist_header`) are kept apart.
-  - The toggle is a checkable toolbar action, "Playlist builder", also in the View menu (Ctrl+Shift+P).
+  - The toggle is a checkable toolbar action, "Playlist builder" (Ctrl+Shift+P).
 - Columns as listed above. The defaults #, Title, Artist and Duration fit the 300 px without scrolling. The
   header menu shows any other column; Title always stays.
 - A header click sorts the playlist itself, missing tracks last. **"#" sorts by the order tracks were added in**,

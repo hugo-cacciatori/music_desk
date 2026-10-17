@@ -30,7 +30,16 @@ Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2
 they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
 of it (see Session protocol 5).
 
-None scheduled.
+### M16: toolbar, searches, trim waveform, CJK tags (Hugo, 2026-10-17)
+Read SPEC §5, §6, §10, §15, §23, §26, §27.
+- [ ] 1. Toolbar and menus: an Advanced search button beside Tools and Playlist builder; the Action and View menus
+  retired; the status bar's Jobs button always shown; "Hide folders without music" in the folder tree's menu;
+  the address bar gives way to the buttons (SPEC §5, §10, §15, §26). 0.5.5.
+- [ ] 2. Advanced search: a Clear button (SPEC §26). 0.5.6.
+- [ ] 3. Enter in the search field runs the search again, from anywhere (SPEC §6). 0.5.7.
+- [ ] 4. The trim waveform at a fixed 70 px (SPEC §23). 0.5.8.
+- [ ] 5. ID3 text marked Latin-1 read as UTF-8 or Shift-JIS/GBK/Big5/EUC-KR when it fits; schema v4 re-reads ID3
+  files (SPEC §27). 0.6.0.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that

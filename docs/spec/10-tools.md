@@ -239,8 +239,9 @@ the rename step only; as in the script, ReplayGain can't be previewed on names t
     - Running: "Running (3 of 9): Kid A".
     - Finished: "Done: 7/12 files were renamed", "Done: 2 albums OK, leveled to -10.40 dB", "Stopped: nothing was
       leveled; see the report", "Failed: …".
-  - **Where:** a bottom dock ("Jobs"), shown when a job starts. It is toggled by View › Jobs panel (Ctrl+J) and
-    by the status bar's "Jobs: N running" button, which appears once there is a job.
+  - **Where:** a bottom dock ("Jobs"), shown when a job starts. It is toggled by the status bar's **Jobs** button
+    and Ctrl+J. Since M16 (Hugo, 2026-10-17; the View menu is retired) the button is always there, reading
+    "Jobs" or "Jobs: N running".
   - **Buttons:**
     - Open (or a double-click) shows the job's page: live while it runs, its report once finished. A job keeps
       its reports, so older runs reopen.

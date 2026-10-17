@@ -114,6 +114,10 @@ checks this subsection first.
   - The query field is in the toolbar ("Search library (Ctrl+K)"). Typing opens the page and runs after 120 ms.
     Enter in the field moves to the results; Esc (field or results) returns to the file list as it was. The
     query is kept for the next Ctrl+K.
+  - **Enter runs the search again** (Hugo, 2026-10-17, M16): Enter in the field always runs its query afresh
+    and moves to the results, whether the page is shown or not. After browsing elsewhere, focusing the field and
+    pressing Enter brings the page back with fresh results, so they include what the scan indexed meanwhile.
+    The results are rebuilt (not updated in place), and an empty field shows the prompt.
   - Under it: the count and Play results (the chips and "Only in <folder> and below" were removed in 0.2.11).
     Columns: Name, Title, Artist, Lyrics (the snippet), Album, Folder (elided on the left), then
     the file list's other columns. The model sorts itself (no sort proxy) and isn't editable;

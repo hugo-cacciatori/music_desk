@@ -15,7 +15,8 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
     └──────────────────────────────────────────────────────────────────────────────────────────┘
 
 - **Folder tree (left):** roots at the top level, folders only, in Explorer's natural alphabetical order. Nodes
-  expand lazily, and the expanded state is remembered. "Hide folders without music" is an option, off by default.
+  expand lazily, and the expanded state is remembered. "Hide folders without music" is an option, off by default (a checkable entry of the folder tree's context
+  menu since M16; it was in the View menu).
 - **File list (center):** folders first, then files, all in natural order. Every file is shown; non-audio files are
   dimmed. Columns: Name, #, Title, Artist, Album, Year, Duration, Format, Bitrate, Size, Modified, RG (✓ track and
   album, ◐ partial, – none), Lyrics tag (✓, ".lrc" when only a sidecar file has them, –), LRCLIB (synced, plain,
@@ -23,6 +24,10 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
   the layout persists. Folder rows show their track count and total duration.
 - **Address bar:** a breadcrumb where each segment is clickable and has a dropdown of its subfolders. Clicking the
   bar turns it into a text path (Ctrl+L); a pasted path navigates if it lies inside a root.
+  - The toolbar, left to right (M16): Back, Forward, Up, Rescan folder, the address bar, Tools, Playlist builder,
+    Advanced search (§26), the search field (§6). The address bar takes the width left over and gives way first:
+    it prefers 520 px and shrinks to 160 px (hiding its leading folders) so the buttons and the search field
+    never go to the toolbar's overflow menu.
 - **Navigation:** Enter or double-click opens a folder. Backspace or Alt+↑ goes up. Alt+←/→ and the mouse
   back/forward buttons move through history. Typing selects by name. Ctrl/Shift extend the selection. F5 rescans
   the folder. Ctrl+F filters the current folder as you type.
@@ -100,5 +105,9 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
   - It is on demand: the smart-views reasoning above still keeps it out of the sidebar, but Hugo wants the list
     as an explicit action.
   - Since 0.4.3 (M12) the Action menu holds only **Advanced search…** (§26), which replaces this entry.
+  - **Retired by M16** (Hugo, 2026-10-17), with the View menu: the menu bar is File and Help. Advanced search is a
+    toolbar button beside Tools and Playlist builder (§26); the jobs panel is toggled by the status bar's Jobs
+    button (§10); the playlist builder by its toolbar button (§15); "Hide folders without music" moved to the
+    folder tree's context menu.
   - As built (0.2.12): `main_window.ACTION_QUERIES`, as `FIND_QUERIES` for the Lyrics menu. Tested in
     `tests/ui/test_action_menu.py` against the files' own tags.

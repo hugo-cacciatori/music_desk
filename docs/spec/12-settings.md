@@ -2,7 +2,7 @@
 **No Settings dialog** (Hugo, 2026-10-15). Each preference is set where it is used, and a dialog would only
 duplicate those controls:
 - library folders: the sidebar (Add folder…, Remove from library);
-- hide folders without music: the View menu;
+- hide folders without music: the folder tree's context menu (the View menu until M16);
 - offline mode and auto-save of found lyrics: the Lyrics menu (both retired by M12, §26);
 - the tools' options: the Tools cards, which remember every change (§10);
 - (M13) the trim's subfolder name: the Trim page (§23); "Save beside <file> without asking" for new cue

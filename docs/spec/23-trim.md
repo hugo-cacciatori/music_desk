@@ -33,6 +33,8 @@ Top to bottom:
   - a handle can't pass the other one;
   - no zoom (the time fields give the precision) and no silence detection: silence shows as a flat line, and the
     user drags to it (Hugo, 2026-10-17);
+  - its height is fixed at 70 px (Hugo, 2026-10-17, M16: it filled the page, much too big); the fields and the
+    rest of the page sit under it, and the spare height goes below them;
   - while the audio is being read, "Reading the audio…" shows in its place, and the time fields already work. If
     it can't be read, the reason shows there; the trim itself only needs the file's length.
 - **Start** and **End**, as `m:ss.mmm` (minutes may pass 59), typed directly for small, precise changes:

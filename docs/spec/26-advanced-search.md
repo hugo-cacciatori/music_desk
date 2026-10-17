@@ -6,8 +6,9 @@ missing ReplayGain tags or the EAC rips not split yet. Its end function is just 
 It has nothing to do with the search bar (Ctrl+K, §6), which stays as it is.
 
 ## The window
-- **Action › Advanced search…** opens it. It is a **separate window**, not modal: the rest of the app keeps
-  working beside it. One window at a time; the menu entry brings it to the front.
+- The toolbar's **Advanced search** button (beside Tools and Playlist builder, since M16; Action › Advanced
+  search… before) opens it. It is a **separate window**, not modal: the rest of the app keeps working beside it.
+  One window at a time; the button brings it to the front.
 - Top to bottom:
   - **The options**, a choice of one search ("macro-like" actions, Hugo). For now, two:
     - **Find albums without ReplayGain tags**;
@@ -18,6 +19,9 @@ It has nothing to do with the search bar (Ctrl+K, §6), which stays as it is.
     fix with the Tools, the Split page or the tags.
   - **Refresh search**, once a search has run, even with no result: it runs the same search again, so the list
     follows the fixes made meanwhile.
+  - **Clear** (Hugo, 2026-10-17, M16), beside Refresh search: empties the results and the status line, and
+    disables Refresh search until a search runs again. A search still running is dropped. Disabled while there
+    is nothing to clear.
 - Nothing is changed by the window itself: it only lists folders.
 - **Built (M12 task 3, 0.4.3):** `ui/advanced_search.py` `AdvancedSearchWindow`, a `Qt.Window` child of the main
   window (above it, never modal), made on first use (`window.advanced_search`). The options are radio buttons

@@ -57,7 +57,7 @@ folder, adding it to the library first when it isn't in it.
 ## Tests
 - The folder argument: an indexed folder opens; one inside a root but not indexed opens after its rescan; one
   outside the library is added, then opens; a missing path says so.
-- Single instance: a second start's message reaches the running window (the socket, in-process), which opens the
+- Single instance: a second start's message (from a real second process) reaches the running server, which opens the
   folder; with no folder, it only comes to the front.
 - MusicDeskHere: it starts MusicDesk.exe with its working directory (a fake launcher).
 - Packaging: the spec builds both programs; the installer script registers the App Paths key.

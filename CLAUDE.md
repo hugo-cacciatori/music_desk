@@ -16,10 +16,10 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 16):** 0.5.0 is on `main`, not released: M12 (Advanced search, the lyrics tag and
+- **State (2026-10-17, session 16):** 0.5.0 is on `main` and released (GitHub v0.5.0): M12 (Advanced search, the lyrics tag and
   Offline mode retired) is done, after M13. Full suite passed, slow included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip, save a second version of the
-  cue and split from it; Preview in player opens in foobar2000 (Trim page and Split page). A release when he asks.
+  cue and split from it; Preview in player opens in foobar2000 (Trim page and Split page).
 - **Next step:** none scheduled. The "Later" blocks (hover texts, SPEC §24; the mouse wheel, §25) wait for
   Hugo to schedule them. Give Hugo full manual steps for checks (memory: manual-check-instructions).
 

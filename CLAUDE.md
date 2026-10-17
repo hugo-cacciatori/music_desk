@@ -21,8 +21,9 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   passed in the last full run, slow ones included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** "Status bar: no rsgain version" (0.3.2); then M11 when Hugo says so, or M12 (to specify
-  with Hugo first). Give Hugo full manual steps for checks (memory: manual-check-instructions).
+- **Next step:** "Status bar: no rsgain version" (0.3.2); then M11: ask Hugo the questions its decisions need,
+  then build it; then M12 the same way. Give Hugo full manual steps for checks (memory:
+  manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …). Tick tasks as
@@ -37,8 +38,8 @@ first.
 Done when: the status bar shows no rsgain text at startup or after the check, a failed check still disables
 the ReplayGain and Tidy cards with their explanation, About still shows the version, and the suite passes.
 
-**M11 Maintenance** (Hugo, 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Not urgent: when
-Hugo says so. The split's controller already exists (0.2.14). Neither changes what the app does.
+**M11 Maintenance** (Hugo, 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Clear its open
+decisions with Hugo first (Session protocol 1), then start. The split's controller already exists (0.2.14). Neither changes what the app does.
 - [ ] 1. Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), findings fixed.
 - [ ] 2. Split `ui/main_window.py` (2,043 lines at 0.2.10) into one controller per feature: tools (Rename,
       ReplayGain, Tidy), split, delete, search. Behaviour and tests unchanged.
@@ -52,7 +53,10 @@ Done when:
 every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet.
 
 ## Session protocol
-1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task.
+1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that
+   waits on Hugo ("when Hugo says so", "to be specified with Hugo") isn't a stop sign (Hugo, 2026-10-17): ask
+   him the questions its decisions need (explained from the need, memory: explain-from-the-need), record the
+   answers in the spec and DECISIONS.md, then start it.
 2. Hugo's global rule: before running anything destructive (deleting files, etc.), tell him the exact command
    first.
    - Hugo works in auto mode, whose safety check blocks some needed commands (running an installer, for

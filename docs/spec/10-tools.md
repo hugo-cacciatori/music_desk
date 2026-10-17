@@ -213,7 +213,8 @@ Tidy cards keep their other options.
   same folder and scope ("step 2 of 2"), with no separate preview, as in the script. A stopped rename doesn't start
   ReplayGain.
 
-**C. Tidy album**: runs A, then B on the final names. This is the script run without flags. The preview covers
+**C. Tidy album** (replaced by §28's Tidy in M17; kept here until M17 task 3 removes it): runs A, then B on the
+final names. This is the script run without flags. The preview covers
 the rename step only; as in the script, ReplayGain can't be previewed on names that are about to change.
 
 | Script                | App |

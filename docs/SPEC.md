@@ -40,3 +40,4 @@ Rules:
 | 25 | [25-scroll-wheel.md](spec/25-scroll-wheel.md) | The mouse wheel never changes an input's value (Ground rule 7, M14) |
 | 26 | [26-advanced-search.md](spec/26-advanced-search.md) | The Advanced search window (album lists to fix by hand), and the lyrics-tag features M12 retires |
 | 27 | [27-tag-encodings.md](spec/27-tag-encodings.md) | Reading Japanese and Chinese text from ID3 frames marked Latin-1 (M16) |
+| 28 | [28-tidy.md](spec/28-tidy.md) | Tidy remade: a whole tree split, renamed and ReplayGained, then an offer to recycle the images (M17) |

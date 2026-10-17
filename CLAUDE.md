@@ -16,13 +16,14 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 17):** 0.5.4 is on `main` and released (GitHub v0.5.4): M14 (the mouse wheel never
-  changes an input, app-wide) and M15 (hover texts on every control, menu status-bar tips, a guard test) are
-  done. Full suite passed.
+- **State (2026-10-17, session 18):** 0.6.0 is on `main` (not released): M16 done (toolbar and menus, Advanced
+  search Clear, Enter reruns the search, trim waveform 70 px, CJK in Latin-1 ID3 tags with schema v4, Back while a
+  split or trim runs). Full suite passed.
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
   in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
-  fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page.
-- **Next step:** none scheduled; ask Hugo what comes next. Give Hugo full manual steps for checks (memory:
+  fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page; Japanese/Chinese MP3 tags read
+  right after the first start of 0.6.0 (it re-reads ID3 files).
+- **Next step:** M17 task 1 (the Tidy remake, SPEC §28). Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
 ## Work plan
@@ -30,18 +31,15 @@ Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2
 they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
 of it (see Session protocol 5).
 
-### M16: toolbar, searches, trim waveform, CJK tags (Hugo, 2026-10-17)
-Read SPEC §5, §6, §10, §15, §23, §26, §27.
-- [x] 1. Toolbar and menus: an Advanced search button beside Tools and Playlist builder; the Action and View menus
-  retired; the status bar's Jobs button always shown; "Hide folders without music" in the folder tree's menu;
-  the address bar gives way to the buttons (SPEC §5, §10, §15, §26). 0.5.5.
-- [x] 2. Advanced search: a Clear button (SPEC §26). 0.5.6.
-- [x] 3. Enter in the search field runs the search again, from anywhere (SPEC §6). 0.5.7.
-- [x] 4. The trim waveform at a fixed 70 px (SPEC §23). 0.5.8.
-- [x] 5. ID3 text marked Latin-1 read as UTF-8 or Shift-JIS/GBK/Big5 when it fits; schema v4 re-reads ID3
-  files (SPEC §27). 0.5.9.
-- [x] 6. Split page (and Trim page): a Back button while a split runs, as the file list already allows leaving
-  (Hugo, 2026-10-17; SPEC §22, §23). 0.6.0.
+### M17: Tidy remade (Hugo, 2026-10-17)
+Read SPEC §28 (and §10, §22, §26 for what it reuses). Each task bumps the patch version; the last one 0.7.0.
+- [ ] 1. `core/tidy.py`: find the albums, sort them (not split, split, half-split, tidy, skipped) and plan each
+  one's steps, with the ReplayGain check; unit tests. 0.6.1.
+- [ ] 2. The job: one Tidy job album by album (split, renames, ReplayGain), locks, Stop, report, the offer list
+  collected. 0.6.2.
+- [ ] 3. The Tidy card and the plan page (preview), Run, the jobs panel; the old Tidy flow removed. 0.6.3.
+- [ ] 4. The offer window (Keep / Delete, multi-select, Apply to the Recycle Bin, closing keeps all); README and
+  SPEC §10 updated. 0.7.0.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that
@@ -97,6 +95,8 @@ Code and tests cite these by number; keep the numbering.
    - (M13) a trim: creating its subfolder if missing (removed again only if that run made it and leaves it
      empty) and the copy there, never over a file; deleting that run's `.partial` (SPEC §23). Saving a new cue
      sheet beside its audio file, never over a file without asking (SPEC §22).
+   - (M17) sending to the **Recycle Bin** the files the user marks Delete in Tidy's offer window (a split album's
+     image and `.cue`), after a confirmation; closing the window keeps them all (SPEC §28).
 
    This list grows when a feature needs to create or overwrite files: it is specified with Hugo, gets a row in
    DECISIONS.md and an entry here (Hugo, 2026-10-16).

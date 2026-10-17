@@ -409,6 +409,17 @@ def test_a_running_split_is_shown_instead_of_opening_another(qtbot, window, spli
     split.job = None
 
 
+def test_back_while_a_split_runs(qtbot, window, split, library_dir):
+    open_sheet(qtbot, split, library_dir / "Albums" / HIDDEN / SHEET)
+    split.job = window._start_job("Split", library_dir / "Albums" / HIDDEN)
+    split.page.show_running()
+    assert split.page.back_button.isVisibleTo(split.page) and "goes on" in split.page.back_button.toolTip()
+    split.page.back_button.click()
+    assert window.center.currentWidget() is window.file_view and split.page.state == "running"
+    window.jobs.finish(split.job, "done", "")
+    split.job = None
+
+
 # -- nothing remembered --
 
 def test_no_split_state_is_saved(tmp_path):

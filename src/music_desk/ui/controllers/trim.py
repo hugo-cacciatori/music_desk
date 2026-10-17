@@ -105,8 +105,8 @@ class TrimController(QObject):
         self.window.center.setCurrentWidget(self.page)
 
     def back(self) -> None:
-        if self.page.state != "running":
-            self.window.close_tools()
+        """Also while the trim runs: it goes on, and the jobs panel reopens its page (SPEC §23)."""
+        self.window.close_tools()
 
     def done(self) -> None:
         self.plan = None

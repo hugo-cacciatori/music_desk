@@ -305,6 +305,9 @@ helper that works in other terms gets its own window)
   folder and the destination, owned by "the Split tool", so tag saves, renames and other jobs there are refused
   meanwhile. Unsaved Metadata
   edits in the folder ask first, as the other tools do. The page's controls are read-only while it runs.
+  - **← Back stays while it runs** (Hugo, 2026-10-17, M16 task 6, 0.6.0): it was hidden, yet the folder tree
+    already left the page. Back shows the file list and the split goes on; the Jobs panel (§10) reopens its page.
+    Its hover text says so while the split runs.
 - One flac process at a time (`CREATE_NO_WINDOW`, below-normal priority, as rsgain in `core/rsgain.py`). flac
   comes from `paths.resource_path("flac/flac.exe")`.
 - **Free space:** the destination's drive must have free space at least equal to the ticked tracks' share of the source's size,

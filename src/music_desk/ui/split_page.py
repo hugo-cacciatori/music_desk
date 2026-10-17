@@ -305,7 +305,9 @@ class SplitPage(QWidget):
         self.split_note.setVisible(state == "editing")
         self.stop_button.setVisible(state == "running")
         self.done_button.setVisible(state in ("result", "error"))
-        self.back_button.setVisible(state != "running")
+        self.back_button.setToolTip(
+            "Back to the file list; the split goes on, and the Jobs panel shows it again" if state == "running"
+            else "Leave this page; unsaved edits to the sheet ask to be saved or discarded")
 
     # -- what the controller shows --
 

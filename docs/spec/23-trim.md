@@ -99,6 +99,8 @@ Top to bottom:
 - It runs in the Jobs panel (§10) as kind **Trim**, holding a `PathLocks` lock on the track's folder (which holds
   the subfolder), owned by "the Trim tool". Unsaved Metadata edits on that track ask first, as the other tools do.
   Background indexing pauses meanwhile, as for a split. The page's controls are read-only while it runs.
+  - **← Back stays while it runs**, as on the Split page (M16 task 6, 0.6.0): the trim goes on and the Jobs panel
+    reopens its page.
 - **Free space:** the drive must have at least the kept range's share of the original's size, or the trim is
   refused.
 - `.partial` first, the proof, then the rename to the final name (checked free again), then the tags. **Stop**

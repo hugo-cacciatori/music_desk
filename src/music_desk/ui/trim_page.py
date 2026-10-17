@@ -360,7 +360,9 @@ class TrimPage(QWidget):
         self.trim_note.setVisible(state == "editing")
         self.stop_button.setVisible(state == "running")
         self.done_button.setVisible(state in ("result", "error"))
-        self.back_button.setVisible(state != "running")
+        self.back_button.setToolTip(
+            "Back to the file list; the trim goes on, and the Jobs panel shows it again" if state == "running"
+            else "Leave this page without trimming; the times you chose aren't kept")
 
     # -- what the controller shows --
 

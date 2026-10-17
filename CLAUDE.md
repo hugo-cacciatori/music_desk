@@ -40,8 +40,8 @@ Read SPEC §5, §6, §10, §15, §23, §26, §27.
 - [x] 4. The trim waveform at a fixed 70 px (SPEC §23). 0.5.8.
 - [x] 5. ID3 text marked Latin-1 read as UTF-8 or Shift-JIS/GBK/Big5 when it fits; schema v4 re-reads ID3
   files (SPEC §27). 0.5.9.
-- [ ] 6. Split page: a Back button while a split runs, as the file list already allows leaving (Hugo,
-  2026-10-17; SPEC §22). 0.6.0.
+- [x] 6. Split page (and Trim page): a Back button while a split runs, as the file list already allows leaving
+  (Hugo, 2026-10-17; SPEC §22, §23). 0.6.0.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that

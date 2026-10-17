@@ -213,6 +213,7 @@ class SplitController(QObject):
         return True
 
     def back(self) -> None:
+        """Also while the split runs: it goes on, and the jobs panel reopens its page (SPEC §22)."""
         if self.page.state != "editing" or self.can_leave():
             self.window.close_tools()
 

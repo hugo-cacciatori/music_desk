@@ -293,6 +293,17 @@ def test_stop_leaves_nothing(qtbot, window, album, monkeypatch):
     assert (job.state, job.status) == ("stopped", "nothing left half-done")
 
 
+def test_back_while_a_trim_runs(qtbot, window, album):
+    page = open_page(qtbot, window, album / HIDDEN)
+    window.trim.job = window._start_job("Trim", album)
+    page.show_running("tone.flac")
+    assert page.back_button.isVisibleTo(page) and "goes on" in page.back_button.toolTip()
+    page.back_button.click()
+    assert window.center.currentWidget() is window.file_view and page.state == "running"
+    window.jobs.finish(window.trim.job, "done", "")
+    window.trim.job = None
+
+
 def test_a_running_trim_is_shown_instead_of_opening_another(qtbot, window, album):
     window.trim.job = window._start_job("Trim", album)
     window.trim.open(album / "tone.wav")

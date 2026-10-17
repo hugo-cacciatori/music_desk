@@ -21,8 +21,8 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   lines). All 1116 tests passed, slow ones included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** M12: ask Hugo the questions its decisions need (SPEC §6 "Later"), then build it. M13 (trim,
-  new cue sheets) is specified and follows. Give Hugo full manual steps for checks (memory:
+- **Next step:** M13 task 1 (trim and new cue sheets, fully specified: SPEC §23, §22 "M13 additions"). Then
+  M12, after asking Hugo its questions (SPEC §6 "Later"). Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
 ## Work plan
@@ -30,11 +30,8 @@ Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2
 they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
 of it (see Session protocol 5).
 
-**M12 Advanced search** (Hugo, 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first, reconsidering
-every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet.
-
-**M13 Trim and new cue sheets** (Hugo, 2026-10-17; read SPEC §23, §22 "M13 additions", §7, §14). Specified;
-after M12.
+**M13 Trim and new cue sheets** (Hugo, 2026-10-17; read SPEC §23, §22 "M13 additions", §7, §14). Specified; it
+comes before M12 (Hugo, 2026-10-17; the labels were kept).
 - [ ] 1. Core: `core/trim.py` (plan, checks, subfolder), the cut and proof through the split's code, the tags.
 - [ ] 2. Core: `core/waveform.py` (measure a 70-minute image, a 24-bit/96 kHz track); temporary `preview-*.cue`.
 - [ ] 3. UI: the Metadata tab's two buttons, the Trim page and `TrimController`, the job, Preview in player.
@@ -44,6 +41,9 @@ after M12.
 Done when: slow tests prove a trimmed copy (length, MD5), fail on a one-sample shift, leave the original
 unchanged; a new sheet saved from the page splits; the waveform never stalls over 50 ms. Optional, for later:
 Preview in player opens in foobar2000 from the installed app.
+
+**M12 Advanced search** (Hugo, 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first, reconsidering
+every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet. After M13.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that

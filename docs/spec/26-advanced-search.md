@@ -19,6 +19,15 @@ It has nothing to do with the search bar (Ctrl+K, §6), which stays as it is.
   - **Refresh search**, once a search has run, even with no result: it runs the same search again, so the list
     follows the fixes made meanwhile.
 - Nothing is changed by the window itself: it only lists folders.
+- **Built (M12 task 3, 0.4.3):** `ui/advanced_search.py` `AdvancedSearchWindow`, a `Qt.Window` child of the main
+  window (above it, never modal), made on first use (`window.advanced_search`). The options are radio buttons
+  (the first chosen at first); the status line beside the buttons reads "Searching…", "N albums found (albums
+  without ReplayGain tags)." or "No album found (…)."; Start and Refresh are disabled while a search runs.
+  Refresh runs the last search that ran, whatever option is picked meanwhile. `services/album_search_service.py`
+  `AlbumSearchService` runs one search at a time on its own thread and read connection; a newer one replaces an
+  older one's result. A double-click calls `MainWindow.show_folder` (unsaved Metadata edits ask first, the Ctrl+K
+  page is left, the file list shows the folder, and the main window comes to the front); a folder gone from the
+  library says so in the status bar.
 
 ## The searches
 - **Albums without ReplayGain tags** (Hugo: "any track missing"): every folder holding audio files where at least

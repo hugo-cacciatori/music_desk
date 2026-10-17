@@ -40,6 +40,7 @@ from music_desk.core.index.store import path_of
 from music_desk.core.path_locks import PathLocks
 from music_desk.core.playlist_builder import Builder
 from music_desk.licenses import licenses_dir
+from music_desk.services.album_search_service import AlbumSearchService
 from music_desk.services.jobs import JobList
 from music_desk.services.library import LibraryService
 from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
@@ -48,6 +49,7 @@ from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
 from music_desk.ui.about_dialog import AboutDialog
 from music_desk.ui.address_bar import AddressBar
+from music_desk.ui.advanced_search import AdvancedSearchWindow
 from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.controllers.delete import DeleteController
 from music_desk.ui.controllers.search import SearchController
@@ -65,9 +67,6 @@ from music_desk.ui.toast import Toast
 log = logging.getLogger(__name__)
 
 APP_TITLE = "MusicDesk"
-ACTION_QUERIES = (  # the Action menu's entries over the whole library: (menu text, search query)
-    ("Show tracks without ReplayGain tags", "rg:none"),
-)
 PAUSED_NOTE = " (paused while ReplayGain runs)"
 
 
@@ -241,9 +240,9 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.jobs_action)
         view_menu.addAction(self.playlist_action)
         action_menu = self.menuBar().addMenu("&Action")  # actions over the whole library (SPEC §5)
-        for text, query in ACTION_QUERIES:
-            action_menu.addAction(text, lambda q=query: self.search.find(q))
+        action_menu.addAction("Advanced &search…", self.open_advanced_search)  # SPEC §26
         action_menu.setEnabled(library is not None)
+        self.advanced_search: AdvancedSearchWindow | None = None  # made on first use
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About MusicDesk", self.open_about)
 
@@ -329,6 +328,32 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     # -- browsing --
+
+    def open_advanced_search(self) -> None:
+        """Action › Advanced search…: its window, not modal (SPEC §26). One at a time; brought to the front."""
+        if not self._library_open():
+            return
+        if self.advanced_search is None:
+            self.advanced_search = AdvancedSearchWindow(self, AlbumSearchService(self.open_library.db_path, self))
+        self.advanced_search.show()
+        self.advanced_search.raise_()
+        self.advanced_search.activateWindow()
+
+    def show_folder(self, folder_id: int, shown: str = "") -> None:
+        """A folder from another window (an Advanced search result): the file list on it, in front."""
+        if not self._library_open() or not self._folder_exists(folder_id):
+            self.statusBar().showMessage(f"{shown or 'That folder'} is no longer in the library.", STATUS_MS)
+            return
+        if not self.side_panel.can_leave():
+            return
+        if self.showing_search:
+            self.search.leave()
+        self.center.setCurrentWidget(self.file_view)
+        if folder_id != self.folder_id:
+            self.open_folder(folder_id)
+        self.raise_()
+        self.activateWindow()
+        self.file_view.view.setFocus()
 
     def open_folder(self, entry_id: int, *, record: bool = True) -> None:
         """Show a folder at once from the index, then have it revalidated (stale-while-revalidate).
@@ -898,6 +923,9 @@ class MainWindow(QMainWindow):
         self._playlist_save.stop()
         self.save_playlist()
         self.search.shutdown()
+        if self.advanced_search is not None:
+            self.advanced_search.close()
+            self.advanced_search.service.close()
         self.save_state()
         app().removeEventFilter(self)
         self._shell.shutdown(wait=False)

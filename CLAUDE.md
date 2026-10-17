@@ -16,11 +16,11 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 16):** 0.4.2 is on `main`, not released: M12 tasks 1–2 are done (the lyrics-tag
-  features, the Lyrics menu and Offline mode retired; the two album searches). Full suite passed, slow included.
+- **State (2026-10-17, session 16):** 0.4.3 is on `main`, not released: M12 tasks 1–3 are done (the lyrics-tag
+  features, the Lyrics menu and Offline mode retired; the Advanced search window and its two album searches). Full suite passed, slow included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip, save a second version of the
   cue and split from it; Preview in player opens in foobar2000 (Trim page and Split page). A release when he asks.
-- **Next step:** M12 task 3 (SPEC §26 "The window"). Give Hugo full manual steps for checks (memory:
+- **Next step:** M12 task 4 (README and 0.5.0). Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
 ## Work plan
@@ -31,7 +31,7 @@ of it (see Session protocol 5).
 **M12 Advanced search** (Hugo, 2026-10-17; read SPEC §26, then §5, §6, §7, §8, §9, §10 where they retire).
 - [x] 1. Retire the lyrics-tag features, the Lyrics menu (Find entries, auto-save, Offline mode as a setting).
 - [x] 2. Core: the two album searches over the index (no ReplayGain on some track; cue + image, no tracks).
-- [ ] 3. UI: the Advanced search window (not modal), Start, results, double-click to the folder, Refresh search.
+- [x] 3. UI: the Advanced search window (not modal), Start, results, double-click to the folder, Refresh search.
 - [ ] 4. README and the minor version (0.5.0).
 
 Done when: the window lists both searches' albums on a fixture library while the main window stays usable; a

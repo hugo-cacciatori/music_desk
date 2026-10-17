@@ -1,15 +1,37 @@
-"""The Action menu (SPEC §5): actions over the whole library, as ready-made searches."""
+"""The Action menu (SPEC §5) and its Advanced search window (SPEC §26): a separate, non-modal window of album lists
+to fix by hand, over a copied fixture library."""
 
-from pathlib import Path
+import shutil
+import threading
 
 import pytest
+from browser_helpers import entry
 from PySide6.QtWidgets import QMenu
-from test_library_search import search
 
-from music_desk.core.formats import AUDIO_EXTENSIONS
-from music_desk.core.metadata import RG_KEYS
+from music_desk.core.index import album_search
 from music_desk.core.tags import TaggedFile
-from music_desk.ui.main_window import ACTION_QUERIES
+from music_desk.services import album_search_service
+
+RG = {"replaygain_track_gain": "-6.00 dB", "replaygain_track_peak": "0.9", "replaygain_album_gain": "-6.50 dB",
+      "replaygain_album_peak": "0.95"}
+
+
+@pytest.fixture
+def library_dir(library_dir, fixtures_dir):
+    """The shared library (Artist/Album has no ReplayGain tags), plus an EAC-style rip and a tagged album."""
+    shutil.copytree(fixtures_dir / "split" / "hidden_track", library_dir / "Rips" / "EAC")
+    tagged = library_dir / "Tagged"
+    tagged.mkdir()
+    shutil.copy2(fixtures_dir / "formats" / "tone.flac", tagged / "01.flac")
+    tag_replaygain(tagged / "01.flac")
+    return library_dir
+
+
+def tag_replaygain(path):
+    tagged = TaggedFile(path)
+    for key, value in RG.items():
+        tagged.set_replaygain(key, value)
+    tagged.save()
 
 
 def menu_titles(window) -> list[str]:
@@ -20,38 +42,100 @@ def action_menu(window) -> QMenu:
     return next(m for m in window.menuBar().findChildren(QMenu) if m.title() == "&Action")
 
 
-def without_replaygain(library_dir: Path) -> set[Path]:
-    """Read from the files themselves, not the index: the readable audio files with no ReplayGain tag."""
-    found = set()
-    for path in library_dir.rglob("*"):
-        if path.suffix.lower() not in AUDIO_EXTENSIONS:
-            continue
-        try:
-            tagged = TaggedFile(path)
-            if all(tagged.get_replaygain(key) is None for key in RG_KEYS):
-                found.add(path)
-        except Exception:  # noqa: BLE001 - an unreadable fixture: its tags can't be read
-            continue
-    return found
+def open_window(window):
+    next(a for a in action_menu(window).actions() if a.text() == "Advanced &search…").trigger()
+    return window.advanced_search
 
 
-def test_the_menu_sits_before_help(window):
-    assert menu_titles(window) == ["&File", "&View", "&Action", "&Help"]  # no Lyrics menu since M12 (SPEC §26)
-    assert [a.text() for a in action_menu(window).actions()] == [text for text, _query in ACTION_QUERIES]
+def run(qtbot, search_window, key=None):
+    if key is not None:
+        next(b for b in search_window.options.buttons() if b.property("search") == key).setChecked(True)
+    search_window.start_button.click()
+    qtbot.waitUntil(lambda: search_window.start_button.isEnabled(), timeout=10000)
+    return search_window.paths()
+
+
+def test_the_menu(window):
+    assert menu_titles(window) == ["&File", "&View", "&Action", "&Help"]  # no Lyrics menu since M12
+    assert [a.text() for a in action_menu(window).actions()] == ["Advanced &search…"]
     assert action_menu(window).isEnabled()
 
 
-@pytest.mark.parametrize("text, query", ACTION_QUERIES)
-def test_show_tracks_without_replaygain_tags(qtbot, window, library_dir, text, query):
-    assert query == "rg:none"
-    next(a for a in action_menu(window).actions() if a.text() == text).trigger()
-    search(qtbot, window)
-    assert window.showing_search and window.search_field.text() == "rg:none"
-    view = window.search_view
-    shown = {Path(row.folder, row.name) for row in view.model.rows}
-    expected = without_replaygain(library_dir)
-    assert expected and shown == expected
-    assert all(not row.is_dir for row in view.model.rows)
+def test_a_separate_window_that_blocks_nothing(qtbot, window, service):
+    search_window = open_window(window)
+    assert search_window.isWindow() and search_window.isVisible() and not search_window.isModal()
+    assert search_window.windowTitle() == "Advanced search" and search_window.parent() is window
+    window.open_folder(entry(service, "Artist", "Album"))  # the main window keeps working beside it
+    assert window.folder_id == entry(service, "Artist", "Album") and window.isEnabled()
+    assert open_window(window) is search_window  # one at a time, brought to the front
+
+
+def test_albums_without_replaygain(qtbot, window, library_dir):
+    search_window = open_window(window)
+    assert not search_window.refresh_button.isEnabled()  # nothing ran yet
+    found = run(qtbot, search_window, album_search.WITHOUT_REPLAYGAIN)
+    assert str(library_dir / "Artist" / "Album") in found and str(library_dir / "Rips" / "EAC") in found
+    assert str(library_dir / "Tagged") not in found
+    assert search_window.status.text() == f"{len(found)} albums found (albums without ReplayGain tags)."
+    assert search_window.refresh_button.isEnabled()
+
+
+def test_albums_not_split(qtbot, window, library_dir):
+    search_window = open_window(window)
+    assert run(qtbot, search_window, album_search.NOT_SPLIT) == [str(library_dir / "Rips" / "EAC")]
+
+
+def test_a_double_click_shows_the_folder_in_the_main_window(qtbot, window, service, library_dir):
+    search_window = open_window(window)
+    run(qtbot, search_window, album_search.NOT_SPLIT)
+    search_window.results.itemActivated.emit(search_window.results.item(0))
+    assert window.folder_id == entry(service, "Rips", "EAC")
+    assert window.center.currentWidget() is window.file_view
+
+
+def test_refresh_follows_a_fix(qtbot, window, service, library_dir):
+    search_window = open_window(window)
+    run(qtbot, search_window, album_search.WITHOUT_REPLAYGAIN)
+    album = library_dir / "Artist" / "Album"
+    assert str(album) in search_window.paths()
+    search_window.options.buttons()[1].setChecked(True)  # Refresh runs the last search, not the one picked now
+    for path in (p for p in album.iterdir() if p.suffix in (".flac", ".mp3")):
+        tag_replaygain(path)
+        service.indexer.update_file(str(path))
+    folder = entry(service, "Artist", "Album")
+    qtbot.waitUntil(lambda: service.conn.execute(
+        "SELECT count(*) FROM tracks t JOIN entries e ON e.id = t.entry_id WHERE e.parent_id = ? "
+        "AND t.rg_track_gain IS NULL", (folder,)).fetchone()[0] == 0, timeout=10000)
+    search_window.refresh_button.click()
+    qtbot.waitUntil(lambda: search_window.start_button.isEnabled(), timeout=10000)
+    assert str(album) not in search_window.paths() and "without ReplayGain" in search_window.status.text()
+
+
+def test_an_empty_result_can_be_refreshed(qtbot, window, library_dir):
+    for sheet in (library_dir / "Rips" / "EAC").glob("*.cue"):
+        sheet.write_text('FILE "elsewhere.flac" WAVE\n', encoding="utf-8")  # it no longer plays the image
+    search_window = open_window(window)
+    assert run(qtbot, search_window, album_search.NOT_SPLIT) == []
+    assert search_window.status.text() == "No album found (albums that are not split)."
+    assert search_window.refresh_button.isEnabled()
+
+
+def test_the_search_runs_on_a_worker(qtbot, window, monkeypatch):
+    release, started = threading.Event(), threading.Event()
+    real = album_search.run
+
+    def slow(conn, search, cancelled=None):
+        started.set()
+        release.wait(10)
+        return real(conn, search, cancelled)
+
+    monkeypatch.setattr(album_search_service.album_search, "run", slow)
+    search_window = open_window(window)
+    search_window.start_button.click()
+    qtbot.waitUntil(started.is_set, timeout=5000)
+    assert search_window.status.text() == "Searching…" and not search_window.start_button.isEnabled()
+    release.set()
+    qtbot.waitUntil(lambda: search_window.start_button.isEnabled(), timeout=10000)
 
 
 def test_disabled_without_a_library(qtbot):

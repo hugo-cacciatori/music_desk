@@ -45,6 +45,8 @@ Preview in player opens in foobar2000 from the installed app.
 **M12 Advanced search** (Hugo, 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first, reconsidering
 every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet. After M13.
 
+**Later: hover texts** (Hugo, 2026-10-17; SPEC §24). A tooltip on every control. Not scheduled, no tasks yet.
+
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that
    waits on Hugo ("when Hugo says so", "to be specified with Hugo") isn't a stop sign (Hugo, 2026-10-17): ask

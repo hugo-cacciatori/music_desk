@@ -977,6 +977,23 @@ Done when:
 - `main_window.py` holds the window, its layout and the browsing; each feature's flow lives in its controller;
 - the full suite passes unchanged, apart from tests that reached into moved internals.
 
+**M13 Trim and new cue sheets** (Hugo, 2026-10-17; read SPEC §23, §22 "M13 additions", §7, §14). Specified; it
+comes before M12 (Hugo, 2026-10-17; the labels were kept).
+- [x] 1. (0.3.5) Core: `core/trim.py` (plan, checks, subfolder), the cut and proof through the split's code, the tags.
+- [x] 2. (0.3.7) Core: `core/waveform.py` (measure a 70-minute image, a 24-bit/96 kHz track); temporary `preview-*.cue`.
+- [x] 3. (0.3.8) UI: the Metadata tab's two buttons, the Trim page and `TrimController`, the job, Preview in player.
+- [x] 4. (0.3.9) UI: on the Split page, New cue sheet…, the source warning, Preview in player, Fill from track lengths….
+- [x] 5. (0.4.0) README and the minor version.
+
+Done when: slow tests prove a trimmed copy (length, MD5), fail on a one-sample shift, leave the original
+unchanged; a new sheet saved from the page splits; the waveform never stalls over 50 ms. Optional, for later:
+Preview in player opens in foobar2000 from the installed app.
+
+Held at 0.4.0 (2026-10-17): `tests/core/test_trim.py`'s slow tests prove trims by length and MD5, fail on a
+one-sample shift and leave the original byte-identical; `test_a_new_sheet_saved_through_the_dialog` splits a sheet
+made with New cue sheet…; the waveform's reads run on a worker (each chunk under 20 ms of GIL), and painting and
+dragging measured 4 ms (SPEC §23). The foobar2000 check stays optional, for later.
+
 ## Former CLAUDE.md sections (as of 2026-10-16)
 
 **Session protocol:**

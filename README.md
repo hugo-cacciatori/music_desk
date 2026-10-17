@@ -1,13 +1,13 @@
 # MusicDesk
 
 A Windows desktop app for looking after a local music library: browse it like File Explorer, edit tags, read
-lyrics, tidy albums (rename files from their tags, apply ReplayGain), and split single-file albums into tracks
-from their cue sheet.
+lyrics, tidy albums (rename files from their tags, apply ReplayGain), split single-file albums into tracks
+from their cue sheet, and trim a track's start or end into a copy.
 
 MusicDesk works on your files where they are. It never copies or moves music, and never deletes anything for
 good. Its only changes are the ones you ask for: tag edits, renames, ReplayGain tags, a `replaygain.log` per
-album, the playlists you export, the tracks of a split and the cue sheets you save. What you delete, a cue sheet
-you save over, and junk files when you tick that option, go to the Recycle Bin.
+album, the playlists you export, the tracks of a split, trimmed copies and the cue sheets you save. What you
+delete, a cue sheet you save over, and junk files when you tick that option, go to the Recycle Bin.
 
 ## Features
 
@@ -46,6 +46,15 @@ you save over, and junk files when you tick that option, go to the Recycle Bin.
   [flac](https://xiph.org/flac/), tagged from the sheet with the album's cover, named with your file name masks,
   and checked sample for sample against its part of the original. Nothing is overwritten (a taken name gets a
   number), and the image, its sheet and its log are never touched.
+
+  No sheet yet? Select the audio file and click **New cue sheet…** on the Metadata tab: the Split page opens on a
+  new sheet filled from its tags. **Fill from track lengths…** sets the start times from a tracklist's lengths,
+  and **Preview in player** opens the sheet as it is, unsaved edits included, in your default player (one that
+  reads cue sheets, such as foobar2000), so you can hear each cut before anything is written.
+- **Trim a track**: select one FLAC, WAV or AIFF file and click **Trim…** on the Metadata tab. Drag the two
+  handles on the waveform (or type the times) to drop a long silence or a hidden track at either end, hear the
+  result with Preview in player, then Trim. A FLAC copy goes into a subfolder (`lite` by default) with the
+  original's tags, checked sample for sample against its part of the original. The original is never touched.
 - **Play** a folder, a selection or search results in your default music player, through a temporary playlist.
 - **Build a playlist** (View › Playlist builder, Ctrl+Shift+P): drag folders and songs in from the folder tree,
   the file list or search results, in the order Explorer shows them. Rearrange it by dragging, with Ctrl+↑/↓ or

@@ -526,6 +526,8 @@ def test_a_new_sheet_saved_through_the_dialog(qtbot, window, split, library_dir,
     assert not split.new and split.path == target and not page.save_beside.isVisible() and page.encoding.isEnabled()
     ready(qtbot, split)
     assert split.plan.cue == target and page.split_button.isEnabled()
+    report = run(qtbot, split)  # M13's "Done when": a new sheet saved from the page splits
+    assert report.startswith("Done: 2 tracks split, all identical to the original.")
 
 
 def test_the_save_beside_box_saves_at_once_and_never_replaces(qtbot, window, split, library_dir, monkeypatch):

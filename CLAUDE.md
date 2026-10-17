@@ -16,33 +16,20 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 16):** 0.3.9 is on `main`, not released: M13 tasks 1–4 are done (trim, new cue
-  sheets, the source warning, Preview in player, Fill from track lengths…). Full suite passed, slow included.
-- **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
-  version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** M13 task 5 (README and the minor version, 0.4.0). Then
-  M12, after asking Hugo its questions (SPEC §6 "Later"). Give Hugo full manual steps for checks (memory:
-  manual-check-instructions).
+- **State (2026-10-17, session 16):** 0.4.0 is on `main`, not released: M13 (trim and new cue sheets) is done.
+  Full suite passed, slow included.
+- **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip, save a second version of the
+  cue and split from it; Preview in player opens in foobar2000 (Trim page and Split page). A release when he asks.
+- **Next step:** M12, after asking Hugo its questions (SPEC §6 "Later"). Give Hugo full manual steps for checks
+  (memory: manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …). Tick tasks as
 they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
 of it (see Session protocol 5).
 
-**M13 Trim and new cue sheets** (Hugo, 2026-10-17; read SPEC §23, §22 "M13 additions", §7, §14). Specified; it
-comes before M12 (Hugo, 2026-10-17; the labels were kept).
-- [x] 1. Core: `core/trim.py` (plan, checks, subfolder), the cut and proof through the split's code, the tags.
-- [x] 2. Core: `core/waveform.py` (measure a 70-minute image, a 24-bit/96 kHz track); temporary `preview-*.cue`.
-- [x] 3. UI: the Metadata tab's two buttons, the Trim page and `TrimController`, the job, Preview in player.
-- [x] 4. UI: on the Split page, New cue sheet…, the source warning, Preview in player, Fill from track lengths….
-- [ ] 5. README and the minor version.
-
-Done when: slow tests prove a trimmed copy (length, MD5), fail on a one-sample shift, leave the original
-unchanged; a new sheet saved from the page splits; the waveform never stalls over 50 ms. Optional, for later:
-Preview in player opens in foobar2000 from the installed app.
-
 **M12 Advanced search** (Hugo, 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first, reconsidering
-every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet. After M13.
+every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet.
 
 **Later: hover texts** (Hugo, 2026-10-17; SPEC §24). A tooltip on every control. Not scheduled, no tasks yet.
 

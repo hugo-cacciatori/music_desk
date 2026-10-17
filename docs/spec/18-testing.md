@@ -57,5 +57,10 @@
   monkeypatch, which a type checker doesn't see. Tests stay the main guard.
 - The plan: pyright (basic mode) as a dev dependency, configured in `pyproject.toml` for `src/`, and run by
   the test suite (`tests/test_types.py` runs it and fails on any error), so it can't be forgotten.
+  - **basedpyright** (Hugo, 2026-10-17): the pip package of pyright that brings its own Node.js into the venv,
+    so `uv sync` installs it and a test run never downloads anything (PyPI's `pyright` wrapper fetches Node.js
+    and pyright on its first run). It runs in basic mode, which checks what pyright's basic mode checks.
+  - **Only `src/`** (Hugo, 2026-10-17): the tests swap in fakes with monkeypatch, which a type checker would
+    flag over and over for no real gain.
 - Its first run's findings are fixed in the same task. Third-party packages without stubs (mutagen, watchdog,
   send2trash) are allowed as `Any`.

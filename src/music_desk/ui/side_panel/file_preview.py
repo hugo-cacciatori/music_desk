@@ -27,7 +27,8 @@ from music_desk.ui.file_view import format_size
 
 class FilePreview(QWidget):
     openRequested = Signal(str)  # the file, to open in its default app
-    splitRequested = Signal(str)  # a .cue: "Split into tracks…" (SPEC §22)
+    splitRequested = Signal(str)  # a .cue: Split, at once with the defaults (SPEC §22)
+    editRequested = Signal(str)  # a .cue: Edit…, the Split page
 
     def __init__(self, io: TagIO, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -54,14 +55,20 @@ class FilePreview(QWidget):
         self.open_button = QPushButton("Open")
         self.open_button.setToolTip("Open it in its default app")
         self.open_button.clicked.connect(lambda: self.path is not None and self.openRequested.emit(str(self.path)))
-        self.split_button = QPushButton("Split into tracks…")
-        self.split_button.setToolTip("Cut the album this cue sheet describes into one FLAC file per track. You "
-                                     "check the tracks before anything is written.")
+        # A cue sheet's three buttons (Hugo, M19): Play (Open, renamed), Split at once, and Edit… (the Split page).
+        self.split_button = QPushButton("Split")
+        self.split_button.setToolTip("Split the album into one FLAC file per track now, with the defaults: every "
+                                     "track, into this folder, named by the File names masks")
         self.split_button.clicked.connect(lambda: self.path is not None and self.splitRequested.emit(str(self.path)))
-        self.split_button.hide()
+        self.edit_button = QPushButton("Edit…")
+        self.edit_button.setToolTip("Open the Split page: check and edit the tracks, the names and the destination "
+                                    "before splitting")
+        self.edit_button.clicked.connect(lambda: self.path is not None and self.editRequested.emit(str(self.path)))
+        for button in (self.split_button, self.edit_button):
+            button.hide()
         header.addLayout(names, 1)
-        header.addWidget(self.split_button, 0, Qt.AlignmentFlag.AlignTop)
-        header.addWidget(self.open_button, 0, Qt.AlignmentFlag.AlignTop)
+        for button in (self.open_button, self.split_button, self.edit_button):
+            header.addWidget(button, 0, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(header)
 
         self.text = QPlainTextEdit()
@@ -97,7 +104,11 @@ class FilePreview(QWidget):
             return
         reload = path == self.path and self.result is not None
         self.path, self._stamp = path, stamp
-        self.split_button.setVisible(path.suffix.lower() == ".cue")
+        cue = path.suffix.lower() == ".cue"
+        self.split_button.setVisible(cue)
+        self.edit_button.setVisible(cue)
+        self.open_button.setText("Play" if cue else "Open")
+        self.open_button.setToolTip("Play the album in your default player" if cue else "Open it in its default app")
         self._scroll = (self.text.horizontalScrollBar().value(), self.text.verticalScrollBar().value()) \
             if reload and self.pages.currentWidget() is self.text else None
         if not reload:

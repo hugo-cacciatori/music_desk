@@ -44,7 +44,7 @@ Read SPEC §28 (and §10, §22, §26 for what it reuses). Each task bumps the pa
 
 ### M19: cue preview buttons (Hugo, 2026-10-17)
 Read SPEC §22 "The entry point". Before M17 tasks 2-4 (Hugo asked for it first).
-- [ ] 1. Play, Split (at once, the defaults), Edit… on a .cue preview; tests. 0.6.4.
+- [x] 1. Play, Split (at once, the defaults), Edit… on a .cue preview; tests. 0.6.4.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that

@@ -160,7 +160,8 @@ class MainWindow(QMainWindow):
         self.side_panel.lyrics.urlRequested.connect(self.open_url)
         self.side_panel.summary.playRequested.connect(self.play_folder)
         self.side_panel.summary.toolsRequested.connect(lambda entry_id: self.tools.open([entry_id]))
-        self.side_panel.preview.splitRequested.connect(lambda path: self.split.open(Path(path)))
+        self.side_panel.preview.splitRequested.connect(lambda path: self.split.split_now(Path(path)))
+        self.side_panel.preview.editRequested.connect(lambda path: self.split.open(Path(path)))
         self.side_panel.preview.openRequested.connect(lambda path: self._in_shell(
             lambda: self.launch(path), f"Windows couldn't open {os.path.basename(path)}: no app is set for this "
             "file type, or the file isn't reachable.", path, False))

@@ -43,7 +43,8 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
 
   Jobs run in the background, and you can keep browsing meanwhile; the status bar's Jobs button (Ctrl+J) shows them.
 - **Split a single-file album**, such as an EAC rip (one FLAC, WAV or AIFF image, its `.cue` and its log), into
-  one FLAC file per track: select the `.cue`, then "Split into tracks…" on its preview. The Split page shows the
+  one FLAC file per track: select the `.cue`, then **Split** on its preview to split it at once with the defaults
+  (every track, into its folder), or **Edit…** to check it first (**Play** plays the album). The Split page shows the
   whole sheet, editable: which audio file it points to, start times and gaps, titles and the other fields,
   tracks to add or delete, and the text encoding of old sheets. Save writes your edits back into the `.cue`,
   changing only the lines you edited; Save as makes another version of the sheet, so one image can be split in

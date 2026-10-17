@@ -109,6 +109,7 @@ class SplitController(QObject):
         self._plan_token: int | None = None
         self._planning = False
         self._split_after_plan = False
+        self._split_now = False  # the preview's Split: split once the sheet is planned, if it needs no look
         self._plan_timer = QTimer(self, singleShot=True, interval=PLAN_DELAY_MS)
         self._plan_timer.timeout.connect(self._request_plan)
 
@@ -160,6 +161,33 @@ class SplitController(QObject):
         self._start(path, new=False)
         self._load_token = self.runner.load(path)
 
+    def split_now(self, path: str | Path) -> None:
+        """The preview's Split (SPEC §22): the sheet opens on the Split page and splits with the defaults as soon as
+        it is planned, unless it needs a look (then the page stays, saying why)."""
+        path = Path(path)
+        self.open(path)
+        if self.path is None or not fsops.is_same_file(self.path, path) or self.window.center.currentWidget() \
+                is not self.page or self.page.state not in ("loading", "editing"):
+            return  # a split running, or Cancel on unsaved edits
+        self._split_now = True
+        if self.page.state == "editing" and not self._planning:
+            self._split_when_planned()  # the same sheet was already open and planned
+
+    def _split_when_planned(self) -> None:
+        self._split_now = False
+        plan = self.plan
+        why = None
+        if plan is not None and plan.sheet is not None and plan.sheet.fell_back:
+            why = "its text encoding had to be guessed"
+        elif plan is not None and plan.warnings:
+            why = plan.warnings[0].rstrip(".")
+        elif not self.page.split_button.isEnabled():
+            why = self.page.split_note.text().rstrip(".") or "it can't be split as it is"
+        if why:
+            self.window.toast.show_message(f"Not split: {why}. Check it here, then click Split.")
+            return
+        self.split()
+
     def new_sheet(self, audio: str | Path) -> None:
         """New cue sheet… on the Metadata tab: the page on a new, unsaved sheet for this audio file (SPEC §22).
         The same new sheet comes back as it was left; another sheet with unsaved edits asks first."""
@@ -179,6 +207,7 @@ class SplitController(QObject):
         self._load_token = self.runner.load_new(audio)
 
     def _start(self, path: Path, new: bool, audio_name: str = "") -> None:
+        self._split_now = False
         self.doc, self.path, self.codec, self.plan, self.info = None, path, None, None, None
         self.ticked, self.hidden_ticked, self.hidden, self.problems = {}, True, False, []
         self.destination, self.audio, self.new = None, (), new
@@ -232,6 +261,7 @@ class SplitController(QObject):
         if loaded.token != self._load_token:
             return
         if loaded.document is None:
+            self._split_now = False
             self.page.show_error(loaded.error or "")
             return
         self.doc = loaded.document
@@ -378,6 +408,8 @@ class SplitController(QObject):
         if self._split_after_plan and not self._planning:
             self._split_after_plan = False
             self.split()
+        elif self._split_now and not self._planning:
+            self._split_when_planned()
 
     def source_warning(self) -> str | None:
         """Why the sheet's source can't be used, for the Source control's mark (SPEC §22): several files, none,

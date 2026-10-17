@@ -139,6 +139,11 @@ in**, and **one page with every control**; you can't split without going through
     has a warning (data tracks). Same sheet already open with unsaved edits: Split asks to save first, as the
     page's own Split does.
   - **Edit…**: what "Split into tracks…" did: the Split page, to check and edit before splitting.
+  - Built (M19 task 1, 0.6.4): `FilePreview` shows `open_button` ("Play" for a `.cue`), `split_button`
+    (`splitRequested` → `SplitController.split_now`) and `edit_button` (`editRequested` → `SplitController.open`).
+    `split_now` opens the sheet and sets `_split_now`; once planned, `_split_when_planned` calls `split()` or shows
+    a toast "Not split: <why>. Check it here, then click Split." (the sjis fixture's guessed encoding is such a
+    case).
 - The side panel's preview of any `.cue` (§20) shows a **Split into tracks…** button. The side panel previews
   only a single selected file, so this is "one `.cue` selected". There is no menu entry, and nothing on the Tools
   page.

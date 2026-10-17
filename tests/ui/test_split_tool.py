@@ -87,19 +87,62 @@ def run(qtbot, split):
 
 # -- the way in --
 
-def test_the_button_on_every_cue_preview(qtbot, window, service, library_dir, split):
-    albums = library_dir / "Albums"
-    window.open_folder(folder_id(service, albums / "sjis"))
+def show_cue(qtbot, window, service, cue):
+    window.open_folder(folder_id(service, cue.parent))
     preview = window.side_panel.preview
-    window.file_view.select_ids([file_id(service, albums / "sjis" / "album.cue")])
+    window.file_view.select_ids([file_id(service, cue)])
     qtbot.waitUntil(lambda: preview.split_button.isVisible(), timeout=10000)
-    preview.split_button.click()
+    return preview
+
+
+def test_the_buttons_on_every_cue_preview(qtbot, window, service, library_dir, split):
+    albums = library_dir / "Albums"
+    preview = show_cue(qtbot, window, service, albums / "sjis" / "album.cue")
+    # Play, Split and Edit… (Hugo, M19): Play is Open, renamed for a cue sheet.
+    assert [b.text() for b in (preview.open_button, preview.split_button, preview.edit_button)] == [
+        "Play", "Split", "Edit…"]
+    assert preview.edit_button.isVisible()
+    preview.edit_button.click()
     assert window.center.currentWidget() is split.page
     ready(qtbot, split)
     assert split.path == albums / "sjis" / "album.cue"
     # No menu entry: the side panel's preview is the one way in.
     texts = [a.text() for a in window.list_menu([file_id(service, albums / "sjis" / "x.flac")]).actions()]
     assert "Split into tracks…" not in texts
+
+
+def test_other_files_keep_open(qtbot, window, service, library_dir):
+    folder = library_dir / "Albums" / "sjis"
+    window.open_folder(folder_id(service, folder))
+    preview = window.side_panel.preview
+    window.file_view.select_ids([file_id(service, folder / "album.cue")])
+    qtbot.waitUntil(lambda: preview.split_button.isVisible(), timeout=10000)
+    (folder / "notes.txt").write_text("hello", encoding="utf-8")
+    preview.show_file(folder / "notes.txt")
+    assert preview.open_button.text() == "Open"
+    assert not preview.split_button.isVisible() and not preview.edit_button.isVisible()
+
+
+def test_split_splits_at_once_with_the_defaults(qtbot, window, service, library_dir, split):
+    folder = library_dir / "Albums" / "wav_image"
+    preview = show_cue(qtbot, window, service, folder / "image.cue")
+    preview.split_button.click()
+    assert window.center.currentWidget() is split.page
+    qtbot.waitUntil(lambda: split.page.state in ("result", "error"), timeout=30000)
+    assert split.page.report.toPlainText().startswith("Done: 2 tracks split, all identical to the original.")
+    assert (folder / "01 One.flac").exists() and (folder / "02 Two.flac").exists()
+    assert (folder / "image.wav").exists() and (folder / "image.cue").exists()  # a split touches nothing else
+
+
+def test_split_stops_on_a_sheet_that_needs_a_look(qtbot, window, service, library_dir, split):
+    folder = library_dir / "Albums" / "sjis"
+    before = sorted(p.name for p in folder.iterdir())
+    preview = show_cue(qtbot, window, service, folder / "album.cue")
+    preview.split_button.click()
+    ready(qtbot, split)
+    assert split.page.state == "editing" and split.job is None  # the page stays, nothing was split
+    assert window.toast.label.text().startswith("Not split: ")
+    assert sorted(p.name for p in folder.iterdir()) == before
 
 
 # -- the page --

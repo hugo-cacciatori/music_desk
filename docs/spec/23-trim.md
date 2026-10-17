@@ -1,5 +1,5 @@
 # 23. Trim
-Specified with Hugo on 2026-10-17 (M13, not built). From one selected audio file, the app writes a **trimmed
+Specified with Hugo on 2026-10-17 (M13; the core, the page and the job are built, New cue sheet… is task 4). From one selected audio file, the app writes a **trimmed
 copy** of it, keeping only the part between a new start and a new end, into a subfolder of its folder. The
 original is never touched. The same selection also offers **New cue sheet…**, which opens the Split page on a new
 sheet for that file (§22, "M13 additions").
@@ -177,9 +177,24 @@ Top to bottom:
 - **UI:** `ui/trim_page.py` (the widgets: the waveform widget, the fields, the subfolder, the buttons, the report)
   and `ui/controllers/trim.py` `TrimController` (`window.trim`), following `SplitController`. The waveform is
   computed on a worker and painted from the cached peaks, so dragging a handle and resizing never decode again.
+  - **Built (M13 task 3, 0.3.8):** `services/trim_job.py` `TrimRunner` reads the track (`trim.read_source`, and
+    title, artist and album for the preview), plans each edit (latest request only, 80 ms after the last change),
+    and runs the job under the lock; the waveform has its own worker and a newer track stops it. `ui/trim_page.py`
+    holds `WaveformView` (a press takes the nearer handle and drags it; the handles stay at least 1 ms apart),
+    `TimeEdit` (the nudge keys) and `TrimPage`; `ui/controllers/trim.py` `TrimController` (`window.trim`).
+  - The Metadata tab shows **Trim…** under the format line for one audio file (`trimRequested`); New cue sheet…
+    joins it with task 4. The button decides from the extension: a 32-bit float WAV opens the page, which says
+    why it can't be trimmed (reading the format needs the file, which the button doesn't open).
+  - The subfolder is a name field labelled "Save in subfolder:" (the copy always goes in one). The name is saved
+    in `Settings.trim_subfolder` when Trim runs. The note beside Trim lists every problem, not only the first.
+  - Preview in player writes the sheet and calls `window.launch` on the shell thread (`window._in_shell`, as
+    Play does); without a player for `.cue`, the toast says how to set one and offers File Explorer.
 - **Measure** (Ground rule 2, §18 `StallWatch`): the waveform's read time and memory on a 70-minute 16-bit image
   and on a 24-bit/96 kHz track, and the UI-thread cost of painting and dragging (target: no stall over 50 ms).
-  Record the numbers here.
+  The read is above ("Built (M13 task 2)"). **Measured** (2026-10-17, this machine, a 2,538-pixel-wide waveform of
+  4096 columns): a repaint 4 ms, a drag step (the handle, its field, the repaint) 4 ms, a resize 23 ms (the peaks
+  fitted again and drawn once into a cached pixmap). Before the pixmap cache, every drag step redrew the waveform
+  (18 ms).
 
 ## Tests
 - **Core, with a fake runner:** times to samples at 44.1 and 48 kHz; the validation (each case above); the copy's

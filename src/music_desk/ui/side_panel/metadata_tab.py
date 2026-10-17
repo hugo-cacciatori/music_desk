@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from music_desk.core import trim
 from music_desk.core.formats import TagFamily
 from music_desk.core.metadata import COVER, COVER_EXTENSIONS, LARGE_COVER, Snapshot, embedded_cover
 from music_desk.core.tags import Fields
@@ -102,12 +103,14 @@ class MetadataTab(QWidget):
     filesSaved = Signal(int)  # a multi-file save: how many files were saved
     saveFailed = Signal(str)
     renameSuggested = Signal(str, str)  # path, new name: the hint after a save (SPEC §7)
+    trimRequested = Signal(str)  # Trim… on one audio file (SPEC §23)
 
     def __init__(self, io: TagIO, writer: TagWriter, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.io = io
         self.writer = writer
         self.locked_by: str | None = None
+        self.trim_unavailable: str | None = None  # flac's self-check failed
         self.path: Path | None = None  # one file
         self.paths: list[Path] = []  # several files
         self.snapshot: Snapshot | None = None  # one file
@@ -183,6 +186,14 @@ class MetadataTab(QWidget):
         names.addWidget(self.name_label)
         names.addWidget(self.format_label)
         names.addWidget(self.cover_source)
+        # In the room the cover column leaves (SPEC §23): nothing on screen is resized.
+        self.trim_button = QPushButton("Trim…")
+        self.trim_button.clicked.connect(lambda: self.trimRequested.emit(str(self.path)) if self.path else None)
+        self.trim_button.hide()
+        trim_row = QHBoxLayout()
+        trim_row.addWidget(self.trim_button)
+        trim_row.addStretch(1)
+        names.addLayout(trim_row)
         names.addStretch(1)
         header.addLayout(cover_box)
         header.addLayout(names, 1)
@@ -503,7 +514,25 @@ class MetadataTab(QWidget):
             notes.insert(0, f"Read-only while {self.locked_by} is running.")
         self.note.setText("\n".join(notes))
         self.note.setVisible(bool(notes))
+        self._update_trim_button()
         self._set_dirty(self.dirty)
+
+    def set_trim_unavailable(self, reason: str | None) -> None:
+        self.trim_unavailable = reason
+        self._update_trim_button()
+
+    def _update_trim_button(self) -> None:
+        """Trim… shows for one audio file only; greyed, saying why, for a format flac doesn't read, while flac is
+        unavailable, or while a job holds the file (SPEC §23)."""
+        single = self.snapshot is not None and not self.multi
+        self.trim_button.setVisible(single)
+        if self.snapshot is None or not single:
+            return
+        reason = (trim.unsupported_reason(self.snapshot.path) or self.trim_unavailable
+                  or (f"Unavailable while {self.locked_by} is running." if self.locked_by else None))
+        self.trim_button.setEnabled(reason is None)
+        self.trim_button.setToolTip(reason or "Write a copy of this track without its start or its end, in a "
+                                              "subfolder. The original is never touched.")
 
     # -- editing --
 

@@ -16,12 +16,13 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 16):** 0.3.7 is on `main`, not released: M13 task 2 is done
-  (`core/waveform.py`, measured in SPEC §23; the preview sheets in `core/playlists.py`, with `trim.preview_sheet`
-  and `split.preview_sheet`). Full suite passed, slow included.
+- **State (2026-10-17, session 16):** 0.3.8 is on `main`, not released: M13 task 3 is done (the Trim page,
+  `TrimController`, the job, Preview in player, Trim… on the Metadata tab; New cue sheet… waits for task 4). Full
+  suite passed, slow included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** M13 task 3 (the Trim page, `TrimController`, the job, Preview in player; SPEC §23). Then
+- **Next step:** M13 task 4 (the Split page: New cue sheet…, the source warning, Preview in player, Fill from
+  track lengths…; SPEC §22 "M13 additions"). Then
   M12, after asking Hugo its questions (SPEC §6 "Later"). Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
@@ -34,7 +35,7 @@ of it (see Session protocol 5).
 comes before M12 (Hugo, 2026-10-17; the labels were kept).
 - [x] 1. Core: `core/trim.py` (plan, checks, subfolder), the cut and proof through the split's code, the tags.
 - [x] 2. Core: `core/waveform.py` (measure a 70-minute image, a 24-bit/96 kHz track); temporary `preview-*.cue`.
-- [ ] 3. UI: the Metadata tab's two buttons, the Trim page and `TrimController`, the job, Preview in player.
+- [x] 3. UI: the Metadata tab's two buttons, the Trim page and `TrimController`, the job, Preview in player.
 - [ ] 4. UI: on the Split page, New cue sheet…, the source warning, Preview in player, Fill from track lengths….
 - [ ] 5. README and the minor version.
 
@@ -98,9 +99,9 @@ Code and tests cite these by number; keep the numbering.
    - (M10) saving a cue sheet from the Split page: Save overwrites the selected `.cue` after its old version
      goes to the Recycle Bin, Save as creates a `.cue` (a replaced one goes to the Recycle Bin first). Where
      Windows has no Recycle Bin, a `.cue` is overwritten only after the user agrees to lose it (SPEC §22).
-   - (M13, not built) a trim: creating its subfolder if missing (removed again only if that run made it and
-     leaves it empty) and the copy there, never over a file; deleting that run's `.partial` (SPEC §23). Saving a
-     new cue sheet beside its audio file (SPEC §22).
+   - (M13) a trim: creating its subfolder if missing (removed again only if that run made it and leaves it
+     empty) and the copy there, never over a file; deleting that run's `.partial` (SPEC §23). (M13, not built)
+     Saving a new cue sheet beside its audio file (SPEC §22).
 
    This list grows when a feature needs to create or overwrite files: it is specified with Hugo, gets a row in
    DECISIONS.md and an entry here (Hugo, 2026-10-16).

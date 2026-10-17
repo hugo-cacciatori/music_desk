@@ -54,6 +54,7 @@ from music_desk.ui.controllers.delete import DeleteController
 from music_desk.ui.controllers.search import SearchController
 from music_desk.ui.controllers.split import SplitController
 from music_desk.ui.controllers.tools import ToolsController
+from music_desk.ui.controllers.trim import TrimController
 from music_desk.ui.file_view import FileView
 from music_desk.ui.jobs_panel import JobsPanel
 from music_desk.ui.playlist_panel import PlaylistPanel
@@ -165,6 +166,9 @@ class MainWindow(QMainWindow):
         self.tools_page, self.rename_preview, self.rg_view = self.tools.pages
         self.split = SplitController(self, locks, self)  # the cue split (SPEC §22)
         self.split_page = self.split.page
+        self.trim = TrimController(self, locks, self)  # trimming one track into a copy (SPEC §23)
+        self.trim_page = self.trim.page
+        self.side_panel.metadata.trimRequested.connect(self.trim.open)
         self.delete = DeleteController(self, self)  # Delete to the Recycle Bin (SPEC §19)
         # The jobs panel (SPEC §10): this session's runs, in a bottom drawer; they go on while you browse.
         self.jobs = JobList(self)
@@ -190,6 +194,7 @@ class MainWindow(QMainWindow):
         self.center.addWidget(self.rename_preview)
         self.center.addWidget(self.rg_view)
         self.center.addWidget(self.split_page)
+        self.center.addWidget(self.trim_page)
         # The playlist builder (SPEC §15): a narrow column between the centre and the side panel, hidden until asked.
         self.playlist_panel = PlaylistPanel(conn)
         self.playlist_file: Path | None = (self.settings.path.with_name("playlist.json")
@@ -334,6 +339,9 @@ class MainWindow(QMainWindow):
         self.flac_version = version
         self.split.set_unavailable(
             None if version else "flac couldn't run, so the split is unavailable. See the log for details.")
+        reason = None if version else "flac couldn't run, so trimming is unavailable. See the log for details."
+        self.trim.set_unavailable(reason)
+        self.side_panel.metadata.set_trim_unavailable(reason)
 
     def open_about(self) -> None:
         """Help › About: versions and licences."""
@@ -640,12 +648,18 @@ class MainWindow(QMainWindow):
             self.center.setCurrentWidget(self.split_page)
         elif "split" in job.reports:
             self.split.show_report(job.reports["split"])
+        elif job_id == self.trim.job:
+            self.center.setCurrentWidget(self.trim_page)
+        elif "trim" in job.reports:
+            self.trim.show_report(job.reports["trim"])
         elif not self.tools.show_job(job_id, job):
             self.toast.show_message(f"{job.kind} in {job.folder}: {job.status}")
 
     def stop_job(self, job_id: int) -> None:
         if job_id == self.split.job:
             self.split.runner.cancel()
+        elif job_id == self.trim.job:
+            self.trim.runner.cancel()
         else:
             self.tools.stop_job(job_id)
 
@@ -654,7 +668,7 @@ class MainWindow(QMainWindow):
             self, "A job is running",
             "Still running:\n" + "\n".join(names) + "\n\nStop it and quit? A stopped rename leaves the files "
             "after that point as they were; a stopped ReplayGain album is reported as cancelled; a stopped split "
-            "deletes the tracks it was writing and leaves its album as it was.")
+            "deletes the tracks it was writing and leaves its album as it was; a stopped trim deletes its copy.")
         return answer == QMessageBox.StandardButton.Yes
 
     def set_lyrics_offline(self, offline: bool) -> None:
@@ -917,6 +931,7 @@ class MainWindow(QMainWindow):
             self.embedder.close()  # before the writer: it may still hand it a batch
         self.tools.shutdown()  # a running rename stops between two files; a running rsgain is killed
         self.split.close()  # a running flac is killed; this run's .partial files are deleted
+        self.trim.close()  # likewise for a trim's .partial
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
         self._playlist_save.stop()

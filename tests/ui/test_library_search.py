@@ -176,6 +176,29 @@ def test_enter_goes_to_the_file_and_esc_returns(qtbot, window, service):
     assert window.search_field.text() == "first"  # the query is kept for the next Ctrl+K
 
 
+def test_enter_runs_the_search_again_from_anywhere(qtbot, window, service):
+    search(qtbot, window, "blue monday")
+    assert names(window) == []
+    window.search.close()
+    window.open_folder(entry(service, "Artist", "Album"))
+    put_lyrics(service, "Second", "How does it feel... blue monday")  # indexed while the page wasn't shown
+    before = window.search.shown
+    window.activateWindow()
+    window.search_field.setFocus()
+    qtbot.waitUntil(lambda: window.search_field.hasFocus())
+    QTest.keyClick(window.search_field, Qt.Key.Key_Return)
+    assert window.showing_search
+    search(qtbot, window)
+    assert window.search.shown != before
+    assert sorted(names(window)) == ["02 Second.flac", "track2.flac"], shown(window)
+    qtbot.waitUntil(lambda: window.search_view.view.hasFocus() and window.search_view.view.currentIndex().row() == 0)
+
+    put_lyrics(service, "First", "blue monday again")  # Enter on the page shown: the query runs again too
+    QTest.keyClick(window.search_field, Qt.Key.Key_Return)
+    qtbot.waitUntil(lambda: len(names(window)) > 2, timeout=10000)
+    assert "01 First.flac" in names(window), shown(window)
+
+
 def test_selecting_a_result_shows_its_lyrics(qtbot, window, service, lyrics):
     search(qtbot, window, "tear us")
     sixth = entry(service, "Other", ALBUM, "track6.FLAC")

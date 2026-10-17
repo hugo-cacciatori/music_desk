@@ -2,7 +2,8 @@
 
 The query is typed in the toolbar's field and runs as you type (debounced); the results stand in for the file
 list until Esc, or until a result is opened. When the index changes while the page is shown, the same query runs
-again and the rows are updated in place, so the selection stays.
+again and the rows are updated in place, so the selection stays. Enter in the field runs the query afresh from
+anywhere, so results left behind catch up with what the scan indexed meanwhile.
 """
 
 from pathlib import Path
@@ -44,6 +45,7 @@ class SearchController(QObject):
         self._token: int | None = None
         self._request: str | None = None  # the query running, and shown
         self._shown_request: str | None = None
+        self._focus_first = False  # Enter: the first result gets the focus once the fresh results are in
         self._timer = QTimer(self, singleShot=True, interval=TYPING_MS)
         self._timer.timeout.connect(self.run)
         self._refresh = QTimer(self, singleShot=True, interval=REFRESH_MS)
@@ -57,7 +59,7 @@ class SearchController(QObject):
         self.field.setMinimumWidth(180)
         self.field.setMaximumWidth(320)
         self.field.textEdited.connect(self._edited)
-        self.field.returnPressed.connect(lambda: self.view.focus_results())
+        self.field.returnPressed.connect(self.enter)
         shortcut(QKeySequence(Qt.Key.Key_Escape), self.field, self.close, Qt.ShortcutContext.WidgetShortcut)
 
     @property
@@ -80,6 +82,19 @@ class SearchController(QObject):
         self.field.setFocus()
         self.field.selectAll()
 
+    def enter(self) -> None:
+        """Enter in the field (SPEC §6): the query runs again from scratch, the page comes back if it was left, and
+        the results take the focus."""
+        if self.showing:
+            self._shown_request = None  # rebuilt, not updated in place
+            self.run()
+        else:
+            self.open()  # runs the query; leaving the page forgot the last results
+            if not self.showing:
+                return  # unsaved tag edits, and Cancel
+        self._focus_first = True
+        self.view.focus_results()
+
     def close(self) -> None:
         """Esc: back to the folder that was open, as it was."""
         window = self.window
@@ -96,6 +111,7 @@ class SearchController(QObject):
         self._refresh.stop()
         self._token = None
         self._shown_request = None  # the next search starts afresh
+        self._focus_first = False
         if self.service is not None:
             self.service.cancel()
 
@@ -133,6 +149,10 @@ class SearchController(QObject):
         else:
             self.view.show_results(results.rows, results.total, results.query.errors, results.error,
                                    keys=results.keys, in_place=in_place)
+        if self._focus_first and self._request == self.field.text():
+            self._focus_first = False
+            if self.view.view.hasFocus():  # unless the user moved on meanwhile
+                self.view.focus_results()
 
     def add_artist_filter(self, artist: str) -> None:
         """Ctrl+click on an artist, or "Filter by": the page's artist checkboxes, as artist: filters (ORed)."""

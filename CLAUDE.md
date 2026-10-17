@@ -36,7 +36,7 @@ Read SPEC §5, §6, §10, §15, §23, §26, §27.
   retired; the status bar's Jobs button always shown; "Hide folders without music" in the folder tree's menu;
   the address bar gives way to the buttons (SPEC §5, §10, §15, §26). 0.5.5.
 - [x] 2. Advanced search: a Clear button (SPEC §26). 0.5.6.
-- [ ] 3. Enter in the search field runs the search again, from anywhere (SPEC §6). 0.5.7.
+- [x] 3. Enter in the search field runs the search again, from anywhere (SPEC §6). 0.5.7.
 - [ ] 4. The trim waveform at a fixed 70 px (SPEC §23). 0.5.8.
 - [ ] 5. ID3 text marked Latin-1 read as UTF-8 or Shift-JIS/GBK/Big5/EUC-KR when it fits; schema v4 re-reads ID3
   files (SPEC §27). 0.6.0.

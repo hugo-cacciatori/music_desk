@@ -118,6 +118,8 @@ checks this subsection first.
     and moves to the results, whether the page is shown or not. After browsing elsewhere, focusing the field and
     pressing Enter brings the page back with fresh results, so they include what the scan indexed meanwhile.
     The results are rebuilt (not updated in place), and an empty field shows the prompt.
+    Built (M16 task 3, 0.5.7): `SearchController.enter`; the first row gets the focus when the fresh results
+    arrive, unless the focus moved meanwhile.
   - Under it: the count and Play results (the chips and "Only in <folder> and below" were removed in 0.2.11).
     Columns: Name, Title, Artist, Lyrics (the snippet), Album, Folder (elided on the left), then
     the file list's other columns. The model sorts itself (no sort proxy) and isn't editable;

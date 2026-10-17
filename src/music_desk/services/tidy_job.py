@@ -264,6 +264,9 @@ class TidyRunner(QObject):
         done.lines.append(f"{where}split into {plural(len(finished.tracks), 'track')}, each identical to its part "
                           "of the original")
         done.lines += [f"{where}{warning}" for warning in finished.warnings]
+        if plan.sheet is not None and plan.sheet.fell_back:
+            done.lines.append(f"{where}{plan.cue.name} read as Windows-1252 (no BOM, not UTF-8): if a title looks "
+                              "wrong, fix its tags")
         return True
 
     def cancel(self) -> None:

@@ -26,9 +26,10 @@ Tidy sorts each album into one of these:
    (§22): every track ticked, into the same folder, named by the File names masks, in the sheet's Auto encoding.
    Then **ReplayGain** runs on the album. The `.cue` and the image go on the **offer list** (below).
    - The split is skipped, and the album listed in the report as "open its .cue to split it by hand", when the
-     sheet needs a human (Hugo): Auto encoding fell back to Windows-1252, any warning of the Split page (data
-     tracks, a hidden track kept before track 1, …), the plan's refusal (a name too long, an existing file, too
+     sheet needs a human (Hugo): any warning of the Split page (data tracks, a sheet whose bytes can't be
+     Windows-1252, a hidden track kept before track 1, …), the plan's refusal (a name too long, an existing file, too
      little space, flac unavailable), or two sheets naming the same image. Nothing in that folder is touched.
+   - A sheet Auto read as Windows-1252 is split (0.7.3, §22 "Text encoding"); the report says so for that album.
 2. **Split** (tracks are there; a cue or not): Tidy **renames** the tracks the masks name differently (the Rename
    card's own options apply, junk cleanup included only when ticked there), then checks ReplayGain.
    - **Half-split** (the image, its `.cue` and the tracks split from it, Hugo): handled as split, and the image and

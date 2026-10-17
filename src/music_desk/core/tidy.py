@@ -192,8 +192,6 @@ def _split_problem(plan: AlbumPlan) -> str | None:
     """Why a sheet needs a human (SPEC §28): anything the Split page would warn about or refuse."""
     if plan.refusal:
         return plan.refusal
-    if plan.sheet is not None and plan.sheet.fell_back:
-        return "the sheet's text encoding had to be guessed (Windows-1252)"
     if plan.warnings:
         return plan.warnings[0]
     if any(track.number == 0 for track in plan.tracks):

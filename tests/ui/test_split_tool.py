@@ -141,8 +141,20 @@ def test_split_stops_on_a_sheet_that_needs_a_look(qtbot, window, service, librar
     preview.split_button.click()
     ready(qtbot, split)
     assert split.page.state == "editing" and split.job is None  # the page stays, nothing was split
-    assert window.toast.label.text().startswith("Not split: ")
+    assert window.toast.label.text().startswith("Not split: The sheet isn't in Windows-1252")
     assert sorted(p.name for p in folder.iterdir()) == before
+
+
+def test_a_windows_1252_sheet_splits_at_once(qtbot, window, service, library_dir, split):
+    """What EAC writes on a Western Windows (no BOM, not UTF-8): Auto reads it as Windows-1252 and splits."""
+    folder = library_dir / "Albums" / "wav_image"
+    sheet = (folder / "image.cue").read_text(encoding="utf-8").replace('TITLE "One"', 'TITLE "Café"')
+    (folder / "image.cue").write_bytes(sheet.encode("cp1252"))
+    preview = show_cue(qtbot, window, service, folder / "image.cue")
+    preview.split_button.click()
+    qtbot.waitUntil(lambda: split.page.state in ("result", "error"), timeout=30000)
+    assert split.page.report.toPlainText().startswith("Done: 2 tracks split"), split.page.report.toPlainText()
+    assert (folder / "01 Café.flac").exists()
 
 
 # -- the page --

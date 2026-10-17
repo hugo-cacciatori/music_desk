@@ -73,13 +73,14 @@ def test_album_and_track_fields(split_dir):
 def test_auto_encoding(split_dir, name, encoding, fell_back):
     sheet = cue.read_cue_sheet(split_dir / "sheets" / name)
     assert (sheet.performer, sheet.title, sheet.tracks[0].title) == ("Björk", "Début", "Café Noël")
-    assert (sheet.encoding, sheet.fell_back) == (encoding, fell_back)
+    assert (sheet.encoding, sheet.fell_back, sheet.not_cp1252) == (encoding, fell_back, False)
 
 
 def test_a_chosen_encoding(split_dir):
     path = split_dir / "sheets" / "sjis.cue"
     auto = cue.read_cue_sheet(path)
     assert auto.fell_back and auto.performer != "宇多田ヒカル"  # garbled: the picker is there for this
+    assert auto.not_cp1252  # and its bytes say so
     chosen = cue.read_cue_sheet(path, "shift_jis")
     assert (chosen.performer, chosen.tracks[1].title, chosen.encoding) == (
         "宇多田ヒカル", "花束を君に", "Shift-JIS (Japanese)")

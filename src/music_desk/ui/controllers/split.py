@@ -177,9 +177,7 @@ class SplitController(QObject):
         self._split_now = False
         plan = self.plan
         why = None
-        if plan is not None and plan.sheet is not None and plan.sheet.fell_back:
-            why = "its text encoding had to be guessed"
-        elif plan is not None and plan.warnings:
+        if plan is not None and plan.warnings:
             why = plan.warnings[0].rstrip(".")
         elif not self.page.split_button.isEnabled():
             why = self.page.split_note.text().rstrip(".") or "it can't be split as it is"

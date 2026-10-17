@@ -93,7 +93,13 @@ which FLAC can't hold, is refused the same way. **The tracks are always FLAC.**
   (Chinese, simplified), Big5 (Chinese, traditional) and EUC-KR (Korean). Changing it re-reads the sheet; with
   unsaved edits it asks first, since they would be lost.
 - When Auto had to fall back to Windows-1252, the page shows "If the titles look wrong, pick the cue sheet's
-  encoding."
+  encoding." That alone never stops a split (Hugo, 2026-10-17, 0.7.3): it is what EAC writes on a Western
+  Windows, and refusing it stopped every such rip with an accented title. A sheet is stopped only when its bytes
+  prove it isn't Windows-1252: one of the five bytes that code page leaves unassigned (0x81, 0x8D, 0x8F, 0x90,
+  0x9D; `preview.not_cp1252`, `CueSheet.not_cp1252`). The plan then warns "The sheet isn't in Windows-1252 (it
+  holds bytes that code page lacks): pick its encoding." Shift-JIS and GBK text nearly always holds one, but not
+  always (a few kana and kanji don't), so a short such sheet can still be read as Windows-1252 and its titles
+  garbled; the picker fixes it.
 - Parsing happens in `core/cue.py` (no Qt): `read_cue_sheet(path, encoding=None) -> CueSheet` (album fields,
   tracks with their fields and INDEX times, the FILE name, the encoding used, warnings). `rename.read_cue` stays
   for the Rename tool's FILE/TRACK count.
@@ -135,8 +141,8 @@ in**, and **one page with every control**; you can't split without going through
     the sheet's folder, named by the File names masks, in the sheet's Auto encoding. The Split page opens to show
     the run and its report, as when Split is clicked there. It doesn't split, and stays on the page with a note
     saying why, when the sheet needs a look: the Split button there would be disabled (a refusal, a marked
-    value, the file names to fix, flac unavailable), the encoding had to be guessed (Windows-1252), or the page
-    has a warning (data tracks). Same sheet already open with unsaved edits: Split asks to save first, as the
+    value, the file names to fix, flac unavailable), or the page has a warning (data tracks, a sheet that
+    can't be Windows-1252; a plain Windows-1252 fallback no longer stops it, 0.7.3). Same sheet already open with unsaved edits: Split asks to save first, as the
     page's own Split does.
   - **Edit…**: what "Split into tracks…" did: the Split page, to check and edit before splitting.
   - **The page edits only** (Hugo, 2026-10-17, M20): opened by Edit… or by New cue sheet… (an audio file's

@@ -26,6 +26,15 @@ _BOMS = ((b"\xef\xbb\xbf", "utf-8", "UTF-8 (BOM)"), (b"\xff\xfe", "utf-16-le", "
          (b"\xfe\xff", "utf-16-be", "UTF-16 BE"))
 
 
+# The five bytes Windows-1252 assigns no character to: text holding one was written in another code page (Shift-JIS
+# and GBK use them often), so reading it as Windows-1252 would garble it. Proof, not a guess.
+CP1252_UNASSIGNED = (b"\x81", b"\x8d", b"\x8f", b"\x90", b"\x9d")
+
+
+def not_cp1252(data: bytes) -> bool:
+    return any(byte in data for byte in CP1252_UNASSIGNED)
+
+
 def kind(path: str | Path) -> str | None:
     """"text", "image", or None when the file isn't previewed."""
     suffix = Path(path).suffix.lower()

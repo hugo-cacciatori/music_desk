@@ -96,13 +96,25 @@ def test_sheets_that_need_a_human_are_skipped(tmp_path, split_fixtures, fixture,
     assert album.replaygain is None and not album.own.offer  # nothing measured, nothing offered
 
 
-def test_a_guessed_encoding_is_skipped(tmp_path, split_fixtures):
+def test_a_windows_1252_sheet_is_split(tmp_path, split_fixtures):
+    """What EAC writes on a Western Windows: no BOM, not UTF-8. Read as Windows-1252, not a reason to stop."""
     folder = tmp_path / "Rip"
     shutil.copytree(split_fixtures / "wav_image", folder)
     sheet = (folder / "image.cue").read_text(encoding="utf-8").replace('TITLE "One"', 'TITLE "Café"')
     (folder / "image.cue").write_bytes(sheet.encode("cp1252"))
     [album] = tidy(tmp_path).albums
-    assert album.own.kind is Kind.SKIPPED and "encoding" in album.own.skip
+    assert album.own.kind is Kind.NOT_SPLIT and album.own.split is not None
+    assert album.own.split.written[0].name == "01 Café.flac"
+
+
+def test_a_sheet_that_cant_be_windows_1252_is_skipped(tmp_path, split_fixtures):
+    folder = tmp_path / "Rip"
+    shutil.copytree(split_fixtures / "wav_image", folder)
+    sheet = (folder / "image.cue").read_bytes().replace(b'TITLE "One"', 'TITLE "さくら、花"'.encode("shift_jis"))
+    assert b"\x81" in sheet  # a byte Windows-1252 has no character for
+    (folder / "image.cue").write_bytes(sheet)
+    [album] = tidy(tmp_path).albums
+    assert album.own.kind is Kind.SKIPPED and "pick its encoding" in album.own.skip
 
 
 def test_two_sheets_for_one_image_are_skipped(tmp_path, split_fixtures):

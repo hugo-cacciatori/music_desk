@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from music_desk.core import fsops
+from music_desk.core import fsops, preview
 from music_desk.core.cue import (
     ENCODINGS,
     FRAMES_PER_SECOND,
@@ -130,7 +130,8 @@ class CueDocument:
     codec: str  # Python's codec, to write it back
     encoding: str  # its name, as the page shows it
     bom: bytes = b""
-    fell_back: bool = False  # Auto had to use Windows-1252: the titles may be garbled
+    fell_back: bool = False  # Auto used Windows-1252 (no BOM, not UTF-8)
+    not_cp1252: bool = False  # ... but the bytes can't be Windows-1252: the titles are garbled
     path: Path | None = None
     saved: bytes | None = None  # the bytes on disk, to tell unsaved edits
 
@@ -205,7 +206,7 @@ class CueDocument:
     def sheet(self) -> CueSheet:
         """The parsed sheet, for planning. Raises CueError (validate() says where)."""
         sheet = parse_cue(_shown(self.text()), self.encoding, self.path)
-        sheet.fell_back = self.fell_back
+        sheet.fell_back, sheet.not_cp1252 = self.fell_back, self.not_cp1252
         return sheet
 
     @property
@@ -394,6 +395,7 @@ class CueDocument:
     def use_utf8_bom(self) -> None:
         """Write UTF-8 with a BOM from now on (a character didn't fit the sheet's encoding)."""
         self.codec, self.bom, self.encoding, self.fell_back = "utf-8", UTF8_BOM, "UTF-8 (BOM)", False
+        self.not_cp1252 = False
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +425,7 @@ def parse_document(data: bytes, encoding: str | None = None, path: Path | None =
         position = match.end()
     if position < len(text):
         lines.append(Line(text[position:]))
-    return CueDocument(lines, codec, label, bom, fell_back, path, data)
+    return CueDocument(lines, codec, label, bom, fell_back, fell_back and preview.not_cp1252(data), path, data)
 
 
 def new_document(audio_name: str, performer: str = "", title: str = "") -> CueDocument:

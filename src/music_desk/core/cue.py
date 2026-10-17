@@ -62,7 +62,8 @@ class CueTrack:
 class CueSheet:
     path: Path | None
     encoding: str  # its name, as the preview shows it
-    fell_back: bool = False  # Auto had to use Windows-1252: the titles may be garbled
+    fell_back: bool = False  # Auto used Windows-1252 (no BOM, not UTF-8): what EAC writes on a Western Windows
+    not_cp1252: bool = False  # ... but the bytes can't be Windows-1252 (preview.not_cp1252): the titles are garbled
     title: str = ""
     performer: str = ""
     date: str = ""
@@ -185,6 +186,7 @@ def read_cue_sheet(path: str | Path, encoding: str | None = None) -> CueSheet:
         text, name = preview.decode(data)
         sheet = parse_cue(text, name, path)
         sheet.fell_back = name == "Windows-1252"
+        sheet.not_cp1252 = sheet.fell_back and preview.not_cp1252(data)
         return sheet
     label = dict(ENCODINGS).get(encoding, encoding)
     codec = "utf-8-sig" if encoding == "utf-8" else encoding  # a BOM is dropped
@@ -390,8 +392,9 @@ def plan_sheet(sheet: CueSheet, cue: str | Path, name_masks: Sequence[str], repl
     plan = AlbumPlan(cue, ticked=frozenset(ticked) if ticked is not None else None,
                      destination=Path(destination) if destination else None)
     plan.sheet = sheet
-    if sheet.fell_back:
-        plan.warnings.append("If the titles look wrong, pick the cue sheet's encoding.")
+    if sheet.not_cp1252:  # a plain Windows-1252 fallback isn't a warning: the Split page names it (SPEC §22)
+        plan.warnings.append("The sheet isn't in Windows-1252 (it holds bytes that code page lacks): pick its "
+                             "encoding.")
     if sheet.data_tracks:
         plan.warnings.append(f"{sheet.data_tracks} data track{'s' if sheet.data_tracks > 1 else ''} skipped.")
     names = {n.casefold() for n in sheet.files}

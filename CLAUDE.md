@@ -16,15 +16,14 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 19):** 0.8.0 is on `main`, not released (the last release is v0.6.3). Session 19:
-  Tidy's Back and Keep/Delete drop-down (0.7.2), Windows-1252 cues no longer block (0.7.3), the Recycle Bin never
-  asks (0.7.4), M21: the tools toolbar and the Options menu replace the Tools page (0.8.0, SPEC §30).
+- **State (2026-10-17, session 19):** 0.8.2 is on `main` and released as v0.8.2. Session 19: Tidy's Back and
+  offer window ("Redundant files", checkboxes), Windows-1252 cues no longer block (0.7.3), the Recycle Bin never
+  asks (0.7.4), M21 the tools toolbar and Options menu (0.8.0, SPEC §30), going up selects where you came from.
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
   in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
-  fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page; Japanese/Chinese MP3 tags read
-  right after the first start of 0.6.x (it re-reads ID3 files). After installing 0.6.3: `musicdesk` typed in Explorer's
-  address bar opens that folder. With 0.7.0: Tidy on a real EAC album (on a copy): split, ReplayGain, the offer
-  window.
+  fix; the real mouse wheel over a ReplayGain number field scrolls its Options dialog; Japanese/Chinese MP3 tags;
+  `musicdesk` in Explorer's address bar; Tidy on a real EAC album (split, ReplayGain, Redundant files); the
+  toolbar's Start names its target.
 - **Next step:** none scheduled; ask Hugo. Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 

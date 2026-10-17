@@ -966,6 +966,17 @@ first.
 Done when: the status bar shows no rsgain text at startup or after the check, a failed check still disables
 the ReplayGain and Tidy cards with their explanation, About still shows the version, and the suite passes.
 
+**M11 Maintenance** (Hugo, 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Clear its open
+decisions with Hugo first (Session protocol 1), then start. The split's controller already exists (0.2.14). Neither changes what the app does.
+- [x] 1. (0.3.3) Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), findings fixed.
+- [x] 2. (0.3.4) Split `ui/main_window.py` (2,043 lines at 0.2.10) into one controller per feature: tools (Rename,
+      ReplayGain, Tidy), split, delete, search. Behaviour and tests unchanged.
+
+Done when:
+- pyright passes (basic mode) in the full test run, and ruff is clean;
+- `main_window.py` holds the window, its layout and the browsing; each feature's flow lives in its controller;
+- the full suite passes unchanged, apart from tests that reached into moved internals.
+
 ## Former CLAUDE.md sections (as of 2026-10-16)
 
 **Session protocol:**

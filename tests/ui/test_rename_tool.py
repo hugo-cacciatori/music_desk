@@ -24,7 +24,7 @@ def library_dir(tmp_path, fixtures_dir):
 @pytest.fixture
 def recycled(window):
     paths = []
-    window.rename_runner.recycle = paths.append
+    window.tools.rename_runner.recycle = paths.append
     return paths
 
 
@@ -35,7 +35,7 @@ def folder_id(service, path) -> int:
 
 def preview(qtbot, window, service, folder, *, cleanup=False, ids=None):
     window.open_folder(folder_id(service, folder))
-    window.open_tools(ids or [])
+    window.tools.open(ids or [])
     card = window.tools_page.rename_card
     card.cleanup.setChecked(cleanup)
     window.tools_page.request(RENAME)
@@ -85,10 +85,10 @@ def test_junk_asks_first_and_can_be_kept(qtbot, window, service, library_dir, re
     view = preview(qtbot, window, service, library_dir / "Cleanup", cleanup=True)
     assert "6 files would be sent to the Recycle Bin as junk (you confirm first)" in view.extras.toPlainText()
     asked = []
-    window.ask_recycle = lambda names: asked.append(names) or "cancel"
+    window.tools.ask_recycle = lambda names: asked.append(names) or "cancel"
     view.apply_button.click()
     assert view.state == "preview" and len(asked[0]) == 6  # cancelled: nothing ran
-    window.ask_recycle = lambda names: "keep"
+    window.tools.ask_recycle = lambda names: "keep"
     report = apply(qtbot, window)
     assert recycled == [] and report.junk == [] and report.renamed
     assert (library_dir / "Cleanup" / "single_file_album" / "notes.txt").exists()
@@ -97,9 +97,9 @@ def test_junk_asks_first_and_can_be_kept(qtbot, window, service, library_dir, re
 def test_junk_goes_to_the_recycle_bin_once_confirmed(qtbot, window, service, library_dir, recycled):
     view = preview(qtbot, window, service, library_dir / "Cleanup", cleanup=True)
     owners = []
-    window.rename_runner.recycle = lambda path: (recycled.append(path),
+    window.tools.rename_runner.recycle = lambda path: (recycled.append(path),
                                                  owners.append(service.locks.owner(path)))
-    window.ask_recycle = lambda names: "recycle"
+    window.tools.ask_recycle = lambda names: "recycle"
     report = apply(qtbot, window)
     assert len(recycled) == len(report.junk) == 6
     assert set(owners) == {"the Rename tool"}  # the folder is locked during the run

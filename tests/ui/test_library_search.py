@@ -34,15 +34,15 @@ def put_lyrics(service, title: str, plain: str) -> None:
 def search(qtbot, window, text: str | None = None) -> None:
     """Type a query (or re-run the current one) and wait for its results on screen."""
     if not window.showing_search:
-        window.open_search()
+        window.search.open()
     if text is not None:
         window.search_field.clear()
         QTest.keyClicks(window.search_field, text)
     # The results on screen are those of the latest request, and that request is the field's text: never the empty
     # query that opening the page runs while the typed one is still debounced.
-    qtbot.waitUntil(lambda: window._search_token is not None and window.search_shown == window._search_token
-                    and not window._search_timer.isActive()
-                    and window._search_request == window.search_field.text(), timeout=10000)
+    qtbot.waitUntil(lambda: window.search._token is not None and window.search.shown == window.search._token
+                    and not window.search._timer.isActive()
+                    and window.search._request == window.search_field.text(), timeout=10000)
 
 
 def names(window) -> list[str]:
@@ -52,7 +52,7 @@ def names(window) -> list[str]:
 def shown(window) -> str:
     """What the page says besides the rows, for failure messages: an empty result may be an error note."""
     view = window.search_view
-    return f"count {view.count_label.text()!r}, note {view.note.text()!r}, request {window._search_request!r}"
+    return f"count {view.count_label.text()!r}, note {view.note.text()!r}, request {window.search._request!r}"
 
 
 @pytest.fixture
@@ -73,9 +73,9 @@ def test_ctrl_k_opens_the_search_with_a_prompt(qtbot, window):
 
 
 def test_typing_runs_after_a_pause_and_counts(qtbot, window):
-    window.open_search()
+    window.search.open()
     QTest.keyClicks(window.search_field, "fir")
-    assert window._search_timer.isActive() and window._search_request == ""  # debounced: nothing runs on each key
+    assert window.search._timer.isActive() and window.search._request == ""  # debounced: nothing runs on each key
     search(qtbot, window)
     assert names(window) == ["01 First.flac", "clash.flac", "01 First.flac"], shown(window)
     assert window.search_view.count_label.text() == "3 of 3 results"
@@ -96,7 +96,7 @@ def test_substring_and_lyrics_snippet(qtbot, window, service, lyrics):
 
 
 def test_cap_and_total(qtbot, window):
-    window.search_limit = 2
+    window.search.limit = 2
     search(qtbot, window, "e")
     total = window.search_view.count_label.text()
     assert window.search_view.model.rowCount() == 2 and total.startswith("2 of ")
@@ -146,11 +146,11 @@ def test_a_folder_result(qtbot, window, service, tmp_path):
 
 def test_artist_filter_from_a_result(qtbot, window, service):
     search(qtbot, window, "first")
-    window.add_artist_filter("Fixture Artist")
+    window.search.add_artist_filter("Fixture Artist")
     search(qtbot, window)
     assert window.search_field.text() == 'first artist:"Fixture Artist"'
     assert len(names(window)) == 3
-    window.add_artist_filter("Fixture Artist")  # once only
+    window.search.add_artist_filter("Fixture Artist")  # once only
     assert window.search_field.text().count("artist:") == 1
 
 
@@ -172,7 +172,7 @@ def test_enter_goes_to_the_file_and_esc_returns(qtbot, window, service):
     qtbot.waitUntil(lambda: window.search_field.hasFocus())
     QTest.keyClick(window.search_field, Qt.Key.Key_Escape)
     assert not window.showing_search and window.folder_id == album
-    window.open_search()
+    window.search.open()
     assert window.search_field.text() == "first"  # the query is kept for the next Ctrl+K
 
 
@@ -199,9 +199,9 @@ def test_unsaved_edits_keep_the_result(qtbot, window, service, monkeypatch):
     tab.edits["title"].textEdited.emit("Edited")
     window.search_view.select_ids([second])
     assert window.search_view.selected_ids() == [first] and tab.dirty
-    window.close_search()
+    window.search.close()
     assert window.showing_search  # Cancel: the search stays
-    window.go_to_result(first)
+    window.search.go_to_result(first)
     assert window.showing_search
 
 
@@ -228,7 +228,7 @@ def test_results_follow_new_lyrics(qtbot, window, service):
 def test_result_menu(qtbot, window, service):
     search(qtbot, window, "sixth")
     sixth = entry(service, "Other", ALBUM, "track6.FLAC")
-    texts = [a.text() for a in window.result_menu([sixth]).actions() if a.text()]
+    texts = [a.text() for a in window.search.result_menu([sixth]).actions() if a.text()]
     assert texts == ["Go to folder", "Open", "Play selection", "Open in File Explorer", "Copy path",
                      "Remove ReplayGain tags…", "Delete\tDel", "Filter by Fixture Artist"]
 

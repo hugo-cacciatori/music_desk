@@ -1,5 +1,4 @@
 import base64
-import dataclasses
 import logging
 import os
 import time
@@ -22,7 +21,6 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -34,41 +32,35 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from music_desk.core import fsops, inline_rename, playlists, rename
+from music_desk.core import fsops, inline_rename, playlists
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
 from music_desk.core.index.scanner import ScanProgress, ScanReport, find_folder
-from music_desk.core.index.search import LIMIT
 from music_desk.core.index.store import path_of
-from music_desk.core.path_locks import LockedError, PathLocks
+from music_desk.core.path_locks import PathLocks
 from music_desk.core.playlist_builder import Builder
 from music_desk.licenses import licenses_dir
-from music_desk.services import jobs as jobs_module
 from music_desk.services.jobs import JobList
 from music_desk.services.library import LibraryService
 from music_desk.services.lyrics_embedder import AutoEmbedder
 from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
-from music_desk.services.rename_job import Applied, Planned, RenameRunner
-from music_desk.services.replaygain_job import Finished, ReplayGainRunner
-from music_desk.services.search_service import SearchResults, SearchService
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
 from music_desk.ui.about_dialog import AboutDialog
 from music_desk.ui.address_bar import AddressBar
+from music_desk.ui.controllers import STATUS_MS
+from music_desk.ui.controllers.delete import DeleteController
+from music_desk.ui.controllers.search import SearchController
 from music_desk.ui.controllers.split import SplitController
+from music_desk.ui.controllers.tools import ToolsController
 from music_desk.ui.file_view import FileView
 from music_desk.ui.jobs_panel import JobsPanel
 from music_desk.ui.playlist_panel import PlaylistPanel
 from music_desk.ui.qt_util import app, shortcut
-from music_desk.ui.search_view import SearchView
-from music_desk.ui.search_view import sort_keys as search_sort_keys
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
-from music_desk.ui.tools.rename_preview import RenamePreview
-from music_desk.ui.tools.rg_report import ReplayGainView, short_result
-from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN, TIDY, ToolRequest, ToolScope, ToolsPage
 
 log = logging.getLogger(__name__)
 
@@ -81,27 +73,7 @@ FIND_QUERIES = (  # the Lyrics menu's Find entries: (menu text, search query)
 ACTION_QUERIES = (  # the Action menu's entries over the whole library: (menu text, search query)
     ("Show tracks without ReplayGain tags", "rg:none"),
 )
-STATUS_MS = 8000
 PAUSED_NOTE = " (paused while ReplayGain runs)"
-DELETE_OWNER = "a delete"  # its PathLocks owner, as other jobs see it
-DELETE_NAMES = 10  # names listed in the question for several items
-
-
-@dataclasses.dataclass(frozen=True)
-class DeleteItem:
-    entry_id: int
-    path: Path
-    is_dir: bool
-
-
-@dataclasses.dataclass
-class DeleteRequest:
-    """One Delete, from the check to the report (SPEC §19). Its lock is held until the end."""
-
-    items: list[DeleteItem]
-    lock: int
-    view: QWidget | None  # where Del was pressed, for the selection afterwards
-    next_id: int | None  # the row to select afterwards
 
 
 class DropOverlay(QLabel):
@@ -128,8 +100,6 @@ class MainWindow(QMainWindow):
     renameDone = Signal(object, bool)  # RenameResult, whether it was an Undo
     renameFailed = Signal(str)
     playlistExported = Signal(str, int)  # the saved file, its track count (emitted from the shell thread)
-    deleteChecked = Signal(object, list)  # the DeleteRequest, [(path, why it can't be recycled)] (shell thread)
-    deleteDone = Signal(object, list, list)  # the DeleteRequest, the sent items, [(name, error)] (shell thread)
 
     def __init__(self, library: LibraryService | None = None, settings: Settings | None = None) -> None:
         super().__init__()
@@ -146,9 +116,6 @@ class MainWindow(QMainWindow):
         # These three are replaced in tests, which never launch anything.
         self.launch = fsops.open_with_default_app
         self.show_in_explorer = fsops.open_in_explorer
-        # Delete (SPEC §19): tests replace both, so they never use the real Recycle Bin.
-        self.recycle = fsops.send_to_recycle_bin
-        self.recycle_check = fsops.can_recycle
         self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\MusicDesk\playlists
         self._shell = ThreadPoolExecutor(1, thread_name_prefix="shell")
         self.setWindowTitle(APP_TITLE)
@@ -187,45 +154,18 @@ class MainWindow(QMainWindow):
                                     lyrics_service=library.lyrics if library is not None else None)
         self.side_panel.lyrics.urlRequested.connect(self.open_url)
         self.side_panel.summary.playRequested.connect(self.play_folder)
-        self.side_panel.summary.toolsRequested.connect(lambda entry_id: self.open_tools([entry_id]))
+        self.side_panel.summary.toolsRequested.connect(lambda entry_id: self.tools.open([entry_id]))
         self.side_panel.preview.splitRequested.connect(lambda path: self.split.open(Path(path)))
         self.side_panel.preview.openRequested.connect(lambda path: self._in_shell(
             lambda: self.launch(path), f"Windows couldn't open {os.path.basename(path)}: no app is set for this "
             "file type, or the file isn't reachable.", path, False))
-        self.tools_page = ToolsPage(self.settings)
-        self.tools_page.backRequested.connect(self.close_tools)
-        self.tools_page.runRequested.connect(self.run_tool)
-        self.tag_io.renameFields.connect(self._tool_example)
-        self.tag_writer.replaygainRemoved.connect(self._replaygain_removed)
-        self._rg_remove_token: int | None = None
-        self._example_token: int | None = None
-        self.rename_preview = RenamePreview()
-        self.rename_preview.backRequested.connect(self._rename_back)
-        self.rename_preview.doneRequested.connect(self._rename_done)
-        self.rename_preview.applyRequested.connect(self.apply_rename)
-        self.rename_preview.cancelRequested.connect(lambda: self.rename_runner.cancel())
-        self.rename_runner = RenameRunner(library.locks if library is not None else PathLocks(), self)
-        self.rename_runner.planned.connect(self._rename_planned)
-        self.rename_runner.applied.connect(self._rename_applied)
-        self._rename_token: int | None = None
-        self._rename_request: ToolRequest | None = None
-        self.rg_view = ReplayGainView()
-        self.rg_view.backRequested.connect(lambda: self.center.setCurrentWidget(self.tools_page))
-        self.rg_view.doneRequested.connect(self.close_tools)
-        self.rg_view.cancelRequested.connect(lambda: self.rg_runner.cancel())
-        self.rg_view.openLogRequested.connect(self.open_log)
-        self.rg_view.revealRequested.connect(lambda path: self._in_shell(
-            lambda: self.show_in_explorer(path, True), f"File Explorer couldn't show {path}.", "", True))
-        self.rg_runner = ReplayGainRunner(library.locks if library is not None else PathLocks(), self)
-        self.rg_runner.lines.connect(self.rg_view.add_lines)
-        self.rg_runner.progress.connect(self.rg_view.set_progress)
-        self.rg_runner.progress.connect(self._rg_progress)
-        self.rg_runner.finished.connect(self._rg_finished)
-        self._rg_token: int | None = None
-        self._rg_request: ToolRequest | None = None
-        # The cue split (SPEC §22): the Split page, its sheet, its saves and its job.
-        self.split = SplitController(self, library.locks if library is not None else PathLocks(), self)
+        locks = library.locks if library is not None else PathLocks()
+        # Each feature's flow lives in its controller (SPEC §16), which owns its pages; the window lays them out.
+        self.tools = ToolsController(self, locks, self)  # Rename, ReplayGain, Tidy (SPEC §10)
+        self.tools_page, self.rename_preview, self.rg_view = self.tools.pages
+        self.split = SplitController(self, locks, self)  # the cue split (SPEC §22)
         self.split_page = self.split.page
+        self.delete = DeleteController(self, self)  # Delete to the Recycle Bin (SPEC §19)
         # The jobs panel (SPEC §10): this session's runs, in a bottom drawer; they go on while you browse.
         self.jobs = JobList(self)
         self.jobs_panel = JobsPanel(self.jobs)
@@ -240,28 +180,9 @@ class MainWindow(QMainWindow):
         self.jobs_dock.hide()
         self.jobs.changed.connect(self._update_jobs_button)
         self.jobs.removed.connect(self._update_jobs_button)
-        self._rename_job: int | None = None  # the job id of the running rename (or Tidy's rename step)
-        self._rg_job: int | None = None
         # Library search (SPEC §6): the query is typed in the toolbar, the results replace the file list.
-        self.search_view = SearchView()
-        self.search_view.resultActivated.connect(self.go_to_result)
-        self.search_view.menuRequested.connect(lambda ids, pos: self.result_menu(ids).exec(pos))
-        self.search_view.playRequested.connect(self.play_selection)
-        self.search_view.artistRequested.connect(self.add_artist_filter)
-        self.search_view.closeRequested.connect(self.close_search)
-        self.search_service = (SearchService(library.db_path, self, prepare=search_sort_keys)
-                               if library is not None else None)
-        if self.search_service is not None:
-            self.search_service.results.connect(self._search_results)
-        self.search_limit = LIMIT  # lowered in tests
-        self._search_token: int | None = None
-        self.search_shown: int | None = None
-        self._search_request: str | None = None  # the query running, and shown
-        self._shown_request: str | None = None
-        self._search_timer = QTimer(self, singleShot=True, interval=120)  # runs as you type, debounced
-        self._search_timer.timeout.connect(self._run_search)
-        self._search_refresh = QTimer(self, singleShot=True, interval=1000)  # the index changed: run it again
-        self._search_refresh.timeout.connect(self._run_search)
+        self.search = SearchController(self, library, self)
+        self.search_view, self.search_field = self.search.view, self.search.field
         self.center = QStackedWidget()  # the file list, the search results, or the Tools page and its previews
         self.center.addWidget(self.file_view)
         self.center.addWidget(self.search_view)
@@ -332,11 +253,11 @@ class MainWindow(QMainWindow):
         lyrics_menu.addSeparator()
         # Library-wide lists for a lyrics action, as ready-made searches (SPEC §5: instead of smart views).
         for text, query in FIND_QUERIES:
-            lyrics_menu.addAction(text, lambda q=query: self.find(q))
+            lyrics_menu.addAction(text, lambda q=query: self.search.find(q))
         lyrics_menu.setEnabled(library is not None)
         action_menu = self.menuBar().addMenu("&Action")  # actions over the whole library (SPEC §5)
         for text, query in ACTION_QUERIES:
-            action_menu.addAction(text, lambda q=query: self.find(q))
+            action_menu.addAction(text, lambda q=query: self.search.find(q))
         action_menu.setEnabled(library is not None)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About MusicDesk", self.open_about)
@@ -364,8 +285,6 @@ class MainWindow(QMainWindow):
         self.sidebar.renameRequested.connect(self.rename_entry)
         self.renameDone.connect(self._renamed)
         self.renameFailed.connect(lambda message: self.toast.show_message(message))
-        self.deleteChecked.connect(self._delete_checked)
-        self.deleteDone.connect(self._delete_done)
         # Each page's selection counts only while it is on screen.
         self.file_view.selectionChanged.connect(
             lambda ids: None if self.showing_search else self._selection_changed(ids))
@@ -397,7 +316,6 @@ class MainWindow(QMainWindow):
             library.lyrics.progress.connect(self.show_lyrics_progress)
             library.lyrics.entryReady.connect(self._lyrics_entry)
             self.file_view.model.lrclib_status = library.lyrics.status_for
-            self.search_view.model.lrclib_status = library.lyrics.status_for
             self.refresh_roots()
             self._reopen_last_folder()
 
@@ -492,25 +410,16 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.address_bar)
         self.tools_action = QAction("Tools", self)
         self.tools_action.setToolTip("Rename from tags, ReplayGain and Tidy, for the selection or this folder")
-        self.tools_action.triggered.connect(lambda: self.open_tools(self.file_view.selected_ids()))
+        self.tools_action.triggered.connect(lambda: self.tools.open(self.file_view.selected_ids()))
         toolbar.addAction(self.tools_action)
         self.playlist_action = QAction("Playlist builder", self, checkable=True,
                                        shortcut=QKeySequence("Ctrl+Shift+P"))
         self.playlist_action.setToolTip("Show or hide the playlist builder (Ctrl+Shift+P)")
         self.playlist_action.toggled.connect(self.set_playlist_visible)
         toolbar.addAction(self.playlist_action)
-        self.search_field = QLineEdit()
-        self.search_field.setPlaceholderText("Search library (Ctrl+K)")
-        self.search_field.setClearButtonEnabled(True)
-        self.search_field.setMinimumWidth(180)
-        self.search_field.setMaximumWidth(320)
-        self.search_field.textEdited.connect(self._search_edited)
-        self.search_field.returnPressed.connect(lambda: self.search_view.focus_results())
-        shortcut(QKeySequence(Qt.Key.Key_Escape), self.search_field, self.close_search,
-                 Qt.ShortcutContext.WidgetShortcut)
         toolbar.addWidget(self.search_field)
         self.search_action = QAction("Search library", self, shortcut=QKeySequence("Ctrl+K"))
-        self.search_action.triggered.connect(self.open_search)
+        self.search_action.triggered.connect(self.search.open)
         self.addAction(self.search_action)
         self.addToolBar(toolbar)
 
@@ -524,7 +433,7 @@ class MainWindow(QMainWindow):
                                (self.search_view.view, self.search_view.selected_ids)):
             for key in ("Del", "Shift+Del"):
                 shortcut(QKeySequence(key), view,
-                         lambda view=view, selected=selected: self.delete_entries(selected(), view),
+                         lambda view=view, selected=selected: self.delete.delete_entries(selected(), view),
                          Qt.ShortcutContext.WidgetShortcut)
         self._update_navigation()
 
@@ -667,215 +576,26 @@ class MainWindow(QMainWindow):
             self._show_selection(self._selected_ids)  # a renamed file reloads under its new name
         self._refresh_location()
         self.side_panel.refresh_folder()
-        self._refresh_search_later()
+        self.search.refresh_later()
 
-    # -- library search (SPEC §6) --
+    # -- the pages in the centre: the file list, the search (SPEC §6), the tools (SPEC §10), the split --
 
     @property
     def showing_search(self) -> bool:
-        return self.center.currentWidget() is self.search_view
-
-    def open_search(self) -> None:
-        """Ctrl+K: the search page, with the query field focused. The results stand in for the file list."""
-        if not self._library_open():
-            return
-        if not self.showing_search:
-            if not self.side_panel.can_leave():  # unsaved tag edits on the selection the search replaces
-                return
-            if self.rename_preview.state == "planning":
-                self.rename_runner.cancel()
-            self.center.setCurrentWidget(self.search_view)
-            self.side_panel.tabs.setCurrentWidget(self.side_panel.lyrics)  # the page's detail pane: the lyrics
-            self._show_selection(self.search_view.selected_ids())
-            self._run_search()
-        self.search_field.setFocus()
-        self.search_field.selectAll()
-
-    def find(self, query: str) -> None:
-        """A ready-made search over the whole library (the Lyrics menu's Find entries, the Action menu)."""
-        if not self._library_open():
-            return
-        self.open_search()
-        if not self.showing_search:
-            return  # unsaved tag edits, and Cancel
-        self.search_field.setText(query)
-        self._run_search()
-
-    def close_search(self) -> None:
-        """Esc: back to the folder that was open, as it was."""
-        if not self.showing_search or not self.side_panel.can_leave():
-            return
-        self._leave_search()
-        self.center.setCurrentWidget(self.file_view)
-        self._show_selection(self.file_view.selected_ids())
-        self.file_view.view.setFocus()
-
-    def _leave_search(self) -> None:
-        self._search_timer.stop()
-        self._search_refresh.stop()
-        self._search_token = None
-        self._shown_request = None  # the next search starts afresh
-        if self.search_service is not None:
-            self.search_service.cancel()
-
-    def _search_edited(self, _text: str) -> None:
-        if not self.showing_search:
-            self.open_search()
-        self._search_timer.start()
-
-    def _run_search(self) -> None:
-        self._search_timer.stop()
-        if not self._library_open() or not self.showing_search or self.search_service is None:
-            return
-        self._search_request = self.search_field.text()
-        self._search_token = self.search_service.search(
-            self.search_field.text(), error_keys=self.open_library.lyrics.error_keys(), limit=self.search_limit)
-
-    def _refresh_search_later(self) -> None:
-        if self.showing_search:
-            self._search_refresh.start()
-
-    def _search_results(self, results: SearchResults) -> None:
-        if results.token != self._search_token or not self.showing_search:
-            return
-        self.search_shown = results.token  # the results on screen (tests wait for it)
-        in_place = self._search_request == self._shown_request  # run again after the index changed
-        self._shown_request = self._search_request
-        if results.query.empty and not results.error:
-            self.search_view.show_prompt()
-        else:
-            self.search_view.show_results(results.rows, results.total, results.query.errors, results.error,
-                                          keys=results.keys, in_place=in_place)
-
-    def add_artist_filter(self, artist: str) -> None:
-        """Ctrl+click on an artist, or "Filter by": the page's artist checkboxes, as artist: filters (ORed)."""
-        term = 'artist:"{}"'.format(artist.replace('"', ""))
-        text = self.search_field.text()
-        if term.casefold() not in text.casefold():
-            self.search_field.setText(f"{text.rstrip()} {term}".strip())
-            self._run_search()
-
-    def go_to_result(self, entry_id: int) -> None:
-        """Enter or a double-click on a result: its folder, with the file selected; a folder result opens."""
-        row = self.search_view.row(entry_id)
-        if row is None or not self._library_open():
-            return
-        folder_id, folder = (entry_id, str(Path(row.folder, row.name))) if row.is_dir else (row.folder_id, row.folder)
-        if not self._folder_exists(folder_id):
-            self.statusBar().showMessage(f"{folder} is no longer in the library.", STATUS_MS)
-            return
-        if not self.side_panel.can_leave():
-            return
-        self._leave_search()
-        self.center.setCurrentWidget(self.file_view)
-        if folder_id != self.folder_id:
-            self.open_folder(folder_id)
-        if not row.is_dir:
-            self.file_view.select_ids([entry_id])
-        self.file_view.view.setFocus()
-
-    def result_menu(self, ids: list[int]) -> QMenu:
-        menu = QMenu(self)
-        if not self._library_open() or not ids:
-            return menu
-        go = menu.addAction("Go to folder", lambda: self.go_to_result(ids[0]))
-        go.setEnabled(len(ids) == 1)
-        open_action = menu.addAction("Open", lambda: self.open_files(ids))
-        open_action.setEnabled(len(ids) == 1)
-        menu.addAction("Play selection", lambda: self.play_selection(ids))
-        menu.addSeparator()
-        menu.addAction("Open in File Explorer", lambda: self.reveal(ids[0]))
-        menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: self.copy_paths(ids))
-        menu.addSeparator()
-        menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain(ids))
-        menu.addSeparator()
-        menu.addAction("Delete\tDel", lambda: self.delete_entries(ids, self.search_view.view))
-        row = self.search_view.row(ids[0])
-        artist = row.artist if len(ids) == 1 and row is not None else None
-        if artist:
-            menu.addSeparator()
-            menu.addAction(f"Filter by {artist}", lambda: self.add_artist_filter(artist))
-        return menu
-
-    # -- Tools (SPEC §10) --
-
-    def tool_scope(self, ids: list[int]) -> ToolScope | None:
-        """What the tools act on: one folder (from the list, the tree or the folder summary); else the audio
-        files among the selected items in the open folder (a selection); with nothing selected, the open folder."""
-        if not self._library_open():
-            return None
-        conn = self.open_library.conn
-        kinds = {i: row[0] for i in ids
-                 if (row := conn.execute("SELECT is_dir FROM entries WHERE id = ?", (i,)).fetchone())}
-        if len(ids) == 1 and kinds.get(ids[0]):
-            folder_id, files = ids[0], ()
-        elif ids:
-            if self.folder_id is None or self.folder_path is None:
-                return None
-            rows = [self.file_view.model.rows[r] for i in ids if (r := self.file_view.model.row_for(i)) is not None]
-            files = tuple(Path(self.folder_path, row.name) for row in rows if row.is_audio)
-            if not files:
-                return None
-            folder_id = self.folder_id
-        elif self.folder_id is not None:
-            folder_id, files = self.folder_id, ()
-        else:
-            return None
-        if not self._folder_exists(folder_id):
-            return None
-        folder = path_of(conn, folder_id)
-        summary = None if files else queries.folder_summary(conn, folder_id)
-        first = files[0] if files else summary.first_track if summary else None
-        return ToolScope(folder, folder_id, files, Path(first) if first else None)
-
-    def open_tools(self, ids: list[int]) -> None:
-        scope = self.tool_scope(ids)
-        if scope is None:
-            self.statusBar().showMessage("Select a folder, or music files, to use the tools.", STATUS_MS)
-            return
-        self.tools_page.set_scope(scope)
-        self._example_token = self.tag_io.read_rename_fields(scope.first_track) if scope.first_track else None
-        self.center.setCurrentWidget(self.tools_page)
-
-    def close_tools(self) -> None:
-        """Back to the file list. A running job goes on (the jobs panel shows it and reopens its page)."""
-        if self.center.currentWidget() is not self.file_view:
-            if self.showing_search:
-                self._leave_search()
-            if self.rename_preview.state == "planning":
-                self.rename_runner.cancel()
-            self.center.setCurrentWidget(self.file_view)
-            self.file_view.view.setFocus()
+        return self.search.showing
 
     @property
     def showing_tools(self) -> bool:
         return self.center.currentWidget() not in (self.file_view, self.search_view)
 
-    def _tool_example(self, token: int, fields: dict | None, extension: str) -> None:
-        if token == self._example_token:
-            self.tools_page.set_example(fields, extension)
-
-    def run_tool(self, request: ToolRequest) -> None:
-        """A card's button: the rename preview, the ReplayGain job (no preview), or Tidy's rename preview. A tool
-        runs one job at a time: while its job runs, its page shows that job instead."""
-        busy = None
-        if request.tool in (RENAME, TIDY) and self._rename_job is not None:
-            busy = self._rename_job
-        elif request.tool in (REPLAYGAIN, TIDY) and self._rg_job is not None:
-            busy = self._rg_job
-        if busy is not None:
-            job = self.jobs.get(busy)
-            assert job is not None  # a running job stays in the list
-            self.toast.show_message(f"{job.kind} is still running in {job.folder}. It can be followed in the jobs "
-                                    "panel; start another run when it has finished.")
-            self.show_job(busy)
-            return
-        if request.tool == RENAME:
-            self.preview_rename(request)
-        elif request.tool == REPLAYGAIN:
-            self.run_replaygain(request)  # no preview: it only writes tags and the logs (Hugo, 2026-10-15)
-        elif request.tool == TIDY:
-            self.preview_rename(request)  # Tidy: the rename step is previewed; ReplayGain follows Apply
+    def close_tools(self) -> None:
+        """Back to the file list. A running job goes on (the jobs panel shows it and reopens its page)."""
+        if self.center.currentWidget() is not self.file_view:
+            if self.showing_search:
+                self.search.leave()
+            self.tools.cancel_planning()
+            self.center.setCurrentWidget(self.file_view)
+            self.file_view.view.setFocus()
 
     def _unsaved_edits_under(self, folder: Path) -> bool:
         """Unsaved Metadata edits on a file a job is about to change: ask Save, Discard or Cancel first."""
@@ -884,56 +604,9 @@ class MainWindow(QMainWindow):
                   if Path(p).is_relative_to(folder)]
         return bool(edited) and not self.side_panel.can_leave()
 
-    # -- the ReplayGain tool (SPEC §10 B) --
-
-    def run_replaygain(self, request: ToolRequest | None = None, title: str | None = None) -> bool:
-        """Start the ReplayGain job (the card's Run, or Tidy's second step). False when it didn't start."""
-        request = request or self._rg_request
-        if request is None or not self._library_open():
-            return False
-        folder = request.scope.folder
-        if self._unsaved_edits_under(folder):
-            return False
-        assert request.replaygain_options is not None  # set for every ReplayGain and Tidy request
-        try:
-            self._rg_token = self.rg_runner.run(folder, request.replaygain_options, request.discography)
-        except LockedError as e:
-            self.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
-            return False
-        self._rg_request = request
-        self._pause_indexing(True)  # rsgain gets the drive to itself; folders you open are still served
-        if request.tool == TIDY and self._rename_job is not None:
-            self._rg_job, self._rename_job = self._rename_job, None  # the same Tidy job, step 2
-            self.jobs.update(self._rg_job, status="ReplayGain")
-        else:
-            self._rg_job = self._start_job(jobs_module.REPLAYGAIN, folder)
-        follow = self.center.currentWidget() in (self.rg_view, self.rename_preview, self.tools_page)
-        self.rg_view.show_running(folder, title, request.discography)
-        if follow:  # Tidy's step 2 doesn't pull you back if you went browsing meanwhile
-            self.center.setCurrentWidget(self.rg_view)
-        return True
-
-    def _rg_finished(self, finished: Finished) -> None:
-        if finished.token != self._rg_token:
-            return
-        self._pause_indexing(False)
-        if self._library_open():
-            self.refresh_after_tool(finished.folder)  # new tags and replaygain.log files
-        self.rg_view.show_result(finished)
-        if self._rg_job is not None:
-            self.jobs.report(self._rg_job, "replaygain", finished)
-            state = jobs_module.FAILED if finished.error else jobs_module.STOPPED if finished.cancelled else \
-                jobs_module.DONE
-            self.jobs.finish(self._rg_job, state, short_result(finished))
-            self._rg_job = None
-        if not finished.error and not finished.nothing:
-            albums = len(finished.album_logs)
-            what = "stopped" if finished.cancelled else "done"
-            self.statusBar().showMessage(f"ReplayGain {what}: {albums} album{'s' if albums != 1 else ''}.", STATUS_MS)
-
     def _pause_indexing(self, paused: bool) -> None:
-        """Background indexing waits while a ReplayGain job runs. On a hard disk, the two reading at once made
-        rsgain several times slower (Hugo, 2026-10-15: 66 s for an album that takes seconds alone)."""
+        """Background indexing waits while a ReplayGain job or a split runs. On a hard disk, the two reading at
+        once made rsgain several times slower (Hugo, 2026-10-15: 66 s for an album that takes seconds alone)."""
         if not self._library_open() or paused == self._indexing_paused:
             return
         self._indexing_paused = paused
@@ -944,101 +617,6 @@ class MainWindow(QMainWindow):
         if self.index_label.isVisible():
             text = self.index_label.text().removesuffix(PAUSED_NOTE)
             self.index_label.setText(text + PAUSED_NOTE if paused else text)
-
-    def open_log(self, path: str) -> None:
-        self._in_shell(lambda: self.launch(path), f"Windows couldn't open {os.path.basename(path)}.",
-                       os.path.dirname(path), True)
-
-    # -- the Rename tool (SPEC §10 A) --
-
-    def preview_rename(self, request: ToolRequest) -> None:
-        scope = request.scope
-        self._rename_request = request
-        assert request.rename_options is not None  # set for every Rename and Tidy request
-        self.rename_preview.show_planning(scope.folder, len(scope.files), tidy=request.tool == TIDY)
-        self.center.setCurrentWidget(self.rename_preview)
-        self._rename_token = self.rename_runner.plan(scope.folder, request.rename_options,
-                                                     list(scope.files) or None)
-
-    def _rename_planned(self, result: Planned) -> None:
-        if result.token != self._rename_token or result.cancelled:
-            return
-        if result.plan is None:
-            self.rename_preview.show_error(f"The preview failed: {result.error}")
-        else:
-            self.rename_preview.show_plan(result.plan)
-
-    def ask_recycle(self, names: list[str]) -> str:
-        """Junk files listed for the Recycle Bin: "recycle", "keep" (rename only) or "cancel"."""
-        shown = "\n".join(names[:30]) + (f"\n… and {len(names) - 30} more" if len(names) > 30 else "")
-        box = QMessageBox(QMessageBox.Icon.Question, "Send junk files to the Recycle Bin",
-                          f"These {len(names)} file{'s' if len(names) != 1 else ''} will be sent to the Recycle "
-                          f"Bin (you can restore them from there):\n\n{shown}", parent=self)
-        recycle = box.addButton("Rename and recycle", QMessageBox.ButtonRole.AcceptRole)
-        keep = box.addButton("Rename only", QMessageBox.ButtonRole.ActionRole)
-        box.addButton(QMessageBox.StandardButton.Cancel)
-        box.exec()
-        return "recycle" if box.clickedButton() is recycle else "keep" if box.clickedButton() is keep else "cancel"
-
-    def apply_rename(self) -> None:
-        plan = self.rename_preview.plan
-        if plan is None or not self._library_open():
-            return
-        if self._unsaved_edits_under(plan.folder):  # unsaved tag edits on a file about to be renamed
-            return
-        junk = [i.source.relative_to(plan.folder).as_posix() for i in plan.items if i.status is rename.Status.JUNK]
-        if junk:
-            answer = self.ask_recycle(junk)
-            if answer == "cancel":
-                return
-            if answer == "keep":
-                plan = dataclasses.replace(plan, items=[i for i in plan.items if i.status is not rename.Status.JUNK])
-        try:
-            self._rename_token = self.rename_runner.apply(plan)
-        except LockedError as e:
-            self.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
-            return
-        tidy = self._rename_request is not None and self._rename_request.tool == TIDY
-        self._rename_job = self._start_job(jobs_module.TIDY if tidy else jobs_module.RENAME, plan.folder)
-        self.jobs.update(self._rename_job, status="Renaming")
-        self.rename_preview.show_applying()
-
-    def _rename_applied(self, result: Applied) -> None:
-        if result.token != self._rename_token:
-            return
-        if result.report is None:
-            self.rename_preview.show_error(f"Renaming failed: {result.error}")
-            if self._rename_job is not None:
-                self.jobs.finish(self._rename_job, jobs_module.FAILED, f"Renaming failed: {result.error}")
-                self._rename_job = None
-            return
-        report = result.report
-        job = self._rename_job
-        if job is not None:
-            self.jobs.report(job, "rename", report)
-        if self._library_open():
-            by_folder: dict[Path, list] = {}
-            for step in report.steps:  # the index applies renames one folder at a time
-                by_folder.setdefault(Path(step[0]).parent, []).append(step)
-            for steps in by_folder.values():
-                self.open_library.indexer.apply_renames(steps)  # in place: ids, tags and selection kept
-            if self._rename_request is not None:  # then the whole scope: recycled junk, sidecars, anything else
-                self.refresh_after_tool(self._rename_request.scope.folder)
-        self.rename_preview.show_report(report)
-        count = len(report.renamed)
-        self.statusBar().showMessage(f"Renamed {count} file{'s' if count != 1 else ''}.", STATUS_MS)
-        request = self._rename_request
-        summary = rename.summary_sections(report, dry_run=False)[0][0]
-        if request is not None and request.tool == TIDY:  # Tidy, step 2: ReplayGain on the final names
-            if report.cancelled:
-                self.rename_preview.message.setText("Stopped, so ReplayGain was not run.")
-            elif self.run_replaygain(request, "Tidy, step 2 of 2: ReplayGain"):
-                return  # the job goes on (its rename report is kept)
-            else:
-                self.rename_preview.message.setText("Renamed. ReplayGain was not started (see the message).")
-        if job is not None:
-            self.jobs.finish(job, jobs_module.STOPPED if report.cancelled else jobs_module.DONE, summary)
-            self._rename_job = None
 
     # -- the jobs panel --
 
@@ -1062,32 +640,14 @@ class MainWindow(QMainWindow):
             self.center.setCurrentWidget(self.split_page)
         elif "split" in job.reports:
             self.split.show_report(job.reports["split"])
-        elif job_id == self._rename_job:
-            self.center.setCurrentWidget(self.rename_preview)
-        elif job_id == self._rg_job:
-            self.center.setCurrentWidget(self.rg_view)
-        elif "replaygain" in job.reports:
-            self.rg_view.show_result(job.reports["replaygain"])
-            self.rg_view.heading.setText(f"<b>{job.kind}</b> · {job.folder}")
-            self.center.setCurrentWidget(self.rg_view)
-        elif "rename" in job.reports:
-            self.rename_preview.heading.setText(f"<b>{job.kind}</b> · {job.folder}")
-            self.rename_preview.show_report(job.reports["rename"])
-            self.center.setCurrentWidget(self.rename_preview)
-        else:
+        elif not self.tools.show_job(job_id, job):
             self.toast.show_message(f"{job.kind} in {job.folder}: {job.status}")
 
     def stop_job(self, job_id: int) -> None:
         if job_id == self.split.job:
             self.split.runner.cancel()
-        elif job_id == self._rename_job:
-            self.rename_runner.cancel()
-        elif job_id == self._rg_job:
-            self.rg_runner.cancel()
-
-    def _rg_progress(self, done: int, total: int, label: str) -> None:
-        if self._rg_job is not None and label != "done":
-            self.jobs.update(self._rg_job, status=label, progress=(done, total))
+        else:
+            self.tools.stop_job(job_id)
 
     def confirm_quit_with_jobs(self, names: list[str]) -> bool:
         answer = QMessageBox.question(
@@ -1096,14 +656,6 @@ class MainWindow(QMainWindow):
             "after that point as they were; a stopped ReplayGain album is reported as cancelled; a stopped split "
             "deletes the tracks it was writing and leaves its album as it was.")
         return answer == QMessageBox.StandardButton.Yes
-
-    def _rename_back(self) -> None:
-        if self.rename_preview.state == "planning":
-            self.rename_runner.cancel()
-        self.center.setCurrentWidget(self.tools_page)
-
-    def _rename_done(self) -> None:
-        self.close_tools()
 
     def set_lyrics_offline(self, offline: bool) -> None:
         self.settings.lyrics_offline = offline
@@ -1119,7 +671,7 @@ class MainWindow(QMainWindow):
         """LRCLIB results: the open folder's LRCLIB column follows, and the search results (their text too)."""
         if not self._library_open():
             return
-        self._refresh_search_later()
+        self.search.refresh_later()
         if self.folder_id not in folder_ids:
             return
         self.file_view.refresh()
@@ -1190,7 +742,7 @@ class MainWindow(QMainWindow):
         if self.folder_id is not None:
             self.file_view.refresh()
         self.side_panel.refresh_folder()
-        self._refresh_search_later()
+        self.search.refresh_later()
 
     def _keep_open_folder(self) -> None:
         """If the open folder left the index (deleted or moved outside the app), open its nearest surviving
@@ -1363,15 +915,13 @@ class MainWindow(QMainWindow):
             return
         if self.embedder is not None:
             self.embedder.close()  # before the writer: it may still hand it a batch
-        self.rename_runner.close()  # a running rename stops between two files
-        self.rg_runner.close()  # a running rsgain is killed; its album is reported as cancelled
+        self.tools.shutdown()  # a running rename stops between two files; a running rsgain is killed
         self.split.close()  # a running flac is killed; this run's .partial files are deleted
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
         self._playlist_save.stop()
         self.save_playlist()
-        if self.search_service is not None:
-            self.search_service.close()
+        self.search.shutdown()
         self.save_state()
         app().removeEventFilter(self)
         self._shell.shutdown(wait=False)
@@ -1390,7 +940,7 @@ class MainWindow(QMainWindow):
             return menu
         if len(ids) == 1 and self.file_view.is_dir(ids[0]):
             self.add_folder_actions(menu, ids[0], rename=lambda: self.file_view.start_rename(ids[0]),
-                                    delete=lambda: self.delete_entries(ids, self.file_view.view))
+                                    delete=lambda: self.delete.delete_entries(ids, self.file_view.view))
             return menu
         open_action = menu.addAction("Open", lambda: self.open_files(ids))
         open_action.setEnabled(len(ids) == 1)
@@ -1402,14 +952,14 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         if len(ids) == 1:
             menu.addAction("Rename\tF2", lambda: self.file_view.start_rename(ids[0]))
-        tools = menu.addAction("Tools…", lambda: self.open_tools(ids))
+        tools = menu.addAction("Tools…", lambda: self.tools.open(ids))
         any_audio = any(self.file_view.model.rows[r].is_audio for i in ids
                         if (r := self.file_view.model.row_for(i)) is not None)
         tools.setEnabled(any_audio)
-        remove = menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain(ids))
+        remove = menu.addAction("Remove ReplayGain tags…", lambda: self.tools.remove_replaygain(ids))
         remove.setEnabled(any_audio)
         menu.addSeparator()
-        menu.addAction("Delete\tDel", lambda: self.delete_entries(ids, self.file_view.view))
+        menu.addAction("Delete\tDel", lambda: self.delete.delete_entries(ids, self.file_view.view))
         return menu
 
     def add_folder_actions(self, menu: QMenu, entry_id: int, include_open: bool = True, rename=None,
@@ -1426,8 +976,8 @@ class MainWindow(QMainWindow):
             menu.addAction("Rename\tF2", rename)  # not a library root
         menu.addAction("Rescan", lambda: self.open_library.indexer.request_folder(entry_id))
         menu.addSeparator()
-        menu.addAction("Tools…", lambda: self.open_tools([entry_id]))
-        menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain([entry_id]))
+        menu.addAction("Tools…", lambda: self.tools.open([entry_id]))
+        menu.addAction("Remove ReplayGain tags…", lambda: self.tools.remove_replaygain([entry_id]))
         if delete is not None and queries.parent_folder(self.open_library.conn, entry_id) is not None:
             menu.addSeparator()
             menu.addAction("Delete\tDel", delete)  # never a library root (Remove from library is below)
@@ -1435,213 +985,7 @@ class MainWindow(QMainWindow):
     def _tree_delete(self, entry_id: int) -> None:
         """Delete from the tree's menu: its selection if the clicked folder is in it, else that folder."""
         selected = self.sidebar.tree.selected_ids()
-        self.delete_entries(selected if entry_id in selected else [entry_id], self.sidebar.tree)
-
-    # -- Delete to the Recycle Bin (SPEC §19) --
-
-    def delete_entries(self, ids: list[int], view: QWidget | None = None) -> None:
-        """Del, Shift+Del or Delete in a menu: the items go to the Recycle Bin after a confirmation, and nowhere
-        else. Refused, with nothing touched: a library root, an item a job or a save holds, and a place where
-        Windows can't recycle (checked off the UI thread, before asking)."""
-        if not self._library_open() or not ids:
-            return
-        conn = self.open_library.conn
-        items: list[DeleteItem] = []
-        for entry_id in dict.fromkeys(ids):
-            row = conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()
-            if row is None:
-                continue
-            path = path_of(conn, entry_id)
-            if queries.parent_folder(conn, entry_id) is None:
-                self.toast.show_message(f"{path} is a library folder. Use Remove from library to take it out of "
-                                        "the library.")
-                return
-            items.append(DeleteItem(entry_id, path, bool(row[0])))
-        # An item inside a selected folder goes with it (the tree can select a folder and its subfolder).
-        items = [i for i in items if not any(o.is_dir and o is not i and i.path.is_relative_to(o.path) for o in items)]
-        if not items:
-            return
-        try:
-            lock = self.open_library.locks.acquire([item.path for item in items], DELETE_OWNER)
-        except LockedError as e:
-            self.toast.show_message(f"{Path(e.path).name} is in use by {e.owner}. Try again when it has finished.")
-            return
-        request = DeleteRequest(items, lock, view, self._row_after(ids, view))
-        check = self.recycle_check
-
-        def run() -> None:
-            reasons = []
-            for item in items:
-                try:
-                    reason = check(item.path)
-                except OSError as e:
-                    reason = f"Windows couldn't check {item.path.name} ({e})"
-                if reason is not None:
-                    reasons.append((str(item.path), reason))
-            self.deleteChecked.emit(request, reasons)
-
-        self._shell.submit(run)
-
-    def _row_after(self, ids: list[int], view: QWidget | None) -> int | None:
-        """The row to select once these are gone: the first one after them, else the last one before (Explorer)."""
-        if view is self.file_view.view:
-            shown = self.file_view.visible_ids()
-        elif view is self.search_view.view:
-            shown = self.search_view.visible_ids()
-        else:
-            return None  # the tree: the open folder's own rule applies (SPEC §5)
-        chosen = set(ids)
-        places = [n for n, entry_id in enumerate(shown) if entry_id in chosen]
-        if not places:
-            return None
-        after = [i for i in shown[places[-1] + 1:] if i not in chosen]
-        before = [i for i in shown[:places[0]] if i not in chosen]
-        return after[0] if after else before[-1] if before else None
-
-    def _delete_checked(self, request: DeleteRequest, reasons: list[tuple[str, str]]) -> None:
-        if not self._library_open():
-            return
-        if reasons:
-            self.open_library.locks.release(request.lock)
-            path, reason = reasons[0]
-            is_dir = any(str(item.path) == path and item.is_dir for item in request.items)
-            self.toast.show_message(
-                f"MusicDesk only deletes to the Recycle Bin, and {reason}, so nothing was deleted. You can delete it "
-                "in File Explorer.", "Open in File Explorer",
-                lambda: self._shell.submit(lambda: self.show_in_explorer(path, is_dir)))
-            return
-        unsaved = self._unsaved_edits_in(request.items)
-        if not self.ask_delete(request.items, unsaved):
-            self.open_library.locks.release(request.lock)
-            return
-        if unsaved:
-            self.side_panel.metadata.discard_edits()  # the question said they would be lost
-        recycle = self.recycle
-
-        def run() -> None:
-            sent, failed = [], []
-            for item in request.items:  # one at a time, so a failure names its file and the others still go
-                try:
-                    recycle(item.path)
-                except OSError as e:  # CannotRecycle too: never deleted for good instead
-                    failed.append((item.path.name, e.strerror or str(e)))
-                else:
-                    sent.append(item)
-            self.deleteDone.emit(request, sent, failed)
-
-        self._shell.submit(run)
-
-    def _unsaved_edits_in(self, items: list[DeleteItem]) -> bool:
-        metadata = self.side_panel.metadata
-        if not metadata.dirty:
-            return False
-        edited = [metadata.path] if metadata.path is not None else metadata.paths
-        return any(path == item.path or (item.is_dir and path.is_relative_to(item.path))
-                   for path in edited for item in items)
-
-    def delete_question(self, items: list[DeleteItem], unsaved: bool) -> str:
-        """The confirmation's text (SPEC §19). A folder's file count comes from the index."""
-        if len(items) == 1 and not items[0].is_dir:
-            text = f"Send '{items[0].path.name}' to the Recycle Bin?"
-        elif len(items) == 1:
-            count = queries.file_count(self.open_library.conn, items[0].entry_id)
-            text = (f"Send the folder '{items[0].path.name}' and everything in it ({count} file"
-                    f"{'' if count == 1 else 's'}) to the Recycle Bin?")
-        else:
-            names = [item.path.name for item in items[:DELETE_NAMES]]
-            if len(items) > DELETE_NAMES:
-                names.append(f"and {len(items) - DELETE_NAMES} more")
-            text = f"Send these {len(items)} items to the Recycle Bin?\n\n" + "\n".join(names)
-        if unsaved:
-            text += "\n\nUnsaved tag edits on it will be lost."
-        return text
-
-    def ask_delete(self, items: list[DeleteItem], unsaved: bool) -> bool:
-        """Confirm a delete (replaced in tests). Cancel is the default, and Esc."""
-        box = QMessageBox(QMessageBox.Icon.Question, "Delete", self.delete_question(items, unsaved), parent=self)
-        send = box.addButton("Send to Recycle Bin", QMessageBox.ButtonRole.DestructiveRole)
-        cancel = box.addButton(QMessageBox.StandardButton.Cancel)
-        box.setDefaultButton(cancel)
-        box.setEscapeButton(cancel)
-        box.exec()
-        return box.clickedButton() is send
-
-    def _delete_done(self, request: DeleteRequest, sent: list[DeleteItem], failed: list[tuple[str, str]]) -> None:
-        if not self._library_open():
-            return
-        self.open_library.locks.release(request.lock)
-        for parent in dict.fromkeys(item.path.parent for item in sent):
-            self.open_library.indexer.request_path(str(parent))  # at once; the watcher would see it too, but later
-        if sent:
-            what = f"'{sent[0].path.name}'" if len(sent) == 1 else f"{len(sent)} items"
-            self.statusBar().showMessage(f"Sent {what} to the Recycle Bin.", STATUS_MS)
-        if failed:
-            shown = "; ".join(f"{name}: {why}" for name, why in failed[:5])
-            more = f" (and {len(failed) - 5} more)" if len(failed) > 5 else ""
-            self.toast.show_message(f"Not sent to the Recycle Bin: {shown}{more}", timeout_ms=15_000)
-        if request.next_id is not None and sent:
-            if request.view is self.file_view.view and not self.showing_search:
-                self.file_view.select_ids([request.next_id])
-            elif request.view is self.search_view.view and self.showing_search:
-                self.search_view.select_ids([request.next_id])
-
-    # -- removing ReplayGain (SPEC §10 B) --
-
-    def remove_replaygain(self, ids: list[int]) -> None:
-        """The ReplayGain tags of the tracks among `ids`, folders included with their subfolders: the
-        REPLAYGAIN_* values and the comment lines the ReplayGain step writes. Asks first; runs on the TagWriter."""
-        if not self._library_open():
-            return
-        conn = self.open_library.conn
-        track_ids = queries.track_ids_for(conn, ids)
-        rows = queries.track_rows(conn, track_ids)
-        paths = [str(rows[i].path) for i in track_ids if i in rows]
-        if not paths:
-            self.statusBar().showMessage("There are no audio files here.", STATUS_MS)
-            return
-        folders = [i for i in ids if (r := conn.execute("SELECT is_dir FROM entries WHERE id = ?",
-                                                         (i,)).fetchone()) and r[0]]
-        if len(ids) == 1 and folders:
-            where = f"{path_of(conn, folders[0])} and its subfolders"
-        else:
-            where = "the selection"
-        options = self.tools_page.replaygain_card.options()
-        if not self.ask_remove_replaygain(len(paths), where, options.comment):
-            return
-        self._rg_remove_token = self.tag_writer.remove_replaygain(paths, options)
-        count = len(paths)
-        self.statusBar().showMessage(f"Removing the ReplayGain tags of {count} file{'s' if count != 1 else ''}…",
-                                     STATUS_MS)
-
-    def ask_remove_replaygain(self, count: int, where: str, comment: str) -> bool:
-        """Confirm the removal (replaced in tests)."""
-        noun = f"{count} track{'s' if count != 1 else ''}"
-        box = QMessageBox(QMessageBox.Icon.Question, "Remove ReplayGain tags",
-                          f"Remove the ReplayGain tags from {noun} in {where}?\n\n"
-                          f"This deletes their track and album gain and peak values, and the comment line "
-                          f"\"{comment}\" that ReplayGain writes. Other tags, other comment lines and the audio "
-                          f"itself are not changed, and replaygain.log files stay.", parent=self)
-        remove = box.addButton("Remove", QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton(QMessageBox.StandardButton.Cancel)
-        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
-        box.exec()
-        return box.clickedButton() is remove
-
-    def _replaygain_removed(self, result) -> None:
-        if result.token != self._rg_remove_token:
-            return
-        done = len(result.removed)
-        if done:
-            text = f"Removed the ReplayGain tags of {done} file{'s' if done != 1 else ''}."
-        else:
-            text = "There were no ReplayGain tags to remove."
-        if result.unchanged and done:
-            text += f" {result.unchanged} had none."
-        self.statusBar().showMessage(text, STATUS_MS)
-        if result.failed:
-            first = result.failed[0][1]
-            more = f" (and {len(result.failed) - 1} more)" if len(result.failed) > 1 else ""
-            self.toast.show_message(f"Not changed: {first}{more}")
+        self.delete.delete_entries(selected if entry_id in selected else [entry_id], self.sidebar.tree)
 
     # -- inline rename (SPEC §11) --
 

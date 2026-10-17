@@ -23,7 +23,7 @@ def library_dir(tmp_path, fixtures_dir):
 @pytest.fixture
 def fake(window):
     scanner = FakeScanner()
-    window.rg_runner.scanner = scanner
+    window.tools.rg_runner.scanner = scanner
     return scanner
 
 
@@ -34,7 +34,7 @@ def folder_id(service, path) -> int:
 
 def open_card(window, service, folder, *, discography=False, tool=REPLAYGAIN):
     window.open_folder(folder_id(service, folder))
-    window.open_tools([])
+    window.tools.open([])
     card = window.tools_page.replaygain_card if tool == REPLAYGAIN else window.tools_page.tidy_card
     card.scope_group.buttons()[1 if discography else 0].setChecked(True)
     window.tools_page.request(tool)

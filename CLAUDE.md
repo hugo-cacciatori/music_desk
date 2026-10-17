@@ -16,30 +16,18 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 14):** 0.3.3 is on `main`, not released: M11 task 1 is done (basedpyright,
-  basic mode, on `src/`; `tests/test_types.py` runs it; 285 first-run findings fixed, none user-visible). All
-  1116 tests passed, slow ones included. `test_remove_asks_first` failed once in a fast run, then passed: a
-  likely scan/remove race (inferred, not measured).
+- **State (2026-10-17, session 14):** 0.3.4 is on `main`, not released: M11 is complete (basedpyright on
+  `src/` in the suite; `main_window.py` split into search, tools, delete and split controllers, 1,912 -> 1,256
+  lines). All 1116 tests passed, slow ones included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** M11 task 2 (controllers); then M12 the same way. Give Hugo full manual steps for checks (memory:
-  manual-check-instructions).
+- **Next step:** M12: ask Hugo the questions its decisions need (SPEC §6 "Later"), then build it. Give Hugo
+  full manual steps for checks (memory: manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …). Tick tasks as
 they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
 of it (see Session protocol 5).
-
-**M11 Maintenance** (Hugo, 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Clear its open
-decisions with Hugo first (Session protocol 1), then start. The split's controller already exists (0.2.14). Neither changes what the app does.
-- [x] 1. Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), findings fixed.
-- [ ] 2. Split `ui/main_window.py` (2,043 lines at 0.2.10) into one controller per feature: tools (Rename,
-      ReplayGain, Tidy), split, delete, search. Behaviour and tests unchanged.
-
-Done when:
-- pyright passes (basic mode) in the full test run, and ruff is clean;
-- `main_window.py` holds the window, its layout and the browsing; each feature's flow lives in its controller;
-- the full suite passes unchanged, apart from tests that reached into moved internals.
 
 **M12 Advanced search** (Hugo, 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first, reconsidering
 every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet.

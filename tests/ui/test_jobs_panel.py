@@ -41,7 +41,7 @@ def library_dir(tmp_path, fixtures_dir):
 @pytest.fixture
 def scanner(qtbot, window):
     scanner = BlockingScanner()
-    window.rg_runner.scanner = scanner
+    window.tools.rg_runner.scanner = scanner
     # pytest-qt closes the window before fixtures end: a job still running then is stopped, without the question
     window.confirm_quit_with_jobs = lambda names: True
     yield scanner
@@ -55,7 +55,7 @@ def folder_id(service, path) -> int:
 
 def start_replaygain(qtbot, window, service, folder):
     window.open_folder(folder_id(service, folder))
-    window.open_tools([])
+    window.tools.open([])
     window.tools_page.request(REPLAYGAIN)  # Run: the job starts at once
 
 
@@ -69,7 +69,7 @@ def test_a_job_runs_on_while_browsing(qtbot, window, service, library_dir, scann
     assert window.jobs_panel.rows()[0][:2] == ("ReplayGain", str(album))
 
     window.open_folder(folder_id(service, library_dir / "Other"))  # browsing elsewhere: the job goes on
-    assert not window.showing_tools and window.rg_runner.running
+    assert not window.showing_tools and window.tools.rg_runner.running
     window.jobs_panel.open_button.click()  # the drawer reopens its live page
     assert window.center.currentWidget() is window.rg_view and window.rg_view.state == "running"
 
@@ -85,14 +85,14 @@ def test_one_job_per_tool(qtbot, window, service, library_dir, scanner):
     start_replaygain(qtbot, window, service, library_dir / "Fixture Artist" / "Album B")
     assert scanner.started.wait(5)
     window.open_folder(folder_id(service, library_dir / "Fixture Artist" / "Album A"))
-    window.open_tools([])
+    window.tools.open([])
     window.tools_page.request(REPLAYGAIN)  # a second ReplayGain run: the running one is shown instead
     assert "ReplayGain is still running in" in window.toast.label.text()
     assert window.center.currentWidget() is window.rg_view and window.rg_view.state == "running"
-    window.open_tools([])
+    window.tools.open([])
     window.tools_page.request(TIDY)  # Tidy needs ReplayGain too
     assert window.center.currentWidget() is window.rg_view
-    window.open_tools([])
+    window.tools.open([])
     window.tools_page.request(RENAME)  # the Rename tool is free
     qtbot.waitUntil(lambda: window.rename_preview.state == "preview", timeout=10000)
     scanner.release.set()
@@ -115,7 +115,7 @@ def test_finished_reports_reopen_and_clear(qtbot, window, service, library_dir, 
     start_replaygain(qtbot, window, service, first)
     qtbot.waitUntil(lambda: window.jobs.jobs[0].state == DONE, timeout=10000)
     window.open_folder(folder_id(service, library_dir / "Other"))
-    window.open_tools([])
+    window.tools.open([])
     window.tools_page.request(RENAME)
     qtbot.waitUntil(lambda: window.rename_preview.state == "preview", timeout=10000)
     window.rename_preview.apply_button.click()
@@ -136,7 +136,7 @@ def test_finished_reports_reopen_and_clear(qtbot, window, service, library_dir, 
 def test_tidy_is_one_job(qtbot, window, service, library_dir, scanner):
     scanner.release.set()
     window.open_folder(folder_id(service, library_dir / "Fixture Artist" / "Album B"))
-    window.open_tools([])
+    window.tools.open([])
     window.tools_page.request(TIDY)
     qtbot.waitUntil(lambda: window.rename_preview.state == "preview", timeout=10000)
     window.rename_preview.apply_button.click()

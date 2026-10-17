@@ -37,6 +37,22 @@
   entries call the controllers.
 - Nothing visible changes. The `ask_*` / `confirm_*` methods tests replace move with their controller, so the
   tests that replace them change only where they reach (for example `window.split.ask_…`).
+- **As built (M11 task 2, 0.3.4):** `main_window.py` went from 1,912 to 1,256 lines.
+  - `window.search` (`SearchController`): the toolbar's query field, the results page, the search service and
+    its timers; `open`, `find`, `close`, `leave`, `refresh_later`, `go_to_result`, `result_menu`.
+  - `window.tools` (`ToolsController`): the Tools page, the rename preview, the ReplayGain view and their two
+    runners and jobs; `open`, `run_tool`, `apply_rename`, `run_replaygain`, `remove_replaygain`, and
+    `show_job` / `stop_job` for its own jobs; `ask_recycle`, `ask_remove_replaygain`.
+  - `window.delete` (`DeleteController`): `delete_entries`, its checks, question (`ask_delete`) and refresh;
+    `DeleteItem` and `DeleteRequest`; its `recycle` and `recycle_check`, which tests replace.
+  - `window.split` (`SplitController`), as before.
+  - The window keeps what the features share: the centre stack and `close_tools` (back to the file list),
+    `showing_search` / `showing_tools`, the jobs panel (`_start_job`, `show_job` and `stop_job`, which hand a
+    job to its controller), `_unsaved_edits_under`, `_pause_indexing`, `refresh_after_tool`, the shell thread
+    and `STATUS_MS` (now in `ui/controllers/__init__.py`). It also keeps the pages as aliases (`search_view`,
+    `search_field`, `tools_page`, `rename_preview`, `rg_view`, `split_page`), which its layout uses.
+  - The inline rename, the playlist builder, the roots and the lyrics status stay in the window: SPEC §16 didn't
+    plan controllers for them, and each is small.
 
 ## Project layout
 As of 0.2.14 (moved from CLAUDE.md on 2026-10-16).
@@ -55,7 +71,7 @@ As of 0.2.14 (moved from CLAUDE.md on 2026-10-16).
       ui/              main_window, sidebar, folder_tree, file_view, address_bar, search_view, playlist_panel,
                        entry_drag, stall_watch, jobs_panel, about_dialog, toast, split_page, qt_util (typed Qt
                        helpers: shortcut, app, cell_text);
-                       controllers/ (split);
+                       controllers/ (search, tools, delete, split);
                        side_panel/ (panel, metadata_tab, lyrics_tab, folder_summary, file_preview);
                        tools/ (tools_page, names_card, rename_card, replaygain_card, rename_preview, rg_report)
     resources/            rsgain/ (rsgain.exe 3.6), flac/ (flac 1.5.0, bundled from M10), icons/, licenses/

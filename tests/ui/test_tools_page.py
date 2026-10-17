@@ -204,7 +204,7 @@ def folder_id(service, path) -> int:
 def test_window_opens_tools_for_a_folder_and_back(qtbot, window, service, library_dir):
     album = library_dir / "Artist" / ALBUM
     window.open_folder(folder_id(service, library_dir / "Artist"))
-    window.open_tools([folder_id(service, album)])
+    window.tools.open([folder_id(service, album)])
     assert window.showing_tools and window.tools_page.scope.folder == album
     assert window.tools_page.scope.first_track == album / "01 First.flac"  # natural order
     qtbot.waitUntil(lambda: window.tools_page.names_card.example.text() == "Example: 01 First.flac")
@@ -240,7 +240,7 @@ def test_window_tools_from_the_folder_summary_and_menus(window, service, library
 
 def test_opening_another_folder_returns_to_the_list(window, service, library_dir):
     window.open_folder(folder_id(service, library_dir / "Artist"))
-    window.open_tools([])
+    window.tools.open([])
     window.open_folder(folder_id(service, library_dir / "Artist" / ALBUM))
     assert not window.showing_tools
 

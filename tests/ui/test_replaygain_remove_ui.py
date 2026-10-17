@@ -42,7 +42,7 @@ def asked(window):
         questions.append((count, where, comment))
         return answer.reply
     answer.reply = True
-    window.ask_remove_replaygain = answer
+    window.tools.ask_remove_replaygain = answer
     return answer, questions
 
 
@@ -54,7 +54,7 @@ def test_a_folder_and_its_subfolders(qtbot, window, service, library_dir, asked)
     answer, questions = asked
     album = library_dir / "Artist" / "Album"
     window.open_folder(entry(service, "Artist", "Album"))
-    window.remove_replaygain([entry(service, "Artist", "Album")])
+    window.tools.remove_replaygain([entry(service, "Artist", "Album")])
     assert questions == [(4, f"{album} and its subfolders", "LUFS Target : {target}")]
     done = "Removed the ReplayGain tags of 3 files. 1 had none."
     qtbot.waitUntil(lambda: done in window.statusBar().currentMessage(), timeout=10000)
@@ -69,7 +69,7 @@ def test_a_folder_and_its_subfolders(qtbot, window, service, library_dir, asked)
 def test_cancel_changes_nothing(qtbot, window, service, library_dir, asked):
     answer, _questions = asked
     answer.reply = False
-    window.remove_replaygain([entry(service, "Artist", "Album")])
+    window.tools.remove_replaygain([entry(service, "Artist", "Album")])
     qtbot.wait(300)
     assert has_rg(library_dir / "Artist" / "Album" / "01 One.flac")
 
@@ -79,7 +79,7 @@ def test_a_selection_of_tracks(qtbot, window, service, library_dir, asked):
     album = library_dir / "Artist" / "Album"
     window.open_folder(entry(service, "Artist", "Album"))
     one = entry(service, "Artist", "Album", "01 One.flac")
-    window.remove_replaygain([one])
+    window.tools.remove_replaygain([one])
     assert questions[0][:2] == (1, "the selection")
     qtbot.waitUntil(lambda: not has_rg(album / "01 One.flac"), timeout=10000)
     assert has_rg(album / "02 Two.flac")  # only the selection
@@ -88,7 +88,7 @@ def test_a_selection_of_tracks(qtbot, window, service, library_dir, asked):
 def test_a_job_lock_refuses_and_says_so(qtbot, window, service, library_dir, asked):
     album = library_dir / "Artist" / "Album"
     token = service.locks.acquire([album / "02 Two.flac"], "the ReplayGain tool")
-    window.remove_replaygain([entry(service, "Artist", "Album")])
+    window.tools.remove_replaygain([entry(service, "Artist", "Album")])
     qtbot.waitUntil(lambda: "is in use by the ReplayGain tool" in window.toast.label.text(), timeout=10000)
     service.locks.release(token)
     assert has_rg(album / "02 Two.flac") and not has_rg(album / "01 One.flac")
@@ -101,5 +101,5 @@ def test_the_metadata_tab_follows(qtbot, window, service, library_dir, asked):
     tab = window.side_panel.metadata
     qtbot.waitUntil(lambda: tab.snapshot is not None and bool(tab.snapshot.replaygain.get(TRACK_GAIN)),
                     timeout=10000)
-    window.remove_replaygain([one])
+    window.tools.remove_replaygain([one])
     qtbot.waitUntil(lambda: tab.snapshot is not None and not tab.snapshot.replaygain.get(TRACK_GAIN), timeout=10000)

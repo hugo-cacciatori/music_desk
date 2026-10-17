@@ -92,10 +92,10 @@ def test_files_from_the_list_keep_the_view_order_and_non_music_is_left_out(windo
 
 
 def test_search_results_drag_their_tracks(qtbot, window):
-    window.open_search()
+    window.search.open()
     QTest.keyClicks(window.search_field, "fir")
-    qtbot.waitUntil(lambda: window._search_token is not None and window.search_shown == window._search_token
-                    and not window._search_timer.isActive(), timeout=10000)
+    qtbot.waitUntil(lambda: window.search._token is not None and window.search.shown == window.search._token
+                    and not window.search._timer.isActive(), timeout=10000)
     results = window.search_view
     results.view.selectAll()
     ids = results.view.drag_ids()

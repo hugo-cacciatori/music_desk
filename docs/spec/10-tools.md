@@ -34,6 +34,7 @@ Tidy cards keep their other options.
       rename, since a new name would break the reference. Status: "kept: used by <name>.cue".
     - Other .cue sheets (one FILE per track, or files that don't exist) are junk, as in the script. When cleanup is
       off and the files they list get renamed, the preview warns that the sheet won't match them anymore.
+    - Retired by M12 (Hugo, 2026-10-17; §26 "Retired with M12"): the protection below: a `.lrc` is junk like the other default extensions.
     - A .lrc file whose audio file (same name stem) has no lyrics tag yet is kept, because recycling it would lose
       those lyrics. Status: "kept: lyrics not in the tags yet". The Metadata tab offers "Import from <name>.lrc"
       for that track (§7).

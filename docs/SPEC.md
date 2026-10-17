@@ -38,3 +38,4 @@ Rules:
 | 23 | [23-trim.md](spec/23-trim.md) | Trimming one track's start and end into a FLAC copy in a subfolder (M13) |
 | 24 | [24-hover-texts.md](spec/24-hover-texts.md) | A short hover text on every button and control (later, not scheduled) |
 | 25 | [25-scroll-wheel.md](spec/25-scroll-wheel.md) | The mouse wheel never changes an input's value (Ground rule 7; later, not scheduled) |
+| 26 | [26-advanced-search.md](spec/26-advanced-search.md) | The Advanced search window (album lists to fix by hand), and the lyrics-tag features M12 retires |

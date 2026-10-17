@@ -14,6 +14,7 @@ cover scan…), it shows a read-only preview of it instead (§20, from M9).
   Comment, and **Lyrics** (multi-line, LRC timestamps kept as typed). The tag keys per format are in §1.
 - Lyrics field: if it is empty and a same-stem `.lrc` file sits next to the track, an "Import from <name>.lrc" link
   fills the field. Saving is the usual Save, and the `.lrc` file itself isn't touched.
+  - Retired by M12 (Hugo, 2026-10-17; §26 "Retired with M12"): the Lyrics field and the `.lrc` import, and the folder summary's lyrics-tag coverage.
 - Cover editing: Replace… (file picker, or drop a jpg/png onto the cover) and Remove. It writes the embedded front
   cover, with a warning for images over 1 MB.
 - Read-only: path, size, codec details, duration, bitrate, sample rate, bit depth, channels, and a Loudness block

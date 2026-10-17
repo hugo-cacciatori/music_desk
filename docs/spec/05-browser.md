@@ -90,6 +90,8 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
 
   They stay as they are until the advanced search (§6, "Later") replaces them (Hugo, 2026-10-16: these lyrics
   lists don't really answer a user need).
+  - Retired by M12 (Hugo, 2026-10-17; §26 "Retired with M12"): the whole Lyrics menu (these entries included), the ♪ column, and the Action
+    menu's "Show tracks without ReplayGain tags" (replaced by Action › Advanced search…).
 - **Action menu** (Hugo, 2026-10-16): between Lyrics and Help (File, View, Lyrics, Action, Help), for actions over
   the whole library. Disabled with no library, as Lyrics is.
   - "Show tracks without ReplayGain tags" opens library search (§6) with `rg:none`, through `MainWindow.find` as

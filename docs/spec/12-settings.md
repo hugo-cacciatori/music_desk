@@ -3,7 +3,7 @@
 duplicate those controls:
 - library folders: the sidebar (Add folder…, Remove from library);
 - hide folders without music: the View menu;
-- offline mode and auto-save of found lyrics: the Lyrics menu;
+- offline mode and auto-save of found lyrics: the Lyrics menu (both retired by M12, §26);
 - the tools' options: the Tools cards, which remember every change (§10);
 - (M13) the trim's subfolder name: the Trim page (§23); "Save beside <file> without asking" for new cue
   sheets: the Split page (§22);

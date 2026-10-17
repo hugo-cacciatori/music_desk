@@ -129,9 +129,7 @@ checks this subsection first.
     shows. The same query's results are applied in place (removals in runs, changed rows, additions, then the
     current sort), so the selection stays; a new query resets the list.
 
-### Later: advanced search (Hugo, 2026-10-16; not specified)
-- A future feature that would bring together, in a streamlined way, the Lyrics menu's three Find entries (§5):
-  songs LRCLIB didn't find, songs LRCLIB can't look up, songs without lyrics in their tags.
-- Hugo's view: those lyrics lists don't really answer a user need. Its options and features are therefore to be
-  fully reconsidered from the need when it is specified (M12), not carried over. Nothing is designed yet.
-- Hugo, 2026-10-17: the app's lyrics focus is LRCLIB, not the lyrics tag (§9), and M12 starts from that.
+### Advanced search: §26
+- Specified with Hugo on 2026-10-17 (M12) as a separate window of album lists to fix by hand, unrelated to this
+  search bar. The Lyrics menu's Find entries it was first meant to replace are retired instead.
+- Retired by M12 (Hugo, 2026-10-17; §26 "Retired with M12"): the `lyricstag:` filter, and free text searching the files' own lyrics tags (LRCLIB's lyrics only).

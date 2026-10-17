@@ -20,16 +20,22 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   Full suite passed, slow included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip, save a second version of the
   cue and split from it; Preview in player opens in foobar2000 (Trim page and Split page). A release when he asks.
-- **Next step:** M12, after asking Hugo its questions (SPEC §6 "Later"). Give Hugo full manual steps for checks
-  (memory: manual-check-instructions).
+- **Next step:** M12 task 1 (SPEC §26 "Retired with M12"). Give Hugo full manual steps for checks (memory:
+  manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …). Tick tasks as
 they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
 of it (see Session protocol 5).
 
-**M12 Advanced search** (Hugo, 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first, reconsidering
-every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet.
+**M12 Advanced search** (Hugo, 2026-10-17; read SPEC §26, then §5, §6, §7, §8, §9, §10 where they retire).
+- [ ] 1. Retire the lyrics-tag features, the Lyrics menu (Find entries, auto-save, Offline mode as a setting).
+- [ ] 2. Core: the two album searches over the index (no ReplayGain on some track; cue + image, no tracks).
+- [ ] 3. UI: the Advanced search window (not modal), Start, results, double-click to the folder, Refresh search.
+- [ ] 4. README and the minor version (0.5.0).
+
+Done when: the window lists both searches' albums on a fixture library while the main window stays usable; a
+double-click shows the folder; Refresh follows a fix; nothing in the app reads or writes the lyrics tag.
 
 **Later: hover texts** (Hugo, 2026-10-17; SPEC §24). A tooltip on every control. Not scheduled, no tasks yet.
 
@@ -68,7 +74,8 @@ Code and tests cite these by number; keep the numbering.
 1. The app never copies, moves, deletes or creates files or folders in the library. The only exceptions:
    - renaming files and folders (inline F2, or the Rename tool), including an audio file's same-stem `.lrc`
      sidecar, which follows its rename;
-   - writing tags into music files (metadata editor, "Save to file tags" in the Lyrics tab, ReplayGain tool);
+   - writing tags into music files (metadata editor, "Save to file tags" in the Lyrics tab until M12 retires it,
+     ReplayGain tool);
    - writing `replaygain.log` in album folders (ReplayGain tool; each run replaces it, while the script
      appended);
    - writing a playlist the user exports from the playlist builder, where the user saves it (the Save dialog
@@ -121,8 +128,8 @@ The full log is `docs/DECISIONS.md`. These apply to all work:
 - **Cue split** (Hugo, 2026-10-16): the `.cue` is the only source of truth. The app stores no split state (no
   remembered options or edits); edits are kept only by saving them into a `.cue`. SPEC §22. (M13's remembered
   "Save beside … without asking" box is a preference, not split state: Hugo, 2026-10-17.)
-- **Lyrics** (Hugo, 2026-10-17): the app's lyrics focus is LRCLIB's results, not the lyrics tag; features that
-  touch lyrics start from LRCLIB (SPEC §9).
+- **Lyrics** (Hugo, 2026-10-17): the app's lyrics are LRCLIB's results, and no function relies on the lyrics tag
+  (M12 retires them, SPEC §26). Features that touch lyrics start from LRCLIB (SPEC §9).
 - **Licence:** GPL-3.0-or-later. Every bundled third-party component is listed in `music_desk/licenses.py`, with
   its text in `resources/licenses/` (SPEC §13).
 - **Repo:** public on GitHub, `hugo-cacciatori/music_desk`, branch `main`.

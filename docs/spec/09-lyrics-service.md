@@ -33,6 +33,8 @@
       (`lyrics_index.pending_count`), and it goes down with each result. The UI thread never counts.
       `LyricsProgress.pending` carries it.
     - Pause is for this session only (not saved).
+  - Retired by M12 (Hugo, 2026-10-17; §26 "Retired with M12"): both settings below, and the Lyrics menu that held them. Without internet the
+    circuit breaker above already pauses and retries by itself; `offline` stays a service parameter for tests.
   - Settings: **Offline mode** (`--offline`: no LRCLIB calls), and **Automatically save found lyrics into tags**
     (`--embed`, off by default). Auto-save only fills an empty lyrics tag and never replaces one. Writes go
     through TagWriter.

@@ -9,6 +9,7 @@ not it has a lyrics tag.
   available, else the plain ones, into the Lyrics tag (the script's `--embed`). It is disabled when the tag
   already holds the same text, and asks before replacing different lyrics.
   - If the file also has a lyrics tag, a note says so, and says whether it differs from LRCLIB.
+- Retired by M12 (Hugo, 2026-10-17; §26 "Retired with M12"): Save to file tags, the note about the file's own lyrics tag, and the offline state.
 - **Instrumental, not found, missing artist/title, lookup error, or offline mode:** a plain explanation plus
   **Search on Genius** (`https://genius.com/search?q=<artist title>`) and **Search on Google**
   (`https://www.google.com/search?q=<artist title>+lyrics`), which open in the default browser. Not-found and

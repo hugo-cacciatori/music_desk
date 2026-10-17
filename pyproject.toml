@@ -1,6 +1,6 @@
 [project]
 name = "music-desk"
-version = "0.6.3"
+version = "0.6.4"
 description = "Windows desktop app for browsing a music library, editing tags, tidying albums and finding lyrics."
 requires-python = ">=3.13,<3.14"
 license = "GPL-3.0-or-later"

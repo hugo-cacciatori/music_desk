@@ -184,7 +184,8 @@ class SplitController(QObject):
         elif not self.page.split_button.isEnabled():
             why = self.page.split_note.text().rstrip(".") or "it can't be split as it is"
         if why:
-            self.window.toast.show_message(f"Not split: {why}. Check it here, then click Split.")
+            self.window.toast.show_message(f"Not split: {why}. Fix it here and save, then use Split on the cue "
+                                           "sheet's preview.")
             return
         self.split()
 

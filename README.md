@@ -51,7 +51,8 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
   whole sheet, editable: which audio file it points to, start times and gaps, titles and the other fields,
   tracks to add or delete, and the text encoding of old sheets. Save writes your edits back into the `.cue`,
   changing only the lines you edited; Save as makes another version of the sheet, so one image can be split in
-  several ways. Tick the tracks you want and choose where they go; each one is cut with the bundled
+  several ways; Preview in player plays it. The page only edits: Split, on the sheet's preview, writes every
+  track into the album's folder. Each one is cut with the bundled
   [flac](https://xiph.org/flac/), tagged from the sheet with the album's cover, named with your file name masks,
   and checked sample for sample against its part of the original. Nothing is overwritten (a taken name gets a
   number), and the image, its sheet and its log are never touched.

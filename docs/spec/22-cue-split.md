@@ -139,6 +139,14 @@ in**, and **one page with every control**; you can't split without going through
     has a warning (data tracks). Same sheet already open with unsaved edits: Split asks to save first, as the
     page's own Split does.
   - **Edit…**: what "Split into tracks…" did: the Split page, to check and edit before splitting.
+  - **The page edits only** (Hugo, 2026-10-17, M20): opened by Edit… or by New cue sheet… (an audio file's
+    Metadata tab), it ends in **Save** (overwrite), **Save as** (a new `.cue`) and **Preview in player**; it has
+    no Split button, no ticks and no destination. A split starts only from a `.cue`'s **Split**, with the
+    defaults (every track, the sheet's folder), and only when the sheet has what a split needs; otherwise the page
+    opens on the sheet saying why ("Fix it here and save, then use Split on the cue sheet's preview."). While that
+    split runs, the page shows it read-only with Stop, then its report. Built in 0.7.1: the Split button, its
+    note, the Tick column and the Destination row stay in `split_page.py` but hidden, since the preview's Split
+    runs through `SplitController.split()`.
   - Built (M19 task 1, 0.6.4): `FilePreview` shows `open_button` ("Play" for a `.cue`), `split_button`
     (`splitRequested` → `SplitController.split_now`) and `edit_button` (`editRequested` → `SplitController.open`).
     `split_now` opens the sheet and sets `_split_now`; once planned, `_split_when_planned` calls `split()` or shows

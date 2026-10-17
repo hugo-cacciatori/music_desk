@@ -1,10 +1,14 @@
 """The Split page (SPEC §22): one cue sheet, every control. It shows what the controller gives it and reports what
 the user does; the editing, saving and the job live in ui/controllers/split.py.
 
-Top to bottom: the source (which audio file the sheet points to), the encoding picker, the destination folder,
-the album fields and their other lines, the track table (a tick per track, the editable values, the computed
-length and new name, validation marks), the selected track's other lines, Add and Delete, then Save, Save as…,
-Split and Stop. While the job runs the editor is read-only; afterwards the report replaces it.
+Top to bottom: the source (which audio file the sheet points to), the encoding picker, the album fields and their
+other lines, the track table (the editable values, the computed length and new name, validation marks), the
+selected track's other lines, Add and Delete, then Save, Save as… and Preview in player.
+
+Since M20 (Hugo, 2026-10-17) the page edits only: a split starts from a cue sheet's Split button on its preview
+(§22), never here. The Split button, the ticks and the destination stay built but hidden, because the preview's
+Split runs through the controller's split() with the defaults (every track, the sheet's folder); while that job
+runs the page shows it read-only, with Stop, and afterwards its report.
 """
 
 import html
@@ -131,9 +135,12 @@ class SplitPage(QWidget):
         source_row.addWidget(self.encoding, 0, 3, 1, 2)
         source_row.addWidget(self.source_note, 1, 1)
         source_row.addWidget(self.encoding_note, 1, 2, 1, 3)
-        source_row.addWidget(QLabel("Destination:"), 2, 0)
+        self.destination_label = QLabel("Destination:")
+        source_row.addWidget(self.destination_label, 2, 0)
         source_row.addWidget(self.destination, 2, 1, 1, 3)
         source_row.addWidget(self.browse_button, 2, 4)
+        for widget in (self.destination_label, self.destination, self.browse_button):
+            widget.hide()  # the page edits only (M20): a split always goes to the sheet's folder
         source_row.setColumnStretch(1, 1)
 
         # -- the album --
@@ -159,6 +166,7 @@ class SplitPage(QWidget):
         # -- the tracks --
         self.table = QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels([header for _key, header in COLUMNS])
+        self.table.setColumnHidden(COLUMN["tick"], True)  # no split from this page (M20): every track
         for key, tip in HEADER_TIPS.items():
             header_item = self.table.horizontalHeaderItem(COLUMN[key])
             if header_item is not None:
@@ -299,10 +307,11 @@ class SplitPage(QWidget):
         self.editor.setEnabled(state == "editing")
         self.report.setVisible(state == "result")
         self.busy.setVisible(state in ("loading", "running"))
-        for button in (self.save_button, self.save_as_button, self.preview_button, self.split_button):
+        for button in (self.save_button, self.save_as_button, self.preview_button):
             button.setVisible(editing)
+        self.split_button.hide()  # the page edits only (M20): Split is on the cue sheet's preview
+        self.split_note.hide()
         self.save_beside.setVisible(editing and self.new)
-        self.split_note.setVisible(state == "editing")
         self.stop_button.setVisible(state == "running")
         self.done_button.setVisible(state in ("result", "error"))
         self.back_button.setToolTip(

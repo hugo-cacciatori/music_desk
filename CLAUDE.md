@@ -16,8 +16,9 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 18):** 0.7.0 is on `main`, installer built, not released (Hugo: no release; the
-  last release is v0.6.3). M17 (the new Tidy, SPEC §28) and M19 (Play / Split / Edit… on a cue) are done.
+- **State (2026-10-17, session 18):** 0.7.1 is on `main`, installer built, not released (Hugo: no release; the
+  last release is v0.6.3). M17 (the new Tidy, SPEC §28), M19 (Play / Split / Edit… on a cue) and M20 (the
+  Split page edits only) are done.
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
   in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
   fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page; Japanese/Chinese MP3 tags read

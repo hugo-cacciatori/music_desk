@@ -504,7 +504,7 @@ def test_a_missing_source_is_marked_until_one_is_chosen(qtbot, split, library_di
                                       "its audio file.")
     assert "<b>This sheet points to Fixture Album.wav" in page.source_note.text()
     assert page.source.styleSheet() and not page.split_button.isEnabled() and not page.preview_button.isEnabled()
-    assert page.split_button.isVisible()  # the page is where a wrong FILE line is fixed
+    assert page.save_as_button.isVisible() and not page.split_button.isVisible()  # the page fixes; it never splits
     index = page.source.findData("image.wav")
     page.source.setCurrentIndex(index)
     page.source.activated.emit(index)
@@ -544,6 +544,19 @@ def new_sheet(qtbot, split, audio):
     split.new_sheet(audio)
     ready(qtbot, split)
     return split.page
+
+
+def test_the_page_edits_only(qtbot, window, split, library_dir):
+    """Edit… and New cue sheet… end in Save, Save as and Preview in player (Hugo, M20): no Split, ticks or
+    destination; a split starts only from a cue sheet's preview."""
+    folder = library_dir / "Albums" / "wav_image"
+    for page in (open_sheet(qtbot, split, folder / "image.cue"), new_sheet(qtbot, split, folder / "image.wav")):
+        visible = [b.text() for b in (page.save_button, page.save_as_button, page.preview_button,
+                                      page.split_button) if b.isVisible()]
+        assert "Split" not in " ".join(visible) and page.save_as_button.isVisible()
+        assert page.preview_button.isVisible()
+        assert page.table.isColumnHidden(0) and not page.destination.isVisible()
+        assert not page.browse_button.isVisible() and not page.split_note.isVisible()
 
 
 def test_new_cue_sheet_from_the_metadata_tab(qtbot, window, service, library_dir, split):

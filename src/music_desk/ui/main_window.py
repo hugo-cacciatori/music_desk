@@ -54,6 +54,7 @@ from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.controllers.delete import DeleteController
 from music_desk.ui.controllers.search import SearchController
 from music_desk.ui.controllers.split import SplitController
+from music_desk.ui.controllers.tidy import TidyController
 from music_desk.ui.controllers.tools import ToolsController
 from music_desk.ui.controllers.trim import TrimController
 from music_desk.ui.file_view import FileView
@@ -172,6 +173,7 @@ class MainWindow(QMainWindow):
         self.split = SplitController(self, locks, self)  # the cue split (SPEC §22)
         self.split_page = self.split.page
         self.trim = TrimController(self, locks, self)  # trimming one track into a copy (SPEC §23)
+        self.tidy = TidyController(self, locks, self)  # a whole tree: split, rename, ReplayGain (SPEC §28)
         self.trim_page = self.trim.page
         self.side_panel.metadata.trimRequested.connect(self.trim.open)
         self.side_panel.metadata.newCueRequested.connect(self.split.new_sheet)
@@ -201,6 +203,7 @@ class MainWindow(QMainWindow):
         self.center.addWidget(self.rg_view)
         self.center.addWidget(self.split_page)
         self.center.addWidget(self.trim_page)
+        self.center.addWidget(self.tidy.page)
         # The playlist builder (SPEC §15): a narrow column between the centre and the side panel, hidden until asked.
         self.playlist_panel = PlaylistPanel(conn)
         self.playlist_file: Path | None = (self.settings.path.with_name("playlist.json")
@@ -715,6 +718,10 @@ class MainWindow(QMainWindow):
             self.center.setCurrentWidget(self.trim_page)
         elif "trim" in job.reports:
             self.trim.show_report(job.reports["trim"])
+        elif job_id == self.tidy.job:
+            self.center.setCurrentWidget(self.tidy.page)
+        elif "tidy" in job.reports:
+            self.tidy.show_report(job.reports["tidy"])
         elif not self.tools.show_job(job_id, job):
             self.toast.show_message(f"{job.kind} in {job.folder}: {job.status}")
 
@@ -723,6 +730,8 @@ class MainWindow(QMainWindow):
             self.split.runner.cancel()
         elif job_id == self.trim.job:
             self.trim.runner.cancel()
+        elif job_id == self.tidy.job:
+            self.tidy.runner.cancel()
         else:
             self.tools.stop_job(job_id)
 
@@ -984,6 +993,9 @@ class MainWindow(QMainWindow):
         self.tools.shutdown()  # a running rename stops between two files; a running rsgain is killed
         self.split.close()  # a running flac is killed; this run's .partial files are deleted
         self.trim.close()  # likewise for a trim's .partial
+        self.tidy.shutdown()  # its split, rename or rsgain stops as those tools' do
+        if self.tidy.offer is not None:
+            self.tidy.offer.close()  # closing keeps every file
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
         self._playlist_save.stop()

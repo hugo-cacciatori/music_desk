@@ -16,14 +16,15 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 18):** 0.6.3 is on `main` and released (GitHub v0.6.3): M16, M18 (the `musicdesk`
-  keyword in File Explorer, single instance), M17 task 1 and the Tools page layout. Full suite passed.
+- **State (2026-10-17, session 18):** 0.7.0 is on `main`, installer built, not released (Hugo: no release; the
+  last release is v0.6.3). M17 (the new Tidy, SPEC §28) and M19 (Play / Split / Edit… on a cue) are done.
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
   in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
   fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page; Japanese/Chinese MP3 tags read
   right after the first start of 0.6.x (it re-reads ID3 files). After installing 0.6.3: `musicdesk` typed in Explorer's
-  address bar opens that folder.
-- **Next step:** M17 task 2 (the Tidy job, SPEC §28). Give Hugo full manual steps for checks (memory:
+  address bar opens that folder. With 0.7.0: Tidy on a real EAC album (on a copy): split, ReplayGain, the offer
+  window.
+- **Next step:** none scheduled; ask Hugo. Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
 ## Work plan
@@ -31,20 +32,7 @@ Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2
 they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
 of it (see Session protocol 5).
 
-### M17: Tidy remade (Hugo, 2026-10-17)
-Read SPEC §28 (and §10, §22, §26 for what it reuses). Each task bumps the patch version; the last one 0.7.0.
-- [x] 1. `core/tidy.py`: find the albums, sort them (not split, split, half-split, tidy, skipped) and plan each
-  one's steps, with the ReplayGain check; unit tests. 0.6.1.
-- [x] 1b. The Tools page in three headed sections, clearer card titles and Run buttons (Hugo, SPEC §10). 0.6.2.
-- [ ] 2. The job: one Tidy job album by album (split, renames, ReplayGain), locks, Stop, report, the offer list
-  collected. 0.6.5.
-- [ ] 3. The Tidy card and the plan page (preview), Run, the jobs panel; the old Tidy flow removed. 0.6.6.
-- [ ] 4. The offer window (Keep / Delete, multi-select, Apply to the Recycle Bin, closing keeps all); README and
-  SPEC §10 updated. 0.7.0.
-
-### M19: cue preview buttons (Hugo, 2026-10-17)
-Read SPEC §22 "The entry point". Before M17 tasks 2-4 (Hugo asked for it first).
-- [x] 1. Play, Split (at once, the defaults), Edit… on a .cue preview; tests. 0.6.4.
+None scheduled.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that

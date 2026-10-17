@@ -39,7 +39,10 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
     follow their audio file, and an optional junk cleanup sends files to the Recycle Bin.
   - **ReplayGain** for an album or a whole discography, with the bundled [rsgain](https://github.com/complexlogic/rsgain).
     Each run writes a fresh `replaygain.log`; the ReplayGain tags can also be removed from tracks or folders.
-  - **Tidy**: the rename, then ReplayGain.
+  - **Tidy**: a whole folder tree at once, album by album. Albums still in one file with their cue sheet are split
+    into tracks, tracks are renamed to the masks, then ReplayGain runs where it's missing or for another target.
+    You see the whole plan first and run it with one button; at the end, a window lists the images and cue sheets
+    the splits made redundant, and you choose which go to the Recycle Bin (closing it keeps them all).
 
   Jobs run in the background, and you can keep browsing meanwhile; the status bar's Jobs button (Ctrl+J) shows them.
 - **Split a single-file album**, such as an EAC rip (one FLAC, WAV or AIFF image, its `.cue` and its log), into

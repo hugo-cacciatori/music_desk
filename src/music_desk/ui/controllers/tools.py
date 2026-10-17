@@ -1,9 +1,8 @@
-"""The Tools page's controller (SPEC §10, §16): Rename, ReplayGain and Tidy, their previews, jobs and reports,
-and Remove ReplayGain tags.
+"""The Tools page's controller (SPEC §10, §16): Rename and ReplayGain, their previews, jobs and reports, and Remove
+ReplayGain tags. Tidy has its own controller (ui/controllers/tidy.py, SPEC §28), which the Tidy card opens.
 
 A tool runs one job at a time: while its job runs, its page shows that job instead. Rename is previewed and
-applied on its runner; ReplayGain has no preview (it only writes tags and the logs); Tidy previews its rename,
-then runs ReplayGain on the final names as the same job's second step.
+applied on its runner; ReplayGain has no preview (it only writes tags and the logs).
 
 Dialogs go through ask_* methods, which tests replace.
 """
@@ -130,13 +129,16 @@ class ToolsController(QObject):
             self.page.set_example(fields, extension)
 
     def run_tool(self, request: ToolRequest) -> None:
-        """A card's button: the rename preview, the ReplayGain job (no preview), or Tidy's rename preview. A tool
-        runs one job at a time: while its job runs, its page shows that job instead."""
+        """A card's button: the rename preview, the ReplayGain job (no preview), or Tidy's plan (its controller). A
+        tool runs one job at a time: while its job runs, its page shows that job instead."""
         window = self.window
+        if request.tool == TIDY:
+            window.tidy.open(request)
+            return
         busy = None
-        if request.tool in (RENAME, TIDY) and self.rename_job is not None:
+        if request.tool == RENAME and self.rename_job is not None:
             busy = self.rename_job
-        elif request.tool in (REPLAYGAIN, TIDY) and self.rg_job is not None:
+        elif request.tool == REPLAYGAIN and self.rg_job is not None:
             busy = self.rg_job
         if busy is not None:
             job = window.jobs.get(busy)
@@ -149,8 +151,6 @@ class ToolsController(QObject):
             self.preview_rename(request)
         elif request.tool == REPLAYGAIN:
             self.run_replaygain(request)  # no preview: it only writes tags and the logs (Hugo, 2026-10-15)
-        elif request.tool == TIDY:
-            self.preview_rename(request)  # Tidy: the rename step is previewed; ReplayGain follows Apply
 
     # -- the jobs panel --
 
@@ -182,7 +182,7 @@ class ToolsController(QObject):
     # -- the ReplayGain tool (SPEC §10 B) --
 
     def run_replaygain(self, request: ToolRequest | None = None, title: str | None = None) -> bool:
-        """Start the ReplayGain job (the card's Run, or Tidy's second step). False when it didn't start."""
+        """Start the ReplayGain job (the card's Run). False when it didn't start."""
         window = self.window
         request = request or self._rg_request
         if request is None or not window._library_open():
@@ -190,7 +190,7 @@ class ToolsController(QObject):
         folder = request.scope.folder
         if window._unsaved_edits_under(folder):
             return False
-        assert request.replaygain_options is not None  # set for every ReplayGain and Tidy request
+        assert request.replaygain_options is not None  # set for every ReplayGain request
         try:
             self._rg_token = self.rg_runner.run(folder, request.replaygain_options, request.discography)
         except LockedError as e:
@@ -198,15 +198,9 @@ class ToolsController(QObject):
             return False
         self._rg_request = request
         window._pause_indexing(True)  # rsgain gets the drive to itself; folders you open are still served
-        if request.tool == TIDY and self.rename_job is not None:
-            self.rg_job, self.rename_job = self.rename_job, None  # the same Tidy job, step 2
-            window.jobs.update(self.rg_job, status="ReplayGain")
-        else:
-            self.rg_job = window._start_job(jobs_module.REPLAYGAIN, folder)
-        follow = window.center.currentWidget() in self.pages
+        self.rg_job = window._start_job(jobs_module.REPLAYGAIN, folder)
         self.rg_view.show_running(folder, title, request.discography)
-        if follow:  # Tidy's step 2 doesn't pull you back if you went browsing meanwhile
-            window.center.setCurrentWidget(self.rg_view)
+        window.center.setCurrentWidget(self.rg_view)
         return True
 
     def _rg_progress(self, done: int, total: int, label: str) -> None:
@@ -243,8 +237,8 @@ class ToolsController(QObject):
     def preview_rename(self, request: ToolRequest) -> None:
         scope = request.scope
         self._rename_request = request
-        assert request.rename_options is not None  # set for every Rename and Tidy request
-        self.rename_preview.show_planning(scope.folder, len(scope.files), tidy=request.tool == TIDY)
+        assert request.rename_options is not None  # set for every Rename request
+        self.rename_preview.show_planning(scope.folder, len(scope.files))
         self.window.center.setCurrentWidget(self.rename_preview)
         self._rename_token = self.rename_runner.plan(scope.folder, request.rename_options,
                                                      list(scope.files) or None)
@@ -292,8 +286,7 @@ class ToolsController(QObject):
         except LockedError as e:
             window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
             return
-        tidy = self._rename_request is not None and self._rename_request.tool == TIDY
-        self.rename_job = window._start_job(jobs_module.TIDY if tidy else jobs_module.RENAME, plan.folder)
+        self.rename_job = window._start_job(jobs_module.RENAME, plan.folder)
         window.jobs.update(self.rename_job, status="Renaming")
         self.rename_preview.show_applying()
 
@@ -322,15 +315,7 @@ class ToolsController(QObject):
         self.rename_preview.show_report(report)
         count = len(report.renamed)
         window.statusBar().showMessage(f"Renamed {count} file{'s' if count != 1 else ''}.", STATUS_MS)
-        request = self._rename_request
         summary = rename.summary_sections(report, dry_run=False)[0][0]
-        if request is not None and request.tool == TIDY:  # Tidy, step 2: ReplayGain on the final names
-            if report.cancelled:
-                self.rename_preview.message.setText("Stopped, so ReplayGain was not run.")
-            elif self.run_replaygain(request, "Tidy, step 2 of 2: ReplayGain"):
-                return  # the job goes on (its rename report is kept)
-            else:
-                self.rename_preview.message.setText("Renamed. ReplayGain was not started (see the message).")
         if job is not None:
             window.jobs.finish(job, jobs_module.STOPPED if report.cancelled else jobs_module.DONE, summary)
             self.rename_job = None

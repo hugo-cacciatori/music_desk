@@ -31,9 +31,11 @@ DISCOGRAPHY_NOTE = (
     "Discography: every folder below that holds music is an album (its lite/bonus/CD2 subfolders go with it). "
     "Then every album is leveled to the lowest album gain, and a summary replaces replaygain.log in this folder.")
 TIDY_DESCRIPTION = (
-    "Renames the music files from their tags (the Rename card's options), then runs ReplayGain on the final names "
-    "(the ReplayGain card's options). This is the script run without flags. The preview covers the rename step "
-    "only: ReplayGain can't be previewed on names that are about to change.")
+    "Tidies this folder and every folder below it that holds music, album by album: an album still in one file "
+    "with its cue sheet is split into tracks, tracks named otherwise are renamed to the masks, then ReplayGain runs "
+    "where a track lacks its values for the current target. lite and bonus folders are left to their album's "
+    "ReplayGain. You see the whole plan before anything changes, and choose at the end which images and cue sheets "
+    "the splits made redundant go to the Recycle Bin.")
 SELECTION_NOTE = ("ReplayGain works on album folders. Open the album folder (or the artist folder, for a "
                   "discography) to use it.")
 ALBUM, DISCOGRAPHY = "album", "discography"
@@ -222,35 +224,27 @@ class ReplayGainCard(Card):
 
 
 class TidyCard(Card):
-    """Rename, then ReplayGain on the final names, with the two cards' options (SPEC §10 C)."""
+    """The whole tree, album by album: split, rename, ReplayGain, with the other cards' options (SPEC §28)."""
 
     runRequested = Signal()
 
     def __init__(self, rename_card, replaygain_card: ReplayGainCard, parent: QWidget | None = None) -> None:
-        super().__init__("Tidy album", TIDY_DESCRIPTION, parent)
+        super().__init__("Tidy", TIDY_DESCRIPTION, parent)
         self.rename_card = rename_card
         self.replaygain_card = replaygain_card
-        self.scope_group, scope_row = scope_buttons(self, self.update_state)
         self.note = QLabel()
         self.note.setWordWrap(True)
-        form = QFormLayout()
-        form.addRow(QLabel(MASKS_LINE, wordWrap=True))
-        form.addRow("Scope:", scope_row)
-        self.body.addLayout(form)
+        self.body.addWidget(QLabel(MASKS_LINE, wordWrap=True))
         self.body.addWidget(self.note)
-        self.run_button = self.primary(QPushButton("Run Tidy…"))  # "…": the rename preview comes first
-        self.run_button.setToolTip("Show the renames first; once you apply them, ReplayGain runs on the final "
-                                   "names")
+        self.run_button = self.primary(QPushButton("Run Tidy…"))  # "…": the whole plan comes first
+        self.run_button.setToolTip("Read the folders and show what Tidy will do to each album; nothing changes "
+                                   "until you click Run Tidy there")
         self.run_button.clicked.connect(self.runRequested)
         self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)
         rename_card.changed.connect(self.update_state)
         replaygain_card.changed.connect(self.update_state)
         self.update_state()
-
-    @property
-    def scope(self) -> str:
-        return checked_scope(self.scope_group)
 
     def update_state(self, *_args) -> None:
         problems = []
@@ -263,9 +257,7 @@ class TidyCard(Card):
         self.show_problems(problems)
         notes = []
         if self.replaygain_card.selection:
-            notes.append("Tidy works on album folders. " + SELECTION_NOTE.split(". ", 1)[1])
-        elif self.scope == DISCOGRAPHY:
-            notes.append("Discography: the rename runs on every subfolder, then ReplayGain levels every album.")
+            notes.append("Tidy works on folders: open the folder to tidy (an album, an artist, the whole library).")
         if self.replaygain_card.unavailable:
             notes.append(self.replaygain_card.unavailable)
         self.note.setText("\n".join(notes))

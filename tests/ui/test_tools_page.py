@@ -166,12 +166,12 @@ def test_requests_carry_the_checked_options(page):
     page.replaygain_card.log_file.textEdited.emit("rg.log")
     page.rename_card.run_button.click()
     page.replaygain_card.run_button.click()
-    page.tidy_card.scope_group.buttons()[1].setChecked(True)
     page.tidy_card.run_button.click()
     assert [r.tool for r in received] == [RENAME, REPLAYGAIN, TIDY]
     assert received[0].rename_options.protected_names == ("rg.log",)  # the configured log is never junk
     assert received[1].replaygain_options.log_file == "rg.log" and not received[1].discography
-    assert received[2].discography and received[2].rename_options.masks == rename.DEFAULT_OPTIONS.masks
+    assert received[2].rename_options.masks == rename.DEFAULT_OPTIONS.masks  # Tidy: always the whole tree
+    assert received[2].replaygain_options.log_file == "rg.log"
 
 
 def test_invalid_options_send_no_request(page):

@@ -145,7 +145,7 @@ class ToolsPage(QWidget):
         elif tool == TIDY and self.tidy_card.run_button.isEnabled():
             self.runRequested.emit(ToolRequest(
                 TIDY, self.scope, rename_options=self.rename_options(),
-                replaygain_options=self.replaygain_card.options(), discography=self.tidy_card.scope == "discography"))
+                replaygain_options=self.replaygain_card.options()))
 
     def _save_names(self) -> None:
         self.settings.name_masks = list(self.names_card.mask_list())

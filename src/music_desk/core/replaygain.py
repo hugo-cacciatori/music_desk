@@ -11,7 +11,7 @@ import os
 import re
 import time
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -370,7 +370,8 @@ def update_album_gain_metadata(folder: Path, files: list[str], run_log: RunLog) 
             run_log.error(f"Could not write album metadata to {file}: {e}")
 
 
-def copy_replaygain_metadata(folder: Path, files: list[str], run_log: RunLog) -> None:
+def copy_replaygain_metadata(folder: Path, files: list[str], run_log: RunLog,
+                             exclude: frozenset[str] = frozenset()) -> None:
     """Copy the album's ReplayGain data to the files of its keyword subfolders.
 
     In track-data subfolders (e.g. 'lite', but not excluded ones like 'bonus'), the track data of the file with
@@ -396,7 +397,7 @@ def copy_replaygain_metadata(folder: Path, files: list[str], run_log: RunLog) ->
         name = subfolder.lower()
         copy_track_data = (any(keyword in name for keyword in options.track_data_keywords)
                            and not any(keyword in name for keyword in options.track_data_excluded_keywords))
-        folder_files, _ = list_audio_files(folder / subfolder)
+        folder_files = [f for f in list_audio_files(folder / subfolder)[0] if f.casefold() not in exclude]
         updated = with_track_data = 0
 
         for audio_file in folder_files:
@@ -429,8 +430,10 @@ def copy_replaygain_metadata(folder: Path, files: list[str], run_log: RunLog) ->
 
 def process_album(folder: str | Path, options: ReplayGainOptions = DEFAULT_OPTIONS,
                   scanner: Scanner = rsgain.scan, exe: Path | None = None, cancel: CancelToken | None = None,
-                  reporter: Reporter | None = None, now: Clock = datetime.now) -> RunLog | None:
-    """Run the album workflow in `folder` and append its report to the log file.
+                  reporter: Reporter | None = None, now: Clock = datetime.now,
+                  exclude: Iterable[str] = ()) -> RunLog | None:
+    """Run the album workflow in `folder` and append its report to the log file. `exclude`: file names that
+    aren't tracks (Tidy's unsplit images, SPEC §28), neither measured nor given the album values.
 
     Returns the RunLog, or None if the folder has no file rsgain can scan. A crash is recorded in the log
     (result CRASHED) and not re-raised.
@@ -438,7 +441,9 @@ def process_album(folder: str | Path, options: ReplayGainOptions = DEFAULT_OPTIO
     folder = Path(folder)
     exe = exe or paths.rsgain_path()
     reporter = reporter or NullReporter()
+    skip = frozenset(name.casefold() for name in exclude)
     files, unsupported = list_audio_files(folder)
+    files = [name for name in files if name.casefold() not in skip]
     if not files:
         reporter.info(f"No audio file rsgain can scan in {folder}")
         return None
@@ -451,7 +456,7 @@ def process_album(folder: str | Path, options: ReplayGainOptions = DEFAULT_OPTIO
             return run_log
         adjust_gain_to_prevent_clipping(folder, files, run_log)
         update_album_gain_metadata(folder, files, run_log)
-        copy_replaygain_metadata(folder, files, run_log)
+        copy_replaygain_metadata(folder, files, run_log, skip)
     except Exception:  # noqa: BLE001 - recorded as CRASHED in the album's log
         log.exception("ReplayGain crashed in %s", folder)
         run_log.crash()

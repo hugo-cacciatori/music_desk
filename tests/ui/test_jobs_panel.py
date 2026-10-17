@@ -11,7 +11,7 @@ from rsgain_fake import FakeScanner
 from music_desk.core.index.store import path_of
 from music_desk.core.rsgain import ScanResult
 from music_desk.services.jobs import DONE, RUNNING, STOPPED
-from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN, TIDY
+from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN
 
 
 class BlockingScanner(FakeScanner):
@@ -90,9 +90,6 @@ def test_one_job_per_tool(qtbot, window, service, library_dir, scanner):
     assert "ReplayGain is still running in" in window.toast.label.text()
     assert window.center.currentWidget() is window.rg_view and window.rg_view.state == "running"
     window.tools.open([])
-    window.tools_page.request(TIDY)  # Tidy needs ReplayGain too
-    assert window.center.currentWidget() is window.rg_view
-    window.tools.open([])
     window.tools_page.request(RENAME)  # the Rename tool is free
     qtbot.waitUntil(lambda: window.rename_preview.state == "preview", timeout=10000)
     scanner.release.set()
@@ -131,18 +128,6 @@ def test_finished_reports_reopen_and_clear(qtbot, window, service, library_dir, 
 
     window.jobs_panel.clear_button.click()
     assert window.jobs.jobs == [] and window.jobs_panel.rows() == [] and window.jobs_button.text() == "Jobs"
-
-
-def test_tidy_is_one_job(qtbot, window, service, library_dir, scanner):
-    scanner.release.set()
-    window.open_folder(folder_id(service, library_dir / "Fixture Artist" / "Album B"))
-    window.tools.open([])
-    window.tools_page.request(TIDY)
-    qtbot.waitUntil(lambda: window.rename_preview.state == "preview", timeout=10000)
-    window.rename_preview.apply_button.click()
-    qtbot.waitUntil(lambda: window.jobs.jobs and window.jobs.jobs[0].state == DONE, timeout=10000)
-    [job] = window.jobs.jobs
-    assert job.kind == "Tidy" and set(job.reports) == {"rename", "replaygain"}
 
 
 def test_the_selection_is_kept_after_replaygain(qtbot, window, service, library_dir, scanner):

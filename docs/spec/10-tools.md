@@ -139,7 +139,8 @@ Tidy cards keep their other options.
   - the target, whose spin box only allows rsgain's −30 to −5 LUFS;
   - "Advanced" with the threshold, margin, keywords (comma-separated, since they may hold spaces), log file name
     and comment text.
-- **Tidy card:** a scope, and the two cards' options ("Run Tidy…").
+- **Tidy card:** no options of its own: the other cards' (File names, Rename, ReplayGain). "Run Tidy…" opens Tidy's
+  plan (§28, since 0.7.0; before, a scope and the rename-then-ReplayGain flow below).
 - **Validation**, inline, under each card:
   - Rename: `rename.validate`.
   - ReplayGain: the new `replaygain.validate`. The script had no ReplayGain checks. It checks rsgain's target
@@ -207,11 +208,8 @@ Tidy cards keep their other options.
   changed (the new ReplayGain tags and the comment).
 - **Unsaved Metadata edits** on a file in the folder ask Save, Discard or Cancel before a run (the rename tool
   does the same).
-- **Tidy:** the Tidy card opens the rename preview, titled "Tidy, step 1 of 2: check the renames". Its button,
-  "Apply renames, then run ReplayGain", reads "Run ReplayGain" when there is nothing to rename, and is enabled
-  then too. After the rename, the ReplayGain job starts on the
-  same folder and scope ("step 2 of 2"), with no separate preview, as in the script. A stopped rename doesn't start
-  ReplayGain.
+- **Tidy:** see §28 (since 0.7.0). The old flow (a rename preview, "Tidy, step 1 of 2", then ReplayGain as step 2)
+  is retired: Hugo saw it ask to rename an unsplit EAC album and offer a "Run ReplayGain" button inside Tidy.
 
 **Layout** (Hugo, 2026-10-17): the cards come in three sections, each under a small upper-case heading as the
 sidebar's LIBRARY: **Shared settings** (File names), **Tools** (Rename, ReplayGain) and **All in one** (Tidy). A
@@ -219,13 +217,12 @@ card's title is larger than its text, its description in a softer colour, and it
 Reset to defaults; cards are 12 px apart, sections 20 px more. Built in 0.6.2 (`tools_page.ToolsPage.sections`,
 `rename_card.Card.primary`).
 
-**C. Tidy album** (replaced by §28's Tidy in M17; kept here until M17 task 3 removes it): runs A, then B on the
-final names. This is the script run without flags. The preview covers
-the rename step only; as in the script, ReplayGain can't be previewed on names that are about to change.
+**C. Tidy album**: replaced by §28's Tidy in 0.7.0 (M17). The script's run without flags was A, then B on the
+final names; the app's Tidy does that and the split, over the whole tree, from one plan.
 
 | Script                | App |
 |-----------------------|-----|
-| (no flag)             | Tidy album |
+| (no flag)             | Tidy (§28)  |
 | `--rename-only`       | Rename files from tags |
 | `--gain-only`         | ReplayGain, scope "This album" |
 | `--discography`       | ReplayGain scope "Discography" (also available in Tidy) |

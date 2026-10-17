@@ -100,6 +100,27 @@ Tidy sorts each album into one of these:
   - `replaygain_needed` reads every track rsgain scans (images aside): the four values, and a comment line
     matching the template (`lufs_comment_pattern`) whose number is the target. Disc folders' tracks need the two
     album values. An unsplit image is never measured, even when its album is skipped.
+- **M17 tasks 2-4 (0.7.0)**, built together after Hugo ran the old Tidy on an EAC album (it asked to rename
+  files that didn't exist yet, and showed a "Run ReplayGain" button):
+  - `services/tidy_job.py` `TidyRunner`: `plan()` on its worker (flac's silence check, `planProgress`), `run()`
+    under one lock on the tree (owner "the Tidy tool"), album by album: `split.cut_album` + `finish_album` for
+    each not-split folder, `rename.apply_plan` for the renames, then `replaygain.process_album(…, exclude=images)`.
+    `process_album` and its copy step gained `exclude`: the album's images (split ones and ones waiting) are never
+    measured nor tagged. A failed or stopped split ends that album (no ReplayGain, nothing offered).
+    `report_text` / `short_result` for the page and the jobs panel.
+  - `ui/tools/tidy_page.py` `TidyPage`: states planning, plan, running, result, error. The plan is a tree: each
+    album with "Split image.cue into 2 tracks, then ReplayGain (after the split)", "Rename 1 file, then ReplayGain
+    (missing tags)", "Already tidy" or "Skipped: …"; its children are the renames (old → new), notes, disc folders
+    and the files to be offered. The only action button is **Run Tidy** (disabled with nothing to do).
+  - `ui/controllers/tidy.py` `TidyController` (`window.tidy`): the Tidy card's request opens it; one Tidy at a
+    time (a second request shows the running one); the job in the jobs panel (kind Tidy, report "tidy"); indexing
+    paused while it runs; the tree re-read after it.
+  - `ui/tidy_offer.py` `OfferWindow` ("Files Tidy made redundant"): File, Folder, Choice; Keep / Delete selected,
+    a double-click toggles, the context menu has Keep, Delete and Open in File Explorer. Apply asks
+    (`confirm_apply`) and sends the Delete rows to the Recycle Bin; a drive without one shows "Keep (no Recycle
+    Bin: …)" and can't be marked. Closing keeps all.
+  - The Tidy card lost its scope; its description says what Tidy does. The old Tidy branches of the Tools
+    controller and the rename preview ("step 1 of 2", "Run ReplayGain") are gone.
 
 ## Tests
 - Album discovery: lite and bonus never split or renamed; a CD2 image split and its parent's ReplayGain run.

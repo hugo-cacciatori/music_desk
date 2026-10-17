@@ -186,7 +186,9 @@ class TidyPage(QWidget):
         self.run_button.setVisible(state == "plan")
         self.stop_button.setVisible(state == "running")
         self.done_button.setVisible(state in ("result", "error"))
-        self.back_button.setVisible(state != "running")
+        self.back_button.setToolTip(
+            "Back to the Tools page; Tidy goes on, and the Jobs panel shows it again" if state == "running"
+            else "Back to the Tools page; nothing has been changed")
 
     # -- the tree --
 

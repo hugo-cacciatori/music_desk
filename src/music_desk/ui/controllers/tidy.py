@@ -67,6 +67,7 @@ class TidyController(QObject):
                                             request.replaygain_options, masks, replacement)
 
     def back(self) -> None:
+        """Also while Tidy runs: it goes on, and the jobs panel (or the Tidy card) shows its page again."""
         if self.page.state == "planning":
             self.runner.cancel()
             self._plan_token = None

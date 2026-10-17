@@ -4,6 +4,7 @@ window (Keep by default, Apply recycles only the files marked Delete, closing ke
 recorder)."""
 
 import shutil
+import threading
 
 import pytest
 from rsgain_fake import VALUES, FakeScanner
@@ -106,12 +107,27 @@ def test_apply_recycles_only_the_files_marked_delete(qtbot, window, service, lib
     asked = []
     offer.confirm_apply = lambda count: asked.append(count) or True
     image = next(item for item in offer.items() if item.text(0) == "image.wav")
-    offer.list.clearSelection()
-    image.setSelected(True)
-    offer.delete_button.click()
+    box = offer.choice_box(image)
+    assert box is not None and [box.itemText(i) for i in range(box.count())] == [KEEP, DELETE]
+    box.setCurrentText(DELETE)  # each row's drop-down
+    assert offer.apply_button.text() == "Apply (1 file to the Recycle Bin)"
     assert offer.choices()[str(eac / "image.wav")] == DELETE and offer.choices()[str(eac / "image.cue")] == KEEP
     offer.apply_button.click()
     assert asked == [1] and tidy.recycled == [eac / "image.wav"] and not offer.isVisible()
+
+
+def test_the_buttons_set_the_selected_rows(qtbot, window, service, library_dir, tidy):
+    eac = library_dir / "Rips" / "EAC"
+    tidy.show_offer([eac / "image.wav", eac / "image.cue"])
+    offer = tidy.offer
+    offer.list.selectAll()
+    offer.delete_button.click()
+    assert set(offer.choices().values()) == {DELETE} and offer.apply_button.isEnabled()
+    offer.list.clearSelection()
+    offer.items()[1].setSelected(True)
+    offer.keep_button.click()
+    assert offer.marked() == [eac / "image.wav"]
+    offer.close()
 
 
 def test_a_drive_without_a_recycle_bin_cant_be_marked_delete(qtbot, window, service, library_dir, tidy):
@@ -121,6 +137,7 @@ def test_a_drive_without_a_recycle_bin_cant_be_marked_delete(qtbot, window, serv
     offer.list.selectAll()
     offer.delete_button.click()
     assert offer.marked() == [] and "no Recycle Bin: network drive" in offer.items()[0].text(2)
+    assert offer.choice_box(offer.items()[0]) is None  # no drop-down to choose Delete with
     offer.close()
 
 
@@ -143,3 +160,26 @@ def test_stop_ends_the_run(qtbot, window, service, library_dir, tidy):
     assert window.jobs.jobs[0].state == "stopped"
     assert TaggedFile(library_dir / "Rips" / "Album B" / "01 Loud.flac").get_replaygain(TRACK_GAIN) is not None
     assert not (library_dir / "Rips" / "EAC" / "01 One.flac").exists()  # the next album never started
+
+
+def test_back_leaves_a_running_tidy_and_the_jobs_panel_shows_it_again(qtbot, window, service, library_dir, tidy):
+    release = threading.Event()
+
+    def held(files, folder, target, exe, cancel=None, on_line=None):
+        release.wait(30)
+        return FakeScanner(TRACKS)(files, folder, target, exe, cancel, on_line)
+
+    tidy.runner.scanner = held
+    page = open_plan(qtbot, window, service, library_dir / "Rips" / "Album B")
+    page.run_button.click()
+    try:
+        assert page.state == "running" and page.back_button.isVisible()
+        assert "Tidy goes on" in page.back_button.toolTip()
+        page.back_button.click()
+        assert window.center.currentWidget() is window.tools_page and tidy.job is not None
+        window.show_job(tidy.job)
+        assert window.center.currentWidget() is page and page.state == "running"
+    finally:
+        release.set()
+    qtbot.waitUntil(lambda: page.state == "result", timeout=60000)
+    assert window.jobs.jobs[0].state == "done"

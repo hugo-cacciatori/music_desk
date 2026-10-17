@@ -1,6 +1,6 @@
 """Tidy's offer window (SPEC §28): the images and cue sheets a run's splits made redundant, each to Keep or Delete.
 
-A separate window, not modal. Every row is Keep until the user marks it Delete (a double-click, or the buttons
+A separate window, not modal. Every row is Keep until the user sets its drop-down to Delete (or uses the buttons
 for the selection); Apply sends the Delete rows to the Recycle Bin after a confirmation. Closing the window keeps
 every file. Nothing is deleted for good: a file whose drive has no Recycle Bin can't be marked Delete.
 """
@@ -11,6 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -51,18 +52,24 @@ class OfferWindow(QWidget):
         self.list.setHeaderLabels(["File", "Folder", "Choice"])
         self.list.setRootIsDecorated(False)
         self.list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.list.setToolTip("Select files freely (Ctrl, Shift, Ctrl+A); a double-click switches Keep and Delete")
+        self.list.setToolTip("Choose Keep or Delete in each row, or select files (Ctrl, Shift, Ctrl+A) and set "
+                             "them together with the buttons below")
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._menu)
-        self.list.itemDoubleClicked.connect(lambda item, _column: self._toggle(item))
         for path in files:
             reason = check_recycle(path)
-            item = QTreeWidgetItem([path.name, str(path.parent), KEEP])
+            item = QTreeWidgetItem([path.name, str(path.parent), ""])
             item.setData(0, PATH_ROLE, str(path))
+            self.list.addTopLevelItem(item)
             if reason:
                 item.setText(2, f"{KEEP} (no Recycle Bin: {reason})")
                 item.setDisabled(True)
-            self.list.addTopLevelItem(item)
+            else:
+                choice = QComboBox()
+                choice.addItems([KEEP, DELETE])
+                choice.setToolTip(f"Keep {path.name}, or send it to the Recycle Bin on Apply")
+                choice.currentTextChanged.connect(lambda _text: self._update())
+                self.list.setItemWidget(item, 2, choice)
         self.list.setColumnWidth(0, 260)
         self.list.setColumnWidth(1, 320)
 
@@ -95,21 +102,27 @@ class OfferWindow(QWidget):
     def items(self) -> list[QTreeWidgetItem]:
         return [item for i in range(self.list.topLevelItemCount()) if (item := self.list.topLevelItem(i))]
 
+    def choice_box(self, item: QTreeWidgetItem) -> QComboBox | None:
+        """A row's Keep / Delete drop-down; None on a drive without a Recycle Bin."""
+        widget = self.list.itemWidget(item, 2)
+        return widget if isinstance(widget, QComboBox) else None
+
+    def choice(self, item: QTreeWidgetItem) -> str:
+        box = self.choice_box(item)
+        return box.currentText() if box is not None else KEEP
+
     def choices(self) -> dict[str, str]:
         """Each file's choice, for tests."""
-        return {item.data(0, PATH_ROLE): item.text(2).split(" ")[0] for item in self.items()}
+        return {item.data(0, PATH_ROLE): self.choice(item) for item in self.items()}
 
     def marked(self) -> list[Path]:
-        return [Path(item.data(0, PATH_ROLE)) for item in self.items() if item.text(2) == DELETE]
+        return [Path(item.data(0, PATH_ROLE)) for item in self.items() if self.choice(item) == DELETE]
 
-    def _mark(self, choice: str, items: list[QTreeWidgetItem] | None = None) -> None:
-        for item in items if items is not None else self.list.selectedItems():
-            if not item.isDisabled():
-                item.setText(2, choice)
+    def _mark(self, choice: str) -> None:
+        for item in self.list.selectedItems():
+            if (box := self.choice_box(item)) is not None:
+                box.setCurrentText(choice)
         self._update()
-
-    def _toggle(self, item: QTreeWidgetItem) -> None:
-        self._mark(KEEP if item.text(2) == DELETE else DELETE, [item])
 
     def _update(self) -> None:
         count = len(self.marked())

@@ -58,6 +58,8 @@ Tidy sorts each album into one of these:
   process), the renames, then ReplayGain (one rsgain process), each with its own lock on the album folder (and
   the parent's for ReplayGain on a disc folder). Background indexing pauses meanwhile, as for the split and
   ReplayGain. The page shows the album in progress and live log lines.
+- **Back** stays on the page while Tidy runs (Hugo, 2026-10-17): it goes back to the Tools page and the run goes
+  on; the Jobs panel (or the Tidy card's "Run Tidy…") shows the running page again.
 - An album whose split fails or is stopped gets no ReplayGain, and nothing of it goes on the offer list. A failed
   rename or ReplayGain doesn't stop the run: the next album goes on.
 - **Stop** stops the current step as the tools do (a split leaves nothing half-written) and no further album
@@ -69,8 +71,8 @@ Tidy sorts each album into one of these:
 ## The offer list ("ask to be deleted")
 - When the run ends (finished or stopped) and the list isn't empty, a **separate window** opens, not modal:
   "Files Tidy made redundant". Each row is a file: the image or the `.cue`, with its folder.
-- Each row has **Keep / Delete**, **Keep** by default. Rows can be selected freely (click, Ctrl, Shift, Ctrl+A)
-  and set together with "Keep selected" / "Delete selected". A row also opens in File Explorer (context menu).
+- Each row has **Keep / Delete** in a drop-down (Hugo, 2026-10-17), **Keep** by default. Rows can be selected
+  freely (click, Ctrl, Shift, Ctrl+A) and set together with "Keep selected" / "Delete selected". A row also opens in File Explorer (context menu).
 - **Apply** sends the rows marked Delete to the **Recycle Bin**, after a confirmation naming the count; the
   window then closes. **Closing the window keeps every file** (Hugo). Nothing is ever deleted permanently: on a
   drive without a Recycle Bin (`fsops.can_recycle`), its rows can't be marked Delete and say why.
@@ -116,11 +118,16 @@ Tidy sorts each album into one of these:
     time (a second request shows the running one); the job in the jobs panel (kind Tidy, report "tidy"); indexing
     paused while it runs; the tree re-read after it.
   - `ui/tidy_offer.py` `OfferWindow` ("Files Tidy made redundant"): File, Folder, Choice; Keep / Delete selected,
-    a double-click toggles, the context menu has Keep, Delete and Open in File Explorer. Apply asks
-    (`confirm_apply`) and sends the Delete rows to the Recycle Bin; a drive without one shows "Keep (no Recycle
-    Bin: …)" and can't be marked. Closing keeps all.
+    a double-click toggles (0.7.2: a drop-down per row instead), the context menu has Keep, Delete and Open in
+    File Explorer. Apply asks (`confirm_apply`) and sends the Delete rows to the Recycle Bin; a drive without one
+    shows "Keep (no Recycle Bin: …)" and can't be marked. Closing keeps all.
   - The Tidy card lost its scope; its description says what Tidy does. The old Tidy branches of the Tools
     controller and the rename preview ("step 1 of 2", "Run ReplayGain") are gone.
+
+- **0.7.2** (Hugo, 2026-10-17): the page's Back is visible while Tidy runs (tooltip "Tidy goes on, and the Jobs
+  panel shows it again"); `TidyController.back` leaves the job running. The offer window's Choice column is a
+  `QComboBox` per row (Keep, Delete; `choice_box(item)`), none on a drive without a Recycle Bin; the double-click
+  toggle is gone. The wheel never changes it (Ground rule 7).
 
 ## Tests
 - Album discovery: lite and bonus never split or renamed; a CD2 image split and its parent's ReplayGain run.
@@ -128,5 +135,6 @@ Tidy sorts each album into one of these:
   refusal, two sheets for one image).
 - The ReplayGain check: all tagged at the target (tidy), one track missing a value, another target in the comment.
 - The run: split then ReplayGain; rename then ReplayGain; a failed split skips ReplayGain and the offer; Stop.
-- The offer window: Keep by default, multi-select, Apply recycles only Delete rows after the confirmation,
+- Back while Tidy runs leaves it running; the jobs panel shows its page again.
+- The offer window: Keep by default, a row's drop-down, multi-select with the buttons, Apply recycles only Delete rows after the confirmation,
   closing keeps all, no Recycle Bin on the drive.

@@ -120,6 +120,8 @@ Code and tests cite these by number; keep the numbering.
 5. rsgain is bundled in `resources/rsgain/` and resolved through `paths.resource_path()`. Its path is never
    configurable. The same goes for flac in `resources/flac/` (M10).
 6. Development and tests never touch a real library. Use the fixtures or copies.
+7. The mouse wheel never changes an input's value (number fields, option selectors, sliders, any other
+   input); over one it scrolls the page. Not yet app-wide: for later, SPEC §25 (Hugo, 2026-10-17).
 
 ## Standing decisions
 The full log is `docs/DECISIONS.md`. These apply to all work:
@@ -158,10 +160,6 @@ The full log is `docs/DECISIONS.md`. These apply to all work:
 - Test module names must be unique across folders (pytest refuses two `test_search.py`).
 - A run that takes 30 s or more before starting is pytest deleting an old 100k-file temp tree, not a hang.
 - The UI tests open real windows; some rely on window focus, so they don't run offscreen.
-
-## Measurements
-The responsiveness figures for this machine (M2, re-measured 2026-10-15) are in SPEC §18 "Performance";
-search in SPEC §6, the scanner in HISTORY.md.
 
 ## Environment (checked 2026-10-15)
 - Windows 11 Pro. Shells: PowerShell 5.1 (primary) and Git Bash.

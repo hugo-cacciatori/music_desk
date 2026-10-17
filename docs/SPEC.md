@@ -8,6 +8,8 @@ Rules:
 - When a decision changes behaviour, update the section and add a dated row to `DECISIONS.md`, together.
 - Sections hold the behaviour as specified, then "As built" notes for how it was implemented. When an as-built
   note supersedes an earlier plan, remove the plan.
+- Measurements: the responsiveness figures for this machine (M2, re-measured 2026-10-15) are in §18
+  "Performance"; search in §6, the scanner in `HISTORY.md`.
 
 | §  | File | Covers |
 |----|------|--------|
@@ -35,3 +37,4 @@ Rules:
 | 22 | [22-cue-split.md](spec/22-cue-split.md) | Cutting single-file albums into FLAC tracks from their .cue, with flac.exe (M10); new sheets, Preview in player, Fill from track lengths (M13) |
 | 23 | [23-trim.md](spec/23-trim.md) | Trimming one track's start and end into a FLAC copy in a subfolder (M13) |
 | 24 | [24-hover-texts.md](spec/24-hover-texts.md) | A short hover text on every button and control (later, not scheduled) |
+| 25 | [25-scroll-wheel.md](spec/25-scroll-wheel.md) | The mouse wheel never changes an input's value (Ground rule 7; later, not scheduled) |

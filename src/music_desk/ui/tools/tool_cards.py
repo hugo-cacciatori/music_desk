@@ -1,7 +1,7 @@
 """The tools' option cards and their dialogs (SPEC §30): File names (§21), Rename and ReplayGain (§10).
 
-The cards replaced the Tools page (M21). They live as long as the window, each in its own non-modal dialog opened
-from the toolbar's Options… or the Options menu, so a run reads their options whether a dialog is open or not.
+The cards replaced the Tools page (M21). They live as long as the window, together in one non-modal Options window
+opened from File > Options… or the toolbar's Options…, so a run reads their options whether it is open or not.
 The options are the saved defaults (Settings.name_masks / name_replacement, rename_options, replaygain_options),
 saved again as they change. Starting a tool is the toolbar's: `request` turns a tool and its target into a
 ToolRequest, or says why it can't.
@@ -12,7 +12,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtWidgets import QDialog, QDialogButtonBox, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QHBoxLayout,
+    QListWidget,
+    QScrollArea,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from music_desk.core import rename, replaygain
 from music_desk.settings import Settings
@@ -21,7 +30,7 @@ from music_desk.ui.tools.rename_card import FIX_FIRST, Card, RenameCard
 from music_desk.ui.tools.replaygain_card import ReplayGainCard
 
 NAMES, RENAME, REPLAYGAIN, TIDY = "names", "rename", "replaygain", "tidy"
-DIALOG_TITLES = {NAMES: "File names", RENAME: "Rename options", REPLAYGAIN: "ReplayGain options"}
+PAGE_TITLES = {NAMES: "File names", RENAME: "Rename", REPLAYGAIN: "ReplayGain"}  # the Options list
 
 
 @dataclass(frozen=True)
@@ -47,32 +56,52 @@ class ToolRequest:
     discography: bool = False
 
 
-class CardDialog(QDialog):
-    """One card, its options and Reset, and Close. Not modal: the window stays usable, and every change is saved
-    as it is made, so Close (or Esc) only closes."""
+class OptionsWindow(QDialog):
+    """File > Options… (SPEC §30): every card in one window, picked from the list on the left. Not modal: the
+    window stays usable, and every change is saved as it is made, so Close (or Esc) only closes."""
 
-    def __init__(self, parent: QWidget | None, title: str, card: Card) -> None:
+    def __init__(self, parent: QWidget | None, cards: list[tuple[str, Card]]) -> None:
         super().__init__(parent)
-        self.setWindowTitle(title)
+        self.setWindowTitle("Options")
         self.setModal(False)
-        self.card = card
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # the card wraps instead
-        holder = QWidget()  # the card at its own height, the space below it empty
-        column = QVBoxLayout(holder)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.addWidget(card)
-        column.addStretch(1)
-        scroll.setWidget(holder)
+        self.pages: list[str] = []
+        self.list = QListWidget()
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.stack = QStackedWidget()
+        for which, card in cards:
+            self.pages.append(which)
+            self.list.addItem(PAGE_TITLES[which])
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # the card wraps instead
+            holder = QWidget()  # the card at its own height, the space below it empty
+            column = QVBoxLayout(holder)
+            column.setContentsMargins(0, 0, 0, 0)
+            column.addWidget(card)
+            column.addStretch(1)
+            scroll.setWidget(holder)
+            self.stack.addWidget(scroll)
+        self.list.setFixedWidth(self.list.sizeHintForColumn(0) + 2 * self.list.frameWidth() + 24)
+        self.list.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.list.setCurrentRow(0)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.close)
         close = buttons.button(QDialogButtonBox.StandardButton.Close)
         close.setToolTip("Close this window; the options are already saved")
+        row = QHBoxLayout()
+        row.addWidget(self.list)
+        row.addWidget(self.stack, 1)
         layout = QVBoxLayout(self)
-        layout.addWidget(scroll, 1)
+        layout.addLayout(row, 1)
         layout.addWidget(buttons)
-        self.resize(640, 520)
+        self.resize(820, 560)
+
+    @property
+    def current(self) -> str:
+        return self.pages[self.stack.currentIndex()]
+
+    def show_page(self, which: str) -> None:
+        self.list.setCurrentRow(self.pages.index(which))
 
 
 class ToolCards(QObject):
@@ -94,16 +123,18 @@ class ToolCards(QObject):
         for card in (self.rename_card, self.replaygain_card):
             card.run_button.hide()  # the toolbar starts the tools (SPEC §30)
             card.set_selection(False)  # the dialogs show every option; a selection is the run's business
-        self.dialogs: dict[str, CardDialog] = {}
+        self.options_window: OptionsWindow | None = None
 
     def card(self, which: str) -> Card:
         return {NAMES: self.names_card, RENAME: self.rename_card, REPLAYGAIN: self.replaygain_card}[which]
 
-    def open_options(self, which: str) -> CardDialog:
-        """The card's dialog, made on first use and raised again after."""
-        dialog = self.dialogs.get(which)
+    def open_options(self, which: str | None = None) -> OptionsWindow:
+        """The Options window, made on first use and raised again after, on `which`'s page (None: as it was)."""
+        dialog = self.options_window
         if dialog is None:
-            dialog = self.dialogs[which] = CardDialog(self.window, DIALOG_TITLES[which], self.card(which))
+            dialog = self.options_window = OptionsWindow(self.window, [(w, self.card(w)) for w in PAGE_TITLES])
+        if which is not None:
+            dialog.show_page(which)
         dialog.show()
         dialog.raise_()
         dialog.activateWindow()

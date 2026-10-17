@@ -4,9 +4,10 @@ duplicate those controls:
 - library folders: the sidebar (Add folder…, Remove from library);
 - hide folders without music: the folder tree's context menu (the View menu until M16);
 - offline mode and auto-save of found lyrics: the Lyrics menu (both retired by M12, §26);
-- the tools' options: their cards, which remember every change (§10), in dialogs opened from the toolbar's
-  Options… or the **Options** menu (M21, §30). The Options menu holds settings used in several places: File
-  names…, Rename options…, ReplayGain options…;
+- the tools' options: their cards, which remember every change (§10), in the **Options window** (File >
+  Options…, or the toolbar's Options…; Hugo, 0.8.3, §30): a list on the left (File names, Rename, ReplayGain),
+  the card on the right. It gathers the settings used in several places; the other preferences stay where they
+  are used;
 - (M13) the trim's subfolder name: the Trim page (§23); "Save beside <file> without asking" for new cue
   sheets: the Split page (§22);
 - light or dark, and text size: Qt follows Windows.

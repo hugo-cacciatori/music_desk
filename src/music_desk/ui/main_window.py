@@ -68,7 +68,7 @@ from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
 from music_desk.ui.toolbar_icons import tool_icon
-from music_desk.ui.tools.tool_cards import NAMES, RENAME, REPLAYGAIN, TIDY
+from music_desk.ui.tools.tool_cards import RENAME, REPLAYGAIN, TIDY
 
 log = logging.getLogger(__name__)
 
@@ -77,11 +77,7 @@ PAUSED_NOTE = " (paused while ReplayGain runs)"
 WAIT_FOR_INDEX_S = 120  # a folder from outside the app opens once indexed, within this (SPEC §29)
 
 
-LYRICS_BUTTON_TIPS = {  # the status bar's lyrics button, by what it says
-    "Pause": "Pause the LRCLIB lookups until you resume them.",
-    "Resume": "Resume the LRCLIB lookups where they stopped.",
-    "Retry now": "Try reaching LRCLIB again now instead of waiting.",
-}
+LYRICS_RETRY_TIP = "Try reaching LRCLIB again now instead of waiting."  # the status bar's Retry now
 
 class DropOverlay(QLabel):
     """Covers the window while folders are dragged over it."""
@@ -133,7 +129,9 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.index_label)
         self.lyrics_label = QLabel()
         self.lyrics_label.hide()
-        self.lyrics_button = QToolButton()
+        self.lyrics_button = QToolButton()  # Retry now, while LRCLIB is unreachable (no Pause since 0.8.3)
+        self.lyrics_button.setText("Retry now")
+        self.lyrics_button.setToolTip(LYRICS_RETRY_TIP)
         self.lyrics_button.setAutoRaise(True)
         self.lyrics_button.clicked.connect(self._lyrics_button_clicked)
         self.lyrics_button.hide()
@@ -244,12 +242,10 @@ class MainWindow(QMainWindow):
         self.rescan_library_action = file_menu.addAction("&Rescan library", self.rescan_library)
         self.rescan_library_action.setEnabled(self.library is not None)
         file_menu.addSeparator()
+        # Every option in one window (SPEC §30), the toolbar's Options… opening it on its tool's page.
+        file_menu.addAction("&Options…", lambda: self.tools.open_options())
+        file_menu.addSeparator()
         file_menu.addAction("E&xit", self.close)
-        # Settings used in several places (SPEC §30): each opens its card in a dialog, as the toolbar's Options….
-        options_menu = self.menuBar().addMenu("&Options")
-        for which, text in ((NAMES, "&File names…"), (RENAME, "&Rename options…"),
-                            (REPLAYGAIN, "Replay&Gain options…")):
-            options_menu.addAction(text, lambda which=which: self.tools.open_options(which))
         # No View or Action menu since M16 (SPEC §5): their entries live where they are used.
         self.hide_empty_action = QAction("&Hide folders without music", self, checkable=True)
         self.hide_empty_action.setChecked(self.settings.hide_folders_without_music)
@@ -260,7 +256,7 @@ class MainWindow(QMainWindow):
         self.addAction(self.jobs_action)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About MusicDesk", self.open_about)
-        for menu in (file_menu, options_menu, help_menu):
+        for menu in (file_menu, help_menu):
             with_status_tips(menu)
 
         self.overlay = DropOverlay(self)
@@ -820,7 +816,7 @@ class MainWindow(QMainWindow):
         self.side_panel.refresh_folder()
 
     def show_lyrics_progress(self, progress: LyricsProgress) -> None:
-        """The status bar's lyrics label and its button: Pause, Resume or Retry now (SPEC §9 Controls)."""
+        """The status bar's lyrics label, and Retry now while LRCLIB is unreachable (SPEC §9 Controls)."""
         if not self._library_open():
             return
         if progress.state != self._lyrics_state:  # offline on or off: the LRCLIB column's pending rows change
@@ -828,34 +824,26 @@ class MainWindow(QMainWindow):
             self.file_view.model.refresh_column("lrclib")
             self.search_view.model.refresh_column("lrclib")
         left = f"{progress.pending:,} to look up" if progress.pending is not None else "starting"
-        button = None
         if progress.state == OFFLINE:
             text = "Lyrics: lookups off"
-        elif progress.state == PAUSED:
-            text, button = f"Lyrics paused: {left}", "Resume"
+        elif progress.state == PAUSED:  # the service can still pause (tests); the app no longer asks it to
+            text = f"Lyrics paused: {left}"
         elif progress.state == UNREACHABLE:
             resume = time.strftime("%H:%M", time.localtime(self.open_library.lyrics.resume_at))
-            text, button = f"LRCLIB unreachable, retrying at {resume}", "Retry now"
+            text = f"LRCLIB unreachable, retrying at {resume}"
         elif progress.state == RUNNING:
-            text, button = f"Looking up lyrics: {left}", "Pause"
+            text = f"Looking up lyrics: {left}"
         elif progress.pending:
             text = f"Lyrics: {progress.pending:,} to retry later"
         else:
             text = ""
         self.lyrics_label.setText(text)
         self.lyrics_label.setVisible(bool(text))
-        self.lyrics_button.setText(button or "")
-        self.lyrics_button.setToolTip(LYRICS_BUTTON_TIPS.get(button or "", ""))
-        self.lyrics_button.setVisible(button is not None)
+        self.lyrics_button.setVisible(progress.state == UNREACHABLE)
 
     def _lyrics_button_clicked(self) -> None:
-        if not self._library_open():
-            return
-        lyrics = self.open_library.lyrics
-        action = {"Pause": lyrics.pause, "Resume": lyrics.resume, "Retry now": lyrics.retry_now}.get(
-            self.lyrics_button.text())
-        if action:
-            action()
+        if self._library_open():
+            self.open_library.lyrics.retry_now()
 
     def _lyrics_entry(self, _key: str, entry: dict) -> None:
         if entry.get("status") == "error" and self._library_open():

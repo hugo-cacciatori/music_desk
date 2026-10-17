@@ -21,10 +21,11 @@
 - Errors are not cached, so they are retried later. Not-found results are retried after 30 days.
 - Priority order: the selected track, then the visible folder, then the rest folder by folder.
 - Controls:
-  - Status bar progress with pause and resume.
+  - Status bar progress. Its Pause and Resume buttons were removed (Hugo, 0.8.3): only Retry now is left.
     - As built (M4 task 5): a lyrics label and a button next to the indexing label:
-      - "Looking up lyrics: N to look up" [Pause];
-      - "Lyrics paused: N to look up" [Resume];
+      - "Looking up lyrics: N to look up" (no button since 0.8.3; it had Pause);
+      - "Lyrics paused: N to look up" (no button since 0.8.3; it had Resume; the app no longer pauses the
+        service, whose `pause()` stays for tests);
       - "LRCLIB unreachable, retrying at HH:MM" [Retry now];
       - "Lyrics: offline mode";
       - "Lyrics: N to retry later" (only failed keys are left);
@@ -32,7 +33,7 @@
     - N is the count of pending keys. The service counts it on its own connection at each background refill
       (`lyrics_index.pending_count`), and it goes down with each result. The UI thread never counts.
       `LyricsProgress.pending` carries it.
-    - Pause is for this session only (not saved).
+    - Pause was for the session only (never saved), so no one is left paused.
   - Retired by M12 (Hugo, 2026-10-17; §26 "Retired with M12"): both settings below, and the Lyrics menu that held them. Without internet the
     circuit breaker above already pauses and retries by itself; `offline` stays a service parameter for tests.
   - Settings: **Offline mode** (`--offline`: no LRCLIB calls), and **Automatically save found lyrics into tags**

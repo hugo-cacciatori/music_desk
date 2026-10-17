@@ -36,7 +36,7 @@ Asked by Hugo on 2026-10-17; scheduled as M15 the same day. Every button and con
   folder tree, the file list, the address bar, the Metadata tab's tag fields, the toast (its message says what
   its button does). Where a control has a reason tooltip, the descriptive text is a constant the reason falls
   back to (`TRIM_TIP`, `NEW_CUE_TIP`, `TIMESTAMPS_TIP`), so it returns as soon as the reason no longer applies.
-- The status bar's lyrics button takes its text's tip (Pause, Resume, Retry now) each time it changes.
+- The status bar's lyrics button is only Retry now (no Pause or Resume since 0.8.3), with its tip.
 - The guard (`tests/ui/test_hover_texts.py`) walks every button, combo box, spin box, slider (not scroll bars)
   and text field under a root, shown or not, and fails on one with no tooltip or one that only repeats its label.
   It leaves out what Qt builds itself (tab bar arrows, dock and toolbar buttons named `qt_*`, the text field of a

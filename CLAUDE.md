@@ -18,7 +18,9 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 ## Resume here
 - **State (2026-10-17, session 19):** 0.8.2 is on `main` and released as v0.8.2. Session 19: Tidy's Back and
   offer window ("Redundant files", checkboxes), Windows-1252 cues no longer block (0.7.3), the Recycle Bin never
-  asks (0.7.4), M21 the tools toolbar and Options menu (0.8.0, SPEC §30), going up selects where you came from.
+  asks (0.7.4), M21 the tools toolbar (0.8.0, SPEC §30), going up selects where you came from. 0.8.3 (not
+  released): File > Options… opens one Options window (list on the left) replacing the Options menu; the
+  status bar's lyrics Pause/Resume are gone (Retry now stays).
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
   in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
   fix; the real mouse wheel over a ReplayGain number field scrolls its Options dialog; Japanese/Chinese MP3 tags;

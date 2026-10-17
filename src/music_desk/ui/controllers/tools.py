@@ -24,7 +24,7 @@ from music_desk.services.replaygain_job import Finished, ReplayGainRunner
 from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.tools.rename_preview import RenamePreview
 from music_desk.ui.tools.rg_report import ReplayGainView, short_result
-from music_desk.ui.tools.tool_cards import NAMES, RENAME, REPLAYGAIN, TIDY, ToolCards, ToolRequest, ToolScope
+from music_desk.ui.tools.tool_cards import RENAME, REPLAYGAIN, TIDY, ToolCards, ToolRequest, ToolScope
 
 TOOL_NAMES = {RENAME: "Rename", REPLAYGAIN: "ReplayGain", TIDY: "Tidy"}
 
@@ -151,13 +151,13 @@ class ToolsController(QObject):
             return
         self.run_tool(request)
 
-    def open_options(self, which: str) -> None:
-        """A card's dialog. File names gets its live example from the first track of the target."""
-        if which == NAMES:
-            scope = self.target(RENAME)
-            first = scope.first_track if scope is not None else None
-            self.cards.set_example(None, "")
-            self._example_token = self.window.tag_io.read_rename_fields(first) if first else None
+    def open_options(self, which: str | None = None) -> None:
+        """The Options window, on `which`'s page. File names gets its live example from the first track of the
+        target, whichever page it opens on (its page is a click away)."""
+        scope = self.target(RENAME)
+        first = scope.first_track if scope is not None else None
+        self.cards.set_example(None, "")
+        self._example_token = self.window.tag_io.read_rename_fields(first) if first else None
         self.cards.open_options(which)
 
     def cancel_planning(self) -> None:

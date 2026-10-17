@@ -26,8 +26,8 @@ hint after a tag save (§7, §11) uses the *default* masks, not the user's.
 - `validate_masks(masks, replacement) -> list[str]`, the mask half of `rename.validate`, which now calls it.
 - `name_for(fields, masks, replacement, extension) -> str | None`, the full file name.
 
-**Where it is edited: a "File names" card** (Hugo: at the top of the Tools page; since M21, in Options > File
-names…, §30)
+**Where it is edited: a "File names" card** (Hugo: at the top of the Tools page; since 0.8.3, the File names
+page of File > Options…, §30)
 - First on the Tools page (§10), above the tool cards. It holds the existing mask editor, moved from the Rename
   card unchanged:
   - the ordered list (drag to reorder, Add, Remove, Insert field);

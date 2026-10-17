@@ -36,7 +36,7 @@ from music_desk.ui.split_page import SplitPage
 log = logging.getLogger(__name__)
 
 PLAN_DELAY_MS = 150  # after an edit, the plan follows once typing pauses
-FIX_NAMES = "Fix the file names first (Options > File names…)."
+FIX_NAMES = "Fix the file names first (File > Options…, File names)."
 NO_CUE_PLAYER = ("No app is set to open .cue sheets. To choose one, open Windows Settings > Apps > Default apps "
                  "and search for .cue.")
 

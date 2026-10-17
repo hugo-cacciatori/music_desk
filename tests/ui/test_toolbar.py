@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QToolBar, QToolButton
 from music_desk.core import rename, replaygain
 from music_desk.core.index.store import path_of
 from music_desk.settings import Settings
-from music_desk.ui.tools.tool_cards import NAMES, RENAME, REPLAYGAIN, TIDY, CardDialog, ToolCards, ToolScope
+from music_desk.ui.tools.tool_cards import NAMES, RENAME, REPLAYGAIN, TIDY, OptionsWindow, ToolCards, ToolScope
 
 ALBUM = "Fixture Artist - Fixture Album"
 SCOPE = ToolScope(Path("C:/lib/Album"), 1)
@@ -43,7 +43,7 @@ def test_the_cards_show_no_run_button(cards):
 def test_rename_card_defaults(cards):
     card = cards.rename_card
     assert card.options() == rename.DEFAULT_OPTIONS and cards.problems(RENAME) == []
-    assert card.masks_line.text() == "File names: the masks set in Options > File names…."
+    assert card.masks_line.text() == "File names: the masks set on the File names page."
     assert card.junk.text() == ".cue .lrc .nfo .sfv .txt"
     assert card.cleanup.isEnabled() and card.recursive.isEnabled()  # a dialog shows every option
 
@@ -239,36 +239,46 @@ def test_start_without_a_folder_says_so(window):
     assert not window.showing_tools
 
 
-def test_options_open_the_card_in_a_dialog(qtbot, window, service, library_dir):
+def test_options_open_the_window_on_the_tools_page(qtbot, window, service, library_dir):
     album = library_dir / "Artist" / ALBUM
     window.open_folder(folder_id(service, album))
     window.file_view.select_ids([])
     window.tool_buttons[REPLAYGAIN].menu().actions()[1].trigger()  # Options…
-    dialog = window.tools.cards.dialogs[REPLAYGAIN]
-    assert isinstance(dialog, CardDialog) and dialog.isVisible() and not dialog.isModal()
-    assert dialog.windowTitle() == "ReplayGain options" and dialog.card is window.tools.cards.replaygain_card
-    dialog.card.target.setValue(-18)
+    dialog = window.tools.cards.options_window
+    assert isinstance(dialog, OptionsWindow) and dialog.isVisible() and not dialog.isModal()
+    assert dialog.windowTitle() == "Options" and dialog.current == REPLAYGAIN
+    assert dialog.stack.currentWidget().isAncestorOf(window.tools.cards.replaygain_card)
+    window.tools.cards.replaygain_card.target.setValue(-18)
     assert window.settings.replaygain_options["target"] == -18.0  # saved as it changes
     dialog.close()
-    window.tools.open_options(REPLAYGAIN)
-    assert window.tools.cards.dialogs[REPLAYGAIN] is dialog and dialog.isVisible()  # the same dialog, raised
+    window.tool_buttons[RENAME].menu().actions()[1].trigger()
+    assert window.tools.cards.options_window is dialog and dialog.isVisible()  # the same window, raised
+    assert dialog.current == RENAME
     dialog.close()
     assert not window.showing_tools  # the file list stays
 
 
-def test_the_options_menu(qtbot, window, service, library_dir):
-    menus = [a.text() for a in window.menuBar().actions()]
-    assert menus == ["&File", "&Options", "&Help"]
-    options = window.menuBar().actions()[1].menu()
-    assert [a.text() for a in options.actions()] == ["&File names…", "&Rename options…", "Replay&Gain options…"]
-    assert all(a.statusTip() for a in options.actions())
+def test_file_options_holds_every_option(qtbot, window, service, library_dir):
+    assert [a.text() for a in window.menuBar().actions()] == ["&File", "&Help"]  # no Options menu
+    file_menu = window.menuBar().actions()[0].menu()
+    options = next(a for a in file_menu.actions() if a.text() == "&Options…")
+    assert options.statusTip()
     album = library_dir / "Artist" / ALBUM
     window.open_folder(folder_id(service, album))
     window.file_view.select_ids([])
-    options.actions()[0].trigger()
-    dialog = window.tools.cards.dialogs[NAMES]
-    assert dialog.windowTitle() == "File names" and dialog.isVisible()
+    options.trigger()
+    dialog = window.tools.cards.options_window
+    assert dialog is not None and dialog.isVisible()
+    assert [dialog.list.item(i).text() for i in range(dialog.list.count())] == ["File names", "Rename",
+                                                                               "ReplayGain"]
+    assert dialog.current == NAMES  # first opened on the first page
+    dialog.list.setCurrentRow(2)  # a click in the list shows that card
+    assert dialog.current == REPLAYGAIN
+    assert dialog.stack.currentWidget().isAncestorOf(window.tools.cards.replaygain_card)
     qtbot.waitUntil(lambda: window.tools.cards.names_card.example.text() == "Example: 01 First.flac")
+    dialog.close()
+    options.trigger()
+    assert dialog.current == REPLAYGAIN  # File > Options… reopens where it was
     dialog.close()
 
 

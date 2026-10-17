@@ -35,7 +35,7 @@ SELECTION_DESCRIPTION = (
     "no mask keep their name. A .lrc file with the same name follows its music file. Junk files are never "
     "touched when renaming a selection.")
 FIX_FIRST = "Fix the file names first."  # what the cards that use the masks say while they are invalid
-MASKS_LINE = "File names: the masks set in Options > File names…."
+MASKS_LINE = "File names: the masks set on the File names page."
 
 
 def parse_extensions(text: str) -> frozenset[str]:

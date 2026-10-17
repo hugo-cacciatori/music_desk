@@ -1,4 +1,4 @@
-"""The File names card, in Options > File names… (SPEC §21, §30): the masks that name music files from their tags,
+"""The File names card, in File > Options… (SPEC §21, §30): the masks that name music files from their tags,
 shared by Rename, Tidy, the cue split and the rename hint after a tag save. The editor moved here unchanged from
 the Rename card.
 """

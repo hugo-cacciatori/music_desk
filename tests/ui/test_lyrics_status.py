@@ -11,23 +11,22 @@ def progress(state, pending=12):
     return LyricsProgress(state, done=3, errors=0, in_flight=1, pending=pending)
 
 
-def test_status_bar_label_and_button(window, service, monkeypatch):
+def test_status_bar_label_and_retry_button(window, service, monkeypatch):
     calls = []
     for name in ("pause", "resume", "retry_now"):
         monkeypatch.setattr(service.lyrics, name, lambda n=name: calls.append(n))
     label, button = window.lyrics_label, window.lyrics_button
 
     window.show_lyrics_progress(progress(RUNNING, 1234))
-    assert (label.text(), button.text(), button.isVisible()) == ("Looking up lyrics: 1,234 to look up", "Pause", True)
-    button.click()
+    assert label.text() == "Looking up lyrics: 1,234 to look up" and not button.isVisible()  # no Pause
     window.show_lyrics_progress(progress(PAUSED))
-    assert (label.text(), button.text()) == ("Lyrics paused: 12 to look up", "Resume")
-    button.click()
+    assert label.text() == "Lyrics paused: 12 to look up" and not button.isVisible()  # no Resume
     monkeypatch.setattr(type(service.lyrics), "resume_at", property(lambda _self: time.time() + 600))
     window.show_lyrics_progress(progress(UNREACHABLE))
     assert label.text().startswith("LRCLIB unreachable, retrying at ") and button.text() == "Retry now"
+    assert button.isVisible()
     button.click()
-    assert calls == ["pause", "resume", "retry_now"]
+    assert calls == ["retry_now"]
     assert button.toolTip() == "Try reaching LRCLIB again now instead of waiting."  # SPEC §24
 
     window.show_lyrics_progress(progress(OFFLINE))

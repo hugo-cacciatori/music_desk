@@ -1,4 +1,4 @@
-# 30. The tools toolbar and the Options menu (M21)
+# 30. The tools toolbar and the Options window (M21, 0.8.3)
 Specified with Hugo on 2026-10-17. It replaces the Tools page (§10 "Tools page") and the toolbar's Tools,
 Playlist builder and Advanced search buttons (§5).
 
@@ -34,15 +34,20 @@ apart from starting it; settings used in several places (the file name masks) li
 - A tool runs one job at a time, as before: Start while its job runs shows that job.
 
 ## Options
-- **Options…** opens the tool's card (§10) in a **separate dialog**, not modal: the card's options and its
-  Reset, and **Close**. The card's own run button isn't shown there. Changes are saved as they are made, as the
-  cards always did; Close (or Esc) only closes.
-- **The Options menu**, between File and Help (Hugo):
-  - **File names…**: the File names card (§21): the masks and the replacement character. Used by Rename, Tidy,
-    Split and the Metadata tab's suggested name. Its live example uses the first track of the selection or of
-    the open folder when the dialog opens.
-  - **Rename options…** and **ReplayGain options…**: the same dialogs as the toolbar dropdowns' Options….
-- One dialog per card, reused: opening it again raises it.
+- **One Options window** (Hugo, 0.8.3; it replaced M21's one dialog per card and the Options menu), opened from
+  **File > Options…** (between Rescan library and Exit) and from the toolbar dropdowns' **Options…**. Not
+  modal; one window, reused: opening it again raises it.
+  - On the left, a **list** of its pages: **File names**, **Rename**, **ReplayGain**. A click shows that card
+    on the right, in a scroll area (the card at its own height). Below, **Close**.
+  - **File names** (§21): the masks and the replacement character, used by Rename, Tidy, Split and the
+    Metadata tab's suggested name. Its live example uses the first track of the selection or of the open
+    folder when the window opens.
+  - **Rename** and **ReplayGain**: the tools' cards (§10), with their Reset. The cards' own run buttons aren't
+    shown there.
+  - A toolbar dropdown's Options… opens the window on its tool's page; File > Options… opens it where it was
+    left (File names the first time).
+  - Changes are saved as they are made, as the cards always did; Close (or Esc) only closes.
+- **M21's Options menu is gone** (Hugo, 0.8.3): its three entries are the window's pages.
 
 ## Gone
 - The Tools page and its sections; the right-click **Tools…** entries (file list, folder tree) and the folder
@@ -53,9 +58,8 @@ apart from starting it; settings used in several places (the file name masks) li
 
 ## As built
 - **M21 (0.8.0):** `ui/tools/tool_cards.py`: `ToolCards` (the three cards, saved as they change; `problems(tool)`,
-  `request(tool, scope)` turning a target into a `ToolRequest`, ReplayGain and Tidy with the files dropped) and
-  `CardDialog` (one per card, made on first use, the card at its own height in a scroll area, Close). The cards'
-  run buttons are hidden; the Tidy card is gone (its checks are `problems(TIDY)`).
+  `request(tool, scope)` turning a target into a `ToolRequest`, ReplayGain and Tidy with the files dropped). The
+  cards' run buttons are hidden; the Tidy card is gone (its checks are `problems(TIDY)`).
   - `ToolsController.target(tool)`, `start_text(tool)`, `start(tool)`, `open_options(which)` (File names reads its
     live example from the target's first track).
   - `MainWindow._build_tools_bar`: `tools_bar` (after a toolbar break), `tool_buttons` (InstantPopup QToolButtons
@@ -63,12 +67,18 @@ apart from starting it; settings used in several places (the file name masks) li
     ("Playlist") and `advanced_search_action`. `ui/toolbar_icons.py` draws the five icons in the palette's
     ButtonText colour. The search field lost its 320 px maximum.
   - The Back buttons of the rename preview and the ReplayGain report read "← Back" and go to the file list.
-  - The Options menu's status tips are in `hover.MENU_TIPS`.
+  - File > Options…'s status tip is in `hover.MENU_TIPS`.
+- **0.8.3:** `OptionsWindow` in `tool_cards.py` (`list`, `stack`, `pages`, `current`, `show_page(which)`)
+  replaced `CardDialog`; `ToolCards.open_options(which=None)` makes it on first use (`options_window`).
+  `ToolsController.open_options(which=None)` reads the File names example whatever the page. The Rename card's
+  line reads "File names: the masks set on the File names page."; the Split page's says "(File > Options…, File
+  names)".
 
 ## Tests
 - The top row holds the address bar and the search field, and no tool buttons; the second row has Rename,
   ReplayGain, Tidy, Playlist and Advanced search, each with an icon and a label.
 - The dropdown's Start names the target (a folder, a file selection) and is disabled without one; Rename's Start
   previews the selection; ReplayGain's Start on a file selection runs on its folder.
-- Options… and the Options menu open the card in a dialog; a change there is saved and used by the next Start.
+- File > Options… opens the Options window, its list showing each card; a dropdown's Options… opens it on its
+  tool's page, the same window each time; a change there is saved as it is made. No Options menu.
 - No "Tools…" in the context menus or the folder summary.

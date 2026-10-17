@@ -32,11 +32,7 @@ MENU_TIPS = {
     "Play folder": "Play this folder's tracks in your default player, as a temporary playlist",
     "Play folder and subfolders": "Play the tracks of this folder and of all its subfolders in your default player",
     "Rescan": "Read this folder from the disk again, to show changes made outside MusicDesk",
-    "File names": "The masks that name music files from their tags: used by Rename, Tidy, the cue split and the "
-                  "Metadata tab's suggested name",
-    "Rename options": "Subfolders, junk cleanup and the audio types of the Rename tool (Tidy uses them too)",
-    "ReplayGain options": "The target loudness, the subfolder keywords, the log and the comment of the ReplayGain "
-                          "tool (Tidy uses them too)",
+    "Options": "The file name masks, and the Rename and ReplayGain options (Tidy uses them too), in one window",
     "Remove ReplayGain tags": "Remove the ReplayGain values and their comment line from these tracks (a folder's "
                               "subfolders included), after asking",
     "Delete": "Send to the Recycle Bin, at once (restore it from there)",

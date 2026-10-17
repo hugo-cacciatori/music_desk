@@ -32,4 +32,5 @@ Rules:
 | 19 | [19-delete.md](spec/19-delete.md) | Delete to the Recycle Bin (M8), and the recyclability check |
 | 20 | [20-file-preview.md](spec/20-file-preview.md) | Read-only preview of text and image files in the side panel (M9) |
 | 21 | [21-name-masks.md](spec/21-name-masks.md) | The shared file name masks and the File names card (M10) |
-| 22 | [22-cue-split.md](spec/22-cue-split.md) | Cutting single-file albums into FLAC tracks from their .cue, with flac.exe (M10) |
+| 22 | [22-cue-split.md](spec/22-cue-split.md) | Cutting single-file albums into FLAC tracks from their .cue, with flac.exe (M10); new sheets, Preview in player, Fill from track lengths (M13) |
+| 23 | [23-trim.md](spec/23-trim.md) | Trimming one track's start and end into a FLAC copy in a subfolder (M13) |

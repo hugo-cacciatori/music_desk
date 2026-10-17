@@ -134,3 +134,4 @@ checks this subsection first.
   songs LRCLIB didn't find, songs LRCLIB can't look up, songs without lyrics in their tags.
 - Hugo's view: those lyrics lists don't really answer a user need. Its options and features are therefore to be
   fully reconsidered from the need when it is specified (M12), not carried over. Nothing is designed yet.
+- Hugo, 2026-10-17: the app's lyrics focus is LRCLIB, not the lyrics tag (§9), and M12 starts from that.

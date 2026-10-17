@@ -7,6 +7,8 @@ cover scan…), it shows a read-only preview of it instead (§20, from M9).
 **Metadata tab:**
 - Header: the cover (the embedded front cover, else `folder.jpg`, `cover.jpg` or `front.jpg` in the folder, else a
   placeholder), the file name and a format line (e.g. "FLAC 16-bit/44.1 kHz · 4:44 · 32 MB").
+- (M13, not built) With one FLAC, WAV or AIFF file, the header also shows **Trim…** and **New cue sheet…** under
+  the format line, in the room the cover column leaves; greyed with the reason on other formats (§23).
 - Editable fields: Title, Artist, Album artist, Album, Track # / total, Disc # / total, Year, Genre, Composer,
   Comment, and **Lyrics** (multi-line, LRC timestamps kept as typed). The tag keys per format are in §1.
 - Lyrics field: if it is empty and a same-stem `.lrc` file sits next to the track, an "Import from <name>.lrc" link

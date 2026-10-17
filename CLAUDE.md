@@ -21,8 +21,9 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   lines). All 1116 tests passed, slow ones included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** M12: ask Hugo the questions its decisions need (SPEC §6 "Later"), then build it. Give Hugo
-  full manual steps for checks (memory: manual-check-instructions).
+- **Next step:** M12: ask Hugo the questions its decisions need (SPEC §6 "Later"), then build it. M13 (trim,
+  new cue sheets) is specified and follows. Give Hugo full manual steps for checks (memory:
+  manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …). Tick tasks as
@@ -31,6 +32,18 @@ of it (see Session protocol 5).
 
 **M12 Advanced search** (Hugo, 2026-10-16; read SPEC §6 "Later"). To be specified with Hugo first, reconsidering
 every option from the need; it replaces the Lyrics menu's Find entries. No tasks yet.
+
+**M13 Trim and new cue sheets** (Hugo, 2026-10-17; read SPEC §23, §22 "M13 additions", §7, §14). Specified;
+after M12.
+- [ ] 1. Core: `core/trim.py` (plan, checks, subfolder), the cut and proof through the split's code, the tags.
+- [ ] 2. Core: `core/waveform.py` (measure a 70-minute image, a 24-bit/96 kHz track); temporary `preview-*.cue`.
+- [ ] 3. UI: the Metadata tab's two buttons, the Trim page and `TrimController`, the job, Preview in player.
+- [ ] 4. UI: on the Split page, New cue sheet…, the source warning, Preview in player, Fill from track lengths….
+- [ ] 5. README and the minor version.
+
+Done when: slow tests prove a trimmed copy (length, MD5), fail on a one-sample shift, leave the original
+unchanged; a new sheet saved from the page splits; the waveform never stalls over 50 ms. Optional, for later:
+Preview in player opens in foobar2000 from the installed app.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that
@@ -83,15 +96,19 @@ Code and tests cite these by number; keep the numbering.
    - (M10) saving a cue sheet from the Split page: Save overwrites the selected `.cue` after its old version
      goes to the Recycle Bin, Save as creates a `.cue` (a replaced one goes to the Recycle Bin first). Where
      Windows has no Recycle Bin, a `.cue` is overwritten only after the user agrees to lose it (SPEC §22).
+   - (M13, not built) a trim: creating its subfolder if missing (removed again only if that run made it and
+     leaves it empty) and the copy there, never over a file; deleting that run's `.partial` (SPEC §23). Saving a
+     new cue sheet beside its audio file (SPEC §22).
 
    This list grows when a feature needs to create or overwrite files: it is specified with Hugo, gets a row in
    DECISIONS.md and an entry here (Hugo, 2026-10-16).
 
    Nothing is ever deleted permanently: everything removed goes to the Recycle Bin, and only where Windows can
-   recycle (`fsops.can_recycle`, SPEC §19). The only exception is the split's own `.partial` files. For anything
-   else, the app offers "Open in File Explorer". Drags inside the app carry entry ids only (never
-   file URLs) and only copy, because a drop of files in Explorer would move them. The app's own files (index,
-   settings, logs, temporary playlists) live only in `%LOCALAPPDATA%\MusicDesk\`.
+   recycle (`fsops.can_recycle`, SPEC §19). The only exceptions are the split's and the trim's own `.partial`
+   files (and an empty trim subfolder its own run created). For anything else, the app offers "Open in File
+   Explorer". Drags inside the app carry entry ids only (never file URLs) and only copy, because a drop of files
+   in Explorer would move them. The app's own files (index, settings, logs, temporary playlists and preview cue
+   sheets) live only in `%LOCALAPPDATA%\MusicDesk\`.
 2. The UI thread never blocks. All scanning, tag reading and writing, rsgain runs and LRCLIB calls happen in
    background workers. Target: no event-loop stall above 50 ms.
 3. Behavior parity: the ported logic behaves exactly like the scripts, except for the deliberate changes in
@@ -112,7 +129,10 @@ The full log is `docs/DECISIONS.md`. These apply to all work:
   hatchling and a `src/` layout; pytest, pytest-qt, ruff, basedpyright; PyInstaller one-folder plus Inno
   Setup. tinytag 2.0.0 is test-only (parity). The stacks considered and rejected are in HISTORY.md ("Stack").
 - **Cue split** (Hugo, 2026-10-16): the `.cue` is the only source of truth. The app stores no split state (no
-  remembered options or edits); edits are kept only by saving them into a `.cue`. SPEC §22.
+  remembered options or edits); edits are kept only by saving them into a `.cue`. SPEC §22. (M13's remembered
+  "Save beside … without asking" box is a preference, not split state: Hugo, 2026-10-17.)
+- **Lyrics** (Hugo, 2026-10-17): the app's lyrics focus is LRCLIB's results, not the lyrics tag; features that
+  touch lyrics start from LRCLIB (SPEC §9).
 - **Licence:** GPL-3.0-or-later. Every bundled third-party component is listed in `music_desk/licenses.py`, with
   its text in `resources/licenses/` (SPEC §13).
 - **Repo:** public on GitHub, `hugo-cacciatori/music_desk`, branch `main`.

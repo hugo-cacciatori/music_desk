@@ -1,4 +1,7 @@
 # 9. Lyrics background service
+**LRCLIB comes first** (Hugo, 2026-10-17): the app's lyrics are LRCLIB's results (this service, the Lyrics tab
+§8, kept in the index). The lyrics tag is secondary. Features that touch lyrics start from LRCLIB.
+
 - Starts by itself once tags are indexed, covers every audio file under the roots, and resumes across restarts
   (its state is in the DB).
 - Per track:

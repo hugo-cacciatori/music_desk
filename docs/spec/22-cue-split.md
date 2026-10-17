@@ -192,6 +192,89 @@ in**, and **one page with every control**; you can't split without going through
   FILE line would point to nothing.
 - Saving refreshes the folder in the browser and the side panel's preview.
 
+## M13 additions (specified with Hugo on 2026-10-17, not built)
+The Split page is also where cue sheets are edited and created. Four changes, built with the trim (§23). When they
+are built, merge them into "In the app" above and drop this heading.
+
+**1. The source warning**
+- Every `.cue` keeps its **Split into tracks…** button, always clickable: the page is where a wrong FILE line is
+  fixed (Hugo).
+- When the sheet's FILE line names a missing file, one the split can't read, or several files, the page draws the
+  eye to the **Source** control. It is marked like a bad cell (red), with the reason in bold beside it, for
+  example "This sheet points to Fixture Album.wav, which isn't in this folder. Choose its audio file." Split stays
+  disabled until it is fixed, as today.
+
+**2. New cue sheet…**, a second way in, from one FLAC, WAV or AIFF file (§23 "The entry point")
+- It opens the Split page on a **new, unsaved sheet** for that file, with only:
+
+      PERFORMER "<album artist, else artist>"
+      TITLE "<album>"
+      FILE "<file name>" WAVE
+        TRACK 01 AUDIO
+          INDEX 01 00:00:00
+
+  A missing tag leaves its line out. Track 1 always starts at 00:00:00 (Hugo). The user adds everything else (the
+  other tracks, their starts, the titles…) with the page's controls. An intro that ended up in track 1 is trimmed
+  from the split track afterwards (§23), not handled here (Hugo).
+- Written in UTF-8 with a BOM and CRLF line endings, laid out as EAC does. The encoding picker shows it, disabled
+  until the sheet is saved (there is no file to read again).
+- Otherwise it is the ordinary page: the source picker, the album fields, the table, Add / Delete, the ticks, the
+  destination. One Split page at a time: New cue sheet… while the page has unsaved edits asks first, as opening
+  another `.cue` does.
+- **Save** is enabled once the sheet has no problem of its own (`validate`): a usable source, at least two
+  tracks, starts that are valid, increase and stay inside the audio, no double quote. That is what Split needs
+  from the sheet itself (Hugo: "as soon as the split would be possible"); the ticks, the destination and the masks
+  aren't cue data.
+  - Save opens a Save dialog in the audio file's folder, proposing `<audio file stem>.cue`. An existing name asks
+    Replace or Keep both, and another folder is refused, as Save as does today.
+  - A box beside it, **Save beside <file name> without asking**, skips the dialog: the sheet is saved at once as
+    `<stem>.cue`, or `<stem> (2).cue`, `(3)`… when the name is taken (`numbered_path`), never replacing a file. The
+    box shows only on a new sheet, and its state is remembered (Hugo, 2026-10-17: a preference kept where it is
+    used, §12).
+  - Save as… on a new sheet always opens the dialog.
+  - After the save, the page works on the new file like any sheet, and Split is there.
+- Split on a new sheet asks "Save the cue sheet first?", as with any unsaved edit.
+- Leaving a new sheet (back, another `.cue`, quitting) asks Save / Discard / Cancel only once something was changed
+  beyond what was filled in.
+
+**3. Preview in player** (Hugo: hear the current edit before writing anything)
+- A button that opens the page's current sheet, unsaved edits included, in the default player, through a temporary
+  sheet written as for the trim (§23 "Preview in player": `preview-*.cue` in the app's playlists folder, the FILE
+  line a full path, opened with `os.startfile`).
+- Enabled when the sheet is viable: a usable source, no sheet problem, and a plan. The masks, the ticks, the
+  destination and flac don't matter.
+- The temporary sheet lists every track the split would write, ticked or not, from the plan. Each one starts where
+  the split cuts it (gaps belong to the previous track) and keeps its title and performer.
+- A hidden track (row 0) becomes the temporary sheet's track 1, titled "Hidden track", since a cue sheet can't
+  number a track 0. The others follow, one number higher than on the page.
+
+**4. Fill from track lengths…** (Hugo: the page reflects the cue grammar exactly, so Length stays computed; a
+helper that works in other terms gets its own window)
+- The need: a tracklist (a back cover, Discogs) gives each track's length, while the sheet needs each start time.
+  Adding up the lengths by hand is slow and error-prone.
+- A button beside Add / Delete track opens a small **modal dialog**: fixed size, on top of the app, keeping the
+  focus until OK or Cancel (Hugo).
+- It has a track count, and a row per track with its length as `m:ss` or `m:ss:ff`, filled in from the sheet's
+  current tracks. The last track's length isn't asked: it runs to the end of the audio, shown as "The rest: 4:12".
+- OK sets the starts: track 1 keeps its start, and each next track starts where the previous one ends.
+  - Tracks are added at the end to reach the count (with no title). Extra tracks at the end are deleted, and the
+    dialog names them first: "Tracks 9–11 will be deleted."
+  - A moved track's INDEX 00 is removed, since its gap no longer fits. Titles and the other fields stay.
+- OK is disabled, saying why, while a length is malformed or the lengths before the last track pass the end of the
+  audio.
+- The result is an ordinary unsaved edit. Lengths in whole seconds give starts on whole seconds: Preview in player
+  checks them, and the Start cells adjust them.
+- Tests never open it: it goes through an `ask_track_lengths` method that they replace.
+
+**Tests (M13)**
+- The source warning on a missing, an unsupported and a multi-FILE source, gone once a file is chosen.
+- New cue sheet…: the filled-in lines (and the ones left out without tags); Save disabled until the sheet is
+  viable; the dialog's proposed folder and name; the box's direct save, numbered when the name is taken and never
+  replacing a file; the box remembered; the page on the new file afterwards; the unsaved-edits questions only after
+  a change.
+- Preview in player: the temporary sheet from a plan with gaps and with a hidden track, through an injected opener.
+- Fill from track lengths: the starts, tracks added and deleted, a gap removed, the disabled OK.
+
 ## The job
 - It runs in the Jobs panel (§10) as kind **Split**, for one album, holding a `PathLocks` lock on the image's
   folder and the destination, owned by "the Split tool", so tag saves, renames and other jobs there are refused

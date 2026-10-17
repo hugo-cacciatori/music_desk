@@ -30,7 +30,7 @@ folder, adding it to the library first when it isn't in it.
   Metadata edits ask first, the Ctrl+K page and the Tools page are left.
 - **Inside a library folder, not indexed yet** (made since the last scan, or the scan hasn't reached it): that
   path is rescanned first, then shown.
-- **Outside the library**: it is added, as File › Add folder… does (a parent of library folders merges them, §3).
+- **Outside the library**: it is added, as the sidebar's Add folder… does (a parent of library folders merges them, §3).
   The status bar says so ("Added D:\Music\New to the library."), and the folder opens as soon as the scan has
   indexed it.
 - The wait for a scan lasts at most 2 minutes; a newer request replaces it. A path that isn't a folder (gone, a

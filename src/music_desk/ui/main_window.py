@@ -237,12 +237,10 @@ class MainWindow(QMainWindow):
 
         self.add_folder_action = QAction("&Add folder…", self, shortcut=QKeySequence("Ctrl+O"))
         self.add_folder_action.triggered.connect(self.add_folder)
+        self.addAction(self.add_folder_action)  # Ctrl+O; the sidebar's Add folder… is the visible way (0.8.4)
         file_menu = self.menuBar().addMenu("&File")
-        file_menu.addAction(self.add_folder_action)
-        self.rescan_library_action = file_menu.addAction("&Rescan library", self.rescan_library)
-        self.rescan_library_action.setEnabled(self.library is not None)
-        file_menu.addSeparator()
-        # Every option in one window (SPEC §30), the toolbar's Options… opening it on its tool's page.
+        # No Add folder… or Rescan library since 0.8.4 (SPEC §30). Every option in one window, the toolbar's
+        # Options… opening it on its tool's page.
         file_menu.addAction("&Options…", lambda: self.tools.open_options())
         file_menu.addSeparator()
         file_menu.addAction("E&xit", self.close)
@@ -628,8 +626,8 @@ class MainWindow(QMainWindow):
             return
         found = find_folder(self.open_library.conn, text)
         if found is None:
-            self.statusBar().showMessage(f"{text} isn't in the library. Add its folder first (File > Add folder…).",
-                                         STATUS_MS)
+            self.statusBar().showMessage(
+                f"{text} isn't in the library. Add its folder first (Add folder… in the sidebar).", STATUS_MS)
             return
         folder, exact = found
         if exact:
@@ -1297,15 +1295,6 @@ class MainWindow(QMainWindow):
             return
         self._keep_open_folder()  # its root may have been removed, or merged into a new one
         self.sidebar.set_roots(self.open_library.roots())
-
-    def rescan_library(self) -> None:
-        """Every library folder, incrementally: only new or changed files are read again (SPEC §4)."""
-        if not self._library_open():
-            return
-        count = self.open_library.rescan_all()
-        self.statusBar().showMessage(
-            f"Rescanning {count} library folder{'s' if count != 1 else ''}…" if count
-            else "The library is empty. Add a folder first (File > Add folder…).", STATUS_MS)
 
     def choose_folder(self) -> str:
         return QFileDialog.getExistingDirectory(self, "Add a music folder to the library")

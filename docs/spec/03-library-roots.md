@@ -1,5 +1,5 @@
 # 3. Library roots
-- Add folders with "Add folder…" (folder picker), or drop one or more folders anywhere on the window. A drop
+- Add folders with the sidebar's "Add folder…" (folder picker; Ctrl+O; no File menu entry since 0.8.4), or drop one or more folders anywhere on the window. A drop
   overlay shows "Add to library". Dropped files are ignored, and a toast offers to add their folder instead.
 - A folder inside an existing root just navigates there. Adding a parent of existing roots merges them.
 - "Remove from library" removes the folder from the index only; nothing on disk changes.

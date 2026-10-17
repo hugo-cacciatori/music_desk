@@ -105,7 +105,7 @@ def test_menu_entries_show_a_status_bar_tip(window, service):
             assert action.statusTip() == MENU_TIPS.get(key, ""), key
             if action.statusTip():
                 tipped.add(key)
-    assert {"Play selection", "Play folder", "Rescan library", "Remove from library", "Reset columns"} <= tipped
+    assert {"Play selection", "Play folder", "Options", "Remove from library", "Reset columns"} <= tipped
     play = next(a for a in menus[0].actions() if a.text() == "Play selection")
     play.showStatusText(window)  # what hovering it does
     assert window.statusBar().currentMessage() == MENU_TIPS["Play selection"]

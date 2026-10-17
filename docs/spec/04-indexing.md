@@ -6,7 +6,7 @@ Indexing runs in the background.
   If profiling shows GIL contention, switch to a process pool. Results reach the DB writer in batches. The same
   pass notes whether a same-stem `.lrc` sidecar exists.
 - Priority: the folder on screen is scanned and tag-read first.
-- Rescans are incremental: at startup, F5 (current folder) and File › Rescan library (every root,
+- Rescans are incremental: at startup, F5 (current folder) and, until 0.8.4, File › Rescan library (every root,
   `LibraryService.rescan_all`, added in 0.2.1). Entries that disappeared are removed during each folder's
   reconciliation (as built below).
 - Live updates: watchdog events are debounced (500 ms) and coalesced per folder, then that folder is reconciled.

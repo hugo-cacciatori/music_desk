@@ -61,7 +61,7 @@ class LibraryService(QObject):
         self.rescan_all()  # the startup rescan
 
     def rescan_all(self) -> int:
-        """Queue an incremental rescan of every root (startup, File › Rescan library); an offline root is skipped
+        """Queue an incremental rescan of every root (at startup); an offline root is skipped
         by the scanner. Returns the number of roots."""
         current = self.roots()
         for root in current:

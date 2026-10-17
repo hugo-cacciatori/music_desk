@@ -35,7 +35,7 @@ apart from starting it; settings used in several places (the file name masks) li
 
 ## Options
 - **One Options window** (Hugo, 0.8.3; it replaced M21's one dialog per card and the Options menu), opened from
-  **File > Options…** (between Rescan library and Exit) and from the toolbar dropdowns' **Options…**. Not
+  **File > Options…** (above Exit) and from the toolbar dropdowns' **Options…**. Not
   modal; one window, reused: opening it again raises it.
   - On the left, a **list** of its pages: **File names**, **Rename**, **ReplayGain**. A click shows that card
     on the right, in a scroll area (the card at its own height). Below, **Close**.
@@ -48,6 +48,8 @@ apart from starting it; settings used in several places (the file name masks) li
     left (File names the first time).
   - Changes are saved as they are made, as the cards always did; Close (or Esc) only closes.
 - **M21's Options menu is gone** (Hugo, 0.8.3): its three entries are the window's pages.
+- **The File menu** (Hugo, 0.8.4) holds only Options… and Exit: Add folder… (the sidebar, a drop or Ctrl+O) and
+  Rescan library (the startup rescan, F5 and Rescan folder) left it.
 
 ## Gone
 - The Tools page and its sections; the right-click **Tools…** entries (file list, folder tree) and the folder

@@ -26,7 +26,6 @@ def is_exempt(widget: QWidget | None) -> bool:
 # 2026-10-17). Keyed by the entry's text without "&", "…" or its shortcut; self-explanatory entries have none.
 MENU_TIPS = {
     "Add folder": "Add a music folder to the library and index it; adding only reads the folder",
-    "Rescan library": "Read every library folder from the disk again, to show changes made outside MusicDesk",
     "Hide folders without music": "Leave out of the folder tree the folders with no music in them or below",
     "Play selection": "Play the selected audio files in your default player, as a temporary playlist",
     "Play folder": "Play this folder's tracks in your default player, as a temporary playlist",

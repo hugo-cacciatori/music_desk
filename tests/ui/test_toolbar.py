@@ -261,6 +261,9 @@ def test_options_open_the_window_on_the_tools_page(qtbot, window, service, libra
 def test_file_options_holds_every_option(qtbot, window, service, library_dir):
     assert [a.text() for a in window.menuBar().actions()] == ["&File", "&Help"]  # no Options menu
     file_menu = window.menuBar().actions()[0].menu()
+    # No Add folder… or Rescan library since 0.8.4: the sidebar adds folders (Ctrl+O still works).
+    assert [a.text() for a in file_menu.actions() if not a.isSeparator()] == ["&Options…", "E&xit"]
+    assert window.add_folder_action in window.actions()
     options = next(a for a in file_menu.actions() if a.text() == "&Options…")
     assert options.statusTip()
     album = library_dir / "Artist" / ALBUM

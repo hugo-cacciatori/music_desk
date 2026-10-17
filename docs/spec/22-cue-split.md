@@ -109,6 +109,8 @@ which FLAC can't hold, is refused the same way. **The tracks are always FLAC.**
 - Album-level values missing from the sheet are taken from the source file's own tags (album, album artist, year,
   genre). The source's embedded **front cover** is copied into every track. Nothing else is copied: its comment,
   lyrics and ReplayGain values described the whole file.
+  flac carries a FLAC image's tags and pictures into each cut (measured 2026-10-17, flac 1.5.0), so `write_tags`
+  clears them before writing these (fixed in 0.3.6; until then tracks kept the image's other tags).
 - Track and track total are the sheet's numbering, whatever tracks are ticked: extracting only track 3 of 11
   gives a file tagged 3 of 11.
 - Names: the shared masks (§21) over those fields, sanitized, with `.flac`. **The split never refuses over a

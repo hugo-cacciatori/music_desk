@@ -16,8 +16,9 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 15):** 0.3.5 is on `main`, not released: M13 task 1 is done (`core/trim.py`:
-  the plan and its checks, the cut and proof through the split's code, the tags). Full suite passed, slow included.
+- **State (2026-10-17, session 15):** 0.3.6 is on `main`, not released: M13 task 1 is done (`core/trim.py`:
+  the plan and its checks, the cut and proof through the split's code, the tags); 0.3.6 fixes split tracks
+  inheriting a FLAC image's tags. Full suite passed, slow included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
 - **Next step:** M13 task 2 (`core/waveform.py` and the temporary `preview-*.cue`; SPEC §23). Then
@@ -200,6 +201,4 @@ agree) and pyproject's `version`, then `uv lock`.
 `tests/` (`reference/`, `fixtures/`, `core/`, `ui/`), `packaging/`, `docs/`. File by file: SPEC §16 "Project layout".
 
 ## Open questions
-- **Split tracks inherit the image's tags** (measured 2026-10-17): flac copies a FLAC image's tags and pictures
-  into each cut, and `split.write_tags` overwrites only the sheet's fields, so tracks keep the image's ReplayGain,
-  CUESHEET, LYRICS… Ask Hugo which tags a split track keeps (the trim rewrites them, SPEC §23).
+None.

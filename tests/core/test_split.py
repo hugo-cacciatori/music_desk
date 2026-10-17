@@ -370,3 +370,30 @@ def test_extracting_track_2_one_sample_off_fails_with_the_real_flac(fixtures_dir
     reason = "doesn't match its part of the original" if shift_end else "samples, but the cut planned"
     assert result.error.startswith("The proof failed: track 2") and reason in result.error
     assert names(plan.cue.parent) == before
+
+
+@pytest.mark.slow
+def test_tracks_get_nothing_else_of_the_images_tags(fixtures_dir, tmp_path, runner):
+    """flac carries a FLAC image's tags and pictures into each cut; a track keeps only the sheet's fields, its ISRC
+    and the front cover (SPEC §22): the image's ReplayGain, lyrics, comment and cue sheet described the whole file."""
+    from mutagen.flac import FLAC, Picture
+
+    plan = real_plan(fixtures_dir, tmp_path, "hidden_track", runner)
+    image = FLAC(str(plan.source))
+    image["REPLAYGAIN_TRACK_GAIN"], image["LYRICS"], image["COMMENT"] = "-7.10 dB", "la la", "EAC rip"
+    image["CUESHEET"], image["COMPOSER"] = plan.cue.read_text(encoding="utf-8"), "Image Composer"
+    back = Picture()
+    back.type, back.mime, back.data = 4, "image/png", b"\x89PNG back"
+    image.add_picture(back)
+    image.save()
+    front = next(p.data for p in FLAC(str(plan.source)).pictures if p.type == 3)
+
+    done = split.finish_album(plan, split.cut_album(plan, runner))
+    assert done.error is None and done.warnings == []
+    hidden, opening = (FLAC(str(path)) for path in done.tracks[:2])
+    assert sorted(k for k, _v in opening.tags) == ["ALBUM", "ALBUMARTIST", "ARTIST", "COMPOSER", "DATE",
+                                                    "DISCNUMBER", "DISCTOTAL", "GENRE", "ISRC", "TITLE",
+                                                    "TRACKNUMBER", "TRACKTOTAL"]
+    assert opening["COMPOSER"] == ["A. Writer"]
+    assert "COMPOSER" not in hidden.tags  # the hidden track has no songwriter: not the image's either
+    assert [(p.type, p.data) for p in opening.pictures] == [(3, front)]

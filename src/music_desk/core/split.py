@@ -154,11 +154,17 @@ def finish_album(plan: AlbumPlan, cut: CutResult) -> Finished:
 
 
 def write_tags(track: PlannedTrack, cover: bytes | None) -> None:
-    """The sheet's fields, the ISRC (a Vorbis comment) and the source's front cover (SPEC §22)."""
+    """The sheet's fields, the ISRC (a Vorbis comment) and the source's front cover, and nothing else (SPEC §22).
+    flac carries a FLAC image's tags and pictures into each cut; they described the whole file, so they go first."""
     from mutagen.flac import FLAC
 
     from music_desk.core.tags import TaggedFile
 
+    audio = FLAC(str(track.out_path))
+    if audio.tags is not None:
+        audio.tags.clear()  # pyright: ignore[reportAttributeAccessIssue] - a VCFLACDict, a list of pairs
+    audio.clear_pictures()
+    audio.save()
     tagged = TaggedFile(track.out_path)
     numbers = ("track", "track_total", "disc", "disc_total")
     tagged.set_fields({name: track.fields[name] if name in numbers else str(track.fields[name])

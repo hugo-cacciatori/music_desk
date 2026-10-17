@@ -141,7 +141,7 @@ Top to bottom:
     refused like an end past it.
   - **Measured** (2026-10-17, flac 1.5.0): cutting a FLAC carries its Vorbis comments and pictures into the cut.
     `copy_tags` therefore clears the copy's tags and pictures and writes the original's (without lyrics), so the
-    result doesn't depend on flac. (The split's tracks inherit the image's tags this way: see Open questions.)
+    result doesn't depend on flac. The split does the same since 0.3.6 (§22).
 - **UI:** `ui/trim_page.py` (the widgets: the waveform widget, the fields, the subfolder, the buttons, the report)
   and `ui/controllers/trim.py` `TrimController` (`window.trim`), following `SplitController`. The waveform is
   computed on a worker and painted from the cached peaks, so dragging a handle and resizing never decode again.

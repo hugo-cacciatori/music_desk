@@ -428,6 +428,7 @@ class MainWindow(QMainWindow):
                 self.sidebar.tree.select_entry(queries.folder_path_ids(self.open_library.conn, self.folder_id))
             return
         self.close_tools()  # browsing elsewhere goes back to the file list (the tools keep their options)
+        came_from = self.folder_id
         if record and self.folder_id is not None:
             self.history_back.append(self.folder_id)
             self.history_forward.clear()
@@ -438,9 +439,18 @@ class MainWindow(QMainWindow):
         self.address_bar.set_location(crumbs, self.folder_path)
         self.sidebar.tree.select_entry([entry for entry, _name in crumbs])
         self._show_selection([])
+        if came_from is not None:
+            self._select_came_from(came_from, entry_id)
         self.open_library.folder_opened(entry_id)
         self.open_library.lyrics.prioritize_folder(entry_id)
         self._update_navigation()
+
+    def _select_came_from(self, came_from: int, opened: int) -> None:
+        """Going up by any way (Up, Back, the address bar, the tree) selects the folder you came from, as Explorer
+        does; from deeper down, the folder on the way back to it (SPEC §5)."""
+        path = queries.folder_path_ids(self.open_library.conn, came_from)
+        if opened in path[:-1]:
+            self.file_view.select_ids([path[path.index(opened) + 1]], reveal=True)
 
     # -- history and navigation --
 
@@ -600,11 +610,9 @@ class MainWindow(QMainWindow):
     def go_up(self) -> None:
         if not self._library_open() or self.folder_id is None:
             return
-        child = self.folder_id
-        parent = queries.parent_folder(self.open_library.conn, child)
+        parent = queries.parent_folder(self.open_library.conn, self.folder_id)
         if parent is not None:
-            self.open_folder(parent)
-            self.file_view.select_ids([child])  # as Explorer does: the folder you came from is selected
+            self.open_folder(parent)  # which selects the folder you came from
 
     def refresh_after_tool(self, folder: Path) -> None:
         """A tool changed files under `folder`: the index catches up on the whole subtree first, even during a

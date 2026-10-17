@@ -133,6 +133,32 @@ def test_up_selects_the_folder_you_came_from(qtbot, window, service):
     assert not window.up_action.isEnabled()
 
 
+def test_every_way_up_selects_the_folder_you_came_from(window, service):
+    """Back, the address bar and the tree too (SPEC §5); from deeper down, the folder on the way back."""
+    artist, album = entry(service, "Artist"), entry(service, "Artist", "Album")
+    cd2 = entry(service, "Artist", "Album", "CD 2")
+    window.open_folder(artist)
+    window.open_folder(album)
+    window.go_back()  # Back to the parent
+    assert window.folder_id == artist and window.file_view.selected_ids() == [album]
+    window.open_folder(cd2)
+    window.address_bar.folderRequested.emit(artist)  # a crumb two levels up
+    assert window.folder_id == artist and window.file_view.selected_ids() == [album]
+    window.open_folder(cd2)
+    window.sidebar.folderSelected.emit(album)  # the tree
+    assert window.folder_id == album and window.file_view.selected_ids() == [cd2]
+
+
+def test_going_down_or_forward_selects_nothing(window, service):
+    artist, album = entry(service, "Artist"), entry(service, "Artist", "Album")
+    window.open_folder(artist)
+    window.open_folder(album)
+    assert window.file_view.selected_ids() == []
+    window.go_back()
+    window.go_forward()  # forward goes down again
+    assert window.folder_id == album and window.file_view.selected_ids() == []
+
+
 def test_backspace_and_alt_up(qtbot, window, service):
     window.open_folder(entry(service, "Artist", "Album", "CD 2"))
     window.file_view.view.setFocus()

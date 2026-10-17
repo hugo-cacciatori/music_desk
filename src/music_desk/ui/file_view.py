@@ -370,7 +370,8 @@ class FileView(QWidget):
         ids = self.selected_ids() if index.isValid() else []
         self.menuRequested.emit(ids, self.view.viewport().mapToGlobal(pos))
 
-    def select_ids(self, entry_ids: list[int]) -> None:
+    def select_ids(self, entry_ids: list[int], reveal: bool = False) -> None:
+        """Selects these rows, the first one current. `reveal` scrolls it into view."""
         selection = self.view.selectionModel()
         selection.clearSelection()
         flags = selection.SelectionFlag.Select | selection.SelectionFlag.Rows
@@ -381,6 +382,8 @@ class FileView(QWidget):
             index = self.proxy.mapFromSource(self.model.index(row, 0))
             if n == 0:
                 selection.setCurrentIndex(index, flags)
+                if reveal:
+                    self.view.scrollTo(index)
             else:
                 selection.select(index, flags)
 

@@ -77,6 +77,9 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
     status message.
   - History: back and forward stacks of folders, which skip folders that left the index. The keys are Alt+←/→
     and the mouse back/forward buttons. Opening a new folder clears the forward stack.
+  - Going up by any way selects the folder you came from, as Explorer does (Hugo, 2026-10-17, 0.8.2): Up,
+    Back to a parent, a parent's crumb in the address bar, or a parent in the tree. From deeper down, the
+    folder on the way back is selected (from Artist\Album\CD 2 to Artist: Album), scrolled into view.
   - Up is Alt+↑, the toolbar button, or Backspace (in the list and the tree only, so text fields keep it). It
     selects the folder you came from. F5 rescans the open folder.
   - Typing in the list selects by name, Enter opens a folder, and Ctrl/Shift extend the selection.

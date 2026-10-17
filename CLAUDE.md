@@ -21,13 +21,21 @@ automatically, so keep it short (under about 15 KB): how things were built belon
   passed in the last full run, slow ones included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** M11 (not urgent, when Hugo says so) or M12 (to specify with Hugo first). Give Hugo full manual
-  steps for checks (memory: manual-check-instructions).
+- **Next step:** "Status bar: no rsgain version" (0.3.2); then M11 when Hugo says so, or M12 (to specify
+  with Hugo first). Give Hugo full manual steps for checks (memory: manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …). Tick tasks as
 they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
 of it (see Session protocol 5).
+
+**Status bar: no rsgain version** (Hugo, 2026-10-17; read SPEC §13 "Startup self-check"). Small, so it goes
+first.
+- [ ] 1. Remove `MainWindow.rsgain_label` ("Checking rsgain…" / the version / "unavailable") from the status
+      bar; the self-check, the cards' explanation and About stay. Tests that read the label move to the cards.
+
+Done when: the status bar shows no rsgain text at startup or after the check, a failed check still disables
+the ReplayGain and Tidy cards with their explanation, About still shows the version, and the suite passes.
 
 **M11 Maintenance** (Hugo, 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Not urgent: when
 Hugo says so. The split's controller already exists (0.2.14). Neither changes what the app does.

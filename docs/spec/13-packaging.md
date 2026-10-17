@@ -12,6 +12,10 @@
     one call.
   - rsgain prints ANSI colour codes, which are stripped as in the script's `strip_ansi`.
 - Startup self-check: if `rsgain --version` fails, the ReplayGain tools are disabled with an explanation.
+  - **No rsgain label in the status bar** (Hugo, 2026-10-17: the version is useless to the user). The
+    right-hand "Checking rsgain…" / "rsgain 3.6" / "rsgain unavailable…" label is removed. Nothing is
+    lost: a failed check is explained on the ReplayGain and Tidy cards (`ToolsPage.set_rsgain_unavailable`),
+    the log records the check, and Help › About shows the versions (rsgain and flac).
 - **flac** (from M10, for the cue split, §22): `resources/flac/` holds `flac.exe` and `libFLAC.dll` from the
   official FLAC 1.5.0 Win64 build (`flac-1.5.0-win.zip` from github.com/xiph/flac/releases, SHA-256
   `53f1500f…0dde`, checked against the release notes on 2026-10-16), with `COPYING.GPL.txt`, `COPYING.Xiph.txt`

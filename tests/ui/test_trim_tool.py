@@ -131,6 +131,10 @@ def test_the_page_shows_the_track_and_its_waveform(qtbot, window, album):
     assert page.copy_path.text() == f"The copy: lite\\{HIDDEN}"
     qtbot.waitUntil(lambda: page.waveform.peaks is not None, timeout=20000)
     assert len(page.waveform.peaks) == 4096 and max(page.waveform.peaks.highs) > 0.2
+    window.resize(1200, 1000)  # a tall window: the waveform keeps its 70 px, the spare height goes below
+    window.show()
+    qtbot.waitUntil(lambda: page.isVisible())
+    assert page.waveform.height() == 70
 
 
 def test_an_unreadable_track_says_why(qtbot, window, album):

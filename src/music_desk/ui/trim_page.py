@@ -28,6 +28,7 @@ from music_desk.core.waveform import Peaks
 
 BAD_STYLE = "background: #ffcdcd;"
 HANDLE_GRAB_PX = 8  # how near a handle a press must be to drag it
+WAVEFORM_HEIGHT = 70  # px; filling the page, it was much too big (Hugo, M16)
 
 
 TIPS = {  # the fields' hover texts, shown while they have no problem to tell (SPEC §24)
@@ -46,8 +47,8 @@ class WaveformView(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumHeight(140)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setFixedHeight(WAVEFORM_HEIGHT)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setMouseTracking(True)
         self.total_ms = 0
         self.start_ms = 0
@@ -282,9 +283,10 @@ class TrimPage(QWidget):
         editor = QVBoxLayout(self.editor)
         editor.setContentsMargins(0, 0, 0, 0)
         editor.addWidget(self.format_label)
-        editor.addWidget(self.waveform, 1)
+        editor.addWidget(self.waveform)
         editor.addLayout(times)
         editor.addLayout(subfolder)
+        editor.addStretch(1)  # the spare height goes below the fields
 
         self.message = QLabel()
         self.message.setWordWrap(True)

@@ -34,7 +34,9 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
 - **Delete** files and folders (Del) from the file list, the folder tree or search results. They go straight to
   the Recycle Bin (no question: restore them from there), never deleted for good, and where Windows has no Recycle Bin (a network
   share, a removable drive) MusicDesk refuses and offers File Explorer instead.
-- **Tools** for a folder or a selection:
+- **Tools**, always one click away on the toolbar's second row (Rename and ReplayGain have **Start** and
+  **Options…**; the **Options** menu holds File names…, Rename options… and ReplayGain options…), for the open
+  folder or the selection:
   - **Rename from tags**, with masks such as `{track:02} {title}`. You see a preview first, `.lrc` files
     follow their audio file, and an optional junk cleanup sends files to the Recycle Bin.
   - **ReplayGain** for an album or a whole discography, with the bundled [rsgain](https://github.com/complexlogic/rsgain).

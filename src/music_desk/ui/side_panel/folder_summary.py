@@ -1,6 +1,6 @@
 """The folder summary (SPEC §7): what the side panel shows for a folder, from the index.
 
-Tool shortcuts (Tidy album, ReplayGain) join the Play buttons when the tools exist (M5).
+The tools start from the toolbar (SPEC §30), not from here.
 """
 
 from PySide6.QtCore import Qt, Signal
@@ -21,7 +21,6 @@ def _coverage(count: int, total: int) -> str:
 
 class FolderSummaryView(QWidget):
     playRequested = Signal(int, bool)  # folder entry id, with subfolders
-    toolsRequested = Signal(int)  # folder entry id
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -75,13 +74,9 @@ class FolderSummaryView(QWidget):
         self.play_all_button.setToolTip("Play the tracks of this folder and of all its subfolders in your default "
                                         "player")
         self.play_all_button.clicked.connect(lambda: self._play(True))
-        self.tools_button = QPushButton("Tools…")
-        self.tools_button.setToolTip("Open the Tools page (file names, Rename, ReplayGain, Tidy) for this folder")
-        self.tools_button.clicked.connect(lambda: self.summary and self.toolsRequested.emit(self.summary.id))
         buttons.addWidget(self.play_button)
         buttons.addWidget(self.play_all_button)
         buttons.addStretch(1)
-        buttons.addWidget(self.tools_button)
         layout.addLayout(buttons)
         layout.addStretch(1)
 

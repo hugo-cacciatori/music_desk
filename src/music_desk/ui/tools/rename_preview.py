@@ -62,10 +62,10 @@ def sections_text(sections: list[tuple[str, list[str]]]) -> str:
     return "\n".join(lines).rstrip()
 
 
-BACK_TIP = "Go back to the Tools options without renaming anything"
+BACK_TIP = "Go back to the file list without renaming anything"
 
 class RenamePreview(QWidget):
-    backRequested = Signal()  # back to the Tools page (cancels a preview still reading)
+    backRequested = Signal()  # back to the file list (cancels a preview still reading)
     applyRequested = Signal()
     cancelRequested = Signal()  # stop a run in progress
     doneRequested = Signal()  # back to the file list
@@ -76,7 +76,7 @@ class RenamePreview(QWidget):
         self.report: RenameReport | None = None
         self.state = "idle"  # planning, preview, applying, result, error
 
-        self.back_button = QPushButton("← Back to options")
+        self.back_button = QPushButton("← Back")
         self.back_button.setToolTip(BACK_TIP)
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
@@ -127,7 +127,7 @@ class RenamePreview(QWidget):
         self.apply_button.setToolTip("Rename exactly the files listed, as shown; in Tidy, ReplayGain then runs on "
                                      "the final names")
         self.apply_button.clicked.connect(self.applyRequested)
-        self.back_bottom = QPushButton("← Back to options")  # next to Apply: return without changing anything
+        self.back_bottom = QPushButton("← Back")  # next to Apply: return without changing anything
         self.back_bottom.setToolTip(BACK_TIP)
         self.back_bottom.clicked.connect(self.backRequested)
         self.cancel_button = QPushButton("Stop")
@@ -173,7 +173,7 @@ class RenamePreview(QWidget):
         self.extras.setPlainText(self._extras_text(plan))
         self.extras.setVisible(bool(self.extras.toPlainText()))
         actionable = any(i.status in (Status.RENAME, Status.JUNK) for i in plan.items)
-        back = "Back to options changes nothing."
+        back = "Back changes nothing."
         if actionable:
             message = f"Nothing has changed yet. Apply renames exactly these files. {back}"
         else:

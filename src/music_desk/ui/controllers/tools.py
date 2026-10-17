@@ -1,5 +1,6 @@
-"""The Tools page's controller (SPEC §10, §16): Rename and ReplayGain, their previews, jobs and reports, and Remove
-ReplayGain tags. Tidy has its own controller (ui/controllers/tidy.py, SPEC §28), which the Tidy card opens.
+"""The tools' controller (SPEC §10, §16, §30): the toolbar's Start and Options…, Rename and ReplayGain with their
+previews, jobs and reports, and Remove ReplayGain tags. Tidy has its own controller (ui/controllers/tidy.py, SPEC
+§28), which the toolbar's Tidy opens.
 
 A tool runs one job at a time: while its job runs, its page shows that job instead. Rename is previewed and
 applied on its runner; ReplayGain has no preview (it only writes tags and the logs).
@@ -23,23 +24,23 @@ from music_desk.services.replaygain_job import Finished, ReplayGainRunner
 from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.tools.rename_preview import RenamePreview
 from music_desk.ui.tools.rg_report import ReplayGainView, short_result
-from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN, TIDY, ToolRequest, ToolScope, ToolsPage
+from music_desk.ui.tools.tool_cards import NAMES, RENAME, REPLAYGAIN, TIDY, ToolCards, ToolRequest, ToolScope
+
+TOOL_NAMES = {RENAME: "Rename", REPLAYGAIN: "ReplayGain", TIDY: "Tidy"}
 
 
 class ToolsController(QObject):
     def __init__(self, window, locks, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.window = window
-        self.page = ToolsPage(window.settings)
-        self.page.backRequested.connect(window.close_tools)
-        self.page.runRequested.connect(self.run_tool)
+        self.cards = ToolCards(window.settings, window)  # the options, in dialogs (SPEC §30)
         window.tag_io.renameFields.connect(self._tool_example)
         window.tag_writer.replaygainRemoved.connect(self._replaygain_removed)
         self._example_token: int | None = None
         self._rg_remove_token: int | None = None
 
         self.rename_preview = RenamePreview()
-        self.rename_preview.backRequested.connect(self._rename_back)
+        self.rename_preview.backRequested.connect(window.close_tools)
         self.rename_preview.doneRequested.connect(window.close_tools)
         self.rename_preview.applyRequested.connect(self.apply_rename)
         self.rename_preview.cancelRequested.connect(lambda: self.rename_runner.cancel())
@@ -51,7 +52,7 @@ class ToolsController(QObject):
         self.rename_job: int | None = None  # the job id of the running rename (or Tidy's rename step)
 
         self.rg_view = ReplayGainView()
-        self.rg_view.backRequested.connect(lambda: window.center.setCurrentWidget(self.page))
+        self.rg_view.backRequested.connect(window.close_tools)
         self.rg_view.doneRequested.connect(window.close_tools)
         self.rg_view.cancelRequested.connect(lambda: self.rg_runner.cancel())
         self.rg_view.openLogRequested.connect(self.open_log)
@@ -69,13 +70,13 @@ class ToolsController(QObject):
     @property
     def pages(self) -> tuple:
         """The centre pages this controller shows."""
-        return self.page, self.rename_preview, self.rg_view
+        return self.rename_preview, self.rg_view
 
     def shutdown(self) -> None:
         self.rename_runner.close()  # a running rename stops between two files
         self.rg_runner.close()  # a running rsgain is killed; its album is reported as cancelled
 
-    # -- the page --
+    # -- the target and the toolbar --
 
     def scope_for(self, ids: list[int]) -> ToolScope | None:
         """What the tools act on: one folder (from the list, the tree or the folder summary); else the audio
@@ -108,15 +109,56 @@ class ToolsController(QObject):
         first = files[0] if files else summary.first_track if summary else None
         return ToolScope(folder, folder_id, files, Path(first) if first else None)
 
-    def open(self, ids: list[int]) -> None:
-        window = self.window
-        scope = self.scope_for(ids)
+    def target(self, tool: str) -> ToolScope | None:
+        """What the toolbar's Start acts on: the file list's selection, else the open folder. ReplayGain and Tidy
+        take a file selection's folder (SPEC §30)."""
+        scope = self.scope_for(self.window.file_view.selected_ids())
+        if scope is not None and tool != RENAME and scope.is_selection:
+            return ToolScope(scope.folder, scope.folder_id)
+        return scope
+
+    @staticmethod
+    def target_text(scope: ToolScope) -> str:
+        count = len(scope.files)
+        if count:
+            return f"{count} selected file{'s' if count != 1 else ''}"
+        return scope.folder.name or str(scope.folder)
+
+    def start_text(self, tool: str) -> tuple[str, bool]:
+        """The dropdown's Start entry, read when it opens: its text and whether it can run."""
+        dots = "…" if tool in (RENAME, TIDY) else ""  # a preview (Rename) or the plan (Tidy) comes first
+        scope = self.target(tool)
         if scope is None:
-            window.statusBar().showMessage("Select a folder, or music files, to use the tools.", STATUS_MS)
+            return "Start (open a folder first)", False
+        if tool != RENAME and self.cards.replaygain_card.unavailable:
+            return "Start (rsgain couldn't run)", False
+        if self.cards.problems(tool):
+            return "Start (fix its options first)", False
+        return f"Start on {self.target_text(scope)}{dots}", True
+
+    def start(self, tool: str) -> None:
+        """The toolbar's Start (Tidy's button): the rename preview, the ReplayGain job, or Tidy's plan."""
+        window = self.window
+        scope = self.target(tool)
+        if scope is None:
+            window.statusBar().showMessage(f"{TOOL_NAMES[tool]}: open a folder, or select music files, first.",
+                                           STATUS_MS)
             return
-        self.page.set_scope(scope)
-        self._example_token = window.tag_io.read_rename_fields(scope.first_track) if scope.first_track else None
-        window.center.setCurrentWidget(self.page)
+        request = self.cards.request(tool, scope)
+        if request is None:
+            window.statusBar().showMessage(f"{TOOL_NAMES[tool]} can't start: "
+                                           f"{' '.join(self.cards.problems(tool))}", STATUS_MS)
+            return
+        self.run_tool(request)
+
+    def open_options(self, which: str) -> None:
+        """A card's dialog. File names gets its live example from the first track of the target."""
+        if which == NAMES:
+            scope = self.target(RENAME)
+            first = scope.first_track if scope is not None else None
+            self.cards.set_example(None, "")
+            self._example_token = self.window.tag_io.read_rename_fields(first) if first else None
+        self.cards.open_options(which)
 
     def cancel_planning(self) -> None:
         """Leaving the rename preview while it plans: the plan isn't needed any more."""
@@ -125,10 +167,10 @@ class ToolsController(QObject):
 
     def _tool_example(self, token: int, fields: dict | None, extension: str) -> None:
         if token == self._example_token:
-            self.page.set_example(fields, extension)
+            self.cards.set_example(fields, extension)
 
     def run_tool(self, request: ToolRequest) -> None:
-        """A card's button: the rename preview, the ReplayGain job (no preview), or Tidy's plan (its controller). A
+        """A Start: the rename preview, the ReplayGain job (no preview), or Tidy's plan (its controller). A
         tool runs one job at a time: while its job runs, its page shows that job instead."""
         window = self.window
         if request.tool == TIDY:
@@ -250,10 +292,6 @@ class ToolsController(QObject):
         else:
             self.rename_preview.show_plan(result.plan)
 
-    def _rename_back(self) -> None:
-        self.cancel_planning()
-        self.window.center.setCurrentWidget(self.page)
-
     def apply_rename(self) -> None:
         window = self.window
         plan = self.rename_preview.plan
@@ -323,7 +361,7 @@ class ToolsController(QObject):
             where = f"{path_of(conn, folders[0])} and its subfolders"
         else:
             where = "the selection"
-        options = self.page.replaygain_card.options()
+        options = self.cards.replaygain_card.options()
         if not self.ask_remove_replaygain(len(paths), where, options.comment):
             return
         self._rg_remove_token = window.tag_writer.remove_replaygain(paths, options)

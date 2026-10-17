@@ -649,7 +649,7 @@ def write_discography_summary(root: Path, options: ReplayGainOptions, start: dat
 
 
 # ---------------------------------------------------------------------------
-# Options: checks and saved values (the Tools page's ReplayGain card)
+# Options: checks and saved values (the ReplayGain options card)
 # ---------------------------------------------------------------------------
 
 TARGET_RANGE = (-30.0, -5.0)  # rsgain's -l accepts -30 <= n <= -5

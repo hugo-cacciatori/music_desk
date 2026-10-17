@@ -15,6 +15,7 @@ from PySide6.QtGui import (
     QDropEvent,
     QKeySequence,
     QMouseEvent,
+    QPalette,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -66,6 +67,8 @@ from music_desk.ui.qt_util import app, shortcut
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
+from music_desk.ui.toolbar_icons import tool_icon
+from music_desk.ui.tools.tool_cards import NAMES, RENAME, REPLAYGAIN, TIDY
 
 log = logging.getLogger(__name__)
 
@@ -160,7 +163,6 @@ class MainWindow(QMainWindow):
                                     lyrics_service=library.lyrics if library is not None else None)
         self.side_panel.lyrics.urlRequested.connect(self.open_url)
         self.side_panel.summary.playRequested.connect(self.play_folder)
-        self.side_panel.summary.toolsRequested.connect(lambda entry_id: self.tools.open([entry_id]))
         self.side_panel.preview.splitRequested.connect(lambda path: self.split.split_now(Path(path)))
         self.side_panel.preview.editRequested.connect(lambda path: self.split.open(Path(path)))
         self.side_panel.preview.openRequested.connect(lambda path: self._in_shell(
@@ -168,8 +170,8 @@ class MainWindow(QMainWindow):
             "file type, or the file isn't reachable.", path, False))
         locks = library.locks if library is not None else PathLocks()
         # Each feature's flow lives in its controller (SPEC §16), which owns its pages; the window lays them out.
-        self.tools = ToolsController(self, locks, self)  # Rename, ReplayGain, Tidy (SPEC §10)
-        self.tools_page, self.rename_preview, self.rg_view = self.tools.pages
+        self.tools = ToolsController(self, locks, self)  # Rename, ReplayGain, Tidy (SPEC §10, §30)
+        self.rename_preview, self.rg_view = self.tools.pages
         self.split = SplitController(self, locks, self)  # the cue split (SPEC §22)
         self.split_page = self.split.page
         self.trim = TrimController(self, locks, self)  # trimming one track into a copy (SPEC §23)
@@ -195,10 +197,9 @@ class MainWindow(QMainWindow):
         # Library search (SPEC §6): the query is typed in the toolbar, the results replace the file list.
         self.search = SearchController(self, library, self)
         self.search_view, self.search_field = self.search.view, self.search.field
-        self.center = QStackedWidget()  # the file list, the search results, or the Tools page and its previews
+        self.center = QStackedWidget()  # the file list, the search results, or a tool's page
         self.center.addWidget(self.file_view)
         self.center.addWidget(self.search_view)
-        self.center.addWidget(self.tools_page)
         self.center.addWidget(self.rename_preview)
         self.center.addWidget(self.rg_view)
         self.center.addWidget(self.split_page)
@@ -244,6 +245,11 @@ class MainWindow(QMainWindow):
         self.rescan_library_action.setEnabled(self.library is not None)
         file_menu.addSeparator()
         file_menu.addAction("E&xit", self.close)
+        # Settings used in several places (SPEC §30): each opens its card in a dialog, as the toolbar's Options….
+        options_menu = self.menuBar().addMenu("&Options")
+        for which, text in ((NAMES, "&File names…"), (RENAME, "&Rename options…"),
+                            (REPLAYGAIN, "Replay&Gain options…")):
+            options_menu.addAction(text, lambda which=which: self.tools.open_options(which))
         # No View or Action menu since M16 (SPEC §5): their entries live where they are used.
         self.hide_empty_action = QAction("&Hide folders without music", self, checkable=True)
         self.hide_empty_action.setChecked(self.settings.hide_folders_without_music)
@@ -254,7 +260,7 @@ class MainWindow(QMainWindow):
         self.addAction(self.jobs_action)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About MusicDesk", self.open_about)
-        for menu in (file_menu, help_menu):
+        for menu in (file_menu, options_menu, help_menu):
             with_status_tips(menu)
 
         self.overlay = DropOverlay(self)
@@ -315,10 +321,10 @@ class MainWindow(QMainWindow):
     # -- rsgain --
 
     def show_rsgain_version(self, version: str | None) -> None:
-        """The startup self-check of the bundled rsgain (SPEC §13). A failure is explained on the ReplayGain and
-        Tidy cards; the version only shows in About, so the status bar has no rsgain label."""
+        """The startup self-check of the bundled rsgain (SPEC §13). A failure is explained on the ReplayGain card
+        and by the toolbar's Start; the version only shows in About, so the status bar has no rsgain label."""
         self.rsgain_version = version  # for the About dialog
-        self.tools_page.set_rsgain_unavailable(
+        self.tools.cards.set_rsgain_unavailable(
             None if version else "rsgain couldn't run, so ReplayGain is unavailable. See the log for details.")
 
     def show_flac_version(self, version: str | None) -> None:
@@ -421,7 +427,7 @@ class MainWindow(QMainWindow):
             if self.folder_id is not None:
                 self.sidebar.tree.select_entry(queries.folder_path_ids(self.open_library.conn, self.folder_id))
             return
-        self.close_tools()  # browsing elsewhere goes back to the file list (the cards keep their options)
+        self.close_tools()  # browsing elsewhere goes back to the file list (the tools keep their options)
         if record and self.folder_id is not None:
             self.history_back.append(self.folder_id)
             self.history_forward.clear()
@@ -476,27 +482,15 @@ class MainWindow(QMainWindow):
         for action in (self.back_action, self.forward_action, self.up_action, self.refresh_action):
             toolbar.addAction(action)
         toolbar.addWidget(self.address_bar)
-        self.tools_action = QAction("Tools", self)
-        self.tools_action.setToolTip("Rename from tags, ReplayGain and Tidy, for the selection or this folder")
-        self.tools_action.triggered.connect(lambda: self.tools.open(self.file_view.selected_ids()))
-        toolbar.addAction(self.tools_action)
-        self.playlist_action = QAction("Playlist builder", self, checkable=True,
-                                       shortcut=QKeySequence("Ctrl+Shift+P"))
-        self.playlist_action.setToolTip("Show or hide the playlist builder (Ctrl+Shift+P)")
-        self.playlist_action.toggled.connect(self.set_playlist_visible)
-        toolbar.addAction(self.playlist_action)
-        self.advanced_search_action = QAction("Advanced search", self)
-        self.advanced_search_action.setToolTip("Open a window listing the albums to fix by hand, like those without "
-                                               "ReplayGain tags or not split yet")
-        self.advanced_search_action.triggered.connect(self.open_advanced_search)
-        self.advanced_search_action.setEnabled(self._library_open())
-        self.advanced_search: AdvancedSearchWindow | None = None  # made on first use (SPEC §26)
-        toolbar.addAction(self.advanced_search_action)
-        toolbar.addWidget(self.search_field)
+        toolbar.addWidget(self.search_field)  # the address bar and the search share the row (SPEC §30)
         self.search_action = QAction("Search library", self, shortcut=QKeySequence("Ctrl+K"))
         self.search_action.triggered.connect(self.search.open)
         self.addAction(self.search_action)
         self.addToolBar(toolbar)
+        self.navigation_bar = toolbar
+        self.addToolBarBreak()
+        self._build_playlist_and_advanced_search()
+        self._build_tools_bar()
 
         # Backspace goes up, but only from the lists (it edits text everywhere else).
         for view in (self.file_view.view, self.sidebar.tree):
@@ -511,6 +505,70 @@ class MainWindow(QMainWindow):
                          lambda view=view, selected=selected: self.delete.delete_entries(selected(), view),
                          Qt.ShortcutContext.WidgetShortcut)
         self._update_navigation()
+
+    def _build_tools_bar(self) -> None:
+        """The second row (SPEC §30), always visible: Rename and ReplayGain (Start and Options… in a dropdown),
+        Tidy, then the playlist builder and Advanced search. Icons with a short label."""
+        color = self.palette().color(QPalette.ColorRole.ButtonText)
+        bar = QToolBar("Tools")
+        bar.setMovable(False)
+        bar.setObjectName("tools")
+        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.tools_bar = bar
+        self.tool_buttons: dict[str, QToolButton] = {}
+        self.start_actions: dict[str, QAction] = {}
+        for tool, label, tip in (
+                (RENAME, "Rename", "Rename the selected music files, or the open folder's, from their tags: Start "
+                                   "shows the new names first; Options… sets subfolders and junk cleanup"),
+                (REPLAYGAIN, "ReplayGain", "Measure loudness and write ReplayGain tags for the selected folder or "
+                                           "the open folder: Start runs at once; Options… sets the target")):
+            button = QToolButton()
+            button.setText(label)
+            button.setIcon(tool_icon(tool, color))
+            button.setToolTip(tip)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            button.setAutoRaise(True)
+            menu = QMenu(button)
+            start = menu.addAction("Start", lambda tool=tool: self.tools.start(tool))
+            menu.addAction("Options…", lambda tool=tool: self.tools.open_options(tool))
+            menu.aboutToShow.connect(lambda tool=tool: self._update_start(tool))
+            button.setMenu(menu)
+            bar.addWidget(button)
+            self.tool_buttons[tool] = button
+            self.start_actions[tool] = start
+        self.tidy_action = QAction(tool_icon(TIDY, color), "Tidy", self)
+        self.tidy_action.setToolTip("Tidy the selected folder or the open folder, and every folder below it: split, "
+                                    "rename, then ReplayGain, album by album. The whole plan shows first; it uses "
+                                    "the Rename and ReplayGain options")
+        self.tidy_action.triggered.connect(lambda: self.tools.start(TIDY))
+        bar.addAction(self.tidy_action)
+        bar.addSeparator()
+        self.playlist_action.setIcon(tool_icon("playlist", color))
+        self.playlist_action.setText("Playlist")
+        bar.addAction(self.playlist_action)
+        self.advanced_search_action.setIcon(tool_icon("advanced_search", color))
+        bar.addAction(self.advanced_search_action)
+        self.addToolBar(bar)
+
+    def _update_start(self, tool: str) -> None:
+        """The dropdown's Start names its target, read as it opens (SPEC §30)."""
+        text, enabled = self.tools.start_text(tool)
+        action = self.start_actions[tool]
+        action.setText(text)
+        action.setEnabled(enabled)
+
+    def _build_playlist_and_advanced_search(self) -> None:
+        self.playlist_action = QAction("Playlist builder", self, checkable=True,
+                                       shortcut=QKeySequence("Ctrl+Shift+P"))
+        self.playlist_action.setToolTip("Show or hide the playlist builder (Ctrl+Shift+P)")
+        self.playlist_action.toggled.connect(self.set_playlist_visible)
+        self.advanced_search_action = QAction("Advanced search", self)
+        self.advanced_search_action.setToolTip("Open a window listing the albums to fix by hand, like those without "
+                                               "ReplayGain tags or not split yet")
+        self.advanced_search_action.triggered.connect(self.open_advanced_search)
+        self.advanced_search_action.setEnabled(self._library_open())
+        self.advanced_search: AdvancedSearchWindow | None = None  # made on first use (SPEC §26)
 
     def _update_navigation(self) -> None:
         open_ = self._library_open() and self.folder_id is not None
@@ -1034,10 +1092,8 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         if len(ids) == 1:
             menu.addAction("Rename\tF2", lambda: self.file_view.start_rename(ids[0]))
-        tools = menu.addAction("Tools…", lambda: self.tools.open(ids))
         any_audio = any(self.file_view.model.rows[r].is_audio for i in ids
                         if (r := self.file_view.model.row_for(i)) is not None)
-        tools.setEnabled(any_audio)
         remove = menu.addAction("Remove ReplayGain tags…", lambda: self.tools.remove_replaygain(ids))
         remove.setEnabled(any_audio)
         menu.addSeparator()
@@ -1058,7 +1114,6 @@ class MainWindow(QMainWindow):
             menu.addAction("Rename\tF2", rename)  # not a library root
         menu.addAction("Rescan", lambda: self.open_library.indexer.request_folder(entry_id))
         menu.addSeparator()
-        menu.addAction("Tools…", lambda: self.tools.open([entry_id]))
         menu.addAction("Remove ReplayGain tags…", lambda: self.tools.remove_replaygain([entry_id]))
         if delete is not None and queries.parent_folder(self.open_library.conn, entry_id) is not None:
             menu.addSeparator()

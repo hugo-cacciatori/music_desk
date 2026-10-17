@@ -124,7 +124,7 @@ class TagIO(QObject):
         return token
 
     def read_rename_fields(self, path: str | Path) -> int:
-        """The fields rename masks use, of one file (the Tools page's live example)."""
+        """The fields rename masks use, of one file (the File names card's live example)."""
         token = self.next_token()
 
         def run() -> None:

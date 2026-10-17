@@ -88,8 +88,8 @@ class ReplayGainView(QWidget):
         self.finished: Finished | None = None
         self.folder: Path | None = None
 
-        self.back_button = QPushButton("← Back to options")
-        self.back_button.setToolTip("Go back to the Tools options")
+        self.back_button = QPushButton("← Back")
+        self.back_button.setToolTip("Go back to the file list")
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)

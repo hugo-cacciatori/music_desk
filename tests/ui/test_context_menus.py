@@ -96,15 +96,14 @@ def test_playlist_queries_read_the_index(service, library_dir):
 def test_file_menu(window, service):
     window.open_folder(entry(service, "Artist", "Album"))
     one = window.list_menu([entry(service, "Artist", "Album", "Track 2.flac")])
-    assert texts(one) == ["Open", "Play selection", "Open in File Explorer", "Copy path", "Rename	F2", "Tools…",
-                          "Remove ReplayGain tags…", "Delete	Del"]
+    assert texts(one) == ["Open", "Play selection", "Open in File Explorer", "Copy path", "Rename	F2",
+                          "Remove ReplayGain tags…", "Delete	Del"]  # no Tools… (the toolbar starts them, SPEC §30)
     two = window.list_menu([entry(service, "Artist", "Album", "Track 2.flac"),
                             entry(service, "Artist", "Album", "cover.jpg")])
-    assert texts(two)[-4:] == ["Copy paths", "Tools…", "Remove ReplayGain tags…", "Delete	Del"]  # no Rename
+    assert texts(two)[-3:] == ["Copy paths", "Remove ReplayGain tags…", "Delete	Del"]  # no Rename
     assert not action(two, "Open").isEnabled() and action(two, "Play selection").isEnabled()
     images = window.list_menu([entry(service, "Artist", "Album", "cover.jpg")])
     assert not action(images, "Play selection").isEnabled()
-    assert not action(images, "Tools…").isEnabled()  # no music file in the selection
     assert not action(images, "Remove ReplayGain tags…").isEnabled()
 
 
@@ -112,13 +111,13 @@ def test_folder_menus(window, service):
     window.open_folder(entry(service, "Artist"))
     folder = window.list_menu([entry(service, "Artist", "Album")])
     assert texts(folder) == ["Open", "Play folder", "Play folder and subfolders", "Open in File Explorer",
-                             "Copy path", "Rename	F2", "Rescan", "Tools…", "Remove ReplayGain tags…",
+                             "Copy path", "Rename	F2", "Rescan", "Remove ReplayGain tags…",
                              "Delete	Del"]
     background = window.list_menu([])
     assert texts(background) == ["Play folder", "Play folder and subfolders", "Open in File Explorer",
-                                 "Copy path", "Rescan", "Tools…", "Remove ReplayGain tags…"]
+                                 "Copy path", "Rescan", "Remove ReplayGain tags…"]
     tree = window.sidebar.context_menu_for(window.sidebar.tree.currentIndex())
-    assert texts(tree)[:10] == texts(folder) and "Remove from library" not in texts(tree)  # not a root
+    assert texts(tree)[:9] == texts(folder) and "Remove from library" not in texts(tree)  # not a root
     for absent in ("Rename", "Cut", "Copy", "Paste", "New folder"):
         assert absent not in texts(folder) + texts(tree)
     assert texts(window.sidebar.context_menu_for(QModelIndex())) == ["Add folder…", "&Hide folders without music"]

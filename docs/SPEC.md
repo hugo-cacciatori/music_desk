@@ -22,7 +22,7 @@ Rules:
 | 7  | [07-side-panel.md](spec/07-side-panel.md) | Side panel, Metadata tab, multi-file edits, covers, folder summary, .lrc import |
 | 8  | [08-lyrics-tab.md](spec/08-lyrics-tab.md) | Lyrics tab states, Save to file tags |
 | 9  | [09-lyrics-service.md](spec/09-lyrics-service.md) | LRCLIB lookups, queue, breaker, auto-save, lyrics_cache.json import |
-| 10 | [10-tools.md](spec/10-tools.md) | Tools page: Rename (junk rules, .cue/.lrc), ReplayGain, Tidy, jobs panel |
+| 10 | [10-tools.md](spec/10-tools.md) | The tools' cards: Rename (junk rules, .cue/.lrc), ReplayGain, Tidy, jobs panel (started from §30) |
 | 11 | [11-inline-rename.md](spec/11-inline-rename.md) | F2 renames, sidecars, Undo, the rename hint |
 | 12 | [12-settings.md](spec/12-settings.md) | No Settings dialog; where each preference lives; About |
 | 13 | [13-packaging.md](spec/13-packaging.md) | rsgain, flac, PyInstaller, the installer (uninstall shortcut), licences |
@@ -42,3 +42,4 @@ Rules:
 | 27 | [27-tag-encodings.md](spec/27-tag-encodings.md) | Reading Japanese and Chinese text from ID3 frames marked Latin-1 (M16) |
 | 28 | [28-tidy.md](spec/28-tidy.md) | Tidy remade: a whole tree split, renamed and ReplayGained, then an offer to recycle the images (M17) |
 | 29 | [29-open-here.md](spec/29-open-here.md) | The `musicdesk` keyword in File Explorer's address bar, a folder argument, one instance at a time (M18) |
+| 30 | [30-toolbar.md](spec/30-toolbar.md) | The always-visible tools toolbar (Start / Options… dropdowns) and the Options menu, replacing the Tools page (M21) |

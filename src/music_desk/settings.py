@@ -2,7 +2,7 @@
 
 Unknown keys are ignored and a value of the wrong type falls back to its default, so an old or hand-edited file
 never stops the app. Saving writes a temporary file and replaces the old one, so a crash can't leave half a file.
-There is no Settings dialog: each preference is set where it is used (a menu, a Tools card); the UI state
+There is no Settings dialog: each preference is set where it is used (a menu, an options card); the UI state
 fields are kept by the windows themselves.
 """
 
@@ -25,7 +25,7 @@ class Settings:
     # File names (SPEC §21): how music files are named from their tags, wherever the app names one
     name_masks: list[str] = field(default_factory=lambda: list(masks.DEFAULT_MASKS))
     name_replacement: str = masks.DEFAULT_REPLACEMENT
-    # Tools (SPEC §10): the cards' options, as core.rename / core.replaygain options_to_json write them
+    # Tools (SPEC §10, §30): the option cards' values, as core.rename / core.replaygain options_to_json write them
     rename_options: dict = field(default_factory=dict)
     replaygain_options: dict = field(default_factory=dict)
     trim_subfolder: str = "lite"  # the Trim page's subfolder: the last name used comes back (SPEC §23)

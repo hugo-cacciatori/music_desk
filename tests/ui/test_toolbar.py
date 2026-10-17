@@ -1,0 +1,289 @@
+"""The tools toolbar, the option cards and the Options menu (SPEC §30, §10, §21): the cards' options, inline
+validation and saved defaults; Start's target; the dialogs; what the toolbar replaced."""
+
+import shutil
+from pathlib import Path
+
+import pytest
+from PySide6.QtWidgets import QToolBar, QToolButton
+
+from music_desk.core import rename, replaygain
+from music_desk.core.index.store import path_of
+from music_desk.settings import Settings
+from music_desk.ui.tools.tool_cards import NAMES, RENAME, REPLAYGAIN, TIDY, CardDialog, ToolCards, ToolScope
+
+ALBUM = "Fixture Artist - Fixture Album"
+SCOPE = ToolScope(Path("C:/lib/Album"), 1)
+
+
+@pytest.fixture
+def cards(qtbot):
+    cards = ToolCards(Settings())
+    for card in (cards.names_card, cards.rename_card, cards.replaygain_card):
+        qtbot.addWidget(card)
+    return cards
+
+
+# -- the cards (SPEC §10, §21) --
+
+def test_file_names_card_defaults(cards):
+    names = cards.names_card
+    assert [names.masks.item(i).text() for i in range(names.masks.count())] == ["{track:02} {title}", "{title}"]
+    assert names.replacement.text() == "-" and not names.problems.isVisible()
+    assert "Split albums and the rename suggestion" in names.description.text()
+
+
+def test_the_cards_show_no_run_button(cards):
+    """The toolbar starts the tools: the cards in the dialogs only hold options."""
+    assert cards.rename_card.run_button.isHidden() and cards.replaygain_card.run_button.isHidden()
+    for card in (cards.names_card, cards.rename_card, cards.replaygain_card):
+        assert card.title.font().bold() and card.title.font().pointSizeF() > card.description.font().pointSizeF()
+
+
+def test_rename_card_defaults(cards):
+    card = cards.rename_card
+    assert card.options() == rename.DEFAULT_OPTIONS and cards.problems(RENAME) == []
+    assert card.masks_line.text() == "File names: the masks set in Options > File names…."
+    assert card.junk.text() == ".cue .lrc .nfo .sfv .txt"
+    assert card.cleanup.isEnabled() and card.recursive.isEnabled()  # a dialog shows every option
+
+
+def test_validation_is_inline(cards):
+    names, card = cards.names_card, cards.rename_card
+    names.masks.item(0).setText("{track:02} {bogus}")
+    assert names.problems.text() == "• mask '{track:02} {bogus}': unknown field(s) bogus"
+    assert card.problems.text() == "• Fix the file names first."
+    assert cards.problems(RENAME) == ["Fix the file names first."] == cards.problems(TIDY)
+    names.masks.item(0).setText("{track:02} {title}")
+    assert cards.problems(RENAME) == [] and cards.problems(TIDY) == []
+    card.junk.setText(".cue .m3u .jpg")
+    card.junk.textEdited.emit(card.junk.text())
+    assert card.problems.text() == ("• .m3u can't be junk: these are playlists\n"
+                                    "• .jpg can't be junk: these are cover images")
+    assert cards.problems(TIDY) == ["The Rename options need fixing."]
+    names.replacement.setText("/")
+    names.replacement.textEdited.emit("/")
+    assert "• The replacement contains a character not allowed in file names" in names.problems.text()
+    names.reset()
+    card.reset()
+    assert cards.problems(RENAME) == [] and card.options() == rename.DEFAULT_OPTIONS
+
+
+def test_masks_can_be_added_filled_and_removed(cards):
+    names = cards.names_card
+    names.masks.setCurrentRow(1)
+    names.remove_mask.click()
+    assert cards.rename_card.options().masks == ("{track:02} {title}",)
+    names._add_mask()
+    names.insert("{artist}")
+    assert cards.rename_card.options().masks == ("{track:02} {title}", "{title} {artist}")
+    names.masks.clear()
+    names._edited()
+    assert names.problems.text() == "• No rename mask" and cards.problems(RENAME)
+
+
+def test_live_example(cards):
+    names = cards.names_card
+    assert names.example.text() == ""
+    cards.set_example({"track": 3, "title": "Who: Me?"}, ".FLAC")
+    assert names.example.text() == "Example: 03 Who- Me-.flac"  # the replacement character, the lowercased ext
+    names.masks.item(0).setText("{disc}-{track:02} {title}")  # no disc: the next mask
+    assert names.example.text() == "Example: Who- Me-.flac"
+    cards.set_example({"genre": "Rock"}, ".mp3")
+    assert names.example.text() == "Example: the first file fits no mask and keeps its name."
+
+
+def test_masks_are_the_shared_setting(qtbot):
+    settings = Settings(name_masks=["{album} - {title}"], name_replacement="_")
+    cards = ToolCards(settings)
+    qtbot.addWidget(cards.names_card)
+    assert cards.rename_card.options().masks == ("{album} - {title}",)
+    assert cards.rename_card.options().replacement == "_"
+    cards.names_card.masks.item(0).setText("{title}")
+    assert settings.name_masks == ["{title}"]
+    assert "masks" not in settings.rename_options  # saved once, as the shared setting
+
+
+def test_replaygain_card_defaults_and_validation(cards):
+    card = cards.replaygain_card
+    assert card.options() == replaygain.DEFAULT_OPTIONS and cards.problems(REPLAYGAIN) == []
+    card.subfolders.setText("lite, Bonus")
+    card.subfolders.textEdited.emit(card.subfolders.text())
+    assert "'Bonus' must be lowercase" in card.problems.text() and cards.problems(REPLAYGAIN)
+    assert cards.problems(TIDY) == ["The ReplayGain options need fixing."]
+    card.reset()
+    assert cards.problems(REPLAYGAIN) == [] == cards.problems(TIDY)
+
+
+def test_replaygain_card_target_stays_in_rsgains_range(cards):
+    card = cards.replaygain_card
+    card.target.setValue(-40)
+    assert card.options().target == -30.0
+
+
+def test_replaygain_scope_and_unavailable_rsgain(cards):
+    card = cards.replaygain_card
+    card.scope_group.buttons()[1].setChecked(True)
+    assert card.scope == "discography" and card.scope_note.text().startswith("Discography:")
+    cards.set_rsgain_unavailable("rsgain couldn't run, so ReplayGain is unavailable.")
+    assert "rsgain couldn't run" in card.scope_note.text()
+    assert "rsgain couldn't run" in cards.problems(REPLAYGAIN)[-1] and cards.problems(TIDY)
+    cards.set_rsgain_unavailable(None)
+    assert cards.problems(REPLAYGAIN) == []
+
+
+def test_requests_carry_the_options(cards):
+    cards.replaygain_card.log_file.setText("rg.log")
+    cards.replaygain_card.log_file.textEdited.emit("rg.log")
+    selection = ToolScope(SCOPE.folder, 1, (SCOPE.folder / "a.flac",))
+    rename_request = cards.request(RENAME, selection)
+    rg_request = cards.request(REPLAYGAIN, selection)
+    tidy_request = cards.request(TIDY, selection)
+    assert rename_request is not None and rg_request is not None and tidy_request is not None
+    assert rename_request.rename_options.protected_names == ("rg.log",)  # the configured log is never junk
+    assert rename_request.scope.files == selection.files  # Rename renames the selected files
+    assert rg_request.replaygain_options.log_file == "rg.log" and not rg_request.discography
+    assert rg_request.scope.files == () and tidy_request.scope.files == ()  # ReplayGain and Tidy: the folder
+    assert tidy_request.rename_options.masks == rename.DEFAULT_OPTIONS.masks
+
+
+def test_invalid_options_make_no_request(cards):
+    cards.names_card.masks.item(0).setText("{nope}")
+    assert cards.request(RENAME, SCOPE) is None and cards.request(TIDY, SCOPE) is None
+    assert cards.request(REPLAYGAIN, SCOPE) is not None  # ReplayGain doesn't use the masks
+
+
+def test_options_are_saved_and_restored(qtbot, tmp_path):
+    settings = Settings(path=tmp_path / "settings.json")
+    cards = ToolCards(settings)
+    qtbot.addWidget(cards.names_card)
+    cards.rename_card.cleanup.setChecked(True)
+    cards.replaygain_card.target.setValue(-18)
+    settings.save()
+    again = ToolCards(Settings.load(tmp_path / "settings.json"))
+    qtbot.addWidget(again.names_card)
+    assert again.rename_card.options().cleanup
+    assert again.replaygain_card.options().target == -18.0
+
+
+# -- in the window --
+
+@pytest.fixture
+def library_dir(tmp_path, fixtures_dir):
+    lib = tmp_path / "lib"
+    shutil.copytree(fixtures_dir / "album" / ALBUM, lib / "Artist" / ALBUM)
+    (lib / "Artist" / ALBUM / "notes.txt").write_text("x")
+    return lib
+
+
+def folder_id(service, path) -> int:
+    conn = service.conn
+    return next(i for (i,) in conn.execute("SELECT id FROM entries WHERE is_dir = 1") if path_of(conn, i) == path)
+
+
+def bar_texts(bar: QToolBar) -> list[str]:
+    texts = []
+    for action in bar.actions():
+        widget = bar.widgetForAction(action)
+        if isinstance(widget, QToolButton) or action.isSeparator() or widget is None:
+            texts.append("|" if action.isSeparator() else (widget.text() if widget else action.text()))
+    return texts
+
+
+def test_two_rows_address_and_search_then_the_tools(window):
+    top, tools = window.navigation_bar, window.tools_bar
+    assert top.widgetForAction(top.actions()[-1]) is window.search_field  # the search ends the top row
+    assert window.address_bar in [top.widgetForAction(a) for a in top.actions()]
+    assert not any(isinstance(top.widgetForAction(a), QToolButton) and top.widgetForAction(a).text() in
+                   ("Tools", "Playlist builder", "Advanced search") for a in top.actions())
+    assert window.toolBarBreak(tools) and window.search_field.maximumWidth() > 10000  # no cap: it shares the row
+    assert bar_texts(tools) == ["Rename", "ReplayGain", "Tidy", "|", "Playlist", "Advanced search"]
+    assert tools.toolButtonStyle().name == "ToolButtonTextBesideIcon"
+    for tool in (RENAME, REPLAYGAIN):
+        button = window.tool_buttons[tool]
+        assert not button.icon().isNull() and button.menu() is not None
+        assert [a.text() for a in button.menu().actions()] == ["Start", "Options…"]
+    assert not window.tidy_action.icon().isNull() and window.tidy_action.menu() is None
+    assert not window.playlist_action.icon().isNull() and not window.advanced_search_action.icon().isNull()
+
+
+def test_start_names_its_target(window, service, library_dir):
+    album = library_dir / "Artist" / ALBUM
+    assert window.tools.start_text(RENAME) == ("Start (open a folder first)", False)
+    window.open_folder(folder_id(service, album))
+    window.file_view.select_ids([])
+    window._update_start(RENAME)
+    assert (window.start_actions[RENAME].text(), window.start_actions[RENAME].isEnabled()) == (
+        f"Start on {ALBUM}…", True)
+    ids = {r.name: r.id for r in window.file_view.model.rows}
+    window.file_view.select_ids([ids["track2.flac"], ids["notes.txt"]])
+    assert window.tools.start_text(RENAME) == ("Start on 1 selected file…", True)  # the music files only
+    assert window.tools.start_text(REPLAYGAIN) == (f"Start on {ALBUM}", True)  # a selection's folder
+    assert window.tools.target(TIDY).folder == album and not window.tools.target(TIDY).is_selection
+    window.tools.cards.names_card.masks.item(0).setText("{nope}")
+    assert window.tools.start_text(RENAME) == ("Start (fix its options first)", False)
+    window.tools.cards.names_card.reset()
+
+
+def test_a_folder_selected_in_the_list_is_the_target(window, service, library_dir):
+    window.open_folder(folder_id(service, library_dir / "Artist"))
+    window.file_view.select_ids([folder_id(service, library_dir / "Artist" / ALBUM)])
+    scope = window.tools.target(RENAME)
+    assert scope is not None and scope.folder == library_dir / "Artist" / ALBUM and not scope.is_selection
+    assert scope.first_track == library_dir / "Artist" / ALBUM / "01 First.flac"  # natural order
+
+
+def test_start_without_a_folder_says_so(window):
+    window.tools.start(TIDY)
+    assert window.statusBar().currentMessage() == "Tidy: open a folder, or select music files, first."
+    assert not window.showing_tools
+
+
+def test_options_open_the_card_in_a_dialog(qtbot, window, service, library_dir):
+    album = library_dir / "Artist" / ALBUM
+    window.open_folder(folder_id(service, album))
+    window.file_view.select_ids([])
+    window.tool_buttons[REPLAYGAIN].menu().actions()[1].trigger()  # Options…
+    dialog = window.tools.cards.dialogs[REPLAYGAIN]
+    assert isinstance(dialog, CardDialog) and dialog.isVisible() and not dialog.isModal()
+    assert dialog.windowTitle() == "ReplayGain options" and dialog.card is window.tools.cards.replaygain_card
+    dialog.card.target.setValue(-18)
+    assert window.settings.replaygain_options["target"] == -18.0  # saved as it changes
+    dialog.close()
+    window.tools.open_options(REPLAYGAIN)
+    assert window.tools.cards.dialogs[REPLAYGAIN] is dialog and dialog.isVisible()  # the same dialog, raised
+    dialog.close()
+    assert not window.showing_tools  # the file list stays
+
+
+def test_the_options_menu(qtbot, window, service, library_dir):
+    menus = [a.text() for a in window.menuBar().actions()]
+    assert menus == ["&File", "&Options", "&Help"]
+    options = window.menuBar().actions()[1].menu()
+    assert [a.text() for a in options.actions()] == ["&File names…", "&Rename options…", "Replay&Gain options…"]
+    assert all(a.statusTip() for a in options.actions())
+    album = library_dir / "Artist" / ALBUM
+    window.open_folder(folder_id(service, album))
+    window.file_view.select_ids([])
+    options.actions()[0].trigger()
+    dialog = window.tools.cards.dialogs[NAMES]
+    assert dialog.windowTitle() == "File names" and dialog.isVisible()
+    qtbot.waitUntil(lambda: window.tools.cards.names_card.example.text() == "Example: 01 First.flac")
+    dialog.close()
+
+
+def test_no_tools_entries_left(window, service, library_dir):
+    artist = folder_id(service, library_dir / "Artist")
+    window.open_folder(artist)
+    window.side_panel.show_folder(artist)
+    assert not hasattr(window.side_panel.summary, "tools_button")
+    assert "Tools…" not in [a.text() for a in window.list_menu([]).actions()]
+
+
+def test_rsgain_unavailable_disables_replaygain(window, service, library_dir):
+    window.open_folder(folder_id(service, library_dir / "Artist" / ALBUM))
+    window.show_rsgain_version(None)
+    assert window.tools.start_text(REPLAYGAIN) == ("Start (rsgain couldn't run)", False)
+    assert window.tools.start_text(TIDY)[1] is False
+    window.show_rsgain_version("rsgain 3.6")
+    assert window.tools.start_text(REPLAYGAIN)[1]

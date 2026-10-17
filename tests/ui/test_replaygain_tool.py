@@ -11,7 +11,7 @@ from music_desk.core.index.store import path_of
 from music_desk.core.replaygain import ALBUM_GAIN, TRACK_GAIN
 from music_desk.core.rsgain import ScanResult
 from music_desk.core.tags import TaggedFile
-from music_desk.ui.tools.tools_page import REPLAYGAIN
+from music_desk.ui.tools.tool_cards import REPLAYGAIN
 
 
 @pytest.fixture
@@ -35,14 +35,14 @@ def folder_id(service, path) -> int:
 
 def open_card(window, service, folder, *, discography=False, tool=REPLAYGAIN):
     window.open_folder(folder_id(service, folder))
-    window.tools.open([])
-    card = window.tools_page.replaygain_card
+    window.file_view.select_ids([])
+    card = window.tools.cards.replaygain_card
     card.scope_group.buttons()[1 if discography else 0].setChecked(True)
-    window.tools_page.request(tool)
+    window.tools.start(tool)
 
 
 def run(qtbot, window, service, folder, **kwargs):
-    """The card's Run: the job starts at once (no preview), and its report follows."""
+    """The toolbar's Start: the job starts at once (no preview), and its report follows."""
     open_card(window, service, folder, **kwargs)
     assert window.rg_view.state in ("running", "result", "error")
     qtbot.waitUntil(lambda: window.rg_view.state in ("result", "error"), timeout=20000)
@@ -55,7 +55,6 @@ def rg(path, key):
 
 def test_album_run(qtbot, window, service, library_dir, fake):
     album = library_dir / "Fixture Artist" / "Album A"
-    assert window.tools_page.replaygain_card.run_button.text() == "Run ReplayGain"
     owners = []
     fake.before = lambda folder: owners.append(service.locks.owner(folder))
     finished = run(qtbot, window, service, album)
@@ -103,7 +102,7 @@ def test_a_job_lock_refuses_the_run(qtbot, window, service, library_dir, fake):
     token = service.locks.acquire([album / "01 Loud.flac"], "the Rename tool")
     open_card(window, service, album)
     assert window.toast.label.text().endswith("is in use by the Rename tool. Try again when it has finished.")
-    assert window.center.currentWidget() is window.tools_page and fake.calls == []  # still on the Tools page
+    assert window.center.currentWidget() is window.file_view and fake.calls == []  # still on the file list
     service.locks.release(token)
 
 
@@ -139,7 +138,7 @@ def test_unsaved_edits_are_asked_before_the_run(qtbot, window, service, library_
     metadata.ask_leave = lambda: "cancel"
     window.file_view.select_ids([])
     open_card(window, service, album)
-    assert window.center.currentWidget() is window.tools_page and fake.calls == []
+    assert window.center.currentWidget() is window.file_view and fake.calls == []
     metadata.revert()
 
 

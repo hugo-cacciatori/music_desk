@@ -13,7 +13,7 @@ from music_desk.core.index.store import path_of
 from music_desk.core.replaygain import ALBUM_GAIN, TRACK_GAIN
 from music_desk.core.tags import TaggedFile
 from music_desk.ui.tidy_offer import DELETE, KEEP
-from music_desk.ui.tools.tools_page import TIDY
+from music_desk.ui.tools.tool_cards import TIDY
 
 TRACKS = {**VALUES, "01 One.flac": ("-3.00 dB", "0.5"), "02 Two.flac": ("-2.00 dB", "0.6")}
 
@@ -45,8 +45,8 @@ def folder_id(service, path) -> int:
 
 def open_plan(qtbot, window, service, folder):
     window.open_folder(folder_id(service, folder))
-    window.tools.open([])
-    window.tools_page.request(TIDY)
+    window.file_view.select_ids([])
+    window.tools.start(TIDY)
     assert window.center.currentWidget() is window.tidy.page
     qtbot.waitUntil(lambda: window.tidy.page.state in ("plan", "error"), timeout=20000)
     return window.tidy.page
@@ -172,9 +172,9 @@ def test_back_leaves_a_running_tidy_and_the_jobs_panel_shows_it_again(qtbot, win
     page.run_button.click()
     try:
         assert page.state == "running" and page.back_button.isVisible()
-        assert "Tidy goes on" in page.back_button.toolTip()
+        assert "Tidy goes on" in page.back_button.toolTip() and "file list" in page.back_button.toolTip()
         page.back_button.click()
-        assert window.center.currentWidget() is window.tools_page and tidy.job is not None
+        assert window.center.currentWidget() is window.file_view and tidy.job is not None
         window.show_job(tidy.job)
         assert window.center.currentWidget() is page and page.state == "running"
     finally:

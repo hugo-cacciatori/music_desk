@@ -498,7 +498,7 @@ def _apply_rename(item: PlanItem, report: RenameReport) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Saved options (the Tools page's card defaults, in settings.json)
+# Saved options (the Rename options, in settings.json)
 # ---------------------------------------------------------------------------
 
 def options_to_json(options: RenameOptions) -> dict:
@@ -514,7 +514,7 @@ def options_to_json(options: RenameOptions) -> dict:
 
 def options_from_json(data) -> RenameOptions:
     """Saved options; a missing or mistyped value falls back to its default, so an old or hand-edited settings
-    file never stops the Tools page. Values that are well typed but invalid are kept: validation shows them."""
+    file never stops the app. Values that are well typed but invalid are kept: validation shows them."""
     data = data if isinstance(data, dict) else {}
     default = DEFAULT_OPTIONS
 

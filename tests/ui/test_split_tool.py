@@ -278,11 +278,12 @@ def test_names_get_a_number_instead_of_a_refusal(qtbot, split, library_dir):
 
 def test_unusable_masks_or_flac_disable_split(qtbot, window, split, library_dir):
     page = open_sheet(qtbot, split, library_dir / "Albums" / HIDDEN / SHEET)
-    window.tools_page.names_card.masks.item(0).setText("{nope}")
+    window.tools.cards.names_card.masks.item(0).setText("{nope}")
     split._refresh()
     ready(qtbot, split)
-    assert not page.split_button.isEnabled() and "Fix the file names first (Tools page)." in page.split_note.text()
-    window.tools_page.names_card.reset()
+    assert not page.split_button.isEnabled()
+    assert "Fix the file names first (Options > File names…)." in page.split_note.text()
+    window.tools.cards.names_card.reset()
     window.show_flac_version(None)
     assert not page.split_button.isEnabled() and "flac couldn't run" in page.split_note.text()
     window.show_flac_version("flac 1.5.0")

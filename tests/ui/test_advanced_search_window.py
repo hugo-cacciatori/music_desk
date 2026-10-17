@@ -52,10 +52,10 @@ def run(qtbot, search_window, key=None):
 
 
 def test_the_menus_and_the_toolbar(window):
-    # No Lyrics menu since M12; no View or Action menu since M16 (SPEC §5).
-    assert menu_titles(window) == ["&File", "&Help"]
-    toolbar = [a.text() for a in window.findChild(QToolBar, "navigation").actions() if a.text()]
-    assert toolbar[-3:] == ["Tools", "Playlist builder", "Advanced search"]
+    # No Lyrics menu since M12; no View or Action menu since M16 (SPEC §5); the Options menu since M21 (§30).
+    assert menu_titles(window) == ["&File", "&Options", "&Help"]
+    toolbar = [a.text() for a in window.findChild(QToolBar, "tools").actions() if a.text()]
+    assert toolbar[-2:] == ["Playlist", "Advanced search"]
     assert window.advanced_search_action.isEnabled()
 
 

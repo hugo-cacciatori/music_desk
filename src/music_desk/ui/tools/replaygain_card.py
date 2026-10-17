@@ -1,4 +1,4 @@
-"""The ReplayGain and Tidy cards of the Tools page (SPEC §10 B and C): options, scope and validation.
+"""The ReplayGain card (SPEC §10 B, §30): options, scope and validation.
 
 The cards only collect options and validate them (core.replaygain.validate). Run (ReplayGain) and Preview rename
 (Tidy) stay disabled until they pass, and while rsgain is unavailable. The job and the preview come from the
@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core import replaygain
 from music_desk.core.replaygain import ReplayGainOptions
-from music_desk.ui.tools.rename_card import FIX_FIRST, MASKS_LINE, Card
+from music_desk.ui.tools.rename_card import Card
 
 DESCRIPTION = (
     "Measures loudness with rsgain at the target level, lowers any track gain that would clip, sets the album "
@@ -30,12 +30,6 @@ DESCRIPTION = (
 DISCOGRAPHY_NOTE = (
     "Discography: every folder below that holds music is an album (its lite/bonus/CD2 subfolders go with it). "
     "Then every album is leveled to the lowest album gain, and a summary replaces replaygain.log in this folder.")
-TIDY_DESCRIPTION = (
-    "Tidies this folder and every folder below it that holds music, album by album: an album still in one file "
-    "with its cue sheet is split into tracks, tracks named otherwise are renamed to the masks, then ReplayGain runs "
-    "where a track lacks its values for the current target. lite and bonus folders are left to their album's "
-    "ReplayGain. You see the whole plan before anything changes, and choose at the end which images and cue sheets "
-    "the splits made redundant go to the Recycle Bin.")
 SELECTION_NOTE = ("ReplayGain works on album folders. Open the album folder (or the artist folder, for a "
                   "discography) to use it.")
 ALBUM, DISCOGRAPHY = "album", "discography"
@@ -222,45 +216,3 @@ class ReplayGainCard(Card):
         self.run_button.setEnabled(not problems and not self.unavailable and not self.selection)
         self.changed.emit()
 
-
-class TidyCard(Card):
-    """The whole tree, album by album: split, rename, ReplayGain, with the other cards' options (SPEC §28)."""
-
-    runRequested = Signal()
-
-    def __init__(self, rename_card, replaygain_card: ReplayGainCard, parent: QWidget | None = None) -> None:
-        super().__init__("Tidy", TIDY_DESCRIPTION, parent)
-        self.rename_card = rename_card
-        self.replaygain_card = replaygain_card
-        self.note = QLabel()
-        self.note.setWordWrap(True)
-        self.body.addWidget(QLabel(MASKS_LINE, wordWrap=True))
-        self.body.addWidget(self.note)
-        self.run_button = self.primary(QPushButton("Run Tidy…"))  # "…": the whole plan comes first
-        self.run_button.setToolTip("Read the folders and show what Tidy will do to each album; nothing changes "
-                                   "until you click Run Tidy there")
-        self.run_button.clicked.connect(self.runRequested)
-        self.buttons.addWidget(self.run_button)
-        self.buttons.addStretch(1)
-        rename_card.changed.connect(self.update_state)
-        replaygain_card.changed.connect(self.update_state)
-        self.update_state()
-
-    def update_state(self, *_args) -> None:
-        problems = []
-        if not self.rename_card.names.valid:
-            problems.append(FIX_FIRST)
-        elif not self.rename_card.valid:
-            problems.append("The Rename card's options need fixing.")
-        if not self.replaygain_card.valid:
-            problems.append("The ReplayGain card's options need fixing.")
-        self.show_problems(problems)
-        notes = []
-        if self.replaygain_card.selection:
-            notes.append("Tidy works on folders: open the folder to tidy (an album, an artist, the whole library).")
-        if self.replaygain_card.unavailable:
-            notes.append(self.replaygain_card.unavailable)
-        self.note.setText("\n".join(notes))
-        self.note.setVisible(bool(notes))
-        self.run_button.setEnabled(not problems and not self.replaygain_card.unavailable
-                                       and not self.replaygain_card.selection)

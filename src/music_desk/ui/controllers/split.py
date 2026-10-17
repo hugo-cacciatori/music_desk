@@ -36,7 +36,7 @@ from music_desk.ui.split_page import SplitPage
 log = logging.getLogger(__name__)
 
 PLAN_DELAY_MS = 150  # after an edit, the plan follows once typing pauses
-FIX_NAMES = "Fix the file names first (Tools page)."
+FIX_NAMES = "Fix the file names first (Options > File names…)."
 NO_CUE_PLAYER = ("No app is set to open .cue sheets. To choose one, open Windows Settings > Apps > Default apps "
                  "and search for .cue.")
 
@@ -455,7 +455,7 @@ class SplitController(QObject):
         ticked = sum(self.ticked.get(row, True) for row in range(len(self.doc.tracks()))) + (
             1 if self.hidden and self.hidden_ticked else 0)
         reasons = []
-        if not self.window.tools_page.names_card.valid:
+        if not self.window.tools.cards.names_card.valid:
             reasons.append(FIX_NAMES)
         if self.unavailable:
             reasons.append(self.unavailable)

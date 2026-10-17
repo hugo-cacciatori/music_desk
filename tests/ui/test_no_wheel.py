@@ -104,9 +104,9 @@ def test_a_scroll_bar_still_scrolls(page):
 
 
 def test_the_replaygain_fields_in_the_window(window):
-    """The real page: the main window installs the filter, so the tools page's number fields keep their values."""
-    window.tools.open([])
-    card = window.tools_page.replaygain_card
+    """The real dialog: the main window installs the filter, so the ReplayGain options keep their values."""
+    window.tools.open_options("replaygain")
+    card = window.tools.cards.replaygain_card
     for field in (card.target, card.threshold, card.margin):
         before = field.value()
         wheel_down(field)

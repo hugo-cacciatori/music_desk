@@ -8,7 +8,7 @@ import pytest
 
 from music_desk.core.index.store import path_of
 from music_desk.core.tags import TaggedFile
-from music_desk.ui.tools.tools_page import RENAME
+from music_desk.ui.tools.tool_cards import RENAME
 
 ALBUM = "Fixture Artist - Fixture Album"
 
@@ -35,10 +35,10 @@ def folder_id(service, path) -> int:
 
 def preview(qtbot, window, service, folder, *, cleanup=False, ids=None):
     window.open_folder(folder_id(service, folder))
-    window.tools.open(ids or [])
-    card = window.tools_page.rename_card
+    window.file_view.select_ids(ids or [])
+    card = window.tools.cards.rename_card
     card.cleanup.setChecked(cleanup)
-    window.tools_page.request(RENAME)
+    window.tools.start(RENAME)
     qtbot.waitUntil(lambda: window.rename_preview.state in ("preview", "error"), timeout=10000)
     return window.rename_preview
 
@@ -52,10 +52,10 @@ def apply(qtbot, window):
 def test_preview_then_apply(qtbot, window, service, library_dir, recycled):
     album = library_dir / "Artist" / ALBUM
     view = preview(qtbot, window, service, album)
-    assert window.tools_page.rename_card.run_button.text() == "Run rename…"
+    assert window.start_actions[RENAME].text().startswith("Start")
     assert view.apply_button.text() == "Apply renames" and view.back_bottom.isVisible()
     assert not view.done_button.isVisible()  # in the preview: Apply, or back to the options
-    assert view.message.text().endswith("Back to options changes nothing.")
+    assert view.message.text().endswith("Back changes nothing.")
     rows = {row[1]: row for row in view.visible_rows()}
     assert rows["track2.flac"][2:4] == ("02 Second.flac", "rename")
     assert rows["missing_title.flac"][3:] == ("missing tags", "missing: title")
@@ -130,7 +130,7 @@ def test_back_cancels_a_preview_and_unsaved_edits_are_asked(qtbot, window, servi
     album = library_dir / "Artist" / ALBUM
     view = preview(qtbot, window, service, album)
     view.back_button.click()
-    assert window.center.currentWidget() is window.tools_page
+    assert window.center.currentWidget() is window.file_view
 
     window.open_folder(folder_id(service, album))
     ids = {r.name: r.id for r in window.file_view.model.rows}
@@ -183,8 +183,8 @@ def test_renames_in_subfolders_reach_the_index(qtbot, window, service, library_d
 def test_back_to_options_changes_nothing(qtbot, window, service, library_dir, recycled):
     album = library_dir / "Artist" / ALBUM
     view = preview(qtbot, window, service, album)
-    window.tools_page.rename_card.cleanup.setChecked(True)  # an option set before; the card keeps it
+    window.tools.cards.rename_card.cleanup.setChecked(True)  # an option set before; the card keeps it
     view.back_bottom.click()
-    assert window.center.currentWidget() is window.tools_page
-    assert window.tools_page.rename_card.cleanup.isChecked()
+    assert window.center.currentWidget() is window.file_view
+    assert window.tools.cards.rename_card.cleanup.isChecked()
     assert (album / "track2.flac").exists() and recycled == []  # nothing was renamed

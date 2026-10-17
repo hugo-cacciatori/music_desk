@@ -24,6 +24,5 @@ def test_rsgain_check_stays_out_of_the_status_bar(qtbot):
     assert not any("rsgain" in text for text in status_bar_texts(window))
     window.show_rsgain_version(None)
     assert not any("rsgain" in text for text in status_bar_texts(window))
-    assert "rsgain couldn't run" in window.tools_page.replaygain_card.scope_note.text()
-    assert not window.tools_page.replaygain_card.run_button.isEnabled()
-    assert not window.tools_page.tidy_card.run_button.isEnabled()
+    assert "rsgain couldn't run" in window.tools.cards.replaygain_card.scope_note.text()
+    assert window.tools.cards.problems("replaygain") and window.tools.cards.problems("tidy")

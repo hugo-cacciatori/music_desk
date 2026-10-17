@@ -1,1 +1,1 @@
-"""The Tools page and its cards (SPEC §10)."""
+"""The tools' option cards and their pages (SPEC §10, §30)."""

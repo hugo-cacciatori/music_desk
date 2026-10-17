@@ -16,9 +16,9 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 19):** 0.7.4 is on `main`, not released (the last release is v0.6.3). Session 19:
-  Tidy's Back while running and Keep/Delete drop-down (0.7.2), a Windows-1252 cue no longer stops a split or
-  Tidy (0.7.3), the Recycle Bin never asks first (0.7.4).
+- **State (2026-10-17, session 19):** 0.8.0 is on `main`, not released (the last release is v0.6.3). Session 19:
+  Tidy's Back and Keep/Delete drop-down (0.7.2), Windows-1252 cues no longer block (0.7.3), the Recycle Bin never
+  asks (0.7.4), M21: the tools toolbar and the Options menu replace the Tools page (0.8.0, SPEC §30).
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
   in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
   fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page; Japanese/Chinese MP3 tags read

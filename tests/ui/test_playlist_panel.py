@@ -41,7 +41,8 @@ def test_showing_takes_only_the_centres_width(qtbot, window):
 
 def test_toolbar_button_and_shortcut(window):
     assert window.playlist_action.shortcut().toString() == "Ctrl+Shift+P"
-    assert window.playlist_action.isCheckable() and window.playlist_action in window.findChild(QToolBar).actions()
+    assert window.playlist_action.isCheckable()
+    assert window.playlist_action in window.findChild(QToolBar, "tools").actions()
 
 
 def test_empty_state(window):

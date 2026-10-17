@@ -11,7 +11,7 @@ from rsgain_fake import FakeScanner
 from music_desk.core.index.store import path_of
 from music_desk.core.rsgain import ScanResult
 from music_desk.services.jobs import DONE, RUNNING, STOPPED
-from music_desk.ui.tools.tools_page import RENAME, REPLAYGAIN
+from music_desk.ui.tools.tool_cards import RENAME, REPLAYGAIN
 
 
 class BlockingScanner(FakeScanner):
@@ -55,8 +55,7 @@ def folder_id(service, path) -> int:
 
 def start_replaygain(qtbot, window, service, folder):
     window.open_folder(folder_id(service, folder))
-    window.tools.open([])
-    window.tools_page.request(REPLAYGAIN)  # Run: the job starts at once
+    window.tools.start(REPLAYGAIN)  # Start: the job starts at once, on the open folder (a selection's too)
 
 
 def test_a_job_runs_on_while_browsing(qtbot, window, service, library_dir, scanner):
@@ -85,12 +84,11 @@ def test_one_job_per_tool(qtbot, window, service, library_dir, scanner):
     start_replaygain(qtbot, window, service, library_dir / "Fixture Artist" / "Album B")
     assert scanner.started.wait(5)
     window.open_folder(folder_id(service, library_dir / "Fixture Artist" / "Album A"))
-    window.tools.open([])
-    window.tools_page.request(REPLAYGAIN)  # a second ReplayGain run: the running one is shown instead
+    window.tools.start(REPLAYGAIN)  # a second ReplayGain run: the running one is shown instead
     assert "ReplayGain is still running in" in window.toast.label.text()
     assert window.center.currentWidget() is window.rg_view and window.rg_view.state == "running"
-    window.tools.open([])
-    window.tools_page.request(RENAME)  # the Rename tool is free
+    window.file_view.select_ids([])
+    window.tools.start(RENAME)  # the Rename tool is free
     qtbot.waitUntil(lambda: window.rename_preview.state == "preview", timeout=10000)
     scanner.release.set()
     qtbot.waitUntil(lambda: not window.jobs.running, timeout=10000)
@@ -112,8 +110,8 @@ def test_finished_reports_reopen_and_clear(qtbot, window, service, library_dir, 
     start_replaygain(qtbot, window, service, first)
     qtbot.waitUntil(lambda: window.jobs.jobs[0].state == DONE, timeout=10000)
     window.open_folder(folder_id(service, library_dir / "Other"))
-    window.tools.open([])
-    window.tools_page.request(RENAME)
+    window.file_view.select_ids([])
+    window.tools.start(RENAME)
     qtbot.waitUntil(lambda: window.rename_preview.state == "preview", timeout=10000)
     window.rename_preview.apply_button.click()
     qtbot.waitUntil(lambda: len(window.jobs.jobs) == 2 and window.jobs.jobs[1].state == DONE, timeout=10000)

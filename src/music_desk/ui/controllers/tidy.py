@@ -1,5 +1,5 @@
-"""Tidy's controller (SPEC §28, §16): the Tidy card opens the plan page, Run Tidy runs the job, and the offer window
-opens at the end when splits made files redundant.
+"""Tidy's controller (SPEC §28, §16): the toolbar's Tidy opens the plan page, Run Tidy runs the job, and the offer
+window opens at the end when splits made files redundant.
 
 The plan comes first and lists everything; there is no separate step to start. Dialogs and the Recycle Bin go
 through attributes that tests replace.
@@ -17,7 +17,7 @@ from music_desk.services.tidy_job import TidyFinished, TidyPlanned, TidyRunner, 
 from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.tidy_offer import OfferWindow
 from music_desk.ui.tools.tidy_page import TidyPage
-from music_desk.ui.tools.tools_page import ToolRequest
+from music_desk.ui.tools.tool_cards import ToolRequest
 
 
 def plural(count: int, noun: str) -> str:
@@ -53,7 +53,7 @@ class TidyController(QObject):
         return self.window.center.currentWidget() is self.page
 
     def open(self, request: ToolRequest) -> None:
-        """The Tidy card's Run Tidy…: the plan of the whole tree, read on a worker."""
+        """The toolbar's Tidy: the plan of the whole tree, read on a worker."""
         window = self.window
         if self.job is not None:
             window.center.setCurrentWidget(self.page)  # one Tidy at a time: the running one
@@ -67,11 +67,11 @@ class TidyController(QObject):
                                             request.replaygain_options, masks, replacement)
 
     def back(self) -> None:
-        """Also while Tidy runs: it goes on, and the jobs panel (or the Tidy card) shows its page again."""
+        """Also while Tidy runs: it goes on, and the jobs panel (or the toolbar's Tidy) shows its page again."""
         if self.page.state == "planning":
             self.runner.cancel()
             self._plan_token = None
-        self.window.center.setCurrentWidget(self.window.tools_page)
+        self.window.close_tools()
 
     def _planned(self, planned: TidyPlanned) -> None:
         if planned.token != self._plan_token or planned.cancelled:

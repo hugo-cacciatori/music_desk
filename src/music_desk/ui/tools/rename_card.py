@@ -1,4 +1,4 @@
-"""The Rename card of the Tools page (SPEC §10 A): the options of core.rename, checked as they are typed.
+"""The Rename card, in the Rename options dialog (SPEC §10 A, §30): core.rename's options, checked as typed.
 
 The card only collects options and validates them (core.rename.validate: the script's validate_config plus the
 cleanup protections); Preview stays disabled until they pass. The preview and the run come from the window. The
@@ -35,7 +35,7 @@ SELECTION_DESCRIPTION = (
     "no mask keep their name. A .lrc file with the same name follows its music file. Junk files are never "
     "touched when renaming a selection.")
 FIX_FIRST = "Fix the file names first."  # what the cards that use the masks say while they are invalid
-MASKS_LINE = "File names: the masks in the File names card above."
+MASKS_LINE = "File names: the masks set in Options > File names…."
 
 
 def parse_extensions(text: str) -> frozenset[str]:

@@ -61,7 +61,7 @@ class TidyPage(QWidget):
         super().__init__(parent)
         self.state = "empty"  # planning, plan, running, result, error
         self.back_button = QPushButton("← Back")
-        self.back_button.setToolTip("Back to the Tools page; nothing has been changed")
+        self.back_button.setToolTip("Back to the file list; nothing has been changed")
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
@@ -187,8 +187,8 @@ class TidyPage(QWidget):
         self.stop_button.setVisible(state == "running")
         self.done_button.setVisible(state in ("result", "error"))
         self.back_button.setToolTip(
-            "Back to the Tools page; Tidy goes on, and the Jobs panel shows it again" if state == "running"
-            else "Back to the Tools page; nothing has been changed")
+            "Back to the file list; Tidy goes on, and the Jobs panel shows it again" if state == "running"
+            else "Back to the file list; nothing has been changed")
 
     # -- the tree --
 

@@ -25,17 +25,21 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
 - **Address bar:** a breadcrumb where each segment is clickable and has a dropdown of its subfolders. Clicking the
   bar turns it into a text path (Ctrl+L); a pasted path navigates if it lies inside a root.
   - The toolbar, left to right (M16): Back, Forward, Up, Rescan folder, the address bar, Tools, Playlist builder,
-    Advanced search (§26), the search field (§6). The address bar takes the width left over and gives way first:
+    Advanced search (§26), the search field (§6). **Since M21 (§30):** the top row is Back, Forward, Up, Rescan
+    folder, the address bar and the search field, sharing the width; Rename, ReplayGain, Tidy, Playlist and
+    Advanced search moved to a second, always-visible row, and the Tools button is gone. The address bar takes the width left over and gives way first:
     it prefers 520 px and shrinks to 160 px (hiding its leading folders) so the buttons and the search field
     never go to the toolbar's overflow menu.
 - **Navigation:** Enter or double-click opens a folder. Backspace or Alt+↑ goes up. Alt+←/→ and the mouse
   back/forward buttons move through history. Typing selects by name. Ctrl/Shift extend the selection. F5 rescans
   the folder. Ctrl+F filters the current folder as you type.
 - **File context menu:** Open with default app, Play selection (§14), Open in File Explorer
-  (`explorer /select,"<path>"`), Rename (F2), Tools…, Remove ReplayGain tags…, Copy path, Delete (Del, §19).
+  (`explorer /select,"<path>"`), Rename (F2), Tools… (gone since M21, §30), Remove ReplayGain tags…, Copy path,
+  Delete (Del, §19).
   There is no split entry: the split starts from a `.cue`'s preview (§20, §22; Hugo, 2026-10-16).
 - **Folder context menu:** Open, Play folder, Play folder and subfolders, Open in File Explorer, Rename (F2),
-  Tools…, Remove ReplayGain tags…, Rescan, Delete (Del, §19; not on roots), Remove from library (roots only).
+  Tools… (gone since M21, §30), Remove ReplayGain tags…, Rescan, Delete (Del, §19; not on roots), Remove from
+  library (roots only).
 - New items arrive with their milestones: Delete with M8.
   - As built (M5): the planned per-tool items (Tidy album…, Rename from tags…, ReplayGain (album)… and
     (discography)…) became one "Tools…", which opens the Tools page with the folder or selection as its scope
@@ -106,7 +110,7 @@ Explorer-like, with no copy, paste or new. Delete sends to the Recycle Bin only 
     as an explicit action.
   - Since 0.4.3 (M12) the Action menu holds only **Advanced search…** (§26), which replaces this entry.
   - **Retired by M16** (Hugo, 2026-10-17), with the View menu: the menu bar is File and Help. Advanced search is a
-    toolbar button beside Tools and Playlist builder (§26); the jobs panel is toggled by the status bar's Jobs
+    toolbar button beside Tools and Playlist builder (§26; on the tools row since M21, §30); the jobs panel is toggled by the status bar's Jobs
     button (§10); the playlist builder by its toolbar button (§15); "Hide folders without music" moved to the
     folder tree's context menu.
   - As built (0.2.12): `main_window.ACTION_QUERIES`, as `FIND_QUERIES` for the Lyrics menu. Tested in

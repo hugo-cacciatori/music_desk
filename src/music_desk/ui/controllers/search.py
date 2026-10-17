@@ -57,7 +57,7 @@ class SearchController(QObject):
         self.field.setToolTip("Search the whole library as you type: names, tags and LRCLIB lyrics, and filters "
                               "like artist: or year: (Ctrl+K)")
         self.field.setMinimumWidth(180)
-        self.field.setMaximumWidth(320)
+        # No maximum: it shares the top row with the address bar (SPEC §30).
         self.field.textEdited.connect(self._edited)
         self.field.returnPressed.connect(self.enter)
         shortcut(QKeySequence(Qt.Key.Key_Escape), self.field, self.close, Qt.ShortcutContext.WidgetShortcut)

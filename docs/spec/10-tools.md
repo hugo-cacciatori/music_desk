@@ -1,4 +1,8 @@
 # 10. Tools
+**Since M21 (0.8.0) the tools start from the always-visible tools toolbar, and their cards open in dialogs from
+its Options… and the Options menu: §30.** The Tools page described below, its sections and its "Tools…" entries
+are gone; the cards, their options and the tools' runs are as described here.
+
 This is the port of music_tools. The tools open from the folder context menu, the toolbar's **Tools** button (acts
 on the current folder) or the folder summary. The **Tools page** is non-modal and takes the center area with a back
 button, so browsing stays possible. Each card starts with a plain-language paragraph saying exactly what will

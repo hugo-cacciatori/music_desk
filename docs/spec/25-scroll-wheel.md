@@ -1,5 +1,5 @@
 # 25. The mouse wheel never changes a value
-Asked by Hugo on 2026-10-17, for later (not scheduled, not built app-wide). It is Ground rule 7.
+Asked by Hugo on 2026-10-17; scheduled as M14 the same day. It is Ground rule 7.
 
 ## The need
 - Scrolling a page with the mouse wheel while the pointer passes over a number field or a drop-down changes its

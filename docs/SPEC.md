@@ -36,6 +36,6 @@ Rules:
 | 21 | [21-name-masks.md](spec/21-name-masks.md) | The shared file name masks and the File names card (M10) |
 | 22 | [22-cue-split.md](spec/22-cue-split.md) | Cutting single-file albums into FLAC tracks from their .cue, with flac.exe (M10); new sheets, Preview in player, Fill from track lengths (M13) |
 | 23 | [23-trim.md](spec/23-trim.md) | Trimming one track's start and end into a FLAC copy in a subfolder (M13) |
-| 24 | [24-hover-texts.md](spec/24-hover-texts.md) | A short hover text on every button and control (later, not scheduled) |
-| 25 | [25-scroll-wheel.md](spec/25-scroll-wheel.md) | The mouse wheel never changes an input's value (Ground rule 7; later, not scheduled) |
+| 24 | [24-hover-texts.md](spec/24-hover-texts.md) | A short hover text on every button and control; status-bar tips in menus (M15) |
+| 25 | [25-scroll-wheel.md](spec/25-scroll-wheel.md) | The mouse wheel never changes an input's value (Ground rule 7, M14) |
 | 26 | [26-advanced-search.md](spec/26-advanced-search.md) | The Advanced search window (album lists to fix by hand), and the lyrics-tag features M12 retires |

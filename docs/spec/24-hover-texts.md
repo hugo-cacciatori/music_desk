@@ -1,5 +1,5 @@
 # 24. Hover texts
-Asked by Hugo on 2026-10-17, for later (not scheduled, not built). Every button and control in the app gets a
+Asked by Hugo on 2026-10-17; scheduled as M15 the same day. Every button and control in the app gets a
 **short descriptive hover text** (a Qt tooltip), so a user can find out what a control does without trying it.
 
 ## The need
@@ -24,8 +24,9 @@ Asked by Hugo on 2026-10-17, for later (not scheduled, not built). Every button 
   error, an offline root, a dimmed playlist track) keep priority: while that reason applies, it is the tooltip;
   the descriptive text returns when it no longer does.
 
-## To settle with Hugo when it is started
-- Menu entries (the menu bar, context menus): Qt shows no hover text in menus by default. Leave them out, or give
-  the less obvious ones a status-bar tip?
-- Whether a UI test should walk every page's controls and fail on one without a tooltip (outside an allow-list
-  of the exclusions above), so new controls don't forget theirs.
+## Settled with Hugo (2026-10-17, when M15 was scheduled)
+- **Menu entries** (the menu bar, context menus) get no tooltip. The less obvious ones get a **status-bar tip**
+  (`QAction.setStatusTip`): hovering the entry shows its one-sentence description in the window's status bar.
+  Self-explanatory entries (Copy, Rename, Delete, Open) get none. Nothing pops up over the menu.
+- **A guard test**: a UI test opens every page, panel and dialog and fails on any button or control without a
+  tooltip, outside a short allow-list of the exclusions above, so a control added later can't forget its text.

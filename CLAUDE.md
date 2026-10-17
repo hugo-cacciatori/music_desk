@@ -16,12 +16,11 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 14):** 0.3.4 is on `main`, not released: M11 is complete (basedpyright on
-  `src/` in the suite; `main_window.py` split into search, tools, delete and split controllers, 1,912 -> 1,256
-  lines). All 1116 tests passed, slow ones included.
+- **State (2026-10-17, session 15):** 0.3.5 is on `main`, not released: M13 task 1 is done (`core/trim.py`:
+  the plan and its checks, the cut and proof through the split's code, the tags). Full suite passed, slow included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** M13 task 1 (trim and new cue sheets, fully specified: SPEC §23, §22 "M13 additions"). Then
+- **Next step:** M13 task 2 (`core/waveform.py` and the temporary `preview-*.cue`; SPEC §23). Then
   M12, after asking Hugo its questions (SPEC §6 "Later"). Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
@@ -32,7 +31,7 @@ of it (see Session protocol 5).
 
 **M13 Trim and new cue sheets** (Hugo, 2026-10-17; read SPEC §23, §22 "M13 additions", §7, §14). Specified; it
 comes before M12 (Hugo, 2026-10-17; the labels were kept).
-- [ ] 1. Core: `core/trim.py` (plan, checks, subfolder), the cut and proof through the split's code, the tags.
+- [x] 1. Core: `core/trim.py` (plan, checks, subfolder), the cut and proof through the split's code, the tags.
 - [ ] 2. Core: `core/waveform.py` (measure a 70-minute image, a 24-bit/96 kHz track); temporary `preview-*.cue`.
 - [ ] 3. UI: the Metadata tab's two buttons, the Trim page and `TrimController`, the job, Preview in player.
 - [ ] 4. UI: on the Split page, New cue sheet…, the source warning, Preview in player, Fill from track lengths….
@@ -201,4 +200,6 @@ agree) and pyproject's `version`, then `uv lock`.
 `tests/` (`reference/`, `fixtures/`, `core/`, `ui/`), `packaging/`, `docs/`. File by file: SPEC §16 "Project layout".
 
 ## Open questions
-None.
+- **Split tracks inherit the image's tags** (measured 2026-10-17): flac copies a FLAC image's tags and pictures
+  into each cut, and `split.write_tags` overwrites only the sheet's fields, so tracks keep the image's ReplayGain,
+  CUESHEET, LYRICS… Ask Hugo which tags a split track keeps (the trim rewrites them, SPEC §23).

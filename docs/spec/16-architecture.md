@@ -63,7 +63,7 @@ As of 0.2.14 (moved from CLAUDE.md on 2026-10-16).
       app.py, __main__.py   entry point: logging, the rsgain self-check, the window
       paths.py, logging_setup.py, settings.py (settings.json; playlist.json beside it), licenses.py
       core/   (no Qt)  formats, tags, metadata, masks, rename, inline_rename, replaygain, rsgain, lyrics, preview,
-                       playlists, playlist_builder, fsops, path_locks, cancel, cue, cue_edit, flac, split; index/ (schema v3, store, scanner,
+                       playlists, playlist_builder, fsops, path_locks, cancel, cue, cue_edit, flac, split, trim; index/ (schema v3, store, scanner,
                        queries, search, roots, lyrics_index, lyrics_import)
       services/ (Qt)   library (owns writer, indexer, watcher, lyrics service), indexer, watcher, lyrics_service,
                        lyrics_embedder, search_service, tag_io, tag_writer, jobs, rename_job, replaygain_job,

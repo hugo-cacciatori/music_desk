@@ -60,8 +60,8 @@ def cut_album(plan: AlbumPlan, runner, cancel: CancelToken | None = None,
     needed = math.ceil(plan.source.stat().st_size * share)
     free = free_space(folder)
     if free < needed:
-        return CutResult(error=f"Not enough free space: the tracks need about {_mb(needed)}, and the drive has "
-                               f"{_mb(free)} free.")
+        return CutResult(error=f"Not enough free space: the tracks need about {megabytes(needed)}, and the drive has "
+                               f"{megabytes(free)} free.")
     taken = [partial_path(t).name for t in plan.written if partial_path(t).exists()]
     if taken:
         return CutResult(error=f"{', '.join(taken)} already exist{'s' if len(taken) == 1 else ''}, maybe left by an "
@@ -78,13 +78,13 @@ def cut_album(plan: AlbumPlan, runner, cancel: CancelToken | None = None,
             runner.encode(plan.source, track.start, end, output, cancel)
         result = prove(plan, written, runner, cancel)
     except Cancelled:
-        _delete(written)
+        delete_partials(written)
         return CutResult(cancelled=True, error="Stopped.")
     except FlacError as e:
-        _delete(written)
+        delete_partials(written)
         return CutResult(error=f"flac: {e}")
     if not result.ok:
-        _delete(written)
+        delete_partials(written)
     return result
 
 
@@ -97,9 +97,9 @@ def prove(plan: AlbumPlan, partials: list[Path], runner, cancel: CancelToken | N
     lengths, track_md5s, problems = [], [], []
     for track, path in zip(plan.written, partials, strict=True):
         own, part = hashlib.md5(), hashlib.md5()
-        size = _hash(runner.decode(path, cancel), own, tracks_digest)
+        size = hash_chunks(runner.decode(path, cancel), own, tracks_digest)
         end = None if track.end == info.samples else track.end
-        _hash(runner.decode_range(source, track.start, end, cancel), part, source_digest)
+        hash_chunks(runner.decode_range(source, track.start, end, cancel), part, source_digest)
         lengths.append(size // frame_bytes)
         track_md5s.append(own.hexdigest())
         if size % frame_bytes or size // frame_bytes != track.length:
@@ -138,7 +138,7 @@ def finish_album(plan: AlbumPlan, cut: CutResult) -> Finished:
     name was taken since the plan, no track is renamed."""
     taken = [t.name for t in plan.written if t.out_path.exists()]
     if taken:
-        _delete(cut.partials)
+        delete_partials(cut.partials)
         return Finished(error="Nothing is ever overwritten, and these names were taken meanwhile: "
                               + ", ".join(taken) + ".")
     finished = Finished()
@@ -172,7 +172,8 @@ def write_tags(track: PlannedTrack, cover: bytes | None) -> None:
         audio.save()
 
 
-def _hash(chunks: Iterable[bytes], *digests) -> int:
+def hash_chunks(chunks: Iterable[bytes], *digests) -> int:
+    """Feed decoded PCM to the digests; returns its size in bytes. Shared with the trim's proof."""
     size = 0
     for chunk in chunks:
         for digest in digests:
@@ -181,12 +182,12 @@ def _hash(chunks: Iterable[bytes], *digests) -> int:
     return size
 
 
-def _delete(paths: Iterable[Path]) -> None:
-    """This run's own .partial files (Ground rule 1's one permanent delete)."""
+def delete_partials(paths: Iterable[Path]) -> None:
+    """This run's own .partial files (Ground rule 1's one permanent delete), the split's or the trim's."""
     for path in paths:
         if path.name.endswith(PARTIAL):
             path.unlink(missing_ok=True)
 
 
-def _mb(size: int) -> str:
+def megabytes(size: int) -> str:
     return f"{size / 1024 / 1024:,.0f} MB"

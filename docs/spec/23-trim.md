@@ -129,6 +129,19 @@ Top to bottom:
     a waveform needs only each sample's most significant byte (`data[1::2]` for 16-bit, `data[2::3]` for 24-bit),
     which slicing gives at C speed.
   - The temporary preview sheets (writing and pruning) beside `core/playlists.py`.
+  - **Built (M13 task 1, 0.3.5):** `core/trim.py`. `plan_trim(source, info, start, end, subfolder)` takes the
+    fields' text and gives a `TrimPlan`: the samples, the copy's name and `shown_path`, the numbering `note`, the
+    `summary` line, and `problems` as (field, why), field being "start", "end", "subfolder" or None ("Nothing to
+    trim"), so the page marks each field. `unsupported_reason(path)` is the buttons' tooltip; `read_source` the
+    split's, with the trim's wording. `cut_trim` (subfolder, free space, `.partial`, `prove`) and `finish_trim`
+    (the name checked again, `copy_tags`) are what the job will call. The split shares `hash_chunks`,
+    `delete_partials` and `megabytes` with it.
+  - Times: `m:ss` and one to three decimals are read too; a time to samples rounds halves up, in integers. An End
+    left at the shown length (rounded to the millisecond) means the last sample. A start at or past the length is
+    refused like an end past it.
+  - **Measured** (2026-10-17, flac 1.5.0): cutting a FLAC carries its Vorbis comments and pictures into the cut.
+    `copy_tags` therefore clears the copy's tags and pictures and writes the original's (without lyrics), so the
+    result doesn't depend on flac. (The split's tracks inherit the image's tags this way: see Open questions.)
 - **UI:** `ui/trim_page.py` (the widgets: the waveform widget, the fields, the subfolder, the buttons, the report)
   and `ui/controllers/trim.py` `TrimController` (`window.trim`), following `SplitController`. The waveform is
   computed on a worker and painted from the cached peaks, so dragging a handle and resizing never decode again.

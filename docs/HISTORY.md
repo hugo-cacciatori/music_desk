@@ -994,6 +994,17 @@ one-sample shift and leave the original byte-identical; `test_a_new_sheet_saved_
 made with New cue sheet…; the waveform's reads run on a worker (each chunk under 20 ms of GIL), and painting and
 dragging measured 4 ms (SPEC §23). The foobar2000 check stays optional, for later.
 
+**M12 Advanced search** (Hugo, 2026-10-17; read SPEC §26, then §5, §6, §7, §8, §9, §10 where they retire).
+- [x] 1. (0.4.1) Retire the lyrics-tag features, the Lyrics menu (Find entries, auto-save, Offline mode as a setting).
+- [x] 2. (0.4.2) Core: the two album searches over the index (no ReplayGain on some track; cue + image, no tracks).
+- [x] 3. (0.4.3) UI: the Advanced search window (not modal), Start, results, double-click to the folder, Refresh search.
+- [x] 4. (0.5.0) README and the minor version.
+
+Done when: the window lists both searches' albums on a fixture library while the main window stays usable; a
+double-click shows the folder; Refresh follows a fix; nothing in the app reads or writes the lyrics tag.
+
+Held at 0.5.0 (2026-10-17): `tests/ui/test_action_menu.py` lists both searches' albums on a fixture library while the main window stays usable, shows a folder on a double-click, and follows a fix on Refresh; no feature reads or writes the lyrics tag (SPEC §26 "Built").
+
 ## Former CLAUDE.md sections (as of 2026-10-16)
 
 **Session protocol:**

@@ -12,18 +12,21 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
 ## Features
 
 - **Browse fast, even on slow drives.** Folders open instantly from an index that stays in step with the disk.
-  The file list shows tag columns (title, artist, album, year, duration, format), plus ReplayGain, lyrics-tag and
-  LRCLIB status columns.
+  The file list shows tag columns (title, artist, album, year, duration, format), plus ReplayGain and LRCLIB
+  status columns.
 - **Edit tags** in FLAC, MP3, M4A/ALAC, Opus, Ogg Vorbis, WMA, WAV, AIFF, WavPack, Monkey's Audio, Musepack and
   more (the formats [mutagen](https://github.com/quodlibet/mutagen) can tag), one file or many at once, covers
   included. ID3 versions are kept as they were.
 - **Lyrics from [LRCLIB](https://lrclib.net)**, looked up in the background for every track. Synced and plain
-  lyrics are shown beside the file. One click saves them into the file's tags, or auto-save can fill empty
-  lyrics tags.
+  lyrics are shown beside the file, with links to search Genius or Google when LRCLIB has none. Without an
+  internet connection, lookups pause and resume by themselves. MusicDesk never writes lyrics into your files.
 - **Library search (Ctrl+K).** Type any part of a folder or file name, a title, artist, album or lyric line.
   Names are found as soon as a folder is listed, before its tags are read. Accents and case are ignored, and
   filters such as `artist:`, `year:`, `ext:`, `lrclib:notfound` or `rg:none` narrow it. The matching lyric line
-  is shown in the results. Action › Show tracks without ReplayGain tags lists those at once.
+  is shown in the results.
+- **Advanced search** (Action › Advanced search…), a window of its own beside the app: lists of albums to go
+  through and fix by hand, such as the albums missing ReplayGain tags or the EAC rips not split yet. Double-click
+  an album to open its folder; Refresh search updates the list as you fix them.
 - **Preview** rip logs, cue sheets, notes, `.nfo` files and scans beside the list, read-only. Each text file is
   read in its own encoding, such as an EAC log's UTF-16 or an `.nfo`'s DOS code page.
 - **Delete** files and folders (Del) from the file list, the folder tree or search results. They always go to

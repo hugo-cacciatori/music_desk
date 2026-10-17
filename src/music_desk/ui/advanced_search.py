@@ -2,7 +2,8 @@
 
 A separate window, not modal: the rest of the app keeps working beside it. One search is chosen from the options,
 Start runs it on a worker, the results are the albums' folders, a double-click shows a folder in the main window,
-and Refresh search runs the last search again so the list follows the fixes. The window only lists folders.
+Refresh search runs the last search again so the list follows the fixes, and Clear empties the list. The window
+only lists folders.
 """
 
 from PySide6.QtCore import Qt
@@ -58,11 +59,16 @@ class AdvancedSearchWindow(QWidget):
         self.refresh_button.setToolTip("Run the last search again, so the list follows what was fixed meanwhile.")
         self.refresh_button.clicked.connect(self.refresh)
         self.refresh_button.setEnabled(False)
+        self.clear_button = QPushButton("Clear")
+        self.clear_button.setToolTip("Empty the list of albums; a search still running is dropped")
+        self.clear_button.clicked.connect(self.clear)
+        self.clear_button.setEnabled(False)
         self.status = QLabel()
         self.status.setWordWrap(True)
         buttons = QHBoxLayout()
         buttons.addWidget(self.start_button)
         buttons.addWidget(self.refresh_button)
+        buttons.addWidget(self.clear_button)
         buttons.addWidget(self.status, 1)
 
         self.results = QListWidget()
@@ -87,11 +93,22 @@ class AdvancedSearchWindow(QWidget):
         if self.last_search is not None:
             self._run(self.last_search)
 
+    def clear(self) -> None:
+        """Back to the window as first opened: no results, no status, nothing to refresh."""
+        self._token = None  # a running search's result is dropped
+        self.last_search = None
+        self.results.clear()
+        self.status.clear()
+        self.start_button.setEnabled(True)
+        self.refresh_button.setEnabled(False)
+        self.clear_button.setEnabled(False)
+
     def _run(self, search: str) -> None:
         self._token = self.service.run(search)
         self.status.setText("Searching…")
         self.start_button.setEnabled(False)
         self.refresh_button.setEnabled(False)
+        self.clear_button.setEnabled(True)
 
     def _done(self, done: SearchDone) -> None:
         if done.token != self._token:

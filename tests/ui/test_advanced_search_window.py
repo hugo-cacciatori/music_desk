@@ -133,6 +133,40 @@ def test_an_empty_result_can_be_refreshed(qtbot, window, library_dir):
     assert search_window.refresh_button.isEnabled()
 
 
+def test_clear_empties_the_list(qtbot, window, library_dir):
+    search_window = open_window(window)
+    assert not search_window.clear_button.isEnabled()  # nothing to clear yet
+    assert run(qtbot, search_window, album_search.WITHOUT_REPLAYGAIN)
+    assert search_window.clear_button.isEnabled()
+    search_window.clear_button.click()
+    assert search_window.paths() == [] and search_window.status.text() == ""
+    assert not search_window.refresh_button.isEnabled() and not search_window.clear_button.isEnabled()
+    assert search_window.start_button.isEnabled()
+    assert run(qtbot, search_window)  # a new search works as before
+
+
+def test_clear_drops_a_running_search(qtbot, window, monkeypatch):
+    release, finished = threading.Event(), threading.Event()
+    real = album_search.run
+
+    def slow(conn, search, cancelled=None):
+        release.wait(10)
+        try:
+            return real(conn, search, cancelled)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(album_search_service.album_search, "run", slow)
+    search_window = open_window(window)
+    search_window.start_button.click()
+    assert search_window.clear_button.isEnabled()
+    search_window.clear_button.click()
+    release.set()
+    qtbot.waitUntil(finished.is_set, timeout=10000)
+    qtbot.wait(100)  # the queued result is delivered, and dropped
+    assert search_window.paths() == [] and search_window.status.text() == ""
+
+
 def test_the_search_runs_on_a_worker(qtbot, window, monkeypatch):
     release, started = threading.Event(), threading.Event()
     real = album_search.run

@@ -22,6 +22,8 @@ It has nothing to do with the search bar (Ctrl+K, §6), which stays as it is.
   - **Clear** (Hugo, 2026-10-17, M16), beside Refresh search: empties the results and the status line, and
     disables Refresh search until a search runs again. A search still running is dropped. Disabled while there
     is nothing to clear.
+    Built (M16 task 2, 0.5.6): `AdvancedSearchWindow.clear` forgets the running search's token, so its result is
+    ignored when it arrives; Clear is enabled from the first Start on.
 - Nothing is changed by the window itself: it only lists folders.
 - **Built (M12 task 3, 0.4.3):** `ui/advanced_search.py` `AdvancedSearchWindow`, a `Qt.Window` child of the main
   window (above it, never modal), made on first use (`window.advanced_search`). The options are radio buttons

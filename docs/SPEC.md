@@ -41,3 +41,4 @@ Rules:
 | 26 | [26-advanced-search.md](spec/26-advanced-search.md) | The Advanced search window (album lists to fix by hand), and the lyrics-tag features M12 retires |
 | 27 | [27-tag-encodings.md](spec/27-tag-encodings.md) | Reading Japanese and Chinese text from ID3 frames marked Latin-1 (M16) |
 | 28 | [28-tidy.md](spec/28-tidy.md) | Tidy remade: a whole tree split, renamed and ReplayGained, then an offer to recycle the images (M17) |
+| 29 | [29-open-here.md](spec/29-open-here.md) | The `musicdesk` keyword in File Explorer's address bar, a folder argument, one instance at a time (M18) |

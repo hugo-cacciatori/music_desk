@@ -1,0 +1,46 @@
+# 29. Opening MusicDesk from File Explorer's address bar
+Specified with Hugo on 2026-10-17 (M18).
+
+**The need** (Hugo): as typing `cmd` in File Explorer's address bar opens a terminal in that folder, a keyword
+there opens MusicDesk on that folder: the app starts, or comes to the front if it is already open, and shows the
+folder, adding it to the library first when it isn't in it.
+
+## The keyword: `musicdesk`
+- File Explorer runs what is typed in its address bar as a program, with the shown folder as the working
+  directory, and finds programs by the **App Paths** registry key (`…\CurrentVersion\App Paths\<name>.exe`), as
+  for `wordpad`. The installer registers `musicdesk.exe` there. `md` was rejected: it is the console's mkdir.
+- The key points to **`MusicDeskHere.exe`**, a second small program installed beside `MusicDesk.exe`, not to
+  the app itself. It reads its working directory and starts `MusicDesk.exe "<that folder>"`. So only the keyword
+  opens the working directory: a start from the Start menu, the desktop, Win+R or anything else behaves as before
+  (no guess from the working directory, which those starts set to the app's folder or the user's).
+- The key is written for all users (HKLM) on an admin install and for the user (HKCU) on a per-user one (Inno's
+  `HKA`), and removed by the uninstaller.
+- `MusicDesk.exe "<folder>"` (and `python -m music_desk "<folder>"`) also works by itself: a folder argument
+  opens that folder, the same way.
+
+## One MusicDesk at a time
+- MusicDesk becomes **single-instance** (a second copy on the same index and settings would fight over them): a
+  second start, whatever started it, hands its folder (or nothing) to the running one through a local socket
+  (`QLocalServer`, a name per Windows user) and exits at once. The running window comes to the front (restored
+  if minimized) and opens the folder.
+- A run from source uses its own name, so it never hands over to an installed MusicDesk.
+
+## Opening the folder
+- **Indexed**: the file list shows it, as a double-click in Advanced search does (`show_folder`): unsaved
+  Metadata edits ask first, the Ctrl+K page and the Tools page are left.
+- **Inside a library folder, not indexed yet** (made since the last scan, or the scan hasn't reached it): that
+  path is rescanned first, then shown.
+- **Outside the library**: it is added, as File › Add folder… does (a parent of library folders merges them, §3).
+  The status bar says so ("Added D:\Music\New to the library."), and the folder opens as soon as the scan has
+  indexed it.
+- The wait for a scan lasts at most 2 minutes; a newer request replaces it. A path that isn't a folder (gone, a
+  file) says so in the status bar, and nothing is added.
+- Ground rule 1 is unchanged: adding a folder to the library only reads it.
+
+## Tests
+- The folder argument: an indexed folder opens; one inside a root but not indexed opens after its rescan; one
+  outside the library is added, then opens; a missing path says so.
+- Single instance: a second start's message reaches the running window (the socket, in-process), which opens the
+  folder; with no folder, it only comes to the front.
+- MusicDeskHere: it starts MusicDesk.exe with its working directory (a fake launcher).
+- Packaging: the spec builds both programs; the installer script registers the App Paths key.

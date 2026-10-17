@@ -33,7 +33,7 @@ def add_entry(conn, root, parent, name, is_dir=False) -> int:
 
 
 def test_fresh_database(conn):
-    assert schema.version(conn) == SCHEMA_VERSION == 3
+    assert schema.version(conn) == SCHEMA_VERSION == 4
     names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'index')")}
     assert TABLES <= names
     assert {"entries_parent", "entries_root", "entries_top", "tracks_lyrics_key"} <= names
@@ -166,7 +166,7 @@ def test_v2_database_is_upgraded(tmp_path, monkeypatch):
                  "'Björk', 'tag words')", (found,))
     conn.execute("INSERT INTO search (rowid, name, title) VALUES (?, '02 Other.flac', 'Other')", (missing,))
     migrate(conn)
-    assert schema.version(conn) == 3
+    assert schema.version(conn) == SCHEMA_VERSION
     rows = conn.execute("SELECT rowid, name, title, artist, lyrics, lrclib FROM search ORDER BY rowid").fetchall()
     assert rows == [(folder, "Album", None, None, None, None),
                     (found, "01 Glove.flac", "Glove", "Björk", "tag words", "lovely day"),
@@ -177,4 +177,23 @@ def test_v2_database_is_upgraded(tmp_path, monkeypatch):
     conn.execute("DELETE FROM entries WHERE id = ?", (folder,))  # the trigger is back: the rows go with it
     assert conn.execute("SELECT count(*) FROM search").fetchone()[0] == 0
     assert not conn.execute("SELECT name FROM sqlite_temp_master").fetchall()
+    conn.close()
+
+
+def test_v3_database_rereads_id3_tags(tmp_path, monkeypatch):
+    conn = sqlite3.connect(tmp_path / "library.db", autocommit=True)
+    configure(conn, write=True)
+    with monkeypatch.context() as patch:
+        patch.setattr(schema, "SCHEMA_VERSION", 3)
+        patch.setattr(schema, "MIGRATIONS", schema.MIGRATIONS[:3])
+        migrate(conn)
+    root, top = add_root(conn)
+    tracks = {name: add_entry(conn, root, top, name) for name in ("a.mp3", "b.wav", "c.flac")}
+    for entry_id, family in zip(tracks.values(), ("ID3", "ID3", "Vorbis"), strict=True):
+        conn.execute("INSERT INTO tracks (entry_id, tag_family, read_size, read_mtime) VALUES (?, ?, 10, 1.5)",
+                     (entry_id, family))
+    migrate(conn)
+    assert schema.version(conn) == SCHEMA_VERSION
+    rows = dict(conn.execute("SELECT entry_id, read_mtime FROM tracks").fetchall())
+    assert rows == {tracks["a.mp3"]: None, tracks["b.wav"]: None, tracks["c.flac"]: 1.5}
     conn.close()

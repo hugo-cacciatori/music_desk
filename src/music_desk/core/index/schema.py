@@ -6,7 +6,7 @@ a plain name, so paths are rebuilt from parents and renaming a folder is one row
 
 import sqlite3
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 BUSY_TIMEOUT_MS = 5000
 
@@ -134,6 +134,11 @@ MIGRATIONS: list[str] = [
     CREATE TRIGGER entries_search_delete AFTER DELETE ON entries BEGIN
         DELETE FROM search WHERE rowid = old.id;
     END;
+    """,
+    # v4 (SPEC §27): ID3 text marked Latin-1 is now read as UTF-8, Shift-JIS, GBK or Big5 when it fits, so the next
+    # scan reads the ID3 files' tags again.
+    """
+    UPDATE tracks SET read_mtime = NULL WHERE tag_family = 'ID3';
     """,
 ]
 

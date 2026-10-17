@@ -735,6 +735,10 @@ the Lyrics tab as the detail pane; Play results). Two commits: the core, then th
 
 ## Progress checklists (finished work plan blocks)
 
+### M18: the `musicdesk` keyword in File Explorer (Hugo, 2026-10-17)
+Read SPEC §29. Comes before M17 tasks 2-4 (Hugo asked for it first).
+- [x] 1. Single instance, a folder argument, MusicDeskHere.exe, the App Paths key; tests. 0.6.3.
+
 ### M16: toolbar, searches, trim waveform, CJK tags (Hugo, 2026-10-17)
 Read SPEC §5, §6, §10, §15, §23, §26, §27.
 - [x] 1. Toolbar and menus: an Advanced search button beside Tools and Playlist builder; the Action and View menus

@@ -16,12 +16,13 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 18):** 0.6.2 is on `main` and released (GitHub v0.6.2): M16 done, M17 task 1
-  (`core/tidy.py`, not used by the app yet) and the Tools page layout. Full suite passed.
+- **State (2026-10-17, session 18):** 0.6.3 is on `main` and released (GitHub v0.6.3): M16, M18 (the `musicdesk`
+  keyword in File Explorer, single instance), M17 task 1 and the Tools page layout. Full suite passed.
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
   in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
   fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page; Japanese/Chinese MP3 tags read
-  right after the first start of 0.6.x (it re-reads ID3 files).
+  right after the first start of 0.6.x (it re-reads ID3 files). After installing 0.6.3: `musicdesk` typed in Explorer's
+  address bar opens that folder.
 - **Next step:** M17 task 2 (the Tidy job, SPEC §28). Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
@@ -40,10 +41,6 @@ Read SPEC §28 (and §10, §22, §26 for what it reuses). Each task bumps the pa
 - [ ] 3. The Tidy card and the plan page (preview), Run, the jobs panel; the old Tidy flow removed. 0.6.5.
 - [ ] 4. The offer window (Keep / Delete, multi-select, Apply to the Recycle Bin, closing keeps all); README and
   SPEC §10 updated. 0.7.0.
-
-### M18: the `musicdesk` keyword in File Explorer (Hugo, 2026-10-17)
-Read SPEC §29. Comes before M17 tasks 2-4 (Hugo asked for it first).
-- [x] 1. Single instance, a folder argument, MusicDeskHere.exe, the App Paths key; tests. 0.6.3.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that

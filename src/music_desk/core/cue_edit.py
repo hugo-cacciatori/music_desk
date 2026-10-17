@@ -344,6 +344,32 @@ class CueDocument:
             del self.lines[regions[row].start:regions[row].end]
         self._renumber()
 
+    def fill_from_lengths(self, lengths: list[int]) -> None:
+        """Fill from track lengths… (SPEC §22): `lengths` are the CD-frame lengths of every track but the last,
+        which runs to the end of the audio. Track 1 keeps its start; each next track starts where the previous one
+        ends. Tracks are added at the end (with no title) or deleted from the end to reach len(lengths) + 1; a moved
+        track loses its INDEX 00, since its gap no longer fits. Raises CueError when track 1 has no valid start."""
+        views = self.tracks()
+        if not views:
+            raise CueError("The sheet has no track.")
+        try:
+            start = frames_from_time(views[0].values["start"])
+        except CueError as e:
+            raise CueError(f"Track 1's start isn't valid: {e}") from None
+        count = len(lengths) + 1
+        if len(views) > count:
+            self.delete_tracks(range(count, len(views)))
+        regions = self._audio()
+        while len(regions) < count:
+            self._insert(regions[-1].end, f"{self.lines[regions[-1].start].indent}TRACK 00 AUDIO")
+            self._renumber()
+            regions = self._audio()
+        for row in range(1, count):
+            start += lengths[row - 1]
+            if self.tracks()[row].values["start"] != format_time(start):
+                self.set_track(row, "gap", "")
+                self.set_track(row, "start", format_time(start))
+
     def _renumber(self) -> None:
         """TRACK lines numbered 1…N in order; only lines whose number changes are rewritten."""
         for number, region in enumerate(self._structure()[2], 1):
@@ -400,6 +426,26 @@ def parse_document(data: bytes, encoding: str | None = None, path: Path | None =
     return CueDocument(lines, codec, label, bom, fell_back, path, data)
 
 
+def new_document(audio_name: str, performer: str = "", title: str = "") -> CueDocument:
+    """New cue sheet… (SPEC §22, "M13 additions"): a sheet for one audio file, laid out as EAC does, in UTF-8 with
+    a BOM and CRLF line endings. A missing tag leaves its line out; track 1 starts at 00:00:00. Its `saved` is
+    what was filled in, so `modified` means changed beyond that; it isn't on disk until saved (`path` None)."""
+    texts = []
+    if performer.strip():
+        texts.append(f'PERFORMER "{_clean(performer)}"')
+    if title.strip():
+        texts.append(f'TITLE "{_clean(title)}"')
+    texts += [f'FILE "{audio_name}" WAVE', "  TRACK 01 AUDIO", "    INDEX 01 00:00:00"]
+    doc = CueDocument([Line(text, "\r\n") for text in texts], "utf-8", "UTF-8 (BOM)", UTF8_BOM)
+    doc.saved = format_cue(doc)
+    return doc
+
+
+def _clean(text: str) -> str:
+    """A tag as a cue value: one line, no double quote (a sheet can't hold one)."""
+    return " ".join(text.replace('"', "'").split())
+
+
 def read_document(path: str | Path, encoding: str | None = None) -> CueDocument:
     """Read a .cue for editing. Raises OSError."""
     path = Path(path)
@@ -450,6 +496,49 @@ def numbered_path(path: str | Path) -> Path:
     except OSError:
         taken = set()
     return path.with_name(free_name(path.name, taken))
+
+
+# ---------------------------------------------------------------------------
+# Fill from track lengths… (SPEC §22): the dialog's values
+# ---------------------------------------------------------------------------
+
+_LENGTH = re.compile(r"^(\d+):(\d{1,2})(?::(\d{1,2}))?$")
+
+
+def parse_length(text: str) -> int | None:
+    """A tracklist's length, `m:ss` or `m:ss:ff`, in CD frames; None when malformed."""
+    match = _LENGTH.match(text.strip())
+    if match is None:
+        return None
+    minutes, seconds, frames = int(match[1]), int(match[2]), int(match[3] or 0)
+    if seconds >= 60 or frames >= FRAMES_PER_SECOND:
+        return None
+    return (minutes * 60 + seconds) * FRAMES_PER_SECOND + frames
+
+
+def format_length(frames: int) -> str:
+    """`m:ss`, or `m:ss:ff` when it isn't a whole second (as a tracklist writes it)."""
+    seconds, ff = divmod(frames, FRAMES_PER_SECOND)
+    text = f"{seconds // 60}:{seconds % 60:02d}"
+    return f"{text}:{ff:02d}" if ff else text
+
+
+def check_lengths(texts: list[str], first_start: int, audio_frames: int) -> tuple[list[int] | None, str]:
+    """The lengths typed for every track but the last, in frames, and "" — or None and why OK is disabled. The
+    last track runs to the end of the audio, so the others must end before it."""
+    lengths = []
+    for n, text in enumerate(texts, 1):
+        frames = parse_length(text)
+        if frames is None:
+            return None, f"Track {n}'s length isn't m:ss or m:ss:ff."
+        if frames == 0:
+            return None, f"Track {n} has no length."
+        lengths.append(frames)
+    end = first_start + sum(lengths)
+    if end >= audio_frames:
+        return None, (f"The lengths before the last track reach {format_length(end)}, past the end of the audio "
+                      f"({format_length(audio_frames)}).")
+    return lengths, ""
 
 
 # ---------------------------------------------------------------------------

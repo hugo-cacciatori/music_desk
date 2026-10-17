@@ -16,13 +16,11 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 16):** 0.3.8 is on `main`, not released: M13 task 3 is done (the Trim page,
-  `TrimController`, the job, Preview in player, Trim… on the Metadata tab; New cue sheet… waits for task 4). Full
-  suite passed, slow included.
+- **State (2026-10-17, session 16):** 0.3.9 is on `main`, not released: M13 tasks 1–4 are done (trim, new cue
+  sheets, the source warning, Preview in player, Fill from track lengths…). Full suite passed, slow included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** M13 task 4 (the Split page: New cue sheet…, the source warning, Preview in player, Fill from
-  track lengths…; SPEC §22 "M13 additions"). Then
+- **Next step:** M13 task 5 (README and the minor version, 0.4.0). Then
   M12, after asking Hugo its questions (SPEC §6 "Later"). Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
@@ -36,7 +34,7 @@ comes before M12 (Hugo, 2026-10-17; the labels were kept).
 - [x] 1. Core: `core/trim.py` (plan, checks, subfolder), the cut and proof through the split's code, the tags.
 - [x] 2. Core: `core/waveform.py` (measure a 70-minute image, a 24-bit/96 kHz track); temporary `preview-*.cue`.
 - [x] 3. UI: the Metadata tab's two buttons, the Trim page and `TrimController`, the job, Preview in player.
-- [ ] 4. UI: on the Split page, New cue sheet…, the source warning, Preview in player, Fill from track lengths….
+- [x] 4. UI: on the Split page, New cue sheet…, the source warning, Preview in player, Fill from track lengths….
 - [ ] 5. README and the minor version.
 
 Done when: slow tests prove a trimmed copy (length, MD5), fail on a one-sample shift, leave the original
@@ -100,8 +98,8 @@ Code and tests cite these by number; keep the numbering.
      goes to the Recycle Bin, Save as creates a `.cue` (a replaced one goes to the Recycle Bin first). Where
      Windows has no Recycle Bin, a `.cue` is overwritten only after the user agrees to lose it (SPEC §22).
    - (M13) a trim: creating its subfolder if missing (removed again only if that run made it and leaves it
-     empty) and the copy there, never over a file; deleting that run's `.partial` (SPEC §23). (M13, not built)
-     Saving a new cue sheet beside its audio file (SPEC §22).
+     empty) and the copy there, never over a file; deleting that run's `.partial` (SPEC §23). Saving a new cue
+     sheet beside its audio file, never over a file without asking (SPEC §22).
 
    This list grows when a feature needs to create or overwrite files: it is specified with Hugo, gets a row in
    DECISIONS.md and an entry here (Hugo, 2026-10-16).

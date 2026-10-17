@@ -437,3 +437,215 @@ def test_one_image_split_twice_from_two_versions(qtbot, split, recycled, library
         "01 One (2).flac", "01 One.flac", "02 Two (2).flac", "02 Two.flac", "image (2).cue", "image.cue",
         "image.wav"]
     assert recycled == []  # the original sheet was never replaced
+
+
+# -- M13: the source warning --
+
+def test_a_missing_source_is_marked_until_one_is_chosen(qtbot, split, library_dir):
+    folder = library_dir / "Albums" / "wav_image"
+    (folder / "image.cue").write_text((folder / "image.cue").read_text(encoding="utf-8").replace(
+        "image.wav", "Fixture Album.wav"), encoding="utf-8")
+    page = open_sheet(qtbot, split, folder / "image.cue")
+    assert split.source_warning() == ("This sheet points to Fixture Album.wav, which isn't in this folder. Choose "
+                                      "its audio file.")
+    assert "<b>This sheet points to Fixture Album.wav" in page.source_note.text()
+    assert page.source.styleSheet() and not page.split_button.isEnabled() and not page.preview_button.isEnabled()
+    assert page.split_button.isVisible()  # the page is where a wrong FILE line is fixed
+    index = page.source.findData("image.wav")
+    page.source.setCurrentIndex(index)
+    page.source.activated.emit(index)
+    ready(qtbot, split)
+    assert split.source_warning() is None and not page.source.styleSheet()
+    assert "WAV, 44.1 kHz, 0:06" in page.source_note.text() and page.split_button.isEnabled()
+
+
+@pytest.mark.parametrize(("change", "warning"), [
+    (lambda doc: doc.set_file("x.ape"), "This sheet points to x.ape, which the split can't read (it reads FLAC, "
+                                        "WAV and AIFF). Choose its audio file."),
+    (lambda doc: doc._insert(len(doc.lines), 'FILE "b.flac" WAVE'),
+     "This sheet names several files: the split needs one audio file for the whole album."),
+])
+def test_an_unsupported_or_multi_file_source_is_marked(qtbot, split, library_dir, change, warning):
+    page = open_sheet(qtbot, split, library_dir / "Albums" / "wav_image" / "image.cue")
+    change(split.doc)
+    split._refresh()
+    ready(qtbot, split)
+    assert split.source_warning() == warning and page.source.styleSheet()
+    assert not page.split_button.isEnabled()
+
+
+def test_a_source_that_cant_be_read_is_marked(qtbot, split, library_dir):
+    folder = library_dir / "Albums" / "wav_image"
+    (folder / "image.wav").write_bytes(b"RIFF....WAVEjunk")
+    page = open_sheet(qtbot, split, folder / "image.cue")
+    assert split.source_warning().endswith("Choose its audio file.") and page.source.styleSheet()
+
+
+# -- M13: New cue sheet… --
+
+NEW_SHEET = "Fixture Artist - Split Album.cue"
+
+
+def new_sheet(qtbot, split, audio):
+    split.new_sheet(audio)
+    ready(qtbot, split)
+    return split.page
+
+
+def test_new_cue_sheet_from_the_metadata_tab(qtbot, window, service, library_dir, split):
+    folder = library_dir / "Albums" / HIDDEN
+    window.open_folder(folder_id(service, folder))
+    window.file_view.select_ids([file_id(service, folder / SOURCE)])
+    metadata = window.side_panel.metadata
+    qtbot.waitUntil(lambda: metadata.snapshot is not None and metadata.new_cue_button.isVisible(), timeout=10000)
+    assert metadata.new_cue_button.isEnabled()
+    metadata.new_cue_button.click()
+    ready(qtbot, split)
+    assert window.center.currentWidget() is split.page and split.new and split.path == folder / NEW_SHEET
+    # The source's tags: album artist, album.
+    assert split.doc.text() == ('PERFORMER "Source Artist"\r\nTITLE "Source Album"\r\n'
+                                f'FILE "{SOURCE}" WAVE\r\n  TRACK 01 AUDIO\r\n    INDEX 01 00:00:00\r\n')
+    page = split.page
+    assert "(new, not saved yet)" in page.heading.text() and not page.encoding.isEnabled()
+    assert page.save_beside.isVisible() and page.save_beside.text() == f"Save beside {SOURCE} without asking"
+    assert not page.save_button.isEnabled()  # one track: not a sheet that could be split yet
+    assert not page.split_button.isEnabled()
+
+
+def test_a_new_sheet_saved_through_the_dialog(qtbot, window, split, library_dir, monkeypatch):
+    folder = library_dir / "Albums" / HIDDEN
+    page = new_sheet(qtbot, split, folder / SOURCE)
+    split.add_track(0)
+    ready(qtbot, split)
+    assert page.save_button.isEnabled() and page.preview_button.isEnabled()
+    proposed = []
+    monkeypatch.setattr(split, "choose_cue_file", lambda suggested: proposed.append(suggested) or suggested)
+    page.save_button.click()
+    target = folder / NEW_SHEET
+    assert proposed == [str(target)] and target.read_bytes().startswith(b"\xef\xbb\xbfPERFORMER")
+    assert not split.new and split.path == target and not page.save_beside.isVisible() and page.encoding.isEnabled()
+    ready(qtbot, split)
+    assert split.plan.cue == target and page.split_button.isEnabled()
+
+
+def test_the_save_beside_box_saves_at_once_and_never_replaces(qtbot, window, split, library_dir, monkeypatch):
+    folder = library_dir / "Albums" / HIDDEN
+    taken = folder / NEW_SHEET
+    taken.write_bytes(b"an earlier sheet")
+    page = new_sheet(qtbot, split, folder / SOURCE)
+    page.save_beside.setChecked(True)
+    assert window.settings.save_cue_beside  # remembered
+    split.add_track(0)
+    ready(qtbot, split)
+    monkeypatch.setattr(split, "choose_cue_file", lambda suggested: pytest.fail("no dialog with the box"))
+    assert split.save()
+    assert taken.read_bytes() == b"an earlier sheet"
+    assert split.path == folder / "Fixture Artist - Split Album (2).cue" and split.path.exists()
+    page.back_button.click()
+    new_sheet(qtbot, split, folder / SOURCE)
+    assert split.page.save_beside.isChecked()
+
+
+def test_save_as_on_a_new_sheet_always_asks(qtbot, split, library_dir, monkeypatch):
+    folder = library_dir / "Albums" / HIDDEN
+    page = new_sheet(qtbot, split, folder / SOURCE)
+    page.save_beside.setChecked(True)
+    split.add_track(0)
+    ready(qtbot, split)
+    asked = []
+    monkeypatch.setattr(split, "choose_cue_file", lambda suggested: asked.append(suggested) or "")
+    assert not split.save_as() and asked
+
+
+def test_leaving_a_new_sheet_asks_only_after_a_change(qtbot, window, split, library_dir, monkeypatch):
+    folder = library_dir / "Albums" / HIDDEN
+    asked = []
+    monkeypatch.setattr(split, "ask_leave", lambda name: asked.append(name) or "cancel")
+    page = new_sheet(qtbot, split, folder / SOURCE)
+    page.back_button.click()
+    assert asked == [] and window.center.currentWidget() is window.file_view
+    page = new_sheet(qtbot, split, folder / SOURCE)
+    split.add_track(0)
+    ready(qtbot, split)
+    page.back_button.click()
+    assert asked == [NEW_SHEET] and window.center.currentWidget() is page
+    monkeypatch.setattr(split, "ask_leave", lambda name: "discard")
+
+
+def test_splitting_a_new_sheet_asks_to_save_it_first(qtbot, split, library_dir, monkeypatch):
+    folder = library_dir / "Albums" / HIDDEN
+    page = new_sheet(qtbot, split, folder / SOURCE)
+    split.add_track(0)
+    ready(qtbot, split)
+    asked = []
+    monkeypatch.setattr(split, "ask_save_first", lambda name: asked.append(name) or "cancel")
+    split._split_after_plan = False
+    page.split_button.setEnabled(True)  # the page enables Split from the plan; the question comes first
+    page.split_button.click()
+    assert asked == [NEW_SHEET] and page.state == "editing"
+
+
+# -- M13: Preview in player --
+
+def test_preview_opens_the_current_sheet_with_its_hidden_track(qtbot, window, split, library_dir, tmp_path):
+    launched = []
+    window.launch = launched.append
+    window.playlist_dir = tmp_path / "playlists"
+    folder = library_dir / "Albums" / HIDDEN
+    page = open_sheet(qtbot, split, folder / SHEET)
+    edit_cell(qtbot, split, 3, "title", "A Duet")  # unsaved edits are previewed
+    page.cell(1, "tick").setCheckState(page.cell(1, "tick").checkState().Unchecked)  # unticked tracks too
+    ready(qtbot, split)
+    page.preview_button.click()
+    qtbot.waitUntil(lambda: bool(launched), timeout=5000)
+    text = launched[0].read_bytes().decode("utf-8-sig")
+    assert f'FILE "{folder / SOURCE}" WAVE' in text
+    titles = [line.strip() for line in text.splitlines() if line.startswith("    TITLE")]
+    assert titles == ['TITLE "Hidden track"', 'TITLE "Opening"', 'TITLE "Second Song"', 'TITLE "A Duet"']
+    assert [line.strip() for line in text.splitlines() if "INDEX" in line] == [
+        "INDEX 01 00:00:00", "INDEX 01 00:03:00", "INDEX 01 00:06:37", "INDEX 01 00:09:00"]  # a gap stays before
+    assert b"A Duet" not in (folder / SHEET).read_bytes()
+
+
+# -- M13: Fill from track lengths… --
+
+def test_fill_from_track_lengths(qtbot, split, library_dir, monkeypatch):
+    folder = library_dir / "Albums" / HIDDEN
+    page = open_sheet(qtbot, split, folder / SHEET)
+    asked = []
+
+    def answer(lengths, first, audio):
+        asked.append((lengths, first, audio))
+        return [75, 150, 225, 300]  # five tracks of 1, 2, 3 and 4 s, then the rest
+
+    monkeypatch.setattr(split, "ask_track_lengths", answer)
+    assert page.fill_button.isEnabled()
+    page.fill_button.click()
+    ready(qtbot, split)
+    assert asked == [([3 * 75 + 37, 2 * 75 + 38], 3 * 75, 12 * 75)]
+    assert [v.values["start"] for v in split.doc.tracks()] == ["00:03:00", "00:04:00", "00:06:00", "00:09:00",
+                                                               "00:13:00"]
+    assert split.doc.tracks()[1].values["gap"] == "" and split.doc.tracks()[1].values["title"] == "Second Song"
+    assert split.doc.modified
+    monkeypatch.setattr(split, "ask_track_lengths", lambda *args: None)  # Cancel changes nothing
+    before = split.doc.text()
+    page.fill_button.click()
+    assert split.doc.text() == before
+
+
+def test_the_lengths_dialog(qtbot):
+    from music_desk.ui.track_lengths import TrackLengthsDialog
+
+    dialog = TrackLengthsDialog([75 * 60, None, 75 * 30], 0, 75 * 600)
+    qtbot.addWidget(dialog)
+    ok = dialog.buttons.button(dialog.buttons.StandardButton.Ok)
+    assert dialog.count.value() == 4 and dialog.values() == ["1:00", "", "0:30"]
+    assert not ok.isEnabled() and dialog.reason.text() == "Track 2's length isn't m:ss or m:ss:ff."
+    dialog.edits[1].setText("2:00:30")
+    assert ok.isEnabled() and dialog.rest.text() == "Track 4: the rest, 6:29:45."
+    dialog.count.setValue(2)
+    assert dialog.deleted.text() == "Tracks 3–4 will be deleted." and dialog.values() == ["1:00"]
+    dialog.count.setValue(5)
+    assert dialog.values() == ["1:00", "2:00:30", "0:30", ""] and dialog.deleted.isHidden()
+    dialog.edits[3].setText("9:00")
+    assert not ok.isEnabled() and "past the end of the audio" in dialog.reason.text()

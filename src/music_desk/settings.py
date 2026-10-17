@@ -32,6 +32,7 @@ class Settings:
     rename_options: dict = field(default_factory=dict)
     replaygain_options: dict = field(default_factory=dict)
     trim_subfolder: str = "lite"  # the Trim page's subfolder: the last name used comes back (SPEC §23)
+    save_cue_beside: bool = False  # a new cue sheet's "Save beside <file> without asking" (SPEC §22)
     # UI state
     window_geometry: str = ""  # base64 of QWidget.saveGeometry()
     splitter_state: str = ""

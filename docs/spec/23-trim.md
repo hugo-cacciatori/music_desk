@@ -1,5 +1,5 @@
 # 23. Trim
-Specified with Hugo on 2026-10-17 (M13; the core, the page and the job are built, New cue sheet… is task 4). From one selected audio file, the app writes a **trimmed
+Specified with Hugo on 2026-10-17 (M13, built in 0.3.5–0.3.9). From one selected audio file, the app writes a **trimmed
 copy** of it, keeping only the part between a new start and a new end, into a subfolder of its folder. The
 original is never touched. The same selection also offers **New cue sheet…**, which opens the Split page on a new
 sheet for that file (§22, "M13 additions").
@@ -182,8 +182,8 @@ Top to bottom:
     and runs the job under the lock; the waveform has its own worker and a newer track stops it. `ui/trim_page.py`
     holds `WaveformView` (a press takes the nearer handle and drags it; the handles stay at least 1 ms apart),
     `TimeEdit` (the nudge keys) and `TrimPage`; `ui/controllers/trim.py` `TrimController` (`window.trim`).
-  - The Metadata tab shows **Trim…** under the format line for one audio file (`trimRequested`); New cue sheet…
-    joins it with task 4. The button decides from the extension: a 32-bit float WAV opens the page, which says
+  - The Metadata tab shows **Trim…** under the format line for one audio file (`trimRequested`), and **New cue
+    sheet…** beside it since 0.3.9 (`newCueRequested`, §22), greyed by the same rules. The button decides from the extension: a 32-bit float WAV opens the page, which says
     why it can't be trimmed (reading the format needs the file, which the button doesn't open).
   - The subfolder is a name field labelled "Save in subfolder:" (the copy always goes in one). The name is saved
     in `Settings.trim_subfolder` when Trim runs. The note beside Trim lists every problem, not only the first.

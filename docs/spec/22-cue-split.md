@@ -194,9 +194,9 @@ in**, and **one page with every control**; you can't split without going through
   FILE line would point to nothing.
 - Saving refreshes the folder in the browser and the side panel's preview.
 
-## M13 additions (specified with Hugo on 2026-10-17, not built)
-The Split page is also where cue sheets are edited and created. Four changes, built with the trim (§23). When they
-are built, merge them into "In the app" above and drop this heading.
+## M13 additions (specified with Hugo on 2026-10-17, built in 0.3.9)
+The Split page is also where cue sheets are edited and created. Four changes, built with the trim (§23); the as-built
+notes are at the end of this section ("As built (M13 task 4, 0.3.9)").
 
 **1. The source warning**
 - Every `.cue` keeps its **Split into tracks…** button, always clickable: the page is where a wrong FILE line is
@@ -276,6 +276,29 @@ helper that works in other terms gets its own window)
   a change.
 - Preview in player: the temporary sheet from a plan with gaps and with a hidden track, through an injected opener.
 - Fill from track lengths: the starts, tracks added and deleted, a gap removed, the disabled OK.
+
+**As built (M13 task 4, 0.3.9)**
+- `cue.plan_sheet` reads the source before checking the destination and the track count, so a plan with a source
+  and no info means the source itself can't be used. `SplitController.source_warning()` gives the Source control's
+  reason, in this order: several FILE lines, none, an unsupported extension, a file not in the folder, a source
+  flac can't read ("… Choose its audio file."). The control is marked red and the reason shown in bold under it.
+  A sheet with several FILE lines can't be fixed on the page (the extra FILE lines aren't in any field); the
+  warning says why it can't be split.
+- New cue sheet…: `cue_edit.new_document(audio name, performer, title)` (a double quote in a tag becomes `'`);
+  `SplitRunner.load_new` reads the tags on the worker. The controller's `new` flag marks a sheet not on disk; its
+  `path` is the `<stem>.cue` it would be saved as, and the heading says "(new, not saved yet)". `saved` holds what
+  was filled in, so `modified` means changed beyond it. Save on a new sheet needs no sheet problem and a usable
+  source; with the box it saves `numbered_path(<stem>.cue)`, else it is Save as… (the dialog proposes
+  `<stem>.cue`). The box's state is `Settings.save_cue_beside` (not `split_…`: it is a preference, not split
+  state). After the save the page works on the file: the encoding picker is enabled and the box hidden.
+- Preview in player: `split.preview_sheet(plan)` through `playlists.write_preview` on the shell thread, as for the
+  trim. It needs a plan with tracks: a missing destination refuses the plan before its tracks are worked out, so
+  it disables the preview too.
+- Fill from track lengths…: `ui/track_lengths.py` `TrackLengthsDialog` (380 × 460, modal, a track count that the
+  wheel never changes); `cue_edit.parse_length`, `format_length`, `check_lengths` and
+  `CueDocument.fill_from_lengths`. The current lengths are the differences of the starts (blank where a start is
+  invalid); lengths typed and hidden by a lower count come back if it is raised again. The ticks follow the new
+  track count (added tracks ticked).
 
 ## The job
 - It runs in the Jobs panel (§10) as kind **Split**, for one album, holding a `PathLocks` lock on the image's

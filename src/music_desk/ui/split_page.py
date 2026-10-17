@@ -7,10 +7,13 @@ length and new name, validation marks), the selected track's other lines, Add an
 Split and Stop. While the job runs the editor is read-only; afterwards the report replaces it.
 """
 
+import html
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QGridLayout,
     QHBoxLayout,
@@ -64,6 +67,9 @@ class SplitPage(QWidget):
     trackOtherEdited = Signal(int, str)  # sheet row, text
     tickToggled = Signal(int, bool)  # track number (0: a hidden track), ticked
     addRequested = Signal(object)  # the sheet row to add after, or None
+    fillRequested = Signal()  # Fill from track lengths…
+    previewRequested = Signal()  # Preview in player
+    saveBesideToggled = Signal(bool)  # a new sheet's "Save beside <file> without asking"
     deleteRequested = Signal(list)  # sheet rows
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -165,6 +171,10 @@ class SplitPage(QWidget):
         track_buttons.addStretch(1)
         track_buttons.addWidget(self.add_button)
         track_buttons.addWidget(self.delete_button)
+        self.fill_button = QPushButton("Fill from track lengths…")
+        self.fill_button.setToolTip("Set the starts from each track's length, as a tracklist gives them.")
+        self.fill_button.clicked.connect(self.fillRequested)
+        track_buttons.addWidget(self.fill_button)
         self.problems = QLabel()
         self.problems.setWordWrap(True)
         self.problems.setStyleSheet("color: #c42b1c;")
@@ -178,6 +188,13 @@ class SplitPage(QWidget):
         self.save_as_button.clicked.connect(self.saveAsRequested)
         self.split_button = QPushButton("Split")
         self.split_button.clicked.connect(self.splitRequested)
+        self.preview_button = QPushButton("Preview in player")
+        self.preview_button.setToolTip("Open the sheet as it is now, unsaved edits included, in the default player.")
+        self.preview_button.clicked.connect(self.previewRequested)
+        self.save_beside = QCheckBox()
+        self.save_beside.toggled.connect(self.saveBesideToggled)
+        self.save_beside.hide()
+        self.new = False  # a new sheet, not saved yet
         self.split_note = QLabel()
         self.split_note.setWordWrap(True)
 
@@ -205,7 +222,9 @@ class SplitPage(QWidget):
         self.done_button = QPushButton("Done")
         self.done_button.clicked.connect(self.doneRequested)
         buttons = QHBoxLayout()
-        for button in (self.save_button, self.save_as_button, self.split_button, self.stop_button):
+        buttons.addWidget(self.save_button)
+        buttons.addWidget(self.save_beside)
+        for button in (self.save_as_button, self.preview_button, self.split_button, self.stop_button):
             buttons.addWidget(button)
         buttons.addWidget(self.split_note, 1)
         buttons.addWidget(self.busy)
@@ -251,8 +270,9 @@ class SplitPage(QWidget):
         self.editor.setEnabled(state == "editing")
         self.report.setVisible(state == "result")
         self.busy.setVisible(state in ("loading", "running"))
-        for button in (self.save_button, self.save_as_button, self.split_button):
+        for button in (self.save_button, self.save_as_button, self.preview_button, self.split_button):
             button.setVisible(editing)
+        self.save_beside.setVisible(editing and self.new)
         self.split_note.setVisible(state == "editing")
         self.stop_button.setVisible(state == "running")
         self.done_button.setVisible(state in ("result", "error"))
@@ -297,6 +317,16 @@ class SplitPage(QWidget):
 
     def show_destination(self, text: str) -> None:
         _set_text(self.destination, text)
+
+    def set_new(self, new: bool, audio_name: str = "", save_beside: bool = False) -> None:
+        """A new sheet (New cue sheet…): the Save-beside box shows, and the encoding is UTF-8 until saved."""
+        self.new = new
+        self.encoding.setEnabled(not new)
+        self.save_beside.blockSignals(True)
+        self.save_beside.setChecked(save_beside)
+        self.save_beside.blockSignals(False)
+        self.save_beside.setText(f"Save beside {audio_name} without asking")
+        self.save_beside.setVisible(new and self.state in ("editing", "running"))
 
     def set_encoding(self, codec) -> None:
         self.encoding.setCurrentIndex(max(0, self.encoding.findData(codec)))
@@ -385,12 +415,16 @@ class SplitPage(QWidget):
             notes += plan.warnings
         self.notes.setText("\n".join(notes))
         self.notes.setVisible(bool(notes))
-        self.source_note.setText(source_text)
+        # A source the split can't use draws the eye: the control is marked like a bad cell, the reason in bold.
+        self.source_note.setText(f"<b>{html.escape(source_text)}</b>" if source_bad else source_text)
         self.source_note.setStyleSheet("color: #c42b1c;" if source_bad else "")
+        self.source.setStyleSheet("QComboBox { background: #ffcdcd; }" if source_bad else "")
 
     def set_buttons(self, *, save: bool, save_as: bool, split: bool, split_text: str, split_note: str,
-                    can_delete: bool) -> None:
+                    can_delete: bool, preview: bool = False, fill: bool = False) -> None:
         self.save_button.setEnabled(save)
+        self.preview_button.setEnabled(preview)
+        self.fill_button.setEnabled(fill)
         self.save_as_button.setEnabled(save_as)
         self.split_button.setEnabled(split)
         self.split_button.setText(split_text)

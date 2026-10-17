@@ -26,6 +26,7 @@ from music_desk.core.cue_edit import CueDocument
 from music_desk.core.flac import FlacRunner
 from music_desk.core.path_locks import PathLocks
 from music_desk.core.split import CutResult, Finished
+from music_desk.core.tags import TaggedFile
 
 log = logging.getLogger(__name__)
 
@@ -109,6 +110,26 @@ class SplitRunner(QObject):
                 self.loaded.emit(Loaded(token, path, document, audio=audio_files(path.parent)))
             except OSError as e:
                 self.loaded.emit(Loaded(token, path, None, f"{path.name} can't be read: {e.strerror or e}"))
+
+        self._submit(run)
+        return token
+
+    def load_new(self, audio: Path) -> int:
+        """New cue sheet… for an audio file: a new sheet filled from its tags (album artist, else artist; album),
+        emitted as `loaded` for the `<stem>.cue` it would be saved as. Nothing is written."""
+        self._token += 1
+        token = self._token
+        cue_path = audio.with_suffix(".cue")
+
+        def run() -> None:
+            performer = title = ""
+            try:
+                fields = TaggedFile(audio, shared=True).fields()
+                performer, title = fields.albumartist or fields.artist or "", fields.album or ""
+            except Exception as e:  # noqa: BLE001 - without tags, the sheet just has no PERFORMER or TITLE
+                log.info("new cue sheet: no tags read from %s: %s", audio, e)
+            document = cue_edit.new_document(audio.name, performer, title)
+            self.loaded.emit(Loaded(token, cue_path, document, audio=audio_files(audio.parent)))
 
         self._submit(run)
         return token

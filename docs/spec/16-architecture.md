@@ -70,7 +70,7 @@ As of 0.2.14 (moved from CLAUDE.md on 2026-10-16).
                        lyrics_embedder, search_service, tag_io, tag_writer, jobs, rename_job, replaygain_job,
                        split_job, trim_job
       ui/              main_window, sidebar, folder_tree, file_view, address_bar, search_view, playlist_panel,
-                       entry_drag, stall_watch, jobs_panel, about_dialog, toast, split_page, trim_page, qt_util (typed Qt
+                       entry_drag, stall_watch, jobs_panel, about_dialog, toast, split_page, trim_page, track_lengths, qt_util (typed Qt
                        helpers: shortcut, app, cell_text);
                        controllers/ (search, tools, delete, split, trim);
                        side_panel/ (panel, metadata_tab, lyrics_tab, folder_summary, file_preview);

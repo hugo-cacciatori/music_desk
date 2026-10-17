@@ -404,12 +404,8 @@ def plan_sheet(sheet: CueSheet, cue: str | Path, name_masks: Sequence[str], repl
         plan.refusal = f"Not a single-file album: {sheet.files[0]} isn't in the folder."
         return plan
     plan.source = source
-    if plan.destination is not None and not plan.destination.is_dir():
-        plan.refusal = f"The destination folder {plan.destination} doesn't exist. Choose an existing folder."
-        return plan
-    if len(sheet.tracks) < 2:
-        plan.refusal = "The sheet has fewer than two audio tracks."
-        return plan
+    # The source is read first, so a plan with a source and no info means the source itself can't be used (the
+    # Split page marks the Source control then).
     try:
         info = read_info(source)
     except CueError as e:
@@ -419,6 +415,12 @@ def plan_sheet(sheet: CueSheet, cue: str | Path, name_masks: Sequence[str], repl
         plan.refusal = f"{source.name} can't be read ({type(e).__name__}: {e})."
         return plan
     plan.info = info
+    if plan.destination is not None and not plan.destination.is_dir():
+        plan.refusal = f"The destination folder {plan.destination} doesn't exist. Choose an existing folder."
+        return plan
+    if len(sheet.tracks) < 2:
+        plan.refusal = "The sheet has fewer than two audio tracks."
+        return plan
 
     starts = [samples_from_frames(t.start_frames, info.rate) for t in sheet.tracks]
     for i in range(1, len(starts)):

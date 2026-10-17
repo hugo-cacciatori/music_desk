@@ -104,6 +104,7 @@ class MetadataTab(QWidget):
     saveFailed = Signal(str)
     renameSuggested = Signal(str, str)  # path, new name: the hint after a save (SPEC §7)
     trimRequested = Signal(str)  # Trim… on one audio file (SPEC §23)
+    newCueRequested = Signal(str)  # New cue sheet… on one audio file (SPEC §22)
 
     def __init__(self, io: TagIO, writer: TagWriter, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -190,8 +191,13 @@ class MetadataTab(QWidget):
         self.trim_button = QPushButton("Trim…")
         self.trim_button.clicked.connect(lambda: self.trimRequested.emit(str(self.path)) if self.path else None)
         self.trim_button.hide()
+        self.new_cue_button = QPushButton("New cue sheet…")
+        self.new_cue_button.clicked.connect(
+            lambda: self.newCueRequested.emit(str(self.path)) if self.path else None)
+        self.new_cue_button.hide()
         trim_row = QHBoxLayout()
         trim_row.addWidget(self.trim_button)
+        trim_row.addWidget(self.new_cue_button)
         trim_row.addStretch(1)
         names.addLayout(trim_row)
         names.addStretch(1)
@@ -522,10 +528,11 @@ class MetadataTab(QWidget):
         self._update_trim_button()
 
     def _update_trim_button(self) -> None:
-        """Trim… shows for one audio file only; greyed, saying why, for a format flac doesn't read, while flac is
-        unavailable, or while a job holds the file (SPEC §23)."""
+        """Trim… and New cue sheet… show for one audio file only; greyed, saying why, for a format flac doesn't
+        read, while flac is unavailable, or while a job holds the file (SPEC §23)."""
         single = self.snapshot is not None and not self.multi
         self.trim_button.setVisible(single)
+        self.new_cue_button.setVisible(single)
         if self.snapshot is None or not single:
             return
         reason = (trim.unsupported_reason(self.snapshot.path) or self.trim_unavailable
@@ -533,6 +540,9 @@ class MetadataTab(QWidget):
         self.trim_button.setEnabled(reason is None)
         self.trim_button.setToolTip(reason or "Write a copy of this track without its start or its end, in a "
                                               "subfolder. The original is never touched.")
+        self.new_cue_button.setEnabled(reason is None)
+        self.new_cue_button.setToolTip(reason or "Start a cue sheet for this file on the Split page, to cut it into "
+                                                 "tracks.")
 
     # -- editing --
 

@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
         self.trim = TrimController(self, locks, self)  # trimming one track into a copy (SPEC §23)
         self.trim_page = self.trim.page
         self.side_panel.metadata.trimRequested.connect(self.trim.open)
+        self.side_panel.metadata.newCueRequested.connect(self.split.new_sheet)
         self.delete = DeleteController(self, self)  # Delete to the Recycle Bin (SPEC §19)
         # The jobs panel (SPEC §10): this session's runs, in a bottom drawer; they go on while you browse.
         self.jobs = JobList(self)

@@ -16,14 +16,13 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 18):** 0.6.0 is on `main` (not released): M16 done (toolbar and menus, Advanced
-  search Clear, Enter reruns the search, trim waveform 70 px, CJK in Latin-1 ID3 tags with schema v4, Back while a
-  split or trim runs). Full suite passed.
+- **State (2026-10-17, session 18):** 0.6.2 is on `main` and released (GitHub v0.6.2): M16 done, M17 task 1
+  (`core/tidy.py`, not used by the app yet) and the Tools page layout. Full suite passed.
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
   in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
   fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page; Japanese/Chinese MP3 tags read
-  right after the first start of 0.6.0 (it re-reads ID3 files).
-- **Next step:** M17 task 1 (the Tidy remake, SPEC §28). Give Hugo full manual steps for checks (memory:
+  right after the first start of 0.6.x (it re-reads ID3 files).
+- **Next step:** M17 task 2 (the Tidy job, SPEC §28). Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
 ## Work plan

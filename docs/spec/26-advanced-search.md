@@ -27,7 +27,17 @@ It has nothing to do with the search bar (Ctrl+K, §6), which stays as it is.
 - **Albums that are not split** (Hugo: "cue + image, no tracks"): every folder with a `.cue` whose FILE line points
   to one FLAC, WAV or AIFF file in that folder (a single-file album, §22), and no other audio file beside that
   image: it was never split. The EAC log isn't required.
-- Both read the index (§2), not the disk, so a search is quick and works on an offline root's last index.
+- Both read the index (§2), not the disk, so a search is quick and works on an offline root's last index. The one
+  exception: "not split" opens the `.cue` sheets of its candidate folders, to see which file they play.
+- **Built (M12 task 2, 0.4.2):** `core/index/album_search.py`, `run(conn, search)` gives `AlbumResult`s (the
+  folder's entry id and path), sorted by path in Explorer's order; `SEARCHES` holds the options' keys and labels.
+  - Without ReplayGain: a track counts when its tags are read, it isn't unreadable, its format has tags (a raw
+    `.aac` can't be tagged, so it is never listed), and it has none of the four ReplayGain values. A track with
+    only some of them (the RG column's "partial") counts as tagged.
+  - Not split: the index's candidates are folders with at least one `.cue` and exactly one audio file (any audio
+    extension), of a format the split reads; the folder is listed when one of its sheets names only that file
+    (ignoring case). A sheet that can't be read, or that names another file, doesn't count. `cancelled` is
+    checked between candidates.
 
 ## Retired with M12 (Hugo, 2026-10-17)
 Hugo never wanted lyrics saved in the lyrics tag: every function that relies on that tag goes. Lyrics already in

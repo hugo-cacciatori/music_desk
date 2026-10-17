@@ -1005,6 +1005,25 @@ double-click shows the folder; Refresh follows a fix; nothing in the app reads o
 
 Held at 0.5.0 (2026-10-17): `tests/ui/test_action_menu.py` lists both searches' albums on a fixture library while the main window stays usable, shows a folder on a double-click, and follows a fix on Refresh; no feature reads or writes the lyrics tag (SPEC §26 "Built").
 
+**M14 Mouse wheel** (Hugo scheduled it 2026-10-17; read SPEC §25).
+- [x] 1. (0.5.1) One application-wide filter (spin boxes, combo boxes, sliders, scroll bars excepted) replacing
+  both `NoWheelSpinBox`; a UI test per kind of input that the value stays and the page scrolls. Ground rule 7
+  becomes app-wide.
+
+Done when: the wheel over any input of any page or dialog scrolls and changes nothing (the UI test).
+
+**M15 Hover texts** (Hugo, 2026-10-17; read SPEC §24). Menus get status-bar tips; a guard test.
+- [x] 1. (0.5.2) The guard test (every page's controls, the allow-list) and the main window, sidebar, side panel.
+- [x] 2. (0.5.3) The tools page, the Split and Trim pages, the playlist builder, jobs, Advanced search, dialogs.
+- [x] 3. (0.5.4) Menu status-bar tips; README.
+
+Done when: the guard test passes with every page open, and reason tooltips still win while they apply.
+
+Held at 0.5.4 (2026-10-17): `tests/ui/test_no_wheel.py` sends wheel notches to each kind of input on a scrolling
+page and in the main window (values kept, the page scrolled); `tests/ui/test_hover_texts.py` passes on the whole
+main window, the Advanced search window and the dialogs, checks the menus' status tips, and the trim and lyrics
+tests check that a reason tooltip gives way to the hover text when it no longer applies.
+
 ## Former CLAUDE.md sections (as of 2026-10-16)
 
 **Session protocol:**

@@ -16,31 +16,21 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 16):** 0.5.0 is on `main` and released (GitHub v0.5.0): M13 (trim, new cue
-  sheets) and M12 (Advanced search; the lyrics tag and Offline mode retired) are done. Full suite passed.
+- **State (2026-10-17, session 17):** 0.5.4 is on `main` and released (GitHub v0.5.4): M14 (the mouse wheel never
+  changes an input, app-wide) and M15 (hover texts on every control, menu status-bar tips, a guard test) are
+  done. Full suite passed.
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
-  in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a fix.
-- **Next step:** M14 (mouse wheel), then M15 (hover texts). Give Hugo full manual steps for checks
-  (memory: manual-check-instructions).
+  in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
+  fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page.
+- **Next step:** none scheduled; ask Hugo what comes next. Give Hugo full manual steps for checks (memory:
+  manual-check-instructions).
 
 ## Work plan
 Specified with Hugo on 2026-10-16. Each task ends with a patch version bump (0.2.2, 0.2.3, …). Tick tasks as
 they are done. A task is done when its code, tests and docs are; releases and installed-app checks are never part
 of it (see Session protocol 5).
 
-**M14 Mouse wheel** (Hugo scheduled it 2026-10-17; read SPEC §25).
-- [x] 1. (0.5.1) One application-wide filter (spin boxes, combo boxes, sliders, scroll bars excepted) replacing
-  both `NoWheelSpinBox`; a UI test per kind of input that the value stays and the page scrolls. Ground rule 7
-  becomes app-wide.
-
-Done when: the wheel over any input of any page or dialog scrolls and changes nothing (the UI test).
-
-**M15 Hover texts** (Hugo, 2026-10-17; read SPEC §24). Menus get status-bar tips; a guard test.
-- [x] 1. (0.5.2) The guard test (every page's controls, the allow-list) and the main window, sidebar, side panel.
-- [x] 2. (0.5.3) The tools page, the Split and Trim pages, the playlist builder, jobs, Advanced search, dialogs.
-- [x] 3. (0.5.4) Menu status-bar tips; README.
-
-Done when: the guard test passes with every page open, and reason tooltips still win while they apply.
+None scheduled.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that

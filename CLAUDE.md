@@ -33,7 +33,7 @@ of it (see Session protocol 5).
 
 ### M17: Tidy remade (Hugo, 2026-10-17)
 Read SPEC §28 (and §10, §22, §26 for what it reuses). Each task bumps the patch version; the last one 0.7.0.
-- [ ] 1. `core/tidy.py`: find the albums, sort them (not split, split, half-split, tidy, skipped) and plan each
+- [x] 1. `core/tidy.py`: find the albums, sort them (not split, split, half-split, tidy, skipped) and plan each
   one's steps, with the ReplayGain check; unit tests. 0.6.1.
 - [ ] 2. The job: one Tidy job album by album (split, renames, ReplayGain), locks, Stop, report, the offer list
   collected. 0.6.2.

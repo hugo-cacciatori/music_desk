@@ -82,6 +82,25 @@ Tidy sorts each album into one of these:
 - The Tidy card needs the File names, Rename and ReplayGain cards valid, flac and rsgain available; its button is
   "Run Tidy…". One job per tool: while a Rename, ReplayGain, Split or Tidy job runs, Tidy shows that job instead.
 
+## As built
+- **M17 task 1 (0.6.1):** `core/tidy.py`. `plan_tidy(root, rename_options, replaygain_options, masks,
+  replacement, is_silent=…, read_info=…, cancel=…, progress=…)` gives a `TidyPlan`: `albums` (`AlbumTidy`: its
+  `folders`, the album's own `FolderPlan` first, then its disc folders; `replaygain`, why ReplayGain runs or None;
+  `replaygain_exclude`, the images never measured), `summary()` and `has_work`.
+  - `find_albums` walks as `replaygain.find_album_folders` but counts any audio file (a folder of formats rsgain
+    can't read is still renamed, with a note); a disc folder is a keyword subfolder matching none of the
+    track-data and excluded keywords.
+  - `plan_folder` sorts a folder: one audio file named by a single-file sheet is **not split**
+    (`cue.plan_sheet` with the File names masks, every track, the sheet's folder); otherwise the folder is
+    renamed (`rename.plan_renames`, the Rename card's options, not recursive) and is **half-split** when a
+    sheet still names an image beside the tracks. Missing tags, names taken and the rename warnings become notes.
+  - A sheet needs a human when the plan has a refusal, a fallback encoding, a warning (data tracks), a hidden
+    track (number 0), a path problem or a renamed track (`plan.notes`). Without `is_silent` any pregap of 2 s or
+    more counts as a hidden track; the job passes flac's silence check.
+  - `replaygain_needed` reads every track rsgain scans (images aside): the four values, and a comment line
+    matching the template (`lufs_comment_pattern`) whose number is the target. Disc folders' tracks need the two
+    album values. An unsplit image is never measured, even when its album is skipped.
+
 ## Tests
 - Album discovery: lite and bonus never split or renamed; a CD2 image split and its parent's ReplayGain run.
 - Classification: not split, split, half-split, already tidy, the skip reasons (fallback encoding, a warning, a

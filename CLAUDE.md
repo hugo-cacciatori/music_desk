@@ -89,8 +89,8 @@ Code and tests cite these by number; keep the numbering.
    - (M13) a trim: creating its subfolder if missing (removed again only if that run made it and leaves it
      empty) and the copy there, never over a file; deleting that run's `.partial` (SPEC §23). Saving a new cue
      sheet beside its audio file, never over a file without asking (SPEC §22).
-   - (M17) sending to the **Recycle Bin** the files the user marks Delete in Tidy's offer window (a split album's
-     image and `.cue`), on Apply; closing the window keeps them all (SPEC §28).
+   - (M17) sending to the **Recycle Bin** the files the user checks in Tidy's "Redundant files" window (a split
+     album's image and `.cue`), on Delete selected; closing the window keeps them all (SPEC §28).
 
    Sending to the Recycle Bin never asks first (Hugo, 2026-10-17): the Recycle Bin is the undo. What still asks
    is a permanent loss (overwriting a `.cue` where there is no Recycle Bin) and a name collision (Save as).

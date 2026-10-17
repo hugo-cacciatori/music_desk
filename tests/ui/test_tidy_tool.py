@@ -7,12 +7,13 @@ import shutil
 import threading
 
 import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QPushButton
 from rsgain_fake import VALUES, FakeScanner
 
 from music_desk.core.index.store import path_of
 from music_desk.core.replaygain import ALBUM_GAIN, TRACK_GAIN
 from music_desk.core.tags import TaggedFile
-from music_desk.ui.tidy_offer import DELETE, KEEP
 from music_desk.ui.tools.tool_cards import TIDY
 
 TRACKS = {**VALUES, "01 One.flac": ("-3.00 dB", "0.5"), "02 Two.flac": ("-2.00 dB", "0.6")}
@@ -92,50 +93,38 @@ def test_the_offer_window_keeps_by_default(qtbot, window, service, library_dir, 
     run(qtbot, window)
     qtbot.waitUntil(lambda: tidy.offer is not None and tidy.offer.isVisible())
     offer = tidy.offer
-    assert offer.choices() == {str(eac / "image.wav"): KEEP, str(eac / "image.cue"): KEEP}
-    assert not offer.apply_button.isEnabled()
+    assert offer.windowTitle() == "Redundant files"
+    assert [item.text(0) for item in offer.items()] == ["image.wav", "image.cue"]
+    assert offer.marked() == [] and not offer.delete_button.isEnabled()  # nothing checked
+    assert [b.text() for b in offer.findChildren(QPushButton)] == ["Delete selected", "Close"]
     offer.close()  # closing keeps every file
     assert tidy.recycled == [] and (eac / "image.wav").exists()
 
 
-def test_apply_recycles_only_the_files_marked_delete(qtbot, window, service, library_dir, tidy):
+def test_delete_selected_recycles_only_the_checked_files(qtbot, window, service, library_dir, tidy):
     eac = library_dir / "Rips" / "EAC"
     open_plan(qtbot, window, service, eac)
     run(qtbot, window)
     qtbot.waitUntil(lambda: tidy.offer is not None and tidy.offer.isVisible())
     offer = tidy.offer
     image = next(item for item in offer.items() if item.text(0) == "image.wav")
-    box = offer.choice_box(image)
-    assert box is not None and [box.itemText(i) for i in range(box.count())] == [KEEP, DELETE]
-    box.setCurrentText(DELETE)  # each row's drop-down
-    assert offer.apply_button.text() == "Apply (1 file to the Recycle Bin)"
-    assert offer.choices()[str(eac / "image.wav")] == DELETE and offer.choices()[str(eac / "image.cue")] == KEEP
-    offer.apply_button.click()
-    assert tidy.recycled == [eac / "image.wav"] and not offer.isVisible()  # no question first
-
-
-def test_the_buttons_set_the_selected_rows(qtbot, window, service, library_dir, tidy):
-    eac = library_dir / "Rips" / "EAC"
-    tidy.show_offer([eac / "image.wav", eac / "image.cue"])
-    offer = tidy.offer
-    offer.list.selectAll()
+    image.setCheckState(0, Qt.CheckState.Checked)
+    assert offer.marked() == [eac / "image.wav"] and offer.delete_button.isEnabled()
+    image.setCheckState(0, Qt.CheckState.Unchecked)
+    assert not offer.delete_button.isEnabled()
+    image.setCheckState(0, Qt.CheckState.Checked)
     offer.delete_button.click()
-    assert set(offer.choices().values()) == {DELETE} and offer.apply_button.isEnabled()
-    offer.list.clearSelection()
-    offer.items()[1].setSelected(True)
-    offer.keep_button.click()
-    assert offer.marked() == [eac / "image.wav"]
-    offer.close()
+    assert tidy.recycled == [eac / "image.wav"] and not offer.isVisible()  # at once, no question
 
 
-def test_a_drive_without_a_recycle_bin_cant_be_marked_delete(qtbot, window, service, library_dir, tidy):
+def test_a_drive_without_a_recycle_bin_cant_be_checked(qtbot, window, service, library_dir, tidy):
     tidy.check_recycle = lambda _path: "network drive"
     tidy.show_offer([library_dir / "Rips" / "EAC" / "image.wav"])
     offer = tidy.offer
-    offer.list.selectAll()
-    offer.delete_button.click()
-    assert offer.marked() == [] and "no Recycle Bin: network drive" in offer.items()[0].text(2)
-    assert offer.choice_box(offer.items()[0]) is None  # no drop-down to choose Delete with
+    [item] = offer.items()
+    assert item.isDisabled() and "no Recycle Bin: network drive" in item.text(0)
+    item.setCheckState(0, Qt.CheckState.Checked)  # even forced, a disabled row is never deleted
+    assert offer.marked() == [] and not offer.delete_button.isEnabled()
     offer.close()
 
 

@@ -44,7 +44,8 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
   - **Tidy**: a whole folder tree at once, album by album. Albums still in one file with their cue sheet are split
     into tracks, tracks are renamed to the masks, then ReplayGain runs where it's missing or for another target.
     You see the whole plan first and run it with one button; at the end, a window lists the images and cue sheets
-    the splits made redundant, and you choose which go to the Recycle Bin (closing it keeps them all).
+    the splits made redundant ("Redundant files"): check the ones to delete and click Delete selected to send them
+    to the Recycle Bin (closing it keeps them all).
 
   Jobs run in the background, and you can keep browsing meanwhile; the status bar's Jobs button (Ctrl+J) shows them.
 - **Split a single-file album**, such as an EAC rip (one FLAC, WAV or AIFF image, its `.cue` and its log), into

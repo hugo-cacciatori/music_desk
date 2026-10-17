@@ -1,8 +1,8 @@
-"""Tidy's offer window (SPEC §28): the images and cue sheets a run's splits made redundant, each to Keep or Delete.
+"""Tidy's offer window, "Redundant files" (SPEC §28): the images and cue sheets a run's splits made redundant.
 
-A separate window, not modal. Every row is Keep until the user sets its drop-down to Delete (or uses the buttons
-for the selection); Apply sends the Delete rows to the Recycle Bin, without a question. Closing the window keeps
-every file. Nothing is deleted for good: a file whose drive has no Recycle Bin can't be marked Delete.
+A separate window, not modal. Each file has a checkbox, unchecked; "Delete selected" sends the checked files to the
+Recycle Bin at once, without a question. Closing the window keeps every file. Nothing is deleted for good: a file
+whose drive has no Recycle Bin can't be checked.
 """
 
 from collections.abc import Callable
@@ -11,7 +11,6 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -24,12 +23,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core import fsops
 
-KEEP, DELETE = "Keep", "Delete"
 PATH_ROLE = Qt.ItemDataRole.UserRole
-
-
-def plural(count: int, noun: str) -> str:
-    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 class OfferWindow(QWidget):
@@ -41,54 +35,41 @@ class OfferWindow(QWidget):
                  check_recycle: Callable[[Path], str | None] = fsops.can_recycle) -> None:
         super().__init__(parent, Qt.WindowType.Window)
         self.recycle = recycle
-        self.setWindowTitle("Files Tidy made redundant")
+        self.setWindowTitle("Redundant files")
         self.resize(760, 420)
         intro = QLabel("The albums below were split into tracks, so these images and cue sheets aren't needed to "
-                       "play them any more. Every file is kept unless you mark it Delete; Apply sends the files "
-                       "marked Delete to the Recycle Bin. Closing this window keeps them all.")
+                       "play them any more. Check the ones to delete, then click Delete selected: they go to the "
+                       "Recycle Bin. Closing this window keeps them all.")
         intro.setWordWrap(True)
         self.list = QTreeWidget()
-        self.list.setHeaderLabels(["File", "Folder", "Choice"])
+        self.list.setHeaderLabels(["File", "Folder"])
         self.list.setRootIsDecorated(False)
-        self.list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.list.setToolTip("Choose Keep or Delete in each row, or select files (Ctrl, Shift, Ctrl+A) and set "
-                             "them together with the buttons below")
+        self.list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.list.setToolTip("Check the files to send to the Recycle Bin")
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._menu)
         for path in files:
             reason = check_recycle(path)
-            item = QTreeWidgetItem([path.name, str(path.parent), ""])
+            item = QTreeWidgetItem([path.name, str(path.parent)])
             item.setData(0, PATH_ROLE, str(path))
-            self.list.addTopLevelItem(item)
+            item.setCheckState(0, Qt.CheckState.Unchecked)
             if reason:
-                item.setText(2, f"{KEEP} (no Recycle Bin: {reason})")
+                item.setText(0, f"{path.name} (no Recycle Bin: {reason})")
+                item.setToolTip(0, f"Kept: it can't go to the Recycle Bin ({reason})")
                 item.setDisabled(True)
-            else:
-                choice = QComboBox()
-                choice.addItems([KEEP, DELETE])
-                choice.setToolTip(f"Keep {path.name}, or send it to the Recycle Bin on Apply")
-                choice.currentTextChanged.connect(lambda _text: self._update())
-                self.list.setItemWidget(item, 2, choice)
-        self.list.setColumnWidth(0, 260)
-        self.list.setColumnWidth(1, 320)
+            self.list.addTopLevelItem(item)
+        self.list.setColumnWidth(0, 300)
+        self.list.itemChanged.connect(lambda _item, _column: self._update())
 
-        self.keep_button = QPushButton("Keep selected")
-        self.keep_button.setToolTip("Mark the selected files Keep")
-        self.keep_button.clicked.connect(lambda: self._mark(KEEP))
         self.delete_button = QPushButton("Delete selected")
-        self.delete_button.setToolTip("Mark the selected files Delete; nothing happens until Apply")
-        self.delete_button.clicked.connect(lambda: self._mark(DELETE))
-        self.apply_button = QPushButton("Apply")
-        self.apply_button.setToolTip("Send the files marked Delete to the Recycle Bin")
-        self.apply_button.clicked.connect(self.apply)
+        self.delete_button.setToolTip("Send the checked files to the Recycle Bin now")
+        self.delete_button.clicked.connect(self.apply)
         self.close_button = QPushButton("Close")
         self.close_button.setToolTip("Close this window and keep every file")
         self.close_button.clicked.connect(self.close)
         buttons = QHBoxLayout()
-        buttons.addWidget(self.keep_button)
-        buttons.addWidget(self.delete_button)
         buttons.addStretch(1)
-        buttons.addWidget(self.apply_button)
+        buttons.addWidget(self.delete_button)
         buttons.addWidget(self.close_button)
         layout = QVBoxLayout(self)
         layout.addWidget(intro)
@@ -96,50 +77,28 @@ class OfferWindow(QWidget):
         layout.addLayout(buttons)
         self._update()
 
-    # -- choices --
+    # -- the checkboxes --
 
     def items(self) -> list[QTreeWidgetItem]:
         return [item for i in range(self.list.topLevelItemCount()) if (item := self.list.topLevelItem(i))]
 
-    def choice_box(self, item: QTreeWidgetItem) -> QComboBox | None:
-        """A row's Keep / Delete drop-down; None on a drive without a Recycle Bin."""
-        widget = self.list.itemWidget(item, 2)
-        return widget if isinstance(widget, QComboBox) else None
-
-    def choice(self, item: QTreeWidgetItem) -> str:
-        box = self.choice_box(item)
-        return box.currentText() if box is not None else KEEP
-
-    def choices(self) -> dict[str, str]:
-        """Each file's choice, for tests."""
-        return {item.data(0, PATH_ROLE): self.choice(item) for item in self.items()}
-
     def marked(self) -> list[Path]:
-        return [Path(item.data(0, PATH_ROLE)) for item in self.items() if self.choice(item) == DELETE]
-
-    def _mark(self, choice: str) -> None:
-        for item in self.list.selectedItems():
-            if (box := self.choice_box(item)) is not None:
-                box.setCurrentText(choice)
-        self._update()
+        """The checked files (a disabled row is never checked)."""
+        return [Path(item.data(0, PATH_ROLE)) for item in self.items()
+                if not item.isDisabled() and item.checkState(0) == Qt.CheckState.Checked]
 
     def _update(self) -> None:
-        count = len(self.marked())
-        self.apply_button.setEnabled(bool(count))
-        self.apply_button.setText(f"Apply ({plural(count, 'file')} to the Recycle Bin)" if count else "Apply")
+        self.delete_button.setEnabled(bool(self.marked()))
 
     def _menu(self, pos) -> None:
         item = self.list.itemAt(pos)
         if item is None:
             return
         menu = QMenu(self)
-        menu.addAction("Keep", lambda: self._mark(KEEP))
-        menu.addAction("Delete", lambda: self._mark(DELETE))
-        menu.addSeparator()
         menu.addAction("Open in File Explorer", lambda: self.revealRequested.emit(item.data(0, PATH_ROLE)))
         menu.exec(self.list.viewport().mapToGlobal(pos))
 
-    # -- Apply --
+    # -- Delete selected --
 
     def apply(self) -> None:
         marked = self.marked()

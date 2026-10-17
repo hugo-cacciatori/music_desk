@@ -71,15 +71,17 @@ Tidy sorts each album into one of these:
 
 ## The offer list ("ask to be deleted")
 - When the run ends (finished or stopped) and the list isn't empty, a **separate window** opens, not modal:
-  "Files Tidy made redundant". Each row is a file: the image or the `.cue`, with its folder.
-- Each row has **Keep / Delete** in a drop-down (Hugo, 2026-10-17), **Keep** by default. Rows can be selected
-  freely (click, Ctrl, Shift, Ctrl+A) and set together with "Keep selected" / "Delete selected". A row also opens in File Explorer (context menu).
-- **Apply** sends the rows marked Delete to the **Recycle Bin** (no question since 0.7.4, Hugo); the
-  window then closes. **Closing the window keeps every file** (Hugo). Nothing is ever deleted permanently: on a
-  drive without a Recycle Bin (`fsops.can_recycle`), its rows can't be marked Delete and say why.
+  **"Redundant files"** (Hugo, 0.8.1; "Files Tidy made redundant" before). Each row is a file: the image or the
+  `.cue`, with its folder.
+- Each row has a **checkbox**, unchecked (Hugo, 0.8.1; a Keep / Delete drop-down in 0.7.2, Keep / Delete selected
+  buttons before). A row also opens in File Explorer (context menu).
+- **Delete selected**, enabled once a box is checked, sends the checked files to the **Recycle Bin** at once (no
+  question since 0.7.4, Hugo); the window then closes. **Closing the window keeps every file** (Hugo). Nothing
+  is ever deleted permanently: on a drive without a Recycle Bin (`fsops.can_recycle`), a row can't be checked
+  and says why.
 - Only the image and its `.cue` are offered (Hugo): the rip's `.log`, `.accurip` and other files are never
   listed.
-- **Ground rule 1** gains an entry: sending to the Recycle Bin the files the user marks Delete in this window.
+- **Ground rule 1** gains an entry: sending to the Recycle Bin the files the user checks in this window.
 
 ## Kept from the old Tidy
 - The Tidy card needs the File names, Rename and ReplayGain cards valid, flac and rsgain available; its button is
@@ -129,6 +131,9 @@ Tidy sorts each album into one of these:
   panel shows it again"); `TidyController.back` leaves the job running. The offer window's Choice column is a
   `QComboBox` per row (Keep, Delete; `choice_box(item)`), none on a drive without a Recycle Bin; the double-click
   toggle is gone. The wheel never changes it (Ground rule 7).
+- **0.8.1** (Hugo, 2026-10-17): the offer window is "Redundant files": File (with its checkbox) and Folder; the
+  drop-downs, Keep selected and Apply are gone; "Delete selected" recycles the checked files. The context menu
+  keeps Open in File Explorer only.
 
 ## Tests
 - Album discovery: lite and bonus never split or renamed; a CD2 image split and its parent's ReplayGain run.
@@ -137,5 +142,5 @@ Tidy sorts each album into one of these:
 - The ReplayGain check: all tagged at the target (tidy), one track missing a value, another target in the comment.
 - The run: split then ReplayGain; rename then ReplayGain; a failed split skips ReplayGain and the offer; Stop.
 - Back while Tidy runs leaves it running; the jobs panel shows its page again.
-- The offer window: Keep by default, a row's drop-down, multi-select with the buttons, Apply recycles only Delete rows,
+- The offer window: nothing checked by default, Delete selected recycles only the checked files,
   closing keeps all, no Recycle Bin on the drive.

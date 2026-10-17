@@ -142,6 +142,12 @@ Top to bottom:
   - **Measured** (2026-10-17, flac 1.5.0): cutting a FLAC carries its Vorbis comments and pictures into the cut.
     `copy_tags` therefore clears the copy's tags and pictures and writes the original's (without lyrics), so the
     result doesn't depend on flac. The split does the same since 0.3.6 (§22).
+  - For `core/waveform.py` (notes from task 1, not measured): `decode_range` runs `flac -c -0 | flac -d` so any
+    source is read by flac; for a whole FLAC, `FlacRunner.decode` (one `flac -d`) skips that re-encode, so time
+    both on the 70-minute image. Neither a 70-minute nor a 24-bit/96 kHz fixture exists: generate them with the
+    dev-only ffmpeg into a scratch folder for the measurement (too big to commit), and keep the tests' fixtures
+    small. The temporary playlists' `prune` touches only `play-*.m3u8`: the preview sheets need their own, for
+    `preview-*.cue`.
 - **UI:** `ui/trim_page.py` (the widgets: the waveform widget, the fields, the subfolder, the buttons, the report)
   and `ui/controllers/trim.py` `TrimController` (`window.trim`), following `SplitController`. The waveform is
   computed on a worker and painted from the cached peaks, so dragging a handle and resizing never decode again.

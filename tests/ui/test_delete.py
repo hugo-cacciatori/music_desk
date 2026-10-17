@@ -64,10 +64,12 @@ def test_del_sends_the_selection_and_selects_the_next_row(qtbot, window, service
     QTest.keyClick(view.view, Qt.Key.Key_Delete)
     qtbot.waitUntil(lambda: len(recycle_bin.paths) == 2, timeout=5000)
     assert sorted(p.name for p in recycle_bin.paths) == ["Track 2.flac", "Track 3.mp3"]
-    qtbot.waitUntil(lambda: "Track 2.flac" not in view.visible_names(), timeout=5000)
-    assert "Track 3.mp3" not in view.visible_names() and "track 1.flac" in view.visible_names()
-    assert view.selected_ids() == [expected_next]
-    assert window.statusBar().currentMessage() == "Sent 2 items to the Recycle Bin."
+    # Both files leave the list, but not always together: the watcher can refresh it between the two moves
+    # (measured with a slow bin), so wait for the end state rather than for the first file.
+    qtbot.waitUntil(lambda: not {"Track 2.flac", "Track 3.mp3"} & set(view.visible_names())
+                    and view.selected_ids() == [expected_next], timeout=5000)
+    assert "track 1.flac" in view.visible_names()
+    qtbot.waitUntil(lambda: window.statusBar().currentMessage() == "Sent 2 items to the Recycle Bin.", timeout=5000)
     assert service.locks.held() == []
 
 
@@ -176,7 +178,9 @@ def test_del_in_the_search_results(qtbot, window, service, library_dir, recycle_
     QTest.keyClick(window.search_view.view, Qt.Key.Key_Delete)
     qtbot.waitUntil(lambda: len(recycle_bin.paths) == 1, timeout=5000)
     qtbot.waitUntil(lambda: "Track 10.flac" not in result_names(window), timeout=10000)
-    assert window.search_view.selected_ids() and chosen not in window.search_view.selected_ids()
+    # The next row is selected when the delete reports, which can come after the results' refresh.
+    qtbot.waitUntil(lambda: bool(window.search_view.selected_ids())
+                    and chosen not in window.search_view.selected_ids(), timeout=5000)
 
 
 def test_menus_offer_delete_except_for_roots_and_the_background(window, service):

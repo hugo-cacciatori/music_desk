@@ -25,3 +25,17 @@ Asked by Hugo on 2026-10-17; scheduled as M14 the same day. It is Ground rule 7.
   replacing `NoWheelSpinBox`.
 - A UI test that sends a wheel event to each kind of input on a page and checks its value didn't change, and
   that the page scrolled.
+
+## As built (M14, 0.5.1)
+- `ui/no_wheel.py`: one `NoWheelFilter` on the application, installed by each main window (once per
+  application), so dialogs and the Advanced search window are covered too. It takes wheel events over
+  `QAbstractSpinBox` (time fields included), `QComboBox` and `QAbstractSlider` (not `QScrollBar`), and hands each
+  to the viewport of the nearest scroll area around the input that can still move, then the next one out. Both
+  `NoWheelSpinBox` classes are gone.
+- Handed on by hand rather than ignored: Qt passes a wheel event up to the parents only when it comes from the
+  mouse; a sent one stops at its widget (measured), so ignoring could not be tested and the two would differ.
+- Not affected: the side panel's tab bar still switches tabs on the wheel (Qt's default; it is navigation, not a
+  value).
+- Tests: `tests/ui/test_no_wheel.py` sends a wheel notch to each kind of input on a scrolling page (focused or
+  not), checks the value stays and the page scrolls, that the keyboard still changes a value, and the
+  ReplayGain fields in the main window.

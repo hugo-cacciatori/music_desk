@@ -29,7 +29,7 @@ they are done. A task is done when its code, tests and docs are; releases and in
 of it (see Session protocol 5).
 
 **M14 Mouse wheel** (Hugo scheduled it 2026-10-17; read SPEC §25).
-- [ ] 1. (0.5.1) One application-wide filter (spin boxes, combo boxes, sliders, scroll bars excepted) replacing
+- [x] 1. (0.5.1) One application-wide filter (spin boxes, combo boxes, sliders, scroll bars excepted) replacing
   both `NoWheelSpinBox`; a UI test per kind of input that the value stays and the page scrolls. Ground rule 7
   becomes app-wide.
 

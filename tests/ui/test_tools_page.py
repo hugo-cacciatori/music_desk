@@ -250,17 +250,3 @@ def test_rsgain_unavailable_disables_replaygain(window):
     assert not window.tools_page.replaygain_card.run_button.isEnabled()
     window.show_rsgain_version("rsgain 3.6")
     assert window.tools_page.replaygain_card.run_button.isEnabled()
-
-
-def test_number_fields_ignore_the_mouse_wheel(page, qtbot):
-    from PySide6.QtCore import QPoint, QPointF, Qt
-    from PySide6.QtGui import QWheelEvent
-    from PySide6.QtWidgets import QApplication
-
-    card = page.replaygain_card
-    for field in (card.target, card.threshold, card.margin):
-        before = field.value()
-        event = QWheelEvent(QPointF(5, 5), QPointF(5, 5), QPoint(0, 0), QPoint(0, 120), Qt.MouseButton.NoButton,
-                            Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
-        QApplication.sendEvent(field, event)
-        assert field.value() == before

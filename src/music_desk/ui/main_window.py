@@ -58,6 +58,7 @@ from music_desk.ui.controllers.tools import ToolsController
 from music_desk.ui.controllers.trim import TrimController
 from music_desk.ui.file_view import FileView
 from music_desk.ui.jobs_panel import JobsPanel
+from music_desk.ui.no_wheel import install_no_wheel
 from music_desk.ui.playlist_panel import PlaylistPanel
 from music_desk.ui.qt_util import app, shortcut
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
@@ -274,6 +275,7 @@ class MainWindow(QMainWindow):
         self.side_panel.metadata.saveFailed.connect(lambda message: self.toast.show_message(message))
         self.shellFailed.connect(self._shell_failed)
         app().installEventFilter(self)  # the mouse back/forward buttons, anywhere in the window
+        install_no_wheel(app())  # Ground rule 7, in every window and dialog
 
         if library is None:
             self.add_folder_action.setEnabled(False)

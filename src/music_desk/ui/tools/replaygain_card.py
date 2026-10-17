@@ -70,14 +70,6 @@ def checked_scope(group: QButtonGroup) -> str:
     return button.property("scope")
 
 
-
-class NoWheelSpinBox(QDoubleSpinBox):
-    """A number field the mouse wheel never changes (Hugo, 2026-10-15): scrolling the page over it used to change
-    the value by accident. The wheel scrolls the page instead; type the value or use the arrows."""
-
-    def wheelEvent(self, event) -> None:  # noqa: N802 - Qt's name
-        event.ignore()
-
 class ReplayGainCard(Card):
     changed = Signal()
     runRequested = Signal()
@@ -91,7 +83,7 @@ class ReplayGainCard(Card):
         self.scope_note = QLabel()
         self.scope_note.setWordWrap(True)
 
-        self.target = NoWheelSpinBox()
+        self.target = QDoubleSpinBox()
         self.target.setRange(*replaygain.TARGET_RANGE)
         self.target.setDecimals(1)
         self.target.setSingleStep(0.5)
@@ -99,12 +91,12 @@ class ReplayGainCard(Card):
         self.target.valueChanged.connect(self._edited)
         self.target.setMaximumWidth(140)
 
-        self.threshold = NoWheelSpinBox()
+        self.threshold = QDoubleSpinBox()
         self.threshold.setRange(0, 1)
         self.threshold.setDecimals(5)
         self.threshold.setSingleStep(0.00001)
         self.threshold.valueChanged.connect(self._edited)
-        self.margin = NoWheelSpinBox()
+        self.margin = QDoubleSpinBox()
         self.margin.setRange(0, 6)
         self.margin.setDecimals(2)
         self.margin.setSingleStep(0.01)

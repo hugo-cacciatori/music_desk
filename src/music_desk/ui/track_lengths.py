@@ -24,13 +24,6 @@ from music_desk.core.cue_edit import check_lengths, format_length
 MAX_TRACKS = 99  # what a cue sheet numbers
 
 
-class NoWheelSpinBox(QSpinBox):
-    """The mouse wheel never changes it (Ground rule 7): over it, the wheel scrolls."""
-
-    def wheelEvent(self, event) -> None:  # noqa: N802 - Qt's name
-        event.ignore()
-
-
 class TrackLengthsDialog(QDialog):
     def __init__(self, lengths: list[int | None], first_start: int, audio_frames: int,
                  parent: QWidget | None = None) -> None:
@@ -48,7 +41,7 @@ class TrackLengthsDialog(QDialog):
         intro = QLabel("Type each track's length, as m:ss or m:ss:ff. Track 1 keeps its start; each next track "
                        "starts where the one before ends.")
         intro.setWordWrap(True)
-        self.count = NoWheelSpinBox()
+        self.count = QSpinBox()
         self.count.setRange(2, MAX_TRACKS)
         self.count.setValue(max(2, self.current_tracks))
         self.count.valueChanged.connect(self._rebuild)

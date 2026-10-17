@@ -44,11 +44,14 @@ class FileNamesCard(Card):
         self.masks.model().rowsMoved.connect(self._edited)
         self.masks.itemChanged.connect(self._edited)
         self.add_mask = QPushButton("Add")
+        self.add_mask.setToolTip("Add a mask at the end of the list; drag the masks to change their order")
         self.add_mask.clicked.connect(self._add_mask)
         self.remove_mask = QPushButton("Remove")
+        self.remove_mask.setToolTip("Remove the selected mask from the list")
         self.remove_mask.clicked.connect(self._remove_mask)
         self.insert_field = QToolButton()
         self.insert_field.setText("Insert field")
+        self.insert_field.setToolTip("Insert a tag field, like {title}, into the selected mask")
         self.insert_field.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(self.insert_field)
         for name in MASK_FIELDS:
@@ -65,6 +68,8 @@ class FileNamesCard(Card):
         self.example.setWordWrap(True)
         self.replacement = QLineEdit()
         self.replacement.setMaximumWidth(80)
+        self.replacement.setToolTip('Put in place of each character Windows does not allow in file names '
+                                    '(\\ / : * ? " < > |)')
         self.replacement.textEdited.connect(self._edited)
 
         form = QFormLayout()
@@ -73,6 +78,7 @@ class FileNamesCard(Card):
         form.addRow("Replace invalid characters with:", self.replacement)
         self.body.addLayout(form)
         self.reset_button = QPushButton("Reset to defaults")
+        self.reset_button.setToolTip("Put back the default masks and replacement")
         self.reset_button.clicked.connect(self.reset)
         self.buttons.addStretch(1)
         self.buttons.addWidget(self.reset_button)

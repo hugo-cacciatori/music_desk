@@ -30,6 +30,13 @@ BAD_STYLE = "background: #ffcdcd;"
 HANDLE_GRAB_PX = 8  # how near a handle a press must be to drag it
 
 
+TIPS = {  # the fields' hover texts, shown while they have no problem to tell (SPEC §24)
+    "start": "Where the copy starts, as m:ss.mmm; Up and Down move it by 10 ms, Page Up and Page Down by 1 s",
+    "end": "Where the copy ends, as m:ss.mmm; Up and Down move it by 10 ms, Page Up and Page Down by 1 s",
+    "subfolder": "The copy goes in this subfolder of the track's folder, created if missing; the original isn't "
+                 "changed",
+}
+
 class WaveformView(QWidget):
     """The whole track's waveform, with a start and an end handle; outside them is dimmed. Positions are in
     milliseconds, as the fields show them."""
@@ -225,6 +232,7 @@ class TrimPage(QWidget):
         self.state = "empty"  # loading, editing, running, result, error
 
         self.back_button = QPushButton("← Back")
+        self.back_button.setToolTip("Leave this page without trimming; the times you chose aren't kept")
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
@@ -235,6 +243,8 @@ class TrimPage(QWidget):
         self.format_label = QLabel()
 
         self.waveform = WaveformView()
+        self.waveform.setToolTip("Drag the two handles to where the copy starts and ends; a click moves the "
+                                 "nearer handle")
         self.waveform.startMoved.connect(lambda ms: self._handle_moved(self.start_edit, ms))
         self.waveform.endMoved.connect(lambda ms: self._handle_moved(self.end_edit, ms))
 
@@ -243,6 +253,8 @@ class TrimPage(QWidget):
         for edit in (self.start_edit, self.end_edit):
             edit.textEdited.connect(self._time_typed)
             edit.nudged.connect(self._time_typed)
+        self.start_edit.setToolTip(TIPS["start"])
+        self.end_edit.setToolTip(TIPS["end"])
         self.summary = QLabel()
         self.summary.setWordWrap(True)
         times = QGridLayout()
@@ -254,8 +266,7 @@ class TrimPage(QWidget):
         times.setColumnStretch(4, 1)
 
         self.subfolder = QLineEdit()
-        self.subfolder.setToolTip("The copy goes in this subfolder of the track's folder, created if missing. The "
-                                  "original is never touched.")
+        self.subfolder.setToolTip(TIPS["subfolder"])
         self.subfolder.setMaximumWidth(220)
         self.subfolder.textEdited.connect(lambda _text: self.valuesEdited.emit())
         self.copy_path = QLabel()
@@ -284,12 +295,17 @@ class TrimPage(QWidget):
         self.busy.setMaximumWidth(120)
         self.busy.setTextVisible(False)
         self.preview_button = QPushButton("Preview in player")
+        self.preview_button.setToolTip("Open the cut start, the kept part and the cut end as three tracks in your "
+                                       "default player, to hear the cuts before trimming")
         self.preview_button.clicked.connect(self.previewRequested)
         self.trim_button = QPushButton("Trim")
+        self.trim_button.setToolTip("Write the kept part as a FLAC copy in the subfolder; the original isn't changed")
         self.trim_button.clicked.connect(self.trimRequested)
         self.stop_button = QPushButton("Stop")
+        self.stop_button.setToolTip("Stop the trim; nothing is left half-written")
         self.stop_button.clicked.connect(self.stopRequested)
         self.done_button = QPushButton("Done")
+        self.done_button.setToolTip("Close this page and go back to the file list")
         self.done_button.clicked.connect(self.doneRequested)
         self.trim_note = QLabel()
         self.trim_note.setWordWrap(True)
@@ -350,10 +366,10 @@ class TrimPage(QWidget):
         """A track read: its values from scratch (the two times are the page's only state)."""
         self.heading.setText(f"<b>Trim</b> · {path}")
         self.format_label.setText(f"<b>{path.name}</b> · {format_line}")
-        for edit in (self.start_edit, self.end_edit):
+        for name, edit in (("start", self.start_edit), ("end", self.end_edit)):
             edit.total_ms = total_ms
             edit.setStyleSheet("")
-            edit.setToolTip("")
+            edit.setToolTip(TIPS[name])
         self.start_edit.setText(trim.format_time(0))
         self.end_edit.setText(trim.format_time(total_ms))
         self.subfolder.setText(subfolder)
@@ -365,7 +381,7 @@ class TrimPage(QWidget):
         for name, edit in (("start", self.start_edit), ("end", self.end_edit), ("subfolder", self.subfolder)):
             why = plan.problem(name)
             edit.setStyleSheet(BAD_STYLE if why else "")
-            edit.setToolTip(why or "")
+            edit.setToolTip(why or TIPS[name])  # a problem's reason first (SPEC §24)
         self.summary.setText(plan.summary if plan.times_ok and plan.length > 0 else "")
         if plan.name:
             path = f"The copy: {plan.shown_path}"

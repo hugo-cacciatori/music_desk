@@ -48,6 +48,12 @@ def format_keywords(keywords) -> str:
     return ", ".join(keywords)
 
 
+SCOPE_TIPS = {
+    ALBUM: "Only this folder, as one album with its lite, bonus and CD2 subfolders",
+    DISCOGRAPHY: "Every album below this folder, then all leveled to the quietest album so they play alike",
+}
+
+
 def scope_buttons(owner: QWidget, changed) -> tuple[QButtonGroup, QWidget]:
     group = QButtonGroup(owner)
     row = QWidget()
@@ -56,6 +62,7 @@ def scope_buttons(owner: QWidget, changed) -> tuple[QButtonGroup, QWidget]:
     for scope, text in ((ALBUM, "This album"), (DISCOGRAPHY, "Discography")):
         button = QRadioButton(text)
         button.setProperty("scope", scope)
+        button.setToolTip(SCOPE_TIPS[scope])
         group.addButton(button)
         layout.addWidget(button)
     layout.addStretch(1)
@@ -89,18 +96,22 @@ class ReplayGainCard(Card):
         self.target.setSingleStep(0.5)
         self.target.setSuffix(" LUFS")
         self.target.valueChanged.connect(self._edited)
+        self.target.setToolTip("The loudness rsgain levels the tracks to, from -30 to -5 LUFS")
         self.target.setMaximumWidth(140)
 
         self.threshold = QDoubleSpinBox()
         self.threshold.setRange(0, 1)
         self.threshold.setDecimals(5)
         self.threshold.setSingleStep(0.00001)
+        self.threshold.setToolTip("The highest peak a track may reach with its gain (1.0 is full scale); a gain "
+                                  "that would go above it is lowered")
         self.threshold.valueChanged.connect(self._edited)
         self.margin = QDoubleSpinBox()
         self.margin.setRange(0, 6)
         self.margin.setDecimals(2)
         self.margin.setSingleStep(0.01)
         self.margin.setSuffix(" dB")
+        self.margin.setToolTip("How far below the threshold a lowered gain leaves the peak")
         self.margin.valueChanged.connect(self._edited)
         self.threshold.setMaximumWidth(140)
         self.margin.setMaximumWidth(140)
@@ -109,6 +120,13 @@ class ReplayGainCard(Card):
         self.excluded = QLineEdit()
         self.log_file = QLineEdit()
         self.comment = QLineEdit()
+        self.subfolders.setToolTip("Subfolders whose name holds one of these words, separated by commas, get the "
+                                   "album's values")
+        self.track_keywords.setToolTip("In subfolders whose name holds one of these words, a file named like one "
+                                       "of the album's also gets its track values")
+        self.excluded.setToolTip("Subfolders whose name holds one of these words never get track values")
+        self.log_file.setToolTip("The report written in each album folder; each run replaces it")
+        self.comment.setToolTip("Written in each file's comment; {target} becomes the target loudness")
         for edit in (self.subfolders, self.track_keywords, self.excluded, self.log_file, self.comment):
             edit.textEdited.connect(self._edited)
         advanced = QWidget()
@@ -131,8 +149,11 @@ class ReplayGainCard(Card):
         self.body.addWidget(advanced)
 
         self.run_button = QPushButton("Run ReplayGain")  # no preview: it starts the job
+        self.run_button.setToolTip("Start at once: measure the tracks, write their ReplayGain tags and the log; "
+                                   "nothing is renamed")
         self.run_button.clicked.connect(self.runRequested)
         self.reset_button = QPushButton("Reset to defaults")
+        self.reset_button.setToolTip("Put back this card's default options")
         self.reset_button.clicked.connect(self.reset)
         self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)
@@ -218,6 +239,8 @@ class TidyCard(Card):
         self.body.addLayout(form)
         self.body.addWidget(self.note)
         self.run_button = QPushButton("Run Tidy…")  # "…": the rename preview comes first
+        self.run_button.setToolTip("Show the renames first; once you apply them, ReplayGain runs on the final "
+                                   "names")
         self.run_button.clicked.connect(self.runRequested)
         self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)

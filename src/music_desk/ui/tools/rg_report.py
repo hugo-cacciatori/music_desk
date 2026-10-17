@@ -89,6 +89,7 @@ class ReplayGainView(QWidget):
         self.folder: Path | None = None
 
         self.back_button = QPushButton("← Back to options")
+        self.back_button.setToolTip("Go back to the Tools options")
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
@@ -115,12 +116,17 @@ class ReplayGainView(QWidget):
         self.text.setFont(mono)  # the RunLog tables line up in columns
 
         self.stop_button = QPushButton("Stop")
+        self.stop_button.setToolTip("Stop ReplayGain: rsgain is stopped and the album being measured isn't "
+                                    "leveled")
         self.stop_button.clicked.connect(self.cancelRequested)
         self.open_log_button = QPushButton("Open replaygain.log")
+        self.open_log_button.setToolTip("Open the replaygain.log this run wrote, in its default app")
         self.open_log_button.clicked.connect(self._open_log)
         self.reveal_button = QPushButton("Open in File Explorer")
         self.reveal_button.clicked.connect(lambda: self.folder and self.revealRequested.emit(str(self.folder)))
+        self.reveal_button.setToolTip("Show the folder in File Explorer")
         self.done_button = QPushButton("Done")
+        self.done_button.setToolTip("Close this report and go back to the file list")
         self.done_button.clicked.connect(self.doneRequested)
         buttons = QHBoxLayout()
         for button in (self.stop_button, self.open_log_button, self.reveal_button):

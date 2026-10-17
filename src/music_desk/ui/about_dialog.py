@@ -56,6 +56,8 @@ class AboutDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         self.licenses_button = QPushButton("Open licences folder")
         buttons.addButton(self.licenses_button, QDialogButtonBox.ButtonRole.ActionRole)
+        self.licenses_button.setToolTip("Show the licence texts of MusicDesk and the components it bundles, in File "
+                                        "Explorer")
         self.licenses_button.clicked.connect(self.licensesRequested)
         buttons.rejected.connect(self.reject)
 

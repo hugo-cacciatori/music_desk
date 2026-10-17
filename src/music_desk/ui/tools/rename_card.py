@@ -84,6 +84,7 @@ class Card(QFrame):
         button.setCheckable(True)
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         button.setArrowType(Qt.ArrowType.RightArrow)
+        button.setToolTip("Show or hide the less common options")
         button.setAutoRaise(True)
         widget.hide()
 
@@ -109,8 +110,11 @@ class RenameCard(Card):
         self.masks_line = QLabel(MASKS_LINE)
         self.masks_line.setWordWrap(True)
         self.recursive = QCheckBox("Include subfolders")
+        self.recursive.setToolTip("Rename the music files of every subfolder too, not only this folder's")
         self.recursive.toggled.connect(self._edited)
         self.cleanup = QCheckBox("Send junk files to the Recycle Bin")
+        self.cleanup.setToolTip("Also send the files of the junk types below to the Recycle Bin; the preview "
+                                "lists them first")
         self.cleanup.toggled.connect(self._edited)
         self.junk = QLineEdit()
         self.junk.textEdited.connect(self._edited)
@@ -119,6 +123,7 @@ class RenameCard(Card):
         self.selection_note = QLabel()
         self.selection_note.setWordWrap(True)
         self.audio = QLineEdit()
+        self.audio.setToolTip("The extensions renamed as music files, separated by spaces")
         self.audio.textEdited.connect(self._edited)
         advanced = QWidget()
         advanced_form = QFormLayout(advanced)
@@ -136,8 +141,10 @@ class RenameCard(Card):
         self.body.addWidget(advanced)
 
         self.run_button = QPushButton("Run rename…")  # "…": a preview to check comes first
+        self.run_button.setToolTip("Show the new names first; nothing is renamed until you apply them")
         self.run_button.clicked.connect(self.runRequested)
         self.reset_button = QPushButton("Reset to defaults")
+        self.reset_button.setToolTip("Put back this card's default options")
         self.reset_button.clicked.connect(self.reset)
         self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)

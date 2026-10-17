@@ -44,6 +44,7 @@ class TrackLengthsDialog(QDialog):
         self.count = QSpinBox()
         self.count.setRange(2, MAX_TRACKS)
         self.count.setValue(max(2, self.current_tracks))
+        self.count.setToolTip("How many tracks the sheet gets; the last one runs to the end of the audio")
         self.count.valueChanged.connect(self._rebuild)
         count_row = QFormLayout()
         count_row.addRow("Tracks:", self.count)
@@ -82,6 +83,7 @@ class TrackLengthsDialog(QDialog):
         for i in range(self.count.value() - 1):
             edit = QLineEdit(self._typed[i] if i < len(self._typed) else "")
             edit.setPlaceholderText("m:ss")
+            edit.setToolTip(f"Track {i + 1}'s length, as m:ss or m:ss:ff; track {i + 2} starts where it ends")
             edit.textChanged.connect(self._check)
             self.form.addRow(f"Track {i + 1}:", edit)
             self.edits.append(edit)

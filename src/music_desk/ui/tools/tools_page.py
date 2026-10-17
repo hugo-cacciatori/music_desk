@@ -56,6 +56,7 @@ class ToolsPage(QWidget):
         self.scope: ToolScope | None = None
 
         self.back_button = QPushButton("← Back")
+        self.back_button.setToolTip("Go back to the file list; the options stay as they are")
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

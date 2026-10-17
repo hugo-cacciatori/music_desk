@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core.cue import ENCODINGS, FRAMES_PER_SECOND, AlbumPlan
 from music_desk.core.cue_edit import CueDocument, Problem, format_time
+from music_desk.ui.hover import exempt
 from music_desk.ui.qt_util import cell_text
 
 # The table's columns: (key, header). Keys are cue_edit.TRACK_FIELDS' where the cell is editable.
@@ -49,6 +50,18 @@ TICK_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.It
 def frames_text(samples: int, rate: int) -> str:
     return format_time(samples * FRAMES_PER_SECOND // rate) if rate else ""
 
+
+SAVE_TIP = "Save the edits into this .cue; its old version goes to the Recycle Bin first"
+NEW_SAVE_TIP = "Save this new cue sheet, beside its audio file unless you choose another place"
+
+HEADER_TIPS = {  # the columns whose header doesn't say it all (SPEC §24)
+    "tick": "Ticked tracks are written by Split; the others are left out",
+    "start": "Where the track starts (INDEX 01), as mm:ss:ff, with 75 frames a second",
+    "gap": "Where the gap before the track starts (INDEX 00); never a cut point",
+    "length": "Computed from the starts",
+    "flags": "The track's cue FLAGS (DCP, 4CH, PRE, SCMS)",
+    "name": "The file name the track gets, from the File names masks",
+}
 
 class SplitPage(QWidget):
     backRequested = Signal()
@@ -80,6 +93,7 @@ class SplitPage(QWidget):
         self._table_stale = False  # a refresh came while a cell was being edited
 
         self.back_button = QPushButton("← Back")
+        self.back_button.setToolTip("Leave this page; unsaved edits to the sheet ask to be saved or discarded")
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
@@ -108,6 +122,7 @@ class SplitPage(QWidget):
                                     "another. A name already taken there gets a number.")
         self.destination.textEdited.connect(self.destinationEdited)
         self.browse_button = QPushButton("Browse…")
+        self.browse_button.setToolTip("Choose an existing folder to write the tracks to")
         self.browse_button.clicked.connect(self.browseRequested)
         source_row = QGridLayout()
         source_row.addWidget(QLabel("Source:"), 0, 0)
@@ -126,6 +141,7 @@ class SplitPage(QWidget):
         album = QGridLayout()
         for i, (key, label) in enumerate(ALBUM_LABELS):
             edit = QLineEdit()
+            exempt(edit, "an album field of the sheet: its label says it all; a problem shows as its tooltip")
             edit.textEdited.connect(lambda text, key=key: self.albumEdited.emit(key, text))
             self.album_edits[key] = edit
             album.addWidget(QLabel(f"{label}:"), i // 2, (i % 2) * 2)
@@ -143,6 +159,10 @@ class SplitPage(QWidget):
         # -- the tracks --
         self.table = QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels([header for _key, header in COLUMNS])
+        for key, tip in HEADER_TIPS.items():
+            header_item = self.table.horizontalHeaderItem(COLUMN[key])
+            if header_item is not None:
+                header_item.setToolTip(tip)
         self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked
@@ -183,15 +203,22 @@ class SplitPage(QWidget):
 
         # -- the buttons --
         self.save_button = QPushButton("Save")
+        self.save_button.setToolTip(SAVE_TIP)
         self.save_button.clicked.connect(self.saveRequested)
         self.save_as_button = QPushButton("Save as…")
+        self.save_as_button.setToolTip("Save the sheet as another .cue file; a file it replaces goes to the Recycle "
+                                       "Bin first")
         self.save_as_button.clicked.connect(self.saveAsRequested)
         self.split_button = QPushButton("Split")
+        self.split_button.setToolTip("Write the ticked tracks as FLAC files in the destination folder, each proven "
+                                     "identical to its part; the image and its .cue aren't changed")
         self.split_button.clicked.connect(self.splitRequested)
         self.preview_button = QPushButton("Preview in player")
         self.preview_button.setToolTip("Open the sheet as it is now, unsaved edits included, in the default player.")
         self.preview_button.clicked.connect(self.previewRequested)
         self.save_beside = QCheckBox()
+        self.save_beside.setToolTip("Save new sheets next to their audio file at once, without the Save dialog "
+                                    "(remembered)")
         self.save_beside.toggled.connect(self.saveBesideToggled)
         self.save_beside.hide()
         self.new = False  # a new sheet, not saved yet
@@ -218,8 +245,10 @@ class SplitPage(QWidget):
         self.report = QPlainTextEdit()
         self.report.setReadOnly(True)
         self.stop_button = QPushButton("Stop")
+        self.stop_button.setToolTip("Stop the split; the tracks it was writing are deleted, the image isn't touched")
         self.stop_button.clicked.connect(self.stopRequested)
         self.done_button = QPushButton("Done")
+        self.done_button.setToolTip("Close this page and go back to the file list")
         self.done_button.clicked.connect(self.doneRequested)
         buttons = QHBoxLayout()
         buttons.addWidget(self.save_button)
@@ -322,6 +351,7 @@ class SplitPage(QWidget):
         """A new sheet (New cue sheet…): the Save-beside box shows, and the encoding is UTF-8 until saved."""
         self.new = new
         self.encoding.setEnabled(not new)
+        self.save_button.setToolTip(NEW_SAVE_TIP if new else SAVE_TIP)
         self.save_beside.blockSignals(True)
         self.save_beside.setChecked(save_beside)
         self.save_beside.blockSignals(False)

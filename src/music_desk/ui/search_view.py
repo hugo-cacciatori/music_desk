@@ -257,6 +257,7 @@ class SearchView(QWidget):
         self.count_label = QLabel()
         count_row.addWidget(self.count_label)
         self.play_button = QPushButton("Play results")
+        self.play_button.setToolTip("Play the audio files found, in the order shown, in your default player")
         self.play_button.setEnabled(False)
         self.play_button.clicked.connect(lambda: self.playRequested.emit(self.shown_ids()))
         count_row.addWidget(self.play_button)

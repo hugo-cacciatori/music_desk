@@ -36,12 +36,12 @@ def qt_internal(widget: QWidget) -> bool:
         parent.standardButton(widget) != QDialogButtonBox.StandardButton.NoButton
 
 
-def missing_hover_texts(root: QWidget, skip: tuple[QWidget, ...] = ()) -> list[str]:
+def missing_hover_texts(root: QWidget) -> list[str]:
     """The controls under `root` (shown or not) with no hover text, or one that only repeats their label."""
     missing = []
     for widget in root.findChildren(QWidget):
         if not isinstance(widget, CONTROLS) or isinstance(widget, QScrollBar) or qt_internal(widget) or \
-                is_exempt(widget) or any(widget is s or s.isAncestorOf(widget) for s in skip):
+                is_exempt(widget):
             continue
         if isinstance(widget, QAbstractButton) and widget.isHidden() and not widget.text() and \
                 widget.icon().isNull():
@@ -54,24 +54,36 @@ def missing_hover_texts(root: QWidget, skip: tuple[QWidget, ...] = ()) -> list[s
     return missing
 
 
-def assert_all_have_hover_texts(root: QWidget, skip: tuple[QWidget, ...] = ()) -> None:
-    missing = missing_hover_texts(root, skip)
+def assert_all_have_hover_texts(root: QWidget) -> None:
+    missing = missing_hover_texts(root)
     assert not missing, "No hover text:\n" + "\n".join(missing)
 
 
-def window_parts_not_done_yet(window) -> tuple[QWidget, ...]:
-    """M15 task 1 covers the main window, the sidebar and the side panel; task 2 covers these."""
-    pages = [window.center.widget(i) for i in range(window.center.count())]
-    return (*(page for page in pages if page is not window.file_view), window.playlist_panel, window.jobs_panel)
-
-
-def test_the_main_window_sidebar_and_side_panel(window, service, qtbot):
-    skip = window_parts_not_done_yet(window)
+def test_the_side_panel_in_each_state(window, service, qtbot):
     window.open_folder(entry(service, "Artist", "Album"))
-    assert_all_have_hover_texts(window, skip)  # a folder's summary
+    assert_all_have_hover_texts(window)  # a folder's summary
     window.file_view.select_ids([entry(service, "Artist", "Album", "track 1.flac")])
     qtbot.waitUntil(lambda: window.side_panel.metadata.snapshot is not None, timeout=10000)
     window.side_panel.tabs.setCurrentIndex(1)
-    assert_all_have_hover_texts(window, skip)  # one file: the Metadata and Lyrics tabs
+    assert_all_have_hover_texts(window)  # one file: the Metadata and Lyrics tabs
     window.file_view.select_ids([entry(service, "Artist", "Album", "cover.jpg")])
-    assert_all_have_hover_texts(window, skip)  # a file's preview
+    assert_all_have_hover_texts(window)  # a file's preview
+
+
+def test_every_page_and_panel(window):
+    """The centre pages (tools, previews, reports, split, trim, search), the playlist builder and the jobs panel
+    are built with the window, shown or not."""
+    assert_all_have_hover_texts(window)
+
+
+def test_the_other_windows_and_dialogs(window, qtbot):
+    from music_desk.ui.about_dialog import AboutDialog
+    from music_desk.ui.track_lengths import TrackLengthsDialog
+
+    window.open_advanced_search()
+    assert window.advanced_search is not None
+    about = AboutDialog("rsgain 3.6", window, flac_version="flac 1.5.0")
+    lengths = TrackLengthsDialog([7350, 7350], 0, 22050, window)
+    for widget in (window.advanced_search, about, lengths):
+        qtbot.addWidget(widget)
+        assert_all_have_hover_texts(widget)

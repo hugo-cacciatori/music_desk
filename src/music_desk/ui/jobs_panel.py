@@ -52,9 +52,12 @@ class JobsPanel(QWidget):
 
         self.open_button = QPushButton("Open")
         self.open_button.clicked.connect(lambda: self._emit(self.openRequested))
+        self.open_button.setToolTip("Show the selected job's page or report (or double-click it)")
         self.stop_button = QPushButton("Stop")
+        self.stop_button.setToolTip("Stop the selected job; each tool says in its report what it left as it was")
         self.stop_button.clicked.connect(lambda: self._emit(self.stopRequested))
         self.clear_button = QPushButton("Clear finished")
+        self.clear_button.setToolTip("Remove the finished jobs from this list; their files stay as they are")
         self.clear_button.clicked.connect(jobs.clear_finished)
         buttons = QVBoxLayout()
         for button in (self.open_button, self.stop_button, self.clear_button):

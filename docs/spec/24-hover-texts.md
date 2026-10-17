@@ -44,3 +44,9 @@ Asked by Hugo on 2026-10-17; scheduled as M15 the same day. Every button and con
   with neither text nor icon (a placeholder filled when shown).
 - M15 task 1 (0.5.2): the main window's toolbar and status bar, the sidebar, the file list's filter, the search
   field, and the side panel (folder summary, Metadata, Lyrics, file preview).
+- M15 task 2 (0.5.3): the Tools page and its cards, the rename preview, the ReplayGain report, the Split page
+  (its column headers too: tick, Start, Gap, Length, Flags, New name), the Trim page (the waveform and both time
+  fields), the jobs panel, the search page, the Advanced search window, About and Fill from track lengths. The
+  Trim page's Start, End and subfolder fields used to lose their text after a check: a problem's reason now
+  falls back to it. The guard covers the whole main window (every page is built with it, shown or not) and the
+  other windows and dialogs.

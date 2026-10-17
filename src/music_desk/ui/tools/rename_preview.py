@@ -62,6 +62,8 @@ def sections_text(sections: list[tuple[str, list[str]]]) -> str:
     return "\n".join(lines).rstrip()
 
 
+BACK_TIP = "Go back to the Tools options without renaming anything"
+
 class RenamePreview(QWidget):
     backRequested = Signal()  # back to the Tools page (cancels a preview still reading)
     applyRequested = Signal()
@@ -76,6 +78,7 @@ class RenamePreview(QWidget):
         self.tidy = False  # step 1 of Tidy: Apply also starts ReplayGain, even with nothing to rename
 
         self.back_button = QPushButton("← Back to options")
+        self.back_button.setToolTip(BACK_TIP)
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
@@ -97,6 +100,7 @@ class RenamePreview(QWidget):
         self.summary.setWordWrap(True)
         self.summary.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.filter = QComboBox()
+        self.filter.setToolTip("Show only the files of one status in the list")
         self.filter.currentIndexChanged.connect(self._apply_filter)
         filter_row = QHBoxLayout()
         filter_row.addWidget(QLabel("Show:"))
@@ -121,12 +125,17 @@ class RenamePreview(QWidget):
         self.extras.setMaximumHeight(160)
 
         self.apply_button = QPushButton("Apply renames")
+        self.apply_button.setToolTip("Rename exactly the files listed, as shown; in Tidy, ReplayGain then runs on "
+                                     "the final names")
         self.apply_button.clicked.connect(self.applyRequested)
         self.back_bottom = QPushButton("← Back to options")  # next to Apply: return without changing anything
+        self.back_bottom.setToolTip(BACK_TIP)
         self.back_bottom.clicked.connect(self.backRequested)
         self.cancel_button = QPushButton("Stop")
+        self.cancel_button.setToolTip("Stop between two files; the files renamed so far keep their new names")
         self.cancel_button.clicked.connect(self.cancelRequested)
         self.done_button = QPushButton("Done")
+        self.done_button.setToolTip("Close this page and go back to the file list")
         self.done_button.clicked.connect(self.doneRequested)
         buttons = QHBoxLayout()
         buttons.addWidget(self.apply_button)

@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from music_desk.core.index.album_search import SEARCHES
+from music_desk.core.index.album_search import NOT_SPLIT, SEARCHES, WITHOUT_REPLAYGAIN
 from music_desk.services.album_search_service import AlbumSearchService, SearchDone
 
 FOLDER_ROLE = Qt.ItemDataRole.UserRole
@@ -41,13 +41,18 @@ class AdvancedSearchWindow(QWidget):
 
         self.options = QButtonGroup(self)
         options = QVBoxLayout()
+        tips = {WITHOUT_REPLAYGAIN: "List the album folders with a track that has no ReplayGain values",
+                NOT_SPLIT: "List the folders holding a cue sheet and the one audio file it describes, with no "
+                           "tracks split from it"}
         for n, (key, label) in enumerate(SEARCHES):
             button = QRadioButton(label)
             button.setProperty("search", key)
             button.setChecked(n == 0)
+            button.setToolTip(tips[key])
             self.options.addButton(button)
             options.addWidget(button)
         self.start_button = QPushButton("Start")
+        self.start_button.setToolTip("Search the library index for the chosen kind of album; nothing is changed")
         self.start_button.clicked.connect(self.start)
         self.refresh_button = QPushButton("Refresh search")
         self.refresh_button.setToolTip("Run the last search again, so the list follows what was fixed meanwhile.")

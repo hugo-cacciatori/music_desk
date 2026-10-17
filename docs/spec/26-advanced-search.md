@@ -1,5 +1,5 @@
 # 26. Advanced search
-Specified with Hugo on 2026-10-17 (M12, not built). It replaces §6 "Later", which had nothing designed.
+Specified with Hugo on 2026-10-17 (M12, built in 0.4.1–0.5.0). It replaces §6 "Later", which had nothing designed.
 
 **The need** (Hugo, 2026-10-17): a separate list of albums to go through and fix by hand, such as the albums still
 missing ReplayGain tags or the EAC rips not split yet. Its end function is just that list of clickable addresses.

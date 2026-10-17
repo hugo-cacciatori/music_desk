@@ -51,6 +51,8 @@ class SearchController(QObject):
         self.field = QLineEdit()  # the window puts it in its toolbar
         self.field.setPlaceholderText("Search library (Ctrl+K)")
         self.field.setClearButtonEnabled(True)
+        self.field.setToolTip("Search the whole library as you type: names, tags and LRCLIB lyrics, and filters "
+                              "like artist: or year: (Ctrl+K)")
         self.field.setMinimumWidth(180)
         self.field.setMaximumWidth(320)
         self.field.textEdited.connect(self._edited)

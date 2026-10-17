@@ -70,9 +70,13 @@ class FolderSummaryView(QWidget):
         buttons = QHBoxLayout()
         self.play_button = QPushButton("Play folder")
         self.play_button.clicked.connect(lambda: self._play(False))
+        self.play_button.setToolTip("Play this folder's tracks in your default player, as a temporary playlist")
         self.play_all_button = QPushButton("Play with subfolders")
+        self.play_all_button.setToolTip("Play the tracks of this folder and of all its subfolders in your default "
+                                        "player")
         self.play_all_button.clicked.connect(lambda: self._play(True))
         self.tools_button = QPushButton("Tools…")
+        self.tools_button.setToolTip("Open the Tools page (file names, Rename, ReplayGain, Tidy) for this folder")
         self.tools_button.clicked.connect(lambda: self.summary and self.toolsRequested.emit(self.summary.id))
         buttons.addWidget(self.play_button)
         buttons.addWidget(self.play_all_button)

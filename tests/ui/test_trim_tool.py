@@ -14,6 +14,7 @@ from music_desk.core.flac import Cancelled
 from music_desk.core.index.store import path_of
 from music_desk.core.tags import TaggedFile
 from music_desk.services import trim_job
+from music_desk.ui.side_panel.metadata_tab import TRIM_TIP
 
 HIDDEN = "Fixture Artist - Split Album.flac"  # 12 s: a 3 s hidden track, then the songs
 
@@ -109,6 +110,7 @@ def test_the_button_is_greyed_while_flac_is_unavailable_or_the_file_locked(qtbot
     assert not metadata.trim_button.isEnabled() and "flac couldn't run" in metadata.trim_button.toolTip()
     window.show_flac_version("flac 1.5.0")
     assert metadata.trim_button.isEnabled()
+    assert metadata.trim_button.toolTip() == TRIM_TIP  # the reason gone, the hover text is back (SPEC §24)
     lock = window.library.locks.acquire([album], "the ReplayGain tool")
     try:
         qtbot.waitUntil(lambda: not metadata.trim_button.isEnabled(), timeout=5000)

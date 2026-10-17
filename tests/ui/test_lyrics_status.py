@@ -28,6 +28,7 @@ def test_status_bar_label_and_button(window, service, monkeypatch):
     assert label.text().startswith("LRCLIB unreachable, retrying at ") and button.text() == "Retry now"
     button.click()
     assert calls == ["pause", "resume", "retry_now"]
+    assert button.toolTip() == "Try reaching LRCLIB again now instead of waiting."  # SPEC §24
 
     window.show_lyrics_progress(progress(OFFLINE))
     assert label.text() == "Lyrics: lookups off" and not button.isVisible()

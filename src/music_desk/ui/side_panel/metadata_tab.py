@@ -38,6 +38,7 @@ from music_desk.core.metadata import COVER, COVER_EXTENSIONS, LARGE_COVER, Snaps
 from music_desk.core.tags import Fields
 from music_desk.services.tag_io import ImageRead, Loaded, LoadedMany, TagIO
 from music_desk.services.tag_writer import BatchWritten, TagWriter
+from music_desk.ui.hover import exempt
 from music_desk.ui.qt_util import shortcut
 
 TEXT_FIELDS = (("title", "Title"), ("artist", "Artist"), ("albumartist", "Album artist"), ("album", "Album"))
@@ -51,6 +52,9 @@ MULTIPLE = object()  # the files of a multi-selection differ on this field
 MULTIPLE_TEXT = "(multiple values)"
 CLEARED_TEXT = "(cleared on all files)"
 
+
+TRIM_TIP = "Write a copy of this track without its start or its end, in a subfolder; the original isn't changed"
+NEW_CUE_TIP = "Start a cue sheet for this file on the Split page, to cut it into tracks"
 
 class CoverLabel(QLabel):
     """The cover in the header. A jpg or png dropped on it replaces the cover (a drop into the app is fine;
@@ -164,7 +168,11 @@ class MetadataTab(QWidget):
         self.cover.pictureDropped.connect(self.replace_cover_from)
         self.replace_cover_button = QPushButton("Replace…")
         self.replace_cover_button.clicked.connect(self.replace_cover)
+        self.replace_cover_button.setToolTip("Choose a JPEG or PNG picture as the embedded cover; it is written when "
+                                             "you save")
         self.remove_cover_button = QPushButton("Remove")
+        self.remove_cover_button.setToolTip("Remove the embedded cover when you save; picture files in the folder "
+                                            "stay")
         self.remove_cover_button.clicked.connect(self.remove_cover)
         cover_box = QVBoxLayout()
         cover_box.addWidget(self.cover)
@@ -185,10 +193,12 @@ class MetadataTab(QWidget):
         # In the room the cover column leaves (SPEC §23): nothing on screen is resized.
         self.trim_button = QPushButton("Trim…")
         self.trim_button.clicked.connect(lambda: self.trimRequested.emit(str(self.path)) if self.path else None)
+        self.trim_button.setToolTip(TRIM_TIP)
         self.trim_button.hide()
         self.new_cue_button = QPushButton("New cue sheet…")
         self.new_cue_button.clicked.connect(
             lambda: self.newCueRequested.emit(str(self.path)) if self.path else None)
+        self.new_cue_button.setToolTip(NEW_CUE_TIP)
         self.new_cue_button.hide()
         trim_row = QHBoxLayout()
         trim_row.addWidget(self.trim_button)
@@ -230,7 +240,9 @@ class MetadataTab(QWidget):
         self.error_label.hide()
         self.revert_button = QPushButton("Revert")
         self.revert_button.clicked.connect(self.revert)
+        self.revert_button.setToolTip("Drop the unsaved edits and show the tags as they are in the files (Esc)")
         self.save_button = QPushButton("Save")
+        self.save_button.setToolTip("Write the edited tags into the selected files (Ctrl+S)")
         self.save_button.setDefault(True)
         self.save_button.clicked.connect(self.save)
         buttons.addWidget(self.error_label, 1)
@@ -268,6 +280,7 @@ class MetadataTab(QWidget):
 
     def _line(self, key: str) -> QLineEdit:
         edit = QLineEdit()
+        exempt(edit, "a tag field: its label says it all (SPEC §24)")
         edit.textEdited.connect(lambda _text, k=key: self._edited(k))
         self.edits[key] = edit
         if key in SHARED_FIELDS:
@@ -510,11 +523,9 @@ class MetadataTab(QWidget):
         reason = (trim.unsupported_reason(self.snapshot.path) or self.trim_unavailable
                   or (f"Unavailable while {self.locked_by} is running." if self.locked_by else None))
         self.trim_button.setEnabled(reason is None)
-        self.trim_button.setToolTip(reason or "Write a copy of this track without its start or its end, in a "
-                                              "subfolder. The original is never touched.")
+        self.trim_button.setToolTip(reason or TRIM_TIP)
         self.new_cue_button.setEnabled(reason is None)
-        self.new_cue_button.setToolTip(reason or "Start a cue sheet for this file on the Split page, to cut it into "
-                                                 "tracks.")
+        self.new_cue_button.setToolTip(reason or NEW_CUE_TIP)
 
     # -- editing --
 

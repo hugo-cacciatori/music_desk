@@ -42,6 +42,8 @@ UNREACHABLE_STATE = "unreachable"
 PAUSED_STATE = "paused"
 
 
+TIMESTAMPS_TIP = "Show the time of each line in front of it, as LRCLIB's synced lyrics give it"
+
 class LyricsTab(QWidget):
     urlRequested = Signal(str)  # a Genius or Google search, opened by the window
 
@@ -71,6 +73,7 @@ class LyricsTab(QWidget):
         self.text = QPlainTextEdit()
         self.text.setReadOnly(True)
         self.timestamps = QCheckBox("Show timestamps")
+        self.timestamps.setToolTip(TIMESTAMPS_TIP)
         self.timestamps.toggled.connect(self._show_text)
         self.source = QLabel()
         self.source.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -81,11 +84,15 @@ class LyricsTab(QWidget):
 
         self.copy_button = QPushButton("Copy")
         self.copy_button.clicked.connect(self.copy)
+        self.copy_button.setToolTip("Copy the lyrics as shown here to the clipboard")
         self.genius_button = QPushButton("Search on Genius")
+        self.genius_button.setToolTip("Search Genius for this track's lyrics in your web browser")
         self.genius_button.clicked.connect(lambda: self._search(0))
         self.google_button = QPushButton("Search on Google")
+        self.google_button.setToolTip("Search Google for this track's lyrics in your web browser")
         self.google_button.clicked.connect(lambda: self._search(1))
         self.retry_button = QPushButton("Retry now")
+        self.retry_button.setToolTip("Look this track up on LRCLIB again now")
         self.retry_button.clicked.connect(self.retry)
         buttons = QHBoxLayout()
         for button in (self.copy_button, self.genius_button, self.google_button, self.retry_button):
@@ -189,7 +196,7 @@ class LyricsTab(QWidget):
             _info, entry = self._found()
             synced = bool(entry.get("synced"))
             self.timestamps.setEnabled(synced)
-            self.timestamps.setToolTip("" if synced else "LRCLIB has only plain lyrics for this track.")
+            self.timestamps.setToolTip(TIMESTAMPS_TIP if synced else "LRCLIB has only plain lyrics for this track.")
             if not synced:
                 self.timestamps.setChecked(False)
             self._show_text()

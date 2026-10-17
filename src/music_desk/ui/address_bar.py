@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from music_desk.ui.hover import exempt
+
 SEPARATOR = "›"
 MIN_WIDTH = 160  # the breadcrumb shrinks to this, hiding its leading folders
 PREFERRED_WIDTH = 520
@@ -42,6 +44,7 @@ class AddressBar(QStackedWidget):
         self._subfolders = subfolders  # entry id -> [(id, name)] in natural order
         self._segments: list[tuple[int, str]] = []
         self._path = ""
+        exempt(self, "the address bar explains itself (SPEC §24)")
 
         self.crumbs = _Crumbs()
         self.crumbs.setFrameShape(QFrame.Shape.StyledPanel)

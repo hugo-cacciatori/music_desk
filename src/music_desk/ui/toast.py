@@ -5,6 +5,8 @@ from collections.abc import Callable
 from PySide6.QtCore import QEvent, QObject, QTimer
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
 
+from music_desk.ui.hover import exempt
+
 TOAST_MS = 8000
 
 
@@ -19,6 +21,7 @@ class Toast(QFrame):
         self.button = QPushButton()
         self.close_button = QPushButton("✕")
         self.close_button.setFlat(True)
+        exempt(self, "the message says what its button does, and the cross closes it")
         self.close_button.clicked.connect(self.hide)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 8, 8, 8)

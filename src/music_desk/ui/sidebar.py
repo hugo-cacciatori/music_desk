@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QLabel, QMenu, QPushButton, QVBoxLayout, QWidget
 
 from music_desk.core.index.roots import Root
 from music_desk.ui.folder_tree import ENTRY_ID_ROLE, FolderTreeModel, FolderTreeView
+from music_desk.ui.hover import exempt
 
 
 class Sidebar(QWidget):
@@ -31,7 +32,10 @@ class Sidebar(QWidget):
         self.empty_hint = QLabel("Add a music folder, or drop one on the window.")
         self.empty_hint.setWordWrap(True)
         self.add_button = QPushButton("Add folder…")
+        self.add_button.setToolTip("Add a music folder to the library and index it; adding only reads the folder "
+                                   "(Ctrl+O)")
         self.add_button.clicked.connect(self.addFolderRequested)
+        exempt(self.tree, "the folder tree explains itself (SPEC §24)")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)

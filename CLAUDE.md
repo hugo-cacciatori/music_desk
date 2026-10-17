@@ -36,7 +36,7 @@ of it (see Session protocol 5).
 Done when: the wheel over any input of any page or dialog scrolls and changes nothing (the UI test).
 
 **M15 Hover texts** (Hugo, 2026-10-17; read SPEC §24). Menus get status-bar tips; a guard test.
-- [ ] 1. (0.5.2) The guard test (every page's controls, the allow-list) and the main window, sidebar, side panel.
+- [x] 1. (0.5.2) The guard test (every page's controls, the allow-list) and the main window, sidebar, side panel.
 - [ ] 2. (0.5.3) The tools page, the Split and Trim pages, the playlist builder, jobs, Advanced search, dialogs.
 - [ ] 3. (0.5.4) Menu status-bar tips; README.
 

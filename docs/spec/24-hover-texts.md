@@ -30,3 +30,17 @@ Asked by Hugo on 2026-10-17; scheduled as M15 the same day. Every button and con
   Self-explanatory entries (Copy, Rename, Delete, Open) get none. Nothing pops up over the menu.
 - **A guard test**: a UI test opens every page, panel and dialog and fails on any button or control without a
   tooltip, outside a short allow-list of the exclusions above, so a control added later can't forget its text.
+
+## As built
+- `ui/hover.py`: `exempt(widget, why)` marks a widget (and everything inside it) as needing no hover text: the
+  folder tree, the file list, the address bar, the Metadata tab's tag fields, the toast (its message says what
+  its button does). Where a control has a reason tooltip, the descriptive text is a constant the reason falls
+  back to (`TRIM_TIP`, `NEW_CUE_TIP`, `TIMESTAMPS_TIP`), so it returns as soon as the reason no longer applies.
+- The status bar's lyrics button takes its text's tip (Pause, Resume, Retry now) each time it changes.
+- The guard (`tests/ui/test_hover_texts.py`) walks every button, combo box, spin box, slider (not scroll bars)
+  and text field under a root, shown or not, and fails on one with no tooltip or one that only repeats its label.
+  It leaves out what Qt builds itself (tab bar arrows, dock and toolbar buttons named `qt_*`, the text field of a
+  spin box or combo box, a text field's clear and action icons, a dialog's standard buttons) and a hidden button
+  with neither text nor icon (a placeholder filled when shown).
+- M15 task 1 (0.5.2): the main window's toolbar and status bar, the sidebar, the file list's filter, the search
+  field, and the side panel (folder summary, Metadata, Lyrics, file preview).

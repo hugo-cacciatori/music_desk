@@ -39,6 +39,7 @@ from music_desk.core.fsops import natural_key
 from music_desk.core.index import queries
 from music_desk.core.index.queries import FileRow
 from music_desk.ui.entry_drag import EntryDragView
+from music_desk.ui.hover import exempt
 from music_desk.ui.qt_util import shortcut
 
 ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
@@ -296,10 +297,12 @@ class FileView(QWidget):
         self.filter = QLineEdit()
         self.filter.setPlaceholderText("Filter this folder by name (Esc to close)")
         self.filter.setClearButtonEnabled(True)
+        self.filter.setToolTip("Show only the entries of this folder whose name contains this text (Ctrl+F)")
         self.filter.textChanged.connect(self.proxy.setFilterFixedString)
         self.filter.hide()
 
         self.view = EntryDragView()
+        exempt(self.view, "the file list explains itself (SPEC §24)")
         self.view.setModel(self.proxy)
         self.view.setRootIsDecorated(False)
         self.view.setUniformRowHeights(True)

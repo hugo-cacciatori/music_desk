@@ -71,6 +71,12 @@ APP_TITLE = "MusicDesk"
 PAUSED_NOTE = " (paused while ReplayGain runs)"
 
 
+LYRICS_BUTTON_TIPS = {  # the status bar's lyrics button, by what it says
+    "Pause": "Pause the LRCLIB lookups until you resume them.",
+    "Resume": "Resume the LRCLIB lookups where they stopped.",
+    "Retry now": "Try reaching LRCLIB again now instead of waiting.",
+}
+
 class DropOverlay(QLabel):
     """Covers the window while folders are dragged over it."""
 
@@ -390,16 +396,21 @@ class MainWindow(QMainWindow):
         # twice is ambiguous and fires nothing.
         self.back_action.setShortcut(QKeySequence("Alt+Left"))
         self.back_action.triggered.connect(self.go_back)
+        self.back_action.setToolTip("Go back to the folder you were in before (Alt+Left)")
         self.forward_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_ArrowForward), "Forward", self)
         self.forward_action.setShortcut(QKeySequence("Alt+Right"))
         self.forward_action.triggered.connect(self.go_forward)
+        self.forward_action.setToolTip("Go forward again to the folder you went back from (Alt+Right)")
         self.up_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_ArrowUp), "Up", self)
         self.up_action.setShortcut(QKeySequence("Alt+Up"))
         self.up_action.triggered.connect(self.go_up)
+        self.up_action.setToolTip("Open the folder that contains this one (Alt+Up)")
         self.refresh_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload), "Rescan folder",
                                       self)
         self.refresh_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Refresh))
         self.refresh_action.triggered.connect(self.rescan_folder)
+        self.refresh_action.setToolTip("Read this folder from the disk again now, to show changes made outside "
+                                       "MusicDesk (F5)")
         self.address_action = QAction("Edit address", self, shortcut=QKeySequence("Ctrl+L"))
         self.address_action.triggered.connect(lambda: self.address_bar.edit())
         self.addAction(self.address_action)
@@ -707,6 +718,7 @@ class MainWindow(QMainWindow):
         self.lyrics_label.setText(text)
         self.lyrics_label.setVisible(bool(text))
         self.lyrics_button.setText(button or "")
+        self.lyrics_button.setToolTip(LYRICS_BUTTON_TIPS.get(button or "", ""))
         self.lyrics_button.setVisible(button is not None)
 
     def _lyrics_button_clicked(self) -> None:

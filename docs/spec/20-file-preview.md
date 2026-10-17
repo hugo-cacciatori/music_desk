@@ -36,6 +36,8 @@ shows it in the side panel, read-only, instead of "<name> isn't an audio file."
   - Files over 50 MB aren't decoded: "Too large to preview (80 MB). Open it instead."
 - **Every `.cue`** also gets a **Split into tracks…** button, the only way into the cue split (§22; Hugo,
   2026-10-16). It opens the Split page in the centre area, where the sheet can be edited and saved.
+  - Since M19 (Hugo, 2026-10-17) a `.cue` shows **Play**, **Split** and **Edit…** instead (§22 "The entry
+    point"): Play is Open renamed, Split splits at once with the defaults, Edit… opens the Split page.
 - Always read-only: nothing on the page writes, renames or deletes (editing happens on the Split page).
 
 **Reading** (Ground rule 2)

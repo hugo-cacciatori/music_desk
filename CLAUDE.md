@@ -37,10 +37,14 @@ Read SPEC §28 (and §10, §22, §26 for what it reuses). Each task bumps the pa
   one's steps, with the ReplayGain check; unit tests. 0.6.1.
 - [x] 1b. The Tools page in three headed sections, clearer card titles and Run buttons (Hugo, SPEC §10). 0.6.2.
 - [ ] 2. The job: one Tidy job album by album (split, renames, ReplayGain), locks, Stop, report, the offer list
-  collected. 0.6.4.
-- [ ] 3. The Tidy card and the plan page (preview), Run, the jobs panel; the old Tidy flow removed. 0.6.5.
+  collected. 0.6.5.
+- [ ] 3. The Tidy card and the plan page (preview), Run, the jobs panel; the old Tidy flow removed. 0.6.6.
 - [ ] 4. The offer window (Keep / Delete, multi-select, Apply to the Recycle Bin, closing keeps all); README and
   SPEC §10 updated. 0.7.0.
+
+### M19: cue preview buttons (Hugo, 2026-10-17)
+Read SPEC §22 "The entry point". Before M17 tasks 2-4 (Hugo asked for it first).
+- [ ] 1. Play, Split (at once, the defaults), Edit… on a .cue preview; tests. 0.6.4.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that

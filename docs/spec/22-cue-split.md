@@ -128,6 +128,17 @@ Redesigned with Hugo on 2026-10-16, replacing the 0.2.10 Tools card (see "Replac
 in**, and **one page with every control**; you can't split without going through it.
 
 **The entry point**
+- **Three buttons on a `.cue` preview** (Hugo, 2026-10-17, M19; they replace "Split into tracks…" and Open there):
+  - **Play**: Open, renamed for a cue sheet: the sheet opens in its default app, which for a cue sheet is the
+    player (it plays the album). Other files keep **Open**.
+  - **Split**: splits at once with the Split page's defaults: every track ticked (a hidden track included), into
+    the sheet's folder, named by the File names masks, in the sheet's Auto encoding. The Split page opens to show
+    the run and its report, as when Split is clicked there. It doesn't split, and stays on the page with a note
+    saying why, when the sheet needs a look: the Split button there would be disabled (a refusal, a marked
+    value, the file names to fix, flac unavailable), the encoding had to be guessed (Windows-1252), or the page
+    has a warning (data tracks). Same sheet already open with unsaved edits: Split asks to save first, as the
+    page's own Split does.
+  - **Edit…**: what "Split into tracks…" did: the Split page, to check and edit before splitting.
 - The side panel's preview of any `.cue` (§20) shows a **Split into tracks…** button. The side panel previews
   only a single selected file, so this is "one `.cue` selected". There is no menu entry, and nothing on the Tools
   page.

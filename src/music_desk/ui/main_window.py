@@ -167,8 +167,6 @@ class MainWindow(QMainWindow):
         self.jobs_button.clicked.connect(lambda: self.jobs_dock.setVisible(not self.jobs_dock.isVisible()))
         self.jobs_button.hide()
         self.statusBar().addPermanentWidget(self.jobs_button)
-        self.rsgain_label = QLabel("Checking rsgain…")
-        self.statusBar().addPermanentWidget(self.rsgain_label)
 
         conn = lambda: self.library.conn if self._library_open() else None  # noqa: E731
         self.sidebar = Sidebar(conn, self.settings.expanded_folders)
@@ -402,15 +400,11 @@ class MainWindow(QMainWindow):
     # -- rsgain --
 
     def show_rsgain_version(self, version: str | None) -> None:
+        """The startup self-check of the bundled rsgain (SPEC §13). A failure is explained on the ReplayGain and
+        Tidy cards; the version only shows in About, so the status bar has no rsgain label."""
         self.rsgain_version = version  # for the About dialog
         self.tools_page.set_rsgain_unavailable(
             None if version else "rsgain couldn't run, so ReplayGain is unavailable. See the log for details.")
-        if version:
-            self.rsgain_label.setText(version)
-            self.rsgain_label.setToolTip("")
-        else:
-            self.rsgain_label.setText("rsgain unavailable: ReplayGain tools disabled")
-            self.rsgain_label.setToolTip("The bundled rsgain.exe could not run. See the log for details.")
 
     def show_flac_version(self, version: str | None) -> None:
         """The startup self-check of the bundled flac (SPEC §13). The Split page's Split button is disabled with

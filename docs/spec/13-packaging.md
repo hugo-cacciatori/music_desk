@@ -13,7 +13,8 @@
   - rsgain prints ANSI colour codes, which are stripped as in the script's `strip_ansi`.
 - Startup self-check: if `rsgain --version` fails, the ReplayGain tools are disabled with an explanation.
   - **No rsgain label in the status bar** (Hugo, 2026-10-17: the version is useless to the user). The
-    right-hand "Checking rsgain…" / "rsgain 3.6" / "rsgain unavailable…" label is removed. Nothing is
+    right-hand "Checking rsgain…" / "rsgain 3.6" / "rsgain unavailable…" label is removed (as built in 0.3.2;
+    `tests/ui/test_main_window.py` checks the status bar never names rsgain). Nothing is
     lost: a failed check is explained on the ReplayGain and Tidy cards (`ToolsPage.set_rsgain_unavailable`),
     the log records the check, and Help › About shows the versions (rsgain and flac).
 - **flac** (from M10, for the cue split, §22): `resources/flac/` holds `flac.exe` and `libFLAC.dll` from the

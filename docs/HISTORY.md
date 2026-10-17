@@ -957,6 +957,15 @@ Done when:
 Optional, for later (not needed for completion): in the installed app, on a copy of an EAC rip (image, cue,
 log), save a second version of the cue sheet with other split points, and split from it with the bundled flac.
 
+**Status bar: no rsgain version** (Hugo, 2026-10-17; read SPEC §13 "Startup self-check"). Small, so it went
+first.
+- [x] 1. Remove `MainWindow.rsgain_label` ("Checking rsgain…" / the version / "unavailable") from the status
+      bar; the self-check, the cards' explanation and About stay. Tests that read the label move to the cards
+      (0.3.2).
+
+Done when: the status bar shows no rsgain text at startup or after the check, a failed check still disables
+the ReplayGain and Tidy cards with their explanation, About still shows the version, and the suite passes.
+
 ## Former CLAUDE.md sections (as of 2026-10-16)
 
 **Session protocol:**

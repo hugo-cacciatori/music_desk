@@ -134,11 +134,11 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.lyrics_label)
         self.statusBar().addPermanentWidget(self.lyrics_button)
         self._lyrics_state = ""
-        self.jobs_button = QToolButton()
+        self.jobs_button = QToolButton(text="Jobs")  # always there: the jobs panel's only toggle (SPEC §10)
         self.jobs_button.setAutoRaise(True)
-        self.jobs_button.setToolTip("Show or hide the jobs panel (Ctrl+J)")
+        self.jobs_button.setToolTip("Show or hide the jobs panel: this session's Rename, ReplayGain, Tidy, Split and "
+                                    "Trim runs (Ctrl+J)")
         self.jobs_button.clicked.connect(lambda: self.jobs_dock.setVisible(not self.jobs_dock.isVisible()))
-        self.jobs_button.hide()
         self.statusBar().addPermanentWidget(self.jobs_button)
 
         conn = lambda: self.open_library.conn if self._library_open() else None  # noqa: E731
@@ -237,23 +237,17 @@ class MainWindow(QMainWindow):
         self.rescan_library_action.setEnabled(self.library is not None)
         file_menu.addSeparator()
         file_menu.addAction("E&xit", self.close)
-        view_menu = self.menuBar().addMenu("&View")
+        # No View or Action menu since M16 (SPEC §5): their entries live where they are used.
         self.hide_empty_action = QAction("&Hide folders without music", self, checkable=True)
         self.hide_empty_action.setChecked(self.settings.hide_folders_without_music)
         self.hide_empty_action.toggled.connect(self.set_hide_folders_without_music)
-        view_menu.addAction(self.hide_empty_action)
-        self.jobs_action = self.jobs_dock.toggleViewAction()
-        self.jobs_action.setText("&Jobs panel")
+        self.sidebar.option_actions = [self.hide_empty_action]  # the folder tree's context menu
+        self.jobs_action = self.jobs_dock.toggleViewAction()  # Ctrl+J; the status bar's Jobs button is the other way
         self.jobs_action.setShortcut(QKeySequence("Ctrl+J"))
-        view_menu.addAction(self.jobs_action)
-        view_menu.addAction(self.playlist_action)
-        action_menu = self.menuBar().addMenu("&Action")  # actions over the whole library (SPEC §5)
-        action_menu.addAction("Advanced &search…", self.open_advanced_search)  # SPEC §26
-        action_menu.setEnabled(library is not None)
-        self.advanced_search: AdvancedSearchWindow | None = None  # made on first use
+        self.addAction(self.jobs_action)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About MusicDesk", self.open_about)
-        for menu in (file_menu, view_menu, action_menu, help_menu):
+        for menu in (file_menu, help_menu):
             with_status_tips(menu)
 
         self.overlay = DropOverlay(self)
@@ -341,7 +335,7 @@ class MainWindow(QMainWindow):
     # -- browsing --
 
     def open_advanced_search(self) -> None:
-        """Action › Advanced search…: its window, not modal (SPEC §26). One at a time; brought to the front."""
+        """The toolbar's Advanced search: its window, not modal (SPEC §26). One at a time; brought to the front."""
         if not self._library_open():
             return
         if self.advanced_search is None:
@@ -439,6 +433,13 @@ class MainWindow(QMainWindow):
         self.playlist_action.setToolTip("Show or hide the playlist builder (Ctrl+Shift+P)")
         self.playlist_action.toggled.connect(self.set_playlist_visible)
         toolbar.addAction(self.playlist_action)
+        self.advanced_search_action = QAction("Advanced search", self)
+        self.advanced_search_action.setToolTip("Open a window listing the albums to fix by hand, like those without "
+                                               "ReplayGain tags or not split yet")
+        self.advanced_search_action.triggered.connect(self.open_advanced_search)
+        self.advanced_search_action.setEnabled(self._library_open())
+        self.advanced_search: AdvancedSearchWindow | None = None  # made on first use (SPEC §26)
+        toolbar.addAction(self.advanced_search_action)
         toolbar.addWidget(self.search_field)
         self.search_action = QAction("Search library", self, shortcut=QKeySequence("Ctrl+K"))
         self.search_action.triggered.connect(self.search.open)
@@ -651,7 +652,6 @@ class MainWindow(QMainWindow):
     def _update_jobs_button(self, _job_id: int = 0) -> None:
         running = len(self.jobs.running)
         self.jobs_button.setText(f"Jobs: {running} running" if running else "Jobs")
-        self.jobs_button.setVisible(bool(self.jobs.jobs))
 
     def show_job(self, job_id: int) -> None:
         """A job's page: live while it runs, its report once it has finished."""

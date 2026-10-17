@@ -28,7 +28,6 @@ MENU_TIPS = {
     "Add folder": "Add a music folder to the library and index it; adding only reads the folder",
     "Rescan library": "Read every library folder from the disk again, to show changes made outside MusicDesk",
     "Hide folders without music": "Leave out of the folder tree the folders with no music in them or below",
-    "Advanced search": "Open a window listing the albums to fix by hand, like those without ReplayGain tags",
     "Play selection": "Play the selected audio files in your default player, as a temporary playlist",
     "Play folder": "Play this folder's tracks in your default player, as a temporary playlist",
     "Play folder and subfolders": "Play the tracks of this folder and of all its subfolders in your default player",

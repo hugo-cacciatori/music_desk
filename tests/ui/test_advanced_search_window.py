@@ -1,4 +1,4 @@
-"""The Action menu (SPEC §5) and its Advanced search window (SPEC §26): a separate, non-modal window of album lists
+"""The Advanced search window (SPEC §26), opened by its toolbar button: a separate, non-modal window of album lists
 to fix by hand, over a copied fixture library."""
 
 import shutil
@@ -6,7 +6,7 @@ import threading
 
 import pytest
 from browser_helpers import entry
-from PySide6.QtWidgets import QMenu
+from PySide6.QtWidgets import QToolBar
 
 from music_desk.core.index import album_search
 from music_desk.core.tags import TaggedFile
@@ -38,12 +38,8 @@ def menu_titles(window) -> list[str]:
     return [action.text() for action in window.menuBar().actions()]
 
 
-def action_menu(window) -> QMenu:
-    return next(m for m in window.menuBar().findChildren(QMenu) if m.title() == "&Action")
-
-
 def open_window(window):
-    next(a for a in action_menu(window).actions() if a.text() == "Advanced &search…").trigger()
+    window.advanced_search_action.trigger()
     return window.advanced_search
 
 
@@ -55,10 +51,27 @@ def run(qtbot, search_window, key=None):
     return search_window.paths()
 
 
-def test_the_menu(window):
-    assert menu_titles(window) == ["&File", "&View", "&Action", "&Help"]  # no Lyrics menu since M12
-    assert [a.text() for a in action_menu(window).actions()] == ["Advanced &search…"]
-    assert action_menu(window).isEnabled()
+def test_the_menus_and_the_toolbar(window):
+    # No Lyrics menu since M12; no View or Action menu since M16 (SPEC §5).
+    assert menu_titles(window) == ["&File", "&Help"]
+    toolbar = [a.text() for a in window.findChild(QToolBar, "navigation").actions() if a.text()]
+    assert toolbar[-3:] == ["Tools", "Playlist builder", "Advanced search"]
+    assert window.advanced_search_action.isEnabled()
+
+
+def test_hide_folders_without_music_is_in_the_tree_menu(window):
+    menu = window.sidebar.context_menu_for(window.sidebar.model.index(0, 0))
+    assert menu.actions()[-1] is window.hide_empty_action and window.hide_empty_action.isCheckable()
+
+
+def test_the_jobs_button_is_always_there(qtbot, window):
+    window.show()
+    assert window.jobs_button.isVisible() and window.jobs_button.text() == "Jobs" and not window.jobs.jobs
+    window.jobs_button.click()
+    assert window.jobs_dock.isVisible()
+    window.jobs_button.click()
+    assert not window.jobs_dock.isVisible()
+    assert window.jobs_action.shortcut().toString() == "Ctrl+J" and window.jobs_action in window.actions()
 
 
 def test_a_separate_window_that_blocks_nothing(qtbot, window, service):
@@ -143,4 +156,4 @@ def test_disabled_without_a_library(qtbot):
 
     window = MainWindow(None)
     qtbot.addWidget(window)
-    assert not action_menu(window).isEnabled()
+    assert not window.advanced_search_action.isEnabled()

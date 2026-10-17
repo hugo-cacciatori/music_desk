@@ -80,16 +80,6 @@ class SearchController(QObject):
         self.field.setFocus()
         self.field.selectAll()
 
-    def find(self, query: str) -> None:
-        """A ready-made search over the whole library (the Action menu)."""
-        if not self.window._library_open():
-            return
-        self.open()
-        if not self.showing:
-            return  # unsaved tag edits, and Cancel
-        self.field.setText(query)
-        self.run()
-
     def close(self) -> None:
         """Esc: back to the folder that was open, as it was."""
         window = self.window

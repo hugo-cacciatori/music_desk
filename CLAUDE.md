@@ -32,7 +32,7 @@ of it (see Session protocol 5).
 
 ### M16: toolbar, searches, trim waveform, CJK tags (Hugo, 2026-10-17)
 Read SPEC §5, §6, §10, §15, §23, §26, §27.
-- [ ] 1. Toolbar and menus: an Advanced search button beside Tools and Playlist builder; the Action and View menus
+- [x] 1. Toolbar and menus: an Advanced search button beside Tools and Playlist builder; the Action and View menus
   retired; the status bar's Jobs button always shown; "Hide folders without music" in the folder tree's menu;
   the address bar gives way to the buttons (SPEC §5, §10, §15, §26). 0.5.5.
 - [ ] 2. Advanced search: a Clear button (SPEC §26). 0.5.6.

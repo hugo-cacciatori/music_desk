@@ -1,10 +1,11 @@
 """The sidebar's LIBRARY section: the folder tree with the roots at the top, "Add folder…" and "Remove from library"
-(SPEC §3, §5)."""
+(SPEC §3, §5), and the tree's own options ("Hide folders without music")."""
 
 import sqlite3
 from collections.abc import Callable
 
 from PySide6.QtCore import QModelIndex, QPoint, Qt, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QLabel, QMenu, QPushButton, QVBoxLayout, QWidget
 
 from music_desk.core.index.roots import Root
@@ -46,6 +47,7 @@ class Sidebar(QWidget):
         self._roots: dict[int, Root] = {}
         # Set by the window: builds the folder actions for an entry (Open, Play, Explorer…).
         self.folder_menu_provider: Callable[[QMenu, int], None] | None = None
+        self.option_actions: list[QAction] = []  # set by the window: checkable options, at the menu's end (SPEC §5)
         self.set_roots([])
 
     def set_roots(self, roots: list[Root]) -> None:
@@ -78,6 +80,9 @@ class Sidebar(QWidget):
             menu.addAction("Remove from library", lambda: self.removeRequested.emit(root))
             menu.addSeparator()
         menu.addAction("Add folder…", self.addFolderRequested.emit)
+        if self.option_actions:
+            menu.addSeparator()
+            menu.addActions(self.option_actions)
         return with_status_tips(menu)
 
     def _context_menu(self, pos: QPoint) -> None:

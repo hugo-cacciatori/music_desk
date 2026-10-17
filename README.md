@@ -24,7 +24,7 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
   Names are found as soon as a folder is listed, before its tags are read. Accents and case are ignored, and
   filters such as `artist:`, `year:`, `ext:`, `lrclib:notfound` or `rg:none` narrow it. The matching lyric line
   is shown in the results.
-- **Advanced search** (Action › Advanced search…), a window of its own beside the app: lists of albums to go
+- **Advanced search** (the toolbar's Advanced search button), a window of its own beside the app: lists of albums to go
   through and fix by hand, such as the albums missing ReplayGain tags or the EAC rips not split yet. Double-click
   an album to open its folder; Refresh search updates the list as you fix them.
 - **Preview** rip logs, cue sheets, notes, `.nfo` files and scans beside the list, read-only. Each text file is
@@ -39,7 +39,7 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
     Each run writes a fresh `replaygain.log`; the ReplayGain tags can also be removed from tracks or folders.
   - **Tidy**: the rename, then ReplayGain.
 
-  Jobs run in the background, and you can keep browsing meanwhile.
+  Jobs run in the background, and you can keep browsing meanwhile; the status bar's Jobs button (Ctrl+J) shows them.
 - **Split a single-file album**, such as an EAC rip (one FLAC, WAV or AIFF image, its `.cue` and its log), into
   one FLAC file per track: select the `.cue`, then "Split into tracks…" on its preview. The Split page shows the
   whole sheet, editable: which audio file it points to, start times and gaps, titles and the other fields,
@@ -59,7 +59,7 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
   result with Preview in player, then Trim. A FLAC copy goes into a subfolder (`lite` by default) with the
   original's tags, checked sample for sample against its part of the original. The original is never touched.
 - **Play** a folder, a selection or search results in your default music player, through a temporary playlist.
-- **Build a playlist** (View › Playlist builder, Ctrl+Shift+P): drag folders and songs in from the folder tree,
+- **Build a playlist** (the toolbar's Playlist builder button, Ctrl+Shift+P): drag folders and songs in from the folder tree,
   the file list or search results, in the order Explorer shows them. Rearrange it by dragging, with Ctrl+↑/↓ or
   by sorting on a column, then play it or export it as a `.m3u8`, with paths relative to the playlist so it keeps
   working when it moves with your music. It is kept until you clear it.

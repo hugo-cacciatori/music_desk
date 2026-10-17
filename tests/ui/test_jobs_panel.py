@@ -130,7 +130,7 @@ def test_finished_reports_reopen_and_clear(qtbot, window, service, library_dir, 
     assert window.center.currentWidget() is window.rename_preview and window.rename_preview.state == "result"
 
     window.jobs_panel.clear_button.click()
-    assert window.jobs.jobs == [] and window.jobs_panel.rows() == [] and not window.jobs_button.isVisible()
+    assert window.jobs.jobs == [] and window.jobs_panel.rows() == [] and window.jobs_button.text() == "Jobs"
 
 
 def test_tidy_is_one_job(qtbot, window, service, library_dir, scanner):

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from browser_helpers import entry
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QToolBar
 
 from music_desk.core.index import queries
 from music_desk.core.playlist_builder import Builder, Item
@@ -38,10 +39,9 @@ def test_showing_takes_only_the_centres_width(qtbot, window):
     assert window.splitter.sizes() == before and not window.playlist_action.isChecked()
 
 
-def test_view_menu_and_shortcut(window):
+def test_toolbar_button_and_shortcut(window):
     assert window.playlist_action.shortcut().toString() == "Ctrl+Shift+P"
-    view_menu = next(a.menu() for a in window.menuBar().actions() if a.text() == "&View")
-    assert window.playlist_action in view_menu.actions()
+    assert window.playlist_action.isCheckable() and window.playlist_action in window.findChild(QToolBar).actions()
 
 
 def test_empty_state(window):

@@ -213,6 +213,12 @@ Tidy cards keep their other options.
   same folder and scope ("step 2 of 2"), with no separate preview, as in the script. A stopped rename doesn't start
   ReplayGain.
 
+**Layout** (Hugo, 2026-10-17): the cards come in three sections, each under a small upper-case heading as the
+sidebar's LIBRARY: **Shared settings** (File names), **Tools** (Rename, ReplayGain) and **All in one** (Tidy). A
+card's title is larger than its text, its description in a softer colour, and its Run button bold, set apart from
+Reset to defaults; cards are 12 px apart, sections 20 px more. Built in 0.6.2 (`tools_page.ToolsPage.sections`,
+`rename_card.Card.primary`).
+
 **C. Tidy album** (replaced by §28's Tidy in M17; kept here until M17 task 3 removes it): runs A, then B on the
 final names. This is the script run without flags. The preview covers
 the rename step only; as in the script, ReplayGain can't be previewed on names that are about to change.

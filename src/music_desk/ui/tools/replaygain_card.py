@@ -148,7 +148,7 @@ class ReplayGainCard(Card):
         self.body.addWidget(self.advanced_toggle(advanced))
         self.body.addWidget(advanced)
 
-        self.run_button = QPushButton("Run ReplayGain")  # no preview: it starts the job
+        self.run_button = self.primary(QPushButton("Run ReplayGain"))  # no preview: it starts the job
         self.run_button.setToolTip("Start at once: measure the tracks, write their ReplayGain tags and the log; "
                                    "nothing is renamed")
         self.run_button.clicked.connect(self.runRequested)
@@ -238,7 +238,7 @@ class TidyCard(Card):
         form.addRow("Scope:", scope_row)
         self.body.addLayout(form)
         self.body.addWidget(self.note)
-        self.run_button = QPushButton("Run Tidy…")  # "…": the rename preview comes first
+        self.run_button = self.primary(QPushButton("Run Tidy…"))  # "…": the rename preview comes first
         self.run_button.setToolTip("Show the renames first; once you apply them, ReplayGain runs on the final "
                                    "names")
         self.run_button.clicked.connect(self.runRequested)

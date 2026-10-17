@@ -37,6 +37,16 @@ def test_file_names_card_comes_first_with_the_defaults(page):
     assert "Split albums and the rename suggestion" in names.description.text()
 
 
+def test_sections_order_the_cards(page):
+    shared, tools, all_in_one = page.sections
+    assert [label.text() for label in page.sections] == ["SHARED SETTINGS", "TOOLS", "ALL IN ONE"]
+    assert shared.y() < page.names_card.y() < tools.y() < page.rename_card.y() < page.replaygain_card.y() \
+        < all_in_one.y() < page.tidy_card.y()
+    for card in (page.rename_card, page.replaygain_card, page.tidy_card):
+        assert card.run_button.font().bold() and card.title.font().bold()
+        assert card.title.font().pointSizeF() > card.description.font().pointSizeF()
+
+
 def test_rename_card_defaults(page):
     card = page.rename_card
     assert card.options() == rename.DEFAULT_OPTIONS

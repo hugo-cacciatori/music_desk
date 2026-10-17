@@ -8,6 +8,7 @@ masks are the File names card's (SPEC §21): this card only shows where they are
 import re
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
@@ -50,15 +51,25 @@ def problems_text(problems: list[str]) -> str:
     return "\n".join(f"• {problem}" for problem in problems)
 
 
+TITLE_SCALE = 1.3
+CARD_MARGIN = 14  # px inside each card
+
+
 class Card(QFrame):
     """A tool card: a title, a plain-language description, options, problems and buttons."""
 
     def __init__(self, title: str, description: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.title = QLabel(f"<b>{title}</b>")
+        # A clear hierarchy (Hugo, M17): a larger title, the description in a softer colour, the Run button bold.
+        self.title = QLabel(title)
+        font = self.title.font()
+        font.setBold(True)
+        font.setPointSizeF(font.pointSizeF() * TITLE_SCALE)
+        self.title.setFont(font)
         self.description = QLabel(description)
         self.description.setWordWrap(True)
+        self.description.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         self.body = QVBoxLayout()
         self.problems = QLabel()
         self.problems.setWordWrap(True)
@@ -66,11 +77,20 @@ class Card(QFrame):
         self.problems.hide()
         self.buttons = QHBoxLayout()
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN)
         layout.addWidget(self.title)
         layout.addWidget(self.description)
         layout.addLayout(self.body)
         layout.addWidget(self.problems)
         layout.addLayout(self.buttons)
+
+    @staticmethod
+    def primary(button: QPushButton) -> QPushButton:
+        """The card's main action, in bold so it stands out from Reset to defaults."""
+        font = button.font()
+        font.setBold(True)
+        button.setFont(font)
+        return button
 
     def show_problems(self, problems: list[str]) -> None:
         self.problems.setText(problems_text(problems))
@@ -140,7 +160,7 @@ class RenameCard(Card):
         self.body.addWidget(self.advanced_toggle(advanced))
         self.body.addWidget(advanced)
 
-        self.run_button = QPushButton("Run rename…")  # "…": a preview to check comes first
+        self.run_button = self.primary(QPushButton("Run rename…"))  # "…": a preview to check comes first
         self.run_button.setToolTip("Show the new names first; nothing is renamed until you apply them")
         self.run_button.clicked.connect(self.runRequested)
         self.reset_button = QPushButton("Reset to defaults")

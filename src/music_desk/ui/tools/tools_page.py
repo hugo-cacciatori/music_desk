@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from music_desk.core import rename, replaygain
@@ -21,6 +22,9 @@ from music_desk.ui.tools.rename_card import RenameCard
 from music_desk.ui.tools.replaygain_card import ReplayGainCard, TidyCard
 
 RENAME, REPLAYGAIN, TIDY = "rename", "replaygain", "tidy"
+
+CARD_SPACING = 12  # px between cards
+SECTION_SPACING = 20  # px more before a section's heading
 
 
 @dataclass(frozen=True)
@@ -79,10 +83,24 @@ class ToolsPage(QWidget):
         self.replaygain_card.runRequested.connect(lambda: self.request(REPLAYGAIN))
         self.tidy_card.runRequested.connect(lambda: self.request(TIDY))
 
+        # Sections (Hugo, M17): the shared settings, the single tools, then the one that runs them all.
         cards = QWidget()
         cards_layout = QVBoxLayout(cards)
-        for card in (self.names_card, self.rename_card, self.replaygain_card, self.tidy_card):
-            cards_layout.addWidget(card)
+        cards_layout.setSpacing(CARD_SPACING)
+        self.sections: list[QLabel] = []
+        for n, (heading, section) in enumerate((
+                ("SHARED SETTINGS", (self.names_card,)),
+                ("TOOLS", (self.rename_card, self.replaygain_card)),
+                ("ALL IN ONE", (self.tidy_card,)))):
+            label = QLabel(heading)
+            label.setStyleSheet("font-weight: 600; letter-spacing: 1px;")  # as the sidebar's LIBRARY
+            label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+            self.sections.append(label)
+            if n:
+                cards_layout.addSpacing(SECTION_SPACING)
+            cards_layout.addWidget(label)
+            for card in section:
+                cards_layout.addWidget(card)
         cards_layout.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)

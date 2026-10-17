@@ -81,25 +81,13 @@ def test_preview_then_apply(qtbot, window, service, library_dir, recycled):
     assert not window.showing_tools
 
 
-def test_junk_asks_first_and_can_be_kept(qtbot, window, service, library_dir, recycled):
+def test_junk_goes_to_the_recycle_bin_without_a_question(qtbot, window, service, library_dir, recycled):
     view = preview(qtbot, window, service, library_dir / "Cleanup", cleanup=True)
-    assert "7 files would be sent to the Recycle Bin as junk (you confirm first)" in view.extras.toPlainText()
-    asked = []
-    window.tools.ask_recycle = lambda names: asked.append(names) or "cancel"
-    view.apply_button.click()
-    assert view.state == "preview" and len(asked[0]) == 7  # cancelled: nothing ran
-    window.tools.ask_recycle = lambda names: "keep"
-    report = apply(qtbot, window)
-    assert recycled == [] and report.junk == [] and report.renamed
-    assert (library_dir / "Cleanup" / "single_file_album" / "notes.txt").exists()
-
-
-def test_junk_goes_to_the_recycle_bin_once_confirmed(qtbot, window, service, library_dir, recycled):
-    view = preview(qtbot, window, service, library_dir / "Cleanup", cleanup=True)
+    extras = view.extras.toPlainText()
+    assert "7 files would be sent to the Recycle Bin as junk" in extras and "confirm" not in extras
     owners = []
     window.tools.rename_runner.recycle = lambda path: (recycled.append(path),
                                                  owners.append(service.locks.owner(path)))
-    window.tools.ask_recycle = lambda names: "recycle"
     report = apply(qtbot, window)
     assert len(recycled) == len(report.junk) == 7
     assert set(owners) == {"the Rename tool"}  # the folder is locked during the run

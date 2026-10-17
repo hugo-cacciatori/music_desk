@@ -7,7 +7,6 @@ applied on its runner; ReplayGain has no preview (it only writes tags and the lo
 Dialogs go through ask_* methods, which tests replace.
 """
 
-import dataclasses
 import os
 from pathlib import Path
 
@@ -255,18 +254,6 @@ class ToolsController(QObject):
         self.cancel_planning()
         self.window.center.setCurrentWidget(self.page)
 
-    def ask_recycle(self, names: list[str]) -> str:
-        """Junk files listed for the Recycle Bin: "recycle", "keep" (rename only) or "cancel"."""
-        shown = "\n".join(names[:30]) + (f"\n… and {len(names) - 30} more" if len(names) > 30 else "")
-        box = QMessageBox(QMessageBox.Icon.Question, "Send junk files to the Recycle Bin",
-                          f"These {len(names)} file{'s' if len(names) != 1 else ''} will be sent to the Recycle "
-                          f"Bin (you can restore them from there):\n\n{shown}", parent=self.window)
-        recycle = box.addButton("Rename and recycle", QMessageBox.ButtonRole.AcceptRole)
-        keep = box.addButton("Rename only", QMessageBox.ButtonRole.ActionRole)
-        box.addButton(QMessageBox.StandardButton.Cancel)
-        box.exec()
-        return "recycle" if box.clickedButton() is recycle else "keep" if box.clickedButton() is keep else "cancel"
-
     def apply_rename(self) -> None:
         window = self.window
         plan = self.rename_preview.plan
@@ -274,13 +261,8 @@ class ToolsController(QObject):
             return
         if window._unsaved_edits_under(plan.folder):  # unsaved tag edits on a file about to be renamed
             return
-        junk = [i.source.relative_to(plan.folder).as_posix() for i in plan.items if i.status is rename.Status.JUNK]
-        if junk:
-            answer = self.ask_recycle(junk)
-            if answer == "cancel":
-                return
-            if answer == "keep":
-                plan = dataclasses.replace(plan, items=[i for i in plan.items if i.status is not rename.Status.JUNK])
+        # Junk listed in the preview goes to the Recycle Bin without a question (Hugo, 2026-10-17): the option is
+        # ticked on the Rename card, and the preview names every file.
         try:
             self._rename_token = self.rename_runner.apply(plan)
         except LockedError as e:

@@ -16,9 +16,9 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 18):** 0.7.1 is on `main`, installer built, not released (Hugo: no release; the
-  last release is v0.6.3). M17 (the new Tidy, SPEC §28), M19 (Play / Split / Edit… on a cue) and M20 (the
-  Split page edits only) are done.
+- **State (2026-10-17, session 19):** 0.7.4 is on `main`, not released (the last release is v0.6.3). Session 19:
+  Tidy's Back while running and Keep/Delete drop-down (0.7.2), a Windows-1252 cue no longer stops a split or
+  Tidy (0.7.3), the Recycle Bin never asks first (0.7.4).
 - **Optional, for later (Hugo):** in the installed app, on copies: split from a second version of a cue; Preview
   in player opens in foobar2000 (Trim and Split pages); Advanced search lists real albums and Refresh follows a
   fix; the real mouse wheel over a ReplayGain number field scrolls the Tools page; Japanese/Chinese MP3 tags read
@@ -75,11 +75,11 @@ Code and tests cite these by number; keep the numbering.
      appended);
    - writing a playlist the user exports from the playlist builder, where the user saves it (the Save dialog
      asks before replacing a file);
-   - sending junk files to the **Recycle Bin**, only when the user ticks that option in the Rename tool and
-     confirms. Audio files, playlists, cover images, the ReplayGain log and cue sheets of single-file albums are
+   - sending junk files to the **Recycle Bin**, only when the user ticks that option in the Rename tool (no
+     question since 0.7.4). Audio files, playlists, cover images, the ReplayGain log and cue sheets of single-file albums are
      never junk (SPEC §10; `.lrc` files are junk again since M12, SPEC §26);
-   - (M8) sending the files and folders the user selects to the **Recycle Bin** with Delete, after a
-     confirmation (SPEC §19);
+   - (M8) sending the files and folders the user selects to the **Recycle Bin** with Delete, without a
+     question (SPEC §19);
    - (M10) creating the track files of a cue split's ticked tracks in the destination folder the user chose
      (an existing one), never over an existing file, and deleting that run's own `.partial` files. A split
      touches nothing else (SPEC §22);
@@ -90,7 +90,10 @@ Code and tests cite these by number; keep the numbering.
      empty) and the copy there, never over a file; deleting that run's `.partial` (SPEC §23). Saving a new cue
      sheet beside its audio file, never over a file without asking (SPEC §22).
    - (M17) sending to the **Recycle Bin** the files the user marks Delete in Tidy's offer window (a split album's
-     image and `.cue`), after a confirmation; closing the window keeps them all (SPEC §28).
+     image and `.cue`), on Apply; closing the window keeps them all (SPEC §28).
+
+   Sending to the Recycle Bin never asks first (Hugo, 2026-10-17): the Recycle Bin is the undo. What still asks
+   is a permanent loss (overwriting a `.cue` where there is no Recycle Bin) and a name collision (Save as).
 
    This list grows when a feature needs to create or overwrite files: it is specified with Hugo, gets a row in
    DECISIONS.md and an entry here (Hugo, 2026-10-16).

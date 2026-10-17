@@ -104,8 +104,6 @@ def test_apply_recycles_only_the_files_marked_delete(qtbot, window, service, lib
     run(qtbot, window)
     qtbot.waitUntil(lambda: tidy.offer is not None and tidy.offer.isVisible())
     offer = tidy.offer
-    asked = []
-    offer.confirm_apply = lambda count: asked.append(count) or True
     image = next(item for item in offer.items() if item.text(0) == "image.wav")
     box = offer.choice_box(image)
     assert box is not None and [box.itemText(i) for i in range(box.count())] == [KEEP, DELETE]
@@ -113,7 +111,7 @@ def test_apply_recycles_only_the_files_marked_delete(qtbot, window, service, lib
     assert offer.apply_button.text() == "Apply (1 file to the Recycle Bin)"
     assert offer.choices()[str(eac / "image.wav")] == DELETE and offer.choices()[str(eac / "image.cue")] == KEEP
     offer.apply_button.click()
-    assert asked == [1] and tidy.recycled == [eac / "image.wav"] and not offer.isVisible()
+    assert tidy.recycled == [eac / "image.wav"] and not offer.isVisible()  # no question first
 
 
 def test_the_buttons_set_the_selected_rows(qtbot, window, service, library_dir, tidy):

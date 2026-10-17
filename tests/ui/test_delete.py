@@ -15,7 +15,6 @@ from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtTest import QTest
 
 from music_desk.core.fsops import CannotRecycle
-from music_desk.ui.controllers.delete import DeleteItem
 
 
 class Bin:
@@ -44,15 +43,6 @@ def recycle_bin(window, tmp_path):
     return bin_
 
 
-@pytest.fixture
-def asked(window):
-    """Answers every question with Send to Recycle Bin, keeping its text."""
-    questions = []
-    delete = window.delete
-    delete.ask_delete = lambda items, unsaved: questions.append(delete.delete_question(items, unsaved)) or True
-    return questions
-
-
 def album_dir(library_dir) -> Path:
     return library_dir / "Artist" / "Album"
 
@@ -63,7 +53,7 @@ def focus(qtbot, window, view) -> None:
     qtbot.waitUntil(view.hasFocus, timeout=3000)
 
 
-def test_del_sends_the_selection_and_selects_the_next_row(qtbot, window, service, library_dir, recycle_bin, asked):
+def test_del_sends_the_selection_and_selects_the_next_row(qtbot, window, service, library_dir, recycle_bin):
     window.open_folder(entry(service, "Artist", "Album"))
     view = window.file_view
     chosen = [entry(service, "Artist", "Album", name) for name in ("Track 2.flac", "Track 3.mp3")]
@@ -73,7 +63,6 @@ def test_del_sends_the_selection_and_selects_the_next_row(qtbot, window, service
     focus(qtbot, window, view.view)
     QTest.keyClick(view.view, Qt.Key.Key_Delete)
     qtbot.waitUntil(lambda: len(recycle_bin.paths) == 2, timeout=5000)
-    assert asked == ["Send these 2 items to the Recycle Bin?\n\nTrack 2.flac\nTrack 3.mp3"]
     assert sorted(p.name for p in recycle_bin.paths) == ["Track 2.flac", "Track 3.mp3"]
     qtbot.waitUntil(lambda: "Track 2.flac" not in view.visible_names(), timeout=5000)
     assert "Track 3.mp3" not in view.visible_names() and "track 1.flac" in view.visible_names()
@@ -82,59 +71,38 @@ def test_del_sends_the_selection_and_selects_the_next_row(qtbot, window, service
     assert service.locks.held() == []
 
 
-def test_shift_del_does_the_same_never_a_permanent_delete(qtbot, window, service, library_dir, recycle_bin, asked):
+def test_shift_del_does_the_same_never_a_permanent_delete(qtbot, window, service, library_dir, recycle_bin):
     window.open_folder(entry(service, "Artist", "Album"))
     window.file_view.select_ids([entry(service, "Artist", "Album", "cover.jpg")])
     focus(qtbot, window, window.file_view.view)
     QTest.keyClick(window.file_view.view, Qt.Key.Key_Delete, Qt.KeyboardModifier.ShiftModifier)
     qtbot.waitUntil(lambda: len(recycle_bin.paths) == 1, timeout=5000)
-    assert asked == ["Send 'cover.jpg' to the Recycle Bin?"]
-    assert window.statusBar().currentMessage() == "Sent 'cover.jpg' to the Recycle Bin."
+    qtbot.waitUntil(lambda: window.statusBar().currentMessage() == "Sent 'cover.jpg' to the Recycle Bin.",
+                    timeout=5000)
 
 
-def test_cancel_changes_nothing(qtbot, window, service, library_dir, recycle_bin):
-    answers = []
-    window.delete.ask_delete = lambda items, unsaved: answers.append([i.path.name for i in items]) or False
-    window.delete.delete_entries([entry(service, "Artist", "Album", "Track 2.flac")], window.file_view.view)
-    qtbot.waitUntil(lambda: answers == [["Track 2.flac"]], timeout=5000)
-    assert recycle_bin.paths == [] and (album_dir(library_dir) / "Track 2.flac").exists()
-    assert service.locks.held() == []
-
-
-def test_a_folder_question_counts_its_files_from_the_index(qtbot, window, service, library_dir, recycle_bin, asked):
+def test_a_folder_goes_whole(qtbot, window, service, library_dir, recycle_bin):
     window.delete.delete_entries([entry(service, "Artist", "Album")], window.file_view.view)
     qtbot.waitUntil(lambda: len(recycle_bin.paths) == 1, timeout=5000)
-    assert asked == ["Send the folder 'Album' and everything in it (5 files) to the Recycle Bin?"]
     assert not album_dir(library_dir).exists()
     qtbot.waitUntil(lambda: service.conn.execute(
         "SELECT 1 FROM entries WHERE name = 'Album'").fetchone() is None, timeout=5000)
 
 
-def test_a_folder_and_its_subfolder_send_the_folder_once(qtbot, window, service, library_dir, recycle_bin, asked):
+def test_a_folder_and_its_subfolder_send_the_folder_once(qtbot, window, service, library_dir, recycle_bin):
     album, cd2 = entry(service, "Artist", "Album"), entry(service, "Artist", "Album", "CD 2")
     window.delete.delete_entries([cd2, album], window.sidebar.tree)
     qtbot.waitUntil(lambda: len(recycle_bin.paths) == 1, timeout=5000)
     assert recycle_bin.paths == [album_dir(library_dir)]
 
 
-def test_many_items_list_the_first_ten(window):
-    items = [DeleteItem(i, Path(f"C:/x/file {i:02}.txt"), False) for i in range(12)]
-    text = window.delete.delete_question(items, unsaved=False)
-    assert text.startswith("Send these 12 items to the Recycle Bin?\n\nfile 00.txt\n")
-    assert text.endswith("file 09.txt\nand 2 more")
-    assert window.delete.delete_question(items[:1], unsaved=True) == (
-        "Send 'file 00.txt' to the Recycle Bin?\n\nUnsaved tag edits on it will be lost.")
-
-
 def test_a_library_root_is_refused(qtbot, window, service, library_dir, recycle_bin):
-    window.delete.ask_delete = lambda items, unsaved: pytest.fail("a root must be refused before asking")
     window.delete.delete_entries([service.roots()[0].top_entry_id], window.sidebar.tree)
     assert window.toast.isVisible() and "is a library folder. Use Remove from library" in window.toast.label.text()
     assert recycle_bin.paths == [] and service.locks.held() == []
 
 
 def test_an_item_a_job_holds_is_refused(qtbot, window, service, library_dir, recycle_bin):
-    window.delete.ask_delete = lambda items, unsaved: pytest.fail("a locked item must be refused before asking")
     token = service.locks.acquire([album_dir(library_dir)], "the Rename tool")
     try:
         window.delete.delete_entries([entry(service, "Artist", "Album", "Track 2.flac")], window.file_view.view)
@@ -146,7 +114,6 @@ def test_an_item_a_job_holds_is_refused(qtbot, window, service, library_dir, rec
 
 
 def test_a_place_without_a_recycle_bin_is_refused(qtbot, window, service, library_dir, recycle_bin, explorer_calls):
-    window.delete.ask_delete = lambda items, unsaved: pytest.fail("refused before asking")
     window.delete.recycle_check = lambda path: "X: is a network location, which has no Recycle Bin"
     window.delete.delete_entries([entry(service, "Artist", "Album", "Track 2.flac")], window.file_view.view)
     qtbot.waitUntil(window.toast.isVisible, timeout=5000)
@@ -166,7 +133,7 @@ def explorer_calls(window):
     return calls
 
 
-def test_a_failure_names_its_file_and_the_others_still_go(qtbot, window, service, library_dir, recycle_bin, asked):
+def test_a_failure_names_its_file_and_the_others_still_go(qtbot, window, service, library_dir, recycle_bin):
     recycle_bin.fail = {"Track 2.flac": PermissionError(13, "The file is open in another program")}
     ids = [entry(service, "Artist", "Album", name) for name in ("Track 2.flac", "Track 3.mp3")]
     window.delete.delete_entries(ids, window.file_view.view)
@@ -178,7 +145,7 @@ def test_a_failure_names_its_file_and_the_others_still_go(qtbot, window, service
 
 
 def test_cannot_recycle_from_the_recycler_is_a_failure_not_a_delete(qtbot, window, service, library_dir,
-                                                                     recycle_bin, asked):
+                                                                     recycle_bin):
     recycle_bin.fail = {"Track 2.flac": CannotRecycle("X: has no Recycle Bin")}
     window.delete.delete_entries([entry(service, "Artist", "Album", "Track 2.flac")], window.file_view.view)
     qtbot.waitUntil(window.toast.isVisible, timeout=5000)
@@ -186,8 +153,7 @@ def test_cannot_recycle_from_the_recycler_is_a_failure_not_a_delete(qtbot, windo
     assert (album_dir(library_dir) / "Track 2.flac").exists()
 
 
-def test_deleting_the_open_folder_from_the_tree_opens_its_parent(qtbot, window, service, library_dir, recycle_bin,
-                                                                  asked):
+def test_deleting_the_open_folder_from_the_tree_opens_its_parent(qtbot, window, service, library_dir, recycle_bin):
     cd2 = entry(service, "Artist", "Album", "CD 2")
     window.open_folder(cd2)
     tree = window.sidebar.tree
@@ -197,10 +163,9 @@ def test_deleting_the_open_folder_from_the_tree_opens_its_parent(qtbot, window, 
     assert tree.selected_ids() == [cd2]
     QTest.keyClick(tree, Qt.Key.Key_Delete)
     qtbot.waitUntil(lambda: window.folder_id == entry(service, "Artist", "Album"), timeout=5000)
-    assert asked == ["Send the folder 'CD 2' and everything in it (0 files) to the Recycle Bin?"]
 
 
-def test_del_in_the_search_results(qtbot, window, service, library_dir, recycle_bin, asked):
+def test_del_in_the_search_results(qtbot, window, service, library_dir, recycle_bin):
     from test_library_search import names as result_names
     from test_library_search import search
 
@@ -210,7 +175,6 @@ def test_del_in_the_search_results(qtbot, window, service, library_dir, recycle_
     focus(qtbot, window, window.search_view.view)
     QTest.keyClick(window.search_view.view, Qt.Key.Key_Delete)
     qtbot.waitUntil(lambda: len(recycle_bin.paths) == 1, timeout=5000)
-    assert asked == ["Send 'Track 10.flac' to the Recycle Bin?"]
     qtbot.waitUntil(lambda: "Track 10.flac" not in result_names(window), timeout=10000)
     assert window.search_view.selected_ids() and chosen not in window.search_view.selected_ids()
 
@@ -232,7 +196,6 @@ def test_menus_offer_delete_except_for_roots_and_the_background(window, service)
 def test_the_playlist_del_still_only_removes_from_the_playlist(qtbot, window, service, library_dir, recycle_bin):
     from test_playlist_dnd import drop, focus_list, names
 
-    window.delete.ask_delete = lambda items, unsaved: pytest.fail("the playlist's Del never deletes files")
     drop(window, [entry(service, "Artist", "Album")])
     focus_list(qtbot, window)
     window.playlist_panel.select_rows([0])

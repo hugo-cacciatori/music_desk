@@ -15,7 +15,11 @@ except that the app **only ever sends them to the Recycle Bin**. It never delete
   - In the playlist builder, Del keeps removing tracks from the playlist only (§15). The files are untouched.
     Each view's shortcut is a WidgetShortcut, so they don't clash.
 
-**Always asks first** (Hugo: "files and folders, always ask")
+**No question since 0.7.4** (Hugo, 2026-10-17: "make this a silent default behavior for every deletion"): Del
+sends the items to the Recycle Bin at once, and the Recycle Bin is the undo. Unsaved Metadata edits on a deleted
+file are discarded with it. The rest of this block is how it asked from M8 to 0.7.3, kept for history.
+
+**Always asked first, until 0.7.3** (Hugo, M8: "files and folders, always ask")
 - One file: "Send '01 Airbag.flac' to the Recycle Bin?"
 - One folder: "Send the folder 'Kid A' and everything in it (12 files) to the Recycle Bin?" The count comes from
   the index (`folder_stats` and the direct files), so no folder is walked on the UI thread.
@@ -92,8 +96,8 @@ except that the app **only ever sends them to the Recycle Bin**. It never delete
   - the side panel shows the new selection.
 - There is no Undo in the app; the dialog's wording points to the Recycle Bin.
 
-**Ground rule 1** gains this exception: sending files and folders the user selected to the Recycle Bin, after a
-confirmation, and never permanently.
+**Ground rule 1** gains this exception: sending files and folders the user selected to the Recycle Bin (after a
+confirmation until 0.7.3, none since), and never permanently.
 
 **Tests**
 - Tests never touch the real Recycle Bin: the window's recycle function and `can_recycle` are injected, as the
@@ -117,8 +121,8 @@ confirmation, and never permanently.
   is held until the report, and released on Cancel or a refusal.
 - On the shell thread: `can_recycle` runs on each item before the question (a slow network check never blocks
   the window). Any reason refuses everything, with Open in File Explorer.
-- The folder count is `queries.file_count` (a recursive query on the index). Confirming with unsaved edits
-  discards them (`MetadataTab.discard_edits`), since the question said so.
+- The folder count is `queries.file_count` (a recursive query on the index). Deleting a file with unsaved
+  edits discards them (`MetadataTab.discard_edits`). 0.7.4 removed `ask_delete` and `delete_question`.
 - **Manual run (2026-10-16, measured):** in the dev app (0.2.4, scratch app data), Hugo deleted a file from his
   own library on F:, during its first scan. The root was added at 18:57:26, and the bin recorded the file as
   deleted at 18:57:34, which includes finding the file and confirming. Hugo found it in the Recycle Bin. He saw it

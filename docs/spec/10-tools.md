@@ -47,7 +47,7 @@ Tidy cards keep their other options.
   files and renamed sidecars are listed separately, the table can be filtered by status, and the counts match the
   script's summary.
 - **Apply** executes exactly the previewed plan and re-checks each item; a file changed since the preview is
-  skipped with a warning. Junk files go to the Recycle Bin after a confirmation dialog that lists them. From M8,
+  skipped with a warning. Junk files go to the Recycle Bin (the preview lists them; no question since 0.7.4, Hugo 2026-10-17). From M8,
   a junk file that can't be recycled (a network share, a removable drive: §19) is kept and reported, never
   deleted permanently. The result
   summary has the same sections as the script.
@@ -168,7 +168,7 @@ Tidy cards keep their other options.
   - a table (Folder, Name, New name, Status, Details), sorted by folder then name, with a status filter that
     shows the counts. The statuses are rename, fallback mask (missing: …), unchanged, missing tags (missing: …),
     name taken, unreadable, and kept (with the reason); a rename's details say when its .lrc follows;
-  - below the table: the junk files ("would be sent to the Recycle Bin as junk (you confirm first)"), the
+  - below the table: the junk files ("would be sent to the Recycle Bin as junk"), the
     sidecars that follow, and the warnings;
   - Apply is enabled only when something would change.
 - **Apply:**

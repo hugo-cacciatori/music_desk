@@ -260,8 +260,7 @@ class RenamePreview(QWidget):
                     if i.status is Status.RENAME and i.sidecar is not None and i.sidecar.status is Status.RENAME]
         sections = []
         if junk:
-            sections.append((f"{rename.count_files(len(junk))} would be sent to the Recycle Bin as junk "
-                             "(you confirm first)", junk))
+            sections.append((f"{rename.count_files(len(junk))} would be sent to the Recycle Bin as junk", junk))
         if sidecars:
             sections.append((f"{len(sidecars)} .lrc file{'s' if len(sidecars) != 1 else ''} would follow "
                              f"{'their' if len(sidecars) != 1 else 'its'} music file", sidecars))

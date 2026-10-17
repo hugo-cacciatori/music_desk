@@ -1,7 +1,7 @@
 """Tidy's offer window (SPEC §28): the images and cue sheets a run's splits made redundant, each to Keep or Delete.
 
 A separate window, not modal. Every row is Keep until the user sets its drop-down to Delete (or uses the buttons
-for the selection); Apply sends the Delete rows to the Recycle Bin after a confirmation. Closing the window keeps
+for the selection); Apply sends the Delete rows to the Recycle Bin, without a question. Closing the window keeps
 every file. Nothing is deleted for good: a file whose drive has no Recycle Bin can't be marked Delete.
 """
 
@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
-    QMessageBox,
     QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -80,7 +79,7 @@ class OfferWindow(QWidget):
         self.delete_button.setToolTip("Mark the selected files Delete; nothing happens until Apply")
         self.delete_button.clicked.connect(lambda: self._mark(DELETE))
         self.apply_button = QPushButton("Apply")
-        self.apply_button.setToolTip("Send the files marked Delete to the Recycle Bin, after asking")
+        self.apply_button.setToolTip("Send the files marked Delete to the Recycle Bin")
         self.apply_button.clicked.connect(self.apply)
         self.close_button = QPushButton("Close")
         self.close_button.setToolTip("Close this window and keep every file")
@@ -142,16 +141,9 @@ class OfferWindow(QWidget):
 
     # -- Apply --
 
-    def confirm_apply(self, count: int) -> bool:
-        """Replaced in tests, which never open a real dialog."""
-        answer = QMessageBox.question(self, "Send to the Recycle Bin",
-                                      f"Send {plural(count, 'file')} to the Recycle Bin?\n\nThe tracks split from "
-                                      "them stay. You can restore the files from the Recycle Bin.")
-        return answer == QMessageBox.StandardButton.Yes
-
     def apply(self) -> None:
         marked = self.marked()
-        if not marked or not self.confirm_apply(len(marked)):
+        if not marked:
             return
         recycled, problems = [], []
         for path in marked:

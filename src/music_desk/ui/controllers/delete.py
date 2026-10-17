@@ -9,7 +9,7 @@ import dataclasses
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QMessageBox, QWidget
+from PySide6.QtWidgets import QWidget
 
 from music_desk.core import fsops
 from music_desk.core.index import queries
@@ -18,7 +18,6 @@ from music_desk.core.path_locks import LockedError
 from music_desk.ui.controllers import STATUS_MS
 
 DELETE_OWNER = "a delete"  # its PathLocks owner, as other jobs see it
-DELETE_NAMES = 10  # names listed in the question for several items
 
 
 @dataclasses.dataclass(frozen=True)
@@ -125,12 +124,9 @@ class DeleteController(QObject):
                 "in File Explorer.", "Open in File Explorer",
                 lambda: window._shell.submit(lambda: window.show_in_explorer(path, is_dir)))
             return
-        unsaved = self._unsaved_edits_in(request.items)
-        if not self.ask_delete(request.items, unsaved):
-            window.open_library.locks.release(request.lock)
-            return
-        if unsaved:
-            window.side_panel.metadata.discard_edits()  # the question said they would be lost
+        # No question (Hugo, 2026-10-17): the Recycle Bin is the undo. Unsaved tag edits on a deleted file go with it.
+        if self._unsaved_edits_in(request.items):
+            window.side_panel.metadata.discard_edits()
         recycle = self.recycle
 
         def run() -> None:
@@ -153,34 +149,6 @@ class DeleteController(QObject):
         edited = [metadata.path] if metadata.path is not None else metadata.paths
         return any(path == item.path or (item.is_dir and path.is_relative_to(item.path))
                    for path in edited for item in items)
-
-    def delete_question(self, items: list[DeleteItem], unsaved: bool) -> str:
-        """The confirmation's text (SPEC §19). A folder's file count comes from the index."""
-        if len(items) == 1 and not items[0].is_dir:
-            text = f"Send '{items[0].path.name}' to the Recycle Bin?"
-        elif len(items) == 1:
-            count = queries.file_count(self.window.open_library.conn, items[0].entry_id)
-            text = (f"Send the folder '{items[0].path.name}' and everything in it ({count} file"
-                    f"{'' if count == 1 else 's'}) to the Recycle Bin?")
-        else:
-            names = [item.path.name for item in items[:DELETE_NAMES]]
-            if len(items) > DELETE_NAMES:
-                names.append(f"and {len(items) - DELETE_NAMES} more")
-            text = f"Send these {len(items)} items to the Recycle Bin?\n\n" + "\n".join(names)
-        if unsaved:
-            text += "\n\nUnsaved tag edits on it will be lost."
-        return text
-
-    def ask_delete(self, items: list[DeleteItem], unsaved: bool) -> bool:
-        """Confirm a delete (replaced in tests). Cancel is the default, and Esc."""
-        box = QMessageBox(QMessageBox.Icon.Question, "Delete", self.delete_question(items, unsaved),
-                          parent=self.window)
-        send = box.addButton("Send to Recycle Bin", QMessageBox.ButtonRole.DestructiveRole)
-        cancel = box.addButton(QMessageBox.StandardButton.Cancel)
-        box.setDefaultButton(cancel)
-        box.setEscapeButton(cancel)
-        box.exec()
-        return box.clickedButton() is send
 
     def _done(self, request: DeleteRequest, sent: list[DeleteItem], failed: list[tuple[str, str]]) -> None:
         window = self.window

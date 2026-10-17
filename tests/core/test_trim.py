@@ -13,7 +13,7 @@ import struct
 import pytest
 
 from music_desk import paths
-from music_desk.core import cue, split, trim
+from music_desk.core import cue, playlists, split, trim
 from music_desk.core.cancel import CancelToken
 from music_desk.core.flac import Cancelled, FlacError, FlacRunner
 
@@ -457,3 +457,48 @@ def test_stopping_the_real_flac(fixture_copy, runner):
     source = fixture_copy(HIDDEN)
     result = trim.cut_trim(real_plan(source, "0:03.000", "0:09.000"), runner, token)
     assert result.cancelled and sorted(p.name for p in source.parent.iterdir()) == [source.name]
+
+
+# -- Preview in player --
+
+def preview_text(path, start, end, title="Song", info=None):
+    info = info or cue.SourceInfo("FLAC", 44_100, 60 * 44_100, 2, 16)
+    sheet = trim.preview_sheet(trim.plan_trim(path, info, start, end, "lite"), title, "Artist", "Album")
+    return playlists.render_preview(sheet)
+
+
+def test_the_preview_has_three_parts_rounded_to_frames(track):
+    text = preview_text(track, "0:02.350", "0:41.004")  # 2.350 s is 176.25 frames, 41.004 s 3075.3
+    assert text == ("﻿"
+                    'PERFORMER "Artist"\r\nTITLE "Album"\r\n'
+                    f'FILE "{track}" WAVE\r\n'
+                    '  TRACK 01 AUDIO\r\n    TITLE "Cut from the start"\r\n    PERFORMER "Artist"\r\n'
+                    "    INDEX 01 00:00:00\r\n"
+                    '  TRACK 02 AUDIO\r\n    TITLE "Song (kept)"\r\n    PERFORMER "Artist"\r\n'
+                    "    INDEX 01 00:02:26\r\n"
+                    '  TRACK 03 AUDIO\r\n    TITLE "Cut from the end"\r\n    PERFORMER "Artist"\r\n'
+                    "    INDEX 01 00:41:00\r\n")
+
+
+@pytest.mark.parametrize(("start", "end", "titles"), [
+    ("0:00.000", "0:41.000", ["Song (kept)", "Cut from the end"]),
+    ("0:02.000", "1:00.000", ["Cut from the start", "Song (kept)"]),
+    ("0:00.003", "1:00.000", ["Song (kept)"]),  # 3 ms rounds to frame 0: nothing to hear there
+])
+def test_a_part_of_no_length_is_left_out(track, start, end, titles):
+    sheet = trim.preview_sheet(trim.plan_trim(track, cue.SourceInfo("FLAC", 44_100, 60 * 44_100, 2, 16),
+                                              start, end, "lite"), "Song")
+    text = playlists.render_preview(sheet)
+    assert [line.strip()[7:-1] for line in text.splitlines() if line.strip().startswith("TITLE")] == titles
+    assert "INDEX 01 00:00:00" in text and "TRACK 01" in text
+
+
+def test_the_preview_needs_only_valid_times(track):
+    plan = trim.plan_trim(track, INFO, "0:01.000", "0:09.000", "a:b")  # a bad subfolder doesn't matter
+    assert not plan.ok and plan.times_ok
+    sheet = trim.preview_sheet(plan, "  ")
+    assert [t.title for t in sheet.tracks] == ["Cut from the start", "03 Song (kept)", "Cut from the end"]
+    assert [t.start for t in sheet.tracks] == [0, 1000, 9000]
+    assert not trim.plan_trim(track, INFO, "0:01.000", "0:x", "lite").times_ok
+    assert not trim.plan_trim(track, INFO, "0:05.000", "0:04.000", "lite").times_ok
+    assert trim.plan_trim(track, INFO, "0:00.000", "0:10.000", "lite").times_ok  # nothing to trim: still playable

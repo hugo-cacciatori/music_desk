@@ -9,8 +9,8 @@ v1 plays through the default app; MusicDesk has no player of its own.
   - Order: "Play folder" uses the folder's natural file order, followed by its subfolders' files in natural order.
     Play selection and Play results use the current view's sort order.
   - The last 20 temporary playlists are kept. Older ones are removed; these are the app's own files.
-  - (M13, not built) **Preview in player** writes temporary cue sheets (`preview-*.cue`) to the same folder,
-    pruned the same way (§23).
+  - (M13) **Preview in player** writes temporary cue sheets (`preview-*.cue`) to the same folder, pruned the
+    same way and apart from the playlists (§23; the core is built, the buttons come with the pages).
   - As built (M1, `core/playlists.py`): files are named `play-<YYYYMMDD-HHMMSS>[-n].m3u8`, written as UTF-8 with
     CRLF line endings. The `#EXTINF` label is "Artist - Title", else the title, else the file stem; the duration is
     rounded seconds, or -1 when unknown. Pruning keeps the newest 20 by name and only ever touches `play-*.m3u8`

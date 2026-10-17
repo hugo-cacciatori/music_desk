@@ -24,6 +24,7 @@ from music_desk.core.cancel import CancelToken
 from music_desk.core.cue import CueError, SourceInfo
 from music_desk.core.flac import Cancelled, FlacError
 from music_desk.core.inline_rename import RESERVED_NAMES
+from music_desk.core.playlists import PreviewSheet, PreviewTrack
 
 DEFAULT_SUBFOLDER = "lite"
 OWNER = "the Trim tool"
@@ -31,6 +32,7 @@ NUDGE_MS, PAGE_MS = 10, 1000  # Up / Down, Page Up / Page Down in the time field
 # Lyrics are never copied, synced or not (SPEC §23): the app's lyrics come from LRCLIB, and synced lyrics would no
 # longer match once the start moves.
 LYRICS_KEYS = frozenset({"lyrics", "unsyncedlyrics", "syncedlyrics"})
+CUT_START_TITLE, CUT_END_TITLE = "Cut from the start", "Cut from the end"  # the preview sheet's parts
 
 _TIME = re.compile(r"^(\d+):([0-5]?\d)(?:\.(\d{1,3}))?$")
 _FOLDER_FORBIDDEN = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
@@ -133,6 +135,11 @@ class TrimPlan:
     def refusal(self) -> str | None:
         return self.problems[0][1] if self.problems else None
 
+    @property
+    def times_ok(self) -> bool:
+        """Start and End are valid, which is all Preview in player needs (the subfolder doesn't matter)."""
+        return not any(where in ("start", "end") for where, _ in self.problems)
+
     def problem(self, name: str | None) -> str | None:
         """The first problem of one field, for marking it on the page."""
         return next((why for where, why in self.problems if where == name), None)
@@ -193,6 +200,18 @@ def plan_trim(source: str | Path, info: SourceInfo, start: str, end: str, subfol
                                                "subfolder's name."))
             break
     return plan
+
+
+def preview_sheet(plan: TrimPlan, title: str = "", artist: str = "", album: str = "") -> PreviewSheet:
+    """Preview in player (SPEC §23): the track as up to three parts, Cut from the start, "<title> (kept)" and Cut
+    from the end; a part of no length is left out. `title` is the track's (else its file name), `artist` and
+    `album` its tags. The plan's times must be valid (`times_ok`)."""
+    assert plan.times_ok
+    kept = f"{title.strip() or plan.source.stem} (kept)"
+    parts = [(0, plan.start, CUT_START_TITLE), (plan.start, plan.end, kept),
+             (plan.end, plan.info.samples, CUT_END_TITLE)]
+    tracks = [PreviewTrack(start, name, artist) for start, end, name in parts if end > start]
+    return PreviewSheet(plan.source, plan.info.rate, plan.info.samples, tracks, album, artist)
 
 
 def check_subfolder(folder: Path, name: str) -> str | None:

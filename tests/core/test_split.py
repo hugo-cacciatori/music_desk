@@ -10,7 +10,7 @@ import shutil
 import pytest
 
 from music_desk import paths
-from music_desk.core import cue, split
+from music_desk.core import cue, playlists, split
 from music_desk.core.cancel import CancelToken
 from music_desk.core.flac import Cancelled, FlacError, FlacRunner, flac_version
 from music_desk.core.masks import DEFAULT_MASKS
@@ -397,3 +397,28 @@ def test_tracks_get_nothing_else_of_the_images_tags(fixtures_dir, tmp_path, runn
     assert opening["COMPOSER"] == ["A. Writer"]
     assert "COMPOSER" not in hidden.tags  # the hidden track has no songwriter: not the image's either
     assert [(p.type, p.data) for p in opening.pictures] == [(3, front)]
+
+
+# -- Preview in player (SPEC §22) --
+
+def test_the_preview_lists_every_track_where_the_split_cuts_it(album):
+    plan = ticked_plan(album, {1})  # unticked tracks are previewed too
+    sheet = split.preview_sheet(plan)
+    assert sheet.audio == album / "image.flac" and (sheet.title, sheet.performer) == ("Album", "Artist")
+    assert [(t.start, t.title, t.performer) for t in sheet.tracks] == [
+        (0, "One", "Artist"), (3 * 75 + 40, "Two", "Artist"), (7 * 75 + 10, "Three", "Artist")]  # the gap stays in One
+    text = playlists.render_preview(sheet)
+    assert "INDEX 00" not in text and "    INDEX 01 00:03:40\r\n" in text
+
+
+def test_a_hidden_track_is_the_previews_track_1(fixtures_dir, tmp_path):
+    folder = tmp_path / "hidden"
+    shutil.copytree(fixtures_dir / "split" / "hidden_track", folder)
+    plan = cue.plan_album(folder / "Split Album.cue", DEFAULT_MASKS, "-")
+    text = playlists.render_preview(split.preview_sheet(plan))
+    tracks = text.split("  TRACK ")[1:]
+    assert [t.splitlines()[0] for t in tracks] == ["01 AUDIO", "02 AUDIO", "03 AUDIO", "04 AUDIO"]
+    assert '    TITLE "Hidden track"' in tracks[0] and "INDEX 01 00:00:00" in tracks[0]
+    assert '    TITLE "Opening"' in tracks[1] and "INDEX 01 00:03:00" in tracks[1]
+    assert '    PERFORMER "Fixture Artist & Guest"' in tracks[3]
+    assert f'FILE "{folder / "Fixture Artist - Split Album.flac"}" WAVE' in text

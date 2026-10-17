@@ -148,6 +148,32 @@ Top to bottom:
     dev-only ffmpeg into a scratch folder for the measurement (too big to commit), and keep the tests' fixtures
     small. The temporary playlists' `prune` touches only `play-*.m3u8`: the preview sheets need their own, for
     `preview-*.cue`.
+  - **Built (M13 task 2, 0.3.7):** `core/waveform.py`. `read_peaks(runner, path, info)` gives `Peaks` (`lows`,
+    `highs`, -1.0 to 1.0) at `COLUMNS` = 4096 columns (one a frame for a shorter track): a FLAC through
+    `FlacRunner.decode`, WAV and AIFF through `decode_range`. `PeakReducer` takes chunks of any size, keeps the top
+    byte of each sample (`bytes.translate` to offset binary, then `min` and `max` per column, so 256 levels; a
+    20-bit sample is scaled by what its top byte reaches), and holds only the current column. `fit(peaks, width)`
+    reduces them to the widget's pixels (lowest low, highest high), so painting never decodes again.
+  - **Measured** (2026-10-17, this machine, flac 1.5.0; scratch files made with ffmpeg, pink noise and a sine):
+    | Source | flac alone | flac and the peaks | worst `feed` call (GIL held) | Python memory |
+    |---|---|---|---|---|
+    | 70 min, 16-bit/44.1 kHz FLAC, `decode` | 3.5 s | 9.7 s | 13 ms | 2.4 MB |
+    | the same FLAC, `decode_range` | 6.1 s | 13.0 s | 17 ms | 2.4 MB |
+    | the same as WAV, `decode_range` | 4.2 s | 11.1 s | 16 ms | 2.4 MB |
+    | 10 min, 24-bit/96 kHz FLAC, `decode` | 1.2 s | 3.2 s | 10 ms | 2.5 MB |
+
+    The Python reduction is the slower half (about 8 ms per MB of PCM). Looking for the extreme bytes with `in`
+    first was slower on noise and on silence, so `min`/`max` stay. Each `feed` holds the GIL under 20 ms, inside
+    the 50 ms target; the UI-thread cost of painting and dragging is measured with the page (task 3).
+  - **Built (M13 task 2):** the temporary preview sheets are in `core/playlists.py`: a `PreviewSheet` (the audio, its
+    rate and length, `PreviewTrack`s at sample starts, the album title and performer), `render_preview` and
+    `write_preview` (`preview-<stamp>[-n].cue`, pruned to 20 by `prune` with its own pattern, which never touches
+    `play-*.m3u8`, nor the reverse). Starts round to the nearest frame, halves up (`frames_from_samples`); a track
+    that rounds to no frame (it starts on the next one's frame, or at the end) is left out, so no two tracks share
+    a frame. A double quote in a title becomes `'` and line breaks a space, since a sheet can't hold them. The FILE
+    type is always WAVE, as EAC writes it. `trim.preview_sheet(plan, title, artist, album)` gives the three parts
+    (the kept one "<title> (kept)", else the file name); `TrimPlan.times_ok` is Preview in player's condition.
+    `split.preview_sheet(plan)` gives the Split page's (§22): every planned track, a hidden track first.
 - **UI:** `ui/trim_page.py` (the widgets: the waveform widget, the fields, the subfolder, the buttons, the report)
   and `ui/controllers/trim.py` `TrimController` (`window.trim`), following `SplitController`. The waveform is
   computed on a worker and painted from the cached peaks, so dragging a handle and resizing never decode again.

@@ -19,6 +19,7 @@ from pathlib import Path
 from music_desk.core.cancel import CancelToken
 from music_desk.core.cue import AlbumPlan, PlannedTrack
 from music_desk.core.flac import Cancelled, FlacError
+from music_desk.core.playlists import PreviewSheet, PreviewTrack
 
 PARTIAL = ".partial"
 
@@ -121,6 +122,19 @@ def prove(plan: AlbumPlan, partials: list[Path], runner, cancel: CancelToken | N
     if problems:
         result.error = "The proof failed: " + "; ".join(problems) + "."
     return result
+
+
+def preview_sheet(plan: AlbumPlan) -> PreviewSheet:
+    """Preview in player on the Split page (SPEC §22): every track the split would write, ticked or not, each
+    starting where the split cuts it (a gap belongs to the track before), with its title and performer. A hidden
+    track becomes track 1 ("Hidden track"), since a cue sheet can't number a track 0; the plan needs a source."""
+    source, info = plan.image
+    sheet, tags = plan.sheet, info.tags
+    tracks = [PreviewTrack(t.start, str(t.fields.get("title", "")), str(t.fields.get("artist", "")))
+              for t in plan.tracks]
+    title = (sheet.title if sheet else "") or tags.get("album", "")
+    performer = (sheet.performer if sheet else "") or tags.get("albumartist", "")
+    return PreviewSheet(source, info.rate, info.samples, tracks, title, performer)
 
 
 @dataclass

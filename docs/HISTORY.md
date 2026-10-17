@@ -954,8 +954,8 @@ Done when:
   shift; extracting only track 3 proves its length and MD5 against the source's range;
 - Save sends the old `.cue` to the (injected) Recycle Bin, and is refused where Windows can't recycle.
 
-Optional, for later (not needed for completion): the installed app, on a copied album, saves a sheet with one
-start time moved and splits it with its bundled flac.
+Optional, for later (not needed for completion): in the installed app, on a copy of an EAC rip (image, cue,
+log), save a second version of the cue sheet with other split points, and split from it with the bundled flac.
 
 ## Former CLAUDE.md sections (as of 2026-10-16)
 

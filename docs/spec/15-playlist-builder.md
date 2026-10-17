@@ -49,6 +49,9 @@ import of existing playlists): one playlist in progress, built by dragging music
   foobar2000, or whatever is associated with `.m3u8`.
 - The playlist is kept across restarts in the app's data (`%LOCALAPPDATA%\MusicDesk`), until it is cleared.
 
+**Checked by Hugo in the installed app (2026-10-17):** an exported playlist plays the right songs in his music
+player, and dragging songs and folders into the builder with the mouse works.
+
 **As built (M7 task 4): export and play** (`ui/playlist_panel.py`, `MainWindow`).
 - Under the footer: **Play**, **Export…** and the **Relative paths** checkbox (ticked by default). Play and
   Export… are enabled when at least one track is still in the library. `PlaylistPanel.entries()` gives the

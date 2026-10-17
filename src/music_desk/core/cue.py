@@ -291,8 +291,14 @@ class AlbumPlan:
     refusal: str | None = None  # why the album is left alone; None when it can be split
     warnings: list[str] = field(default_factory=list)
     ticked: frozenset[int] | None = None  # the track numbers to write (0 is a hidden track); None for all
+    destination: Path | None = None  # where the tracks go; None: the .cue's folder
     problems: list[tuple[int, str]] = field(default_factory=list)  # (track number, why): a path too long
     notes: list[tuple[int, str]] = field(default_factory=list)  # (track number, how its name was changed)
+
+    @property
+    def folder(self) -> Path:
+        """Where the tracks are written: the chosen destination, else the .cue's (and the image's) folder."""
+        return self.destination or self.cue.parent
 
     def is_ticked(self, number: int) -> bool:
         return self.ticked is None or number in self.ticked
@@ -352,16 +358,19 @@ def plan_album(cue: str | Path, name_masks: Sequence[str], replacement: str, enc
 
 def plan_sheet(sheet: CueSheet, cue: str | Path, name_masks: Sequence[str], replacement: str, *,
                ticked: Iterable[int] | None = None, is_silent: Callable[[Path, int, int], bool] | None = None,
-               read_info: Callable[[Path], SourceInfo] = read_source) -> AlbumPlan:
+               read_info: Callable[[Path], SourceInfo] = read_source,
+               destination: str | Path | None = None) -> AlbumPlan:
     """What splitting this sheet would write, or why it can't be split. Nothing on disk changes. `cue` is where
     the sheet lives (its folder holds the source); the sheet itself may hold the Split page's unsaved edits.
 
     `ticked` are the track numbers to write (None: all). Unticked tracks still set the boundaries, and the tags'
     track total is the sheet's, whatever is ticked. `is_silent(source, start, end)` decodes that range (the
     job's flac); without it, audio before track 1 that is 2 s or longer is kept as a hidden track (no sample is
-    lost either way)."""
+    lost either way). `destination` is the existing folder the tracks go to (None: the .cue's folder); the app
+    never creates folders (Ground rule 1)."""
     cue = Path(cue)
-    plan = AlbumPlan(cue, ticked=frozenset(ticked) if ticked is not None else None)
+    plan = AlbumPlan(cue, ticked=frozenset(ticked) if ticked is not None else None,
+                     destination=Path(destination) if destination else None)
     plan.sheet = sheet
     if sheet.fell_back:
         plan.warnings.append("If the titles look wrong, pick the cue sheet's encoding.")
@@ -377,6 +386,9 @@ def plan_sheet(sheet: CueSheet, cue: str | Path, name_masks: Sequence[str], repl
         plan.refusal = f"Not a single-file album: {sheet.files[0]} isn't in the folder."
         return plan
     plan.source = source
+    if plan.destination is not None and not plan.destination.is_dir():
+        plan.refusal = f"The destination folder {plan.destination} doesn't exist. Choose an existing folder."
+        return plan
     if len(sheet.tracks) < 2:
         plan.refusal = "The sheet has fewer than two audio tracks."
         return plan
@@ -428,7 +440,7 @@ def name_tracks(plan: AlbumPlan, name_masks: Sequence[str], replacement: str,
     an earlier ticked track, gets " (2)", " (3)"…, and a track no mask fits is named from its number ("03
     Track.flac"). `plan.notes` says which names changed and why. Returns why the album can't be split (a path
     too long for Windows, no track ticked), or None. Unticked tracks are named, and not checked."""
-    folder = plan.cue.parent
+    folder = plan.folder
     if existing is None:
         try:
             existing = os.listdir(folder)

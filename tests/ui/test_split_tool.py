@@ -1,13 +1,13 @@
 """The Split page in the window (SPEC §22): the button on every .cue preview, the page's fields and table, edits,
-validation marks and the disabled buttons, ticks and options, the encoding picker, Save / Save as, the unsaved-edits
-questions, and the job with the real bundled flac on copied fixtures: the lock, Stop, recycling through a recorder
-(never the real Recycle Bin), ReplayGain afterwards with a fake rsgain, and the report."""
+validation marks and the disabled buttons, ticks, the source picker, the destination, the encoding picker, Save /
+Save as (a saved-over sheet goes to a recorder, never the real Recycle Bin), the unsaved-edits questions, and the
+job with the real bundled flac on copied fixtures: the lock, Stop, several splits of one image, and the report.
+A split is just a split: it never touches the image or its sheet."""
 
 import json
 import shutil
 
 import pytest
-from rsgain_fake import FakeScanner
 
 from music_desk.core.flac import Cancelled
 from music_desk.core.index.store import path_of
@@ -34,9 +34,9 @@ def library_dir(tmp_path, fixtures_dir):
 
 @pytest.fixture
 def recycled(window):
-    """Everything the split and the saves send to the Recycle Bin, recorded: nothing really moves."""
+    """Every saved-over cue sheet sent to the Recycle Bin, recorded: nothing really moves."""
     paths = []
-    window.split.runner.recycle = paths.append
+    window.split.recycle = paths.append
     window.split.check_recycle = lambda _path: None
     return paths
 
@@ -106,7 +106,8 @@ def test_the_button_on_every_cue_preview(qtbot, window, service, library_dir, sp
 
 def test_the_page_shows_the_sheet_and_its_plan(qtbot, split, library_dir):
     page = open_sheet(qtbot, split, library_dir / "Albums" / HIDDEN / SHEET)
-    assert page.file_edit.text() == SOURCE and "FLAC, 44.1 kHz, 0:12" in page.source_note.text()
+    assert page.source.currentData() == SOURCE and "FLAC, 44.1 kHz, 0:12" in page.source_note.text()
+    assert page.destination.text() == str(library_dir / "Albums" / HIDDEN)
     assert page.album_edits["performer"].text() == "Fixture Artist"
     assert (page.album_edits["genre"].text(), page.album_edits["date"].text()) == ("Test Rock", "2024")
     assert page.album_edits["disc"].text() == "1" and page.album_edits["disc_total"].text() == "2"
@@ -118,7 +119,6 @@ def test_the_page_shows_the_sheet_and_its_plan(qtbot, split, library_dir):
     assert page.column_texts("gap")[2] == "00:06:00"
     assert page.split_button.text() == "Split 4 tracks" and page.split_button.isEnabled()
     assert not page.save_button.isEnabled() and page.save_as_button.isEnabled()  # nothing to save yet
-    assert page.recycle.isEnabled() and not page.recycle.isChecked() and not page.replaygain.isEnabled()
     page.table.selectRow(2)  # track 2: FLAGS has its column, so no other lines
     assert page.track_other.isEnabled() and page.track_other.toPlainText() == ""
     page.table.selectRow(0)  # the hidden track isn't in the sheet
@@ -164,19 +164,55 @@ def test_add_and_delete_tracks(qtbot, split, library_dir):
     assert not split.doc.modified  # back to the sheet as it was, byte for byte
 
 
-def test_ticks_and_options(qtbot, split, library_dir):
+def test_ticks(qtbot, split, library_dir):
     page = open_sheet(qtbot, split, library_dir / "Albums" / HIDDEN / SHEET)
-    page.recycle.setChecked(True)
-    assert page.replaygain.isEnabled()
     page.cell(2, "tick").setCheckState(page.cell(2, "tick").checkState().Unchecked)
     ready(qtbot, split)
     assert page.split_button.text() == "Split 3 tracks"
-    assert not page.recycle.isEnabled() and not page.recycle.isChecked() and not page.replaygain.isEnabled()
-    assert "Only when every track is ticked" in page.recycle.toolTip()
     for row in range(4):
         page.cell(row, "tick").setCheckState(page.cell(row, "tick").checkState().Unchecked)
     ready(qtbot, split)
     assert not page.split_button.isEnabled() and "Tick the tracks" in page.split_note.text()
+
+
+def test_the_source_picker(qtbot, split, library_dir):
+    """Which audio file the sheet points to is chosen from the files beside it (Hugo, 2026-10-17)."""
+    folder = library_dir / "Albums" / "sjis"
+    shutil.copy2(folder / "x.flac", folder / "y.flac")
+    (folder / "notes.txt").write_text("not audio", encoding="utf-8")
+    page = open_sheet(qtbot, split, folder / "album.cue")
+    assert [page.source.itemText(i) for i in range(page.source.count())] == ["x.flac", "y.flac"]
+    page.source.setCurrentIndex(1)
+    page.source.activated.emit(1)
+    ready(qtbot, split)
+    assert split.doc.file == "y.flac" and 'FILE "y.flac" WAVE' in split.doc.text()
+    assert split.plan.source == folder / "y.flac"
+    (folder / "x.flac").unlink()  # the test's own copy, gone: the sheet now points to nothing
+    split.doc.set_file("x.flac")
+    split._refresh()
+    ready(qtbot, split)  # each plan lists the folder again
+    assert page.source.itemText(0) == "x.flac (not found)" and page.source.currentIndex() == 0
+    split.doc.set_file("x.ape")
+    split._refresh()
+    ready(qtbot, split)
+    assert page.source.itemText(0) == "x.ape (not supported)"
+
+
+def test_the_destination(qtbot, split, library_dir, tmp_path, monkeypatch):
+    page = open_sheet(qtbot, split, library_dir / "Albums" / "wav_image" / "image.cue")
+    page.destination.setText(str(tmp_path / "Nowhere"))
+    page.destination.textEdited.emit(str(tmp_path / "Nowhere"))
+    ready(qtbot, split)
+    assert not page.split_button.isEnabled() and "doesn't exist" in page.split_note.text()
+    elsewhere = tmp_path / "Elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setattr(split, "choose_destination_folder", lambda start: str(elsewhere))
+    page.browse_button.click()
+    ready(qtbot, split)
+    assert page.destination.text() == str(elsewhere) and page.split_button.isEnabled()
+    run(qtbot, split)
+    assert sorted(p.name for p in elsewhere.iterdir()) == ["01 One.flac", "02 Two.flac"]
+    assert sorted(p.name for p in (library_dir / "Albums" / "wav_image").iterdir()) == ["image.cue", "image.wav"]
 
 
 def test_names_get_a_number_instead_of_a_refusal(qtbot, split, library_dir):
@@ -250,6 +286,9 @@ def test_save_as_replace_or_keep_both(qtbot, split, recycled, library_dir, monke
     assert b"A Duet" in (folder / "other (2).cue").read_bytes() and b"A Duet" not in (folder / SHEET).read_bytes()
     monkeypatch.setattr(split, "ask_replace_or_keep", lambda name: "replace")
     assert split.save_as() and recycled == [other] and b"A Duet" in other.read_bytes()
+    elsewhere = library_dir / "Albums" / "wav_image" / "version.cue"
+    monkeypatch.setattr(split, "choose_cue_file", lambda suggested: str(elsewhere))
+    assert not split.save_as() and not elsewhere.exists()  # a sheet sits beside its audio file
 
 
 def test_a_save_in_a_locked_folder_is_refused(qtbot, window, split, library_dir):
@@ -307,7 +346,7 @@ def test_split_with_unsaved_edits_saves_first(qtbot, split, recycled, library_di
     monkeypatch.setattr(split, "ask_save_first", lambda name: "save")
     report = run(qtbot, split)
     assert report.startswith("Done: 2 tracks split, all identical to the original.")
-    assert recycled == [folder / "image.cue"]  # the save's old version; the originals stay
+    assert recycled == [folder / "image.cue"]  # the save's old version, nothing else
     assert (folder / "02 Deux.flac").exists() and b"Deux" in (folder / "image.cue").read_bytes()
 
 
@@ -316,12 +355,12 @@ def test_split_with_unsaved_edits_saves_first(qtbot, split, recycled, library_di
 def test_the_job_splits_proves_and_reports(qtbot, window, service, split, recycled, library_dir):
     folder = library_dir / "Albums" / HIDDEN
     page = open_sheet(qtbot, split, folder / SHEET)
-    page.recycle.setChecked(True)
+    image, sheet = (folder / SOURCE).read_bytes(), (folder / SHEET).read_bytes()
     report = run(qtbot, split)
     assert report.startswith("Done: 4 tracks split, all identical to the original.")
     assert "Together, the tracks have the original's MD5" in report
-    assert "The album file and its .cue are in the Recycle Bin." in report
-    assert recycled == [folder / SOURCE, folder / SHEET]
+    assert f"Written to {folder}:" in report and "The image and its cue sheet are as they were." in report
+    assert recycled == [] and (folder / SOURCE).read_bytes() == image and (folder / SHEET).read_bytes() == sheet
     assert sorted(p.name for p in folder.iterdir()) == [
         "00 Hidden track.flac", "01 Opening.flac", "02 Second Song.flac", "03 Duet.flac", SOURCE, SHEET]
     assert TaggedFile(folder / "03 Duet.flac").fields().artist == "Fixture Artist & Guest"
@@ -362,18 +401,6 @@ def test_stop_leaves_the_album_as_it_was(qtbot, window, split, library_dir, monk
     assert job.state == "stopped" and job.status == "nothing left half-done"
 
 
-def test_recycling_then_replaygain(qtbot, window, split, recycled, library_dir):
-    scanner = FakeScanner(values={})
-    split.runner.scanner = scanner
-    folder = library_dir / "Albums" / "wav_image"
-    page = open_sheet(qtbot, split, folder / "image.cue")
-    page.recycle.setChecked(True)
-    page.replaygain.setChecked(True)
-    report = run(qtbot, split)
-    assert recycled == [folder / "image.wav", folder / "image.cue"]
-    assert scanner.calls and scanner.calls[0][1] == folder and "ReplayGain:" in report
-
-
 def test_a_running_split_is_shown_instead_of_opening_another(qtbot, window, split, library_dir):
     split.job = window._start_job("Split", library_dir / "Albums" / HIDDEN)
     split.open(library_dir / "Albums" / "wav_image" / "image.cue")
@@ -392,9 +419,21 @@ def test_no_split_state_is_saved(tmp_path):
     assert not [key for key in json.loads(path.read_text(encoding="utf-8")) if key.startswith("split_")]
 
 
-def test_options_start_unticked_each_time(qtbot, split, library_dir):
-    page = open_sheet(qtbot, split, library_dir / "Albums" / HIDDEN / SHEET)
-    page.recycle.setChecked(True)
-    open_sheet(qtbot, split, library_dir / "Albums" / "wav_image" / "image.cue")
-    assert not page.recycle.isChecked() and not page.replaygain.isChecked()
-
+def test_one_image_split_twice_from_two_versions(qtbot, split, recycled, library_dir, monkeypatch):
+    """Hugo's workflow (2026-10-17): the EAC set is kept, and each version of the sheet splits the same image."""
+    folder = library_dir / "Albums" / "wav_image"
+    open_sheet(qtbot, split, folder / "image.cue")
+    run(qtbot, split)
+    split.page.done_button.click()
+    open_sheet(qtbot, split, folder / "image.cue")
+    edit_cell(qtbot, split, 1, "start", "00:02:00")  # other split points
+    monkeypatch.setattr(split, "choose_cue_file", lambda suggested: str(folder / "image.cue"))
+    monkeypatch.setattr(split, "ask_replace_or_keep", lambda name: "keep")
+    assert split.save_as() and split.path == folder / "image (2).cue"
+    ready(qtbot, split)
+    assert split.page.column_texts("name") == ["01 One (2).flac", "02 Two (2).flac"]
+    run(qtbot, split)
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "01 One (2).flac", "01 One.flac", "02 Two (2).flac", "02 Two.flac", "image (2).cue", "image.cue",
+        "image.wav"]
+    assert recycled == []  # the original sheet was never replaced

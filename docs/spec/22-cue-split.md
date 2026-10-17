@@ -4,6 +4,22 @@ ripped as **one audio file plus a `.cue` sheet** that says where each track star
 app shows a Split page where the sheet can be edited, then cuts the file into one FLAC file per ticked track, named
 with the shared masks (§21) and tagged from the sheet, and proves the cut lost nothing.
 
+**The use case** (Hugo, 2026-10-17):
+- The split is for **EAC rips**, which notoriously arrive as one set: the unified image (`.flac`), the `.cue`
+  that EAC wrote, and EAC's extraction `.log`. Hugo doesn't store albums that way; the set is what a new rip
+  looks like.
+- **The set is kept.** The image and the original `.cue` stay as they are, so the album can be split again later.
+- **One image, several splits.** The same image may be split in several ways, each from its own **version of the
+  cue sheet** with different split points (start times, tracks added or deleted). Each version is a `.cue` beside
+  the image that points to it; the original EAC sheet is one of them. Making a version is Save as… from the
+  Split page (Keep both numbers it, `Split Album (2).cue`), then Split from it.
+- **A cue sheet is useless without its audio file.** Which audio file a sheet points to (its FILE line) is a
+  control of its own on the page (below, "Source"), not text to type, and a sheet is saved only beside it.
+- **A split is just a split.** It writes the tracks, and nothing else: it never deletes or moves the image, the
+  sheet or the log, and nothing runs after it (ReplayGain is its own tool). The 0.2.10–0.3.0 options to recycle
+  the originals and then run ReplayGain are removed (Hugo, 2026-10-17: never asked for, and they would break the
+  other versions).
+
 **The `.cue` is the split's only source of truth** (Hugo, 2026-10-16). The app stores no split state: no
 remembered options, no remembered edits. Edits are kept only by saving them into a `.cue`.
 
@@ -118,10 +134,17 @@ in**, and **one page with every control**; you can't split without going through
   first.
 
 **The Split page**, top to bottom:
-- **Source:** the FILE line, editable. It must name a FLAC, WAV or AIFF file in the `.cue`'s folder. Then its
-  format and length, or why it can't be split ("APE isn't supported: the split reads FLAC, WAV and AIFF.", "File
-  not found", "This sheet names 11 files: only single-file albums can be split").
+- **Source:** which audio file the sheet points to (its FILE line), chosen from a list of the FLAC, WAV and AIFF
+  files in the `.cue`'s folder (Hugo, 2026-10-17: a control, not text to type). A FILE line naming a file that
+  isn't there, or one the split can't read, shows in the list marked "(not found)" or "(not supported)" until
+  another is chosen. Choosing one rewrites that one line (its type word kept). Then the file's format and length,
+  or why it can't be split ("APE isn't supported: the split reads FLAC, WAV and AIFF.", "This sheet names 11
+  files: only single-file albums can be split").
 - **Encoding:** the picker (above).
+- **Destination:** the folder the tracks are written to, the image's folder by default, with **Browse…** (Hugo,
+  2026-10-17). It must be an existing folder (the app creates none); otherwise Split is disabled, saying so. Names
+  are checked there: a name already taken, by an earlier split for instance, gets " (2)", " (3)"…. Like the
+  ticks, it starts at its default each time the page opens.
 - **Album fields**, editable: performer, title, genre (`REM GENRE`), date (`REM DATE`), disc and total discs
   (`REM DISCNUMBER`, `REM TOTALDISCS`), catalog, songwriter, and **Other lines**: the album-level lines that have
   no field of their own (`REM DISCID`, `REM COMMENT`, unknown lines), editable as text.
@@ -142,17 +165,11 @@ in**, and **one page with every control**; you can't split without going through
   (Tools page)." and Split is disabled.
 - **Ticks:** every track is ticked when the page opens. Unticked tracks still set the boundaries; they are just
   not written. The name numbering and the free-space check cover the ticked tracks only.
-- **Options**, at their defaults each time the page opens (nothing is remembered):
-  - **Send the album file and its .cue to the Recycle Bin once the tracks are verified**: off. Enabled only when
-    every track is ticked, since otherwise the unticked audio would be lost; the tooltip says so.
-  - **Then run ReplayGain on the album**: off. Enabled only when the option above is ticked, since ReplayGain
-    measures every audio file in the folder and would count the album file too. It uses the ReplayGain card's
-    options.
 - **Buttons:** **Save**, **Save as…**, **Split N tracks** (disabled by invalid values, no ticked track, or a
   failed flac self-check, §13), **Stop** while the job runs, then the report on the page.
 - **Unsaved edits:**
   - Split with unsaved edits asks "Save the cue sheet first?" (Save, Save as…, Cancel), so the tracks always
-    match a `.cue` on disk. The ticks and options aren't cue data and need no save.
+    match a `.cue` on disk. The ticks and the destination aren't cue data and need no save.
   - Leaving the page (back, another `.cue`, closing the app) with unsaved edits asks to save or discard them.
 
 **Saving the sheet** (a Ground rule 1 exception, added 2026-10-16)
@@ -168,18 +185,21 @@ in**, and **one page with every control**; you can't split without going through
   mistaken save can be undone from the bin; then the sheet is written in its place. Where Windows can't recycle
   (a network drive), Save asks "Overwrite <name> for good? This drive has no Recycle Bin." first. A folder
   locked by a job (`PathLocks`) refuses it, as tag saves are refused.
-- **Save as…** opens a Save dialog in the `.cue`'s folder. On a name that exists, the app asks: **Replace** (the
-  old file goes to the Recycle Bin first, as for Save) or **Keep both**, which saves as `image (2).cue`, then
-  `(3)`… (Hugo, 2026-10-17). The page then works on the new file.
+- **Save as…** is how a version is made. It opens a Save dialog in the `.cue`'s folder. On a name that exists
+  (the sheet's own name included), the app asks: **Replace** (the old file goes to the Recycle Bin first, as for
+  Save) or **Keep both**, which saves as `image (2).cue`, then `(3)`… (Hugo, 2026-10-17). The page then works on
+  the new file. A sheet is saved only in its audio file's folder: another folder is refused, saying so, since its
+  FILE line would point to nothing.
 - Saving refreshes the folder in the browser and the side panel's preview.
 
 ## The job
-- It runs in the Jobs panel (§10) as kind **Split**, for one album, holding a `PathLocks` folder lock owned by
-  "the Split tool", so tag saves, renames and other jobs in that folder are refused meanwhile. Unsaved Metadata
+- It runs in the Jobs panel (§10) as kind **Split**, for one album, holding a `PathLocks` lock on the image's
+  folder and the destination, owned by "the Split tool", so tag saves, renames and other jobs there are refused
+  meanwhile. Unsaved Metadata
   edits in the folder ask first, as the other tools do. The page's controls are read-only while it runs.
 - One flac process at a time (`CREATE_NO_WINDOW`, below-normal priority, as rsgain in `core/rsgain.py`). flac
   comes from `paths.resource_path("flac/flac.exe")`.
-- **Free space:** the drive must have free space at least equal to the ticked tracks' share of the source's size,
+- **Free space:** the destination's drive must have free space at least equal to the ticked tracks' share of the source's size,
   or the split is refused.
 - **For each ticked track:** `flac -8 -V --silent --skip=<first sample> [--until=<end sample>] -o
   "<new name>.partial" <source>`. `-V` makes flac decode what it wrote and compare it while encoding.
@@ -192,28 +212,22 @@ in**, and **one page with every control**; you can't split without going through
   STREAMINFO MD5, or for WAV/AIFF, or a FLAC without an MD5, the hash of the source's decoded audio.
 - **Then:**
   - each `.partial` is renamed to its final name (checked free again);
-  - the tags and the cover are written through `TaggedFile`;
-  - if ticked (only possible with every track ticked), the album file and its `.cue` go to the Recycle Bin
-    together, through `fsops.send_to_recycle_bin` and its safety check (§19). If they can't be recycled, they
-    stay and the report says why.
+  - the tags and the cover are written through `TaggedFile`. Nothing else changes.
 - **Stop:** it kills flac and deletes this run's `.partial` files, and only those (their exact paths are
   recorded). Once the renames have started, Stop takes effect after them.
 - **Failure:** a failed proof or a flac error leaves the folder untouched. The `.partial` files are deleted, and
   the report gives flac's message.
-- **Split + ReplayGain** is one job across two steps, as Tidy is (§10): `process_album` on the folder once the
-  originals reached the Recycle Bin.
-- **Afterwards:** `MainWindow.refresh_after_tool` on the folder.
+- **Afterwards:** `MainWindow.refresh_after_tool` on the destination.
 - **The report**, on the Split page:
   - "Done: 11 tracks split, all identical to the original." or "Done: 3 of 11 tracks split, each identical to its
     part of the original.";
-  - the tracks written, the proof's result, and what happened to the originals;
-  - the ReplayGain report when it ran.
+  - the folder and the tracks written, the proof's result, and that the image and its sheet are as they were.
 
   The jobs panel reads, for example, "Running (2 of 3): Kid A", "Done: 3 tracks split", or "Stopped: nothing left
   half-done".
 
-**Ground rule 1** gains three exceptions: creating the track files of a split (never overwriting a file), deleting
-the split's own `.partial` files from the same run, and saving a cue sheet from the Split page (Save and Save as,
+**Ground rule 1** gains three exceptions: creating the track files of a split in the destination the user chose
+(never overwriting a file), deleting the split's own `.partial` files from the same run, and saving a cue sheet from the Split page (Save and Save as,
 the replaced version going to the Recycle Bin; overwritten for good only where Windows has no Recycle Bin and the
 user agreed).
 
@@ -320,8 +334,8 @@ user agreed).
 - **The proof** (`split.prove`): each written track's length, then its MD5 against `decode_range` of its own
   range of the source. With every track ticked, the tracks end to end must also match the STREAMINFO MD5, or,
   without one (WAV, AIFF), the source ranges' hashes end to end, which cover the whole audio, so the source is
-  decoded once. Free space is the ticked tracks' share of the source's size. `finish_album` renames, tags and
-  recycles the written tracks only, and keeps the originals when not every track was split.
+  decoded once. Free space is the ticked tracks' share of the source's size. `finish_album` renames and tags
+  the written tracks only (its recycling was removed in 0.3.1).
 - **Tests:** `tests/core/test_cue_edit.py`; ticks in `test_cue.py` and `test_split.py`, including the real flac
   extracting only track 3 (its length and MD5 against its range) and track 2 one sample off (moving only its
   start fails on the length; moving its start and end keeps the length and fails on the MD5).
@@ -340,10 +354,10 @@ user agreed).
     a hidden track's row 0 comes from the last plan that had tracks, so rows don't move while a value is fixed.
   - Buttons: Save needs unsaved edits and no sheet problem; Save as needs no sheet problem; Split needs a plan
     of the latest edit with no refusal, a ticked track, valid masks ("Fix the file names first (Tools page).")
-    and flac (`set_unavailable`, from `MainWindow.show_flac_version`). The reasons show beside Split. The
-    recycling option is enabled only with every track ticked, ReplayGain only with recycling; both start
-    unticked each time the page opens.
-  - Saving: `save_cue` with the runner's recycler. A character the encoding can't hold asks `confirm_utf8`; a
+    and flac (`set_unavailable`, from `MainWindow.show_flac_version`). The reasons show beside Split. (Revised
+    2026-10-17: the recycle and ReplayGain options are gone; the source picker and the destination were added,
+    see below.)
+  - Saving: `save_cue` with the controller's recycler. A character the encoding can't hold asks `confirm_utf8`; a
     drive without a Recycle Bin asks `confirm_overwrite_for_good`; a folder locked by a job refuses it. Save as
     asks `choose_cue_file`, then `ask_replace_or_keep` on an existing name (Keep both: `numbered_path`), and
     the page then works on the new file. Saving refreshes the folder (`refresh_after_tool`).
@@ -361,17 +375,34 @@ user agreed).
   (2).flac.").
 - **`services/split_job.py` `SplitRunner`:** `load(path, encoding)` reads the document on its worker,
   `plan(sheet, cue, masks, replacement, ticked)` plans it (the source's info and the silence checks are cached
-  per file version, so planning again after an edit doesn't decode again), and `run(plan, options, rg_options)`
-  cuts, proves, finishes and runs ReplayGain for one album. `split.cut_album` gained `on_track` for the
+  per file version, so planning again after an edit doesn't decode again), and `run(plan)` cuts, proves
+  and finishes one album (0.3.1: its options and ReplayGain removed). `split.cut_album` gained `on_track` for the
   progress.
 - **Kept from 0.2.10:** `split.finish_album` (final names checked free again, tags through `write_tags` with the
-  cover and the ISRC as a Vorbis comment, the originals recycled album file first) and ReplayGain chained in
-  the same job only once both originals reached the Recycle Bin.
+  cover and the ISRC as a Vorbis comment). Its recycling of the originals, and ReplayGain chained in the job,
+  were kept in 0.3.0 and removed in 0.3.1.
 - **Removed:** the Split card and its Tools page wiring, `cue.find_albums` and the folder scan, the
   multi-album preview, the "Split into tracks…" menu entries, `SplitOptions.recursive` and its JSON, and
   `Settings.split_options` (an old settings file's key is ignored, and gone at the next save).
 - **Tests:** `tests/ui/test_split_tool.py`, with the real flac on copied fixtures and a recorder for the Recycle
   Bin.
+
+## As built (0.3.1): the source picker, the destination, a split that only splits
+- **Source picker:** `SplitPage.source`, a list of the FLAC, WAV and AIFF files beside the sheet
+  (`split_job.audio_files`, listed on the worker when the sheet is read and with each plan, so it follows the
+  folder). The FILE line's name is listed first when it isn't one of them, marked "(not found)" or "(not
+  supported)". Choosing one calls `CueDocument.set_file`, which rewrites that one line.
+- **Destination:** `SplitPage.destination` and Browse… (`choose_destination_folder`, an existing folder only).
+  `cue.plan_sheet(destination=…)` refuses a folder that doesn't exist; `AlbumPlan.folder` is where the tracks
+  go, and `name_tracks` numbers names against it. `cut_album` checks that drive's free space; the job locks the
+  image's folder and the destination.
+- **Save as:** asks Replace / Keep both on any existing name, the sheet's own included (Keep both makes a
+  version), and refuses a folder other than the audio file's.
+- **Removed:** `SplitOptions`, recycling in `finish_album` (`Finished.recycled`, `kept_reason`), ReplayGain in
+  the split job, and the page's two option boxes. The controller keeps its own recycler for saved-over sheets
+  (`SplitController.recycle`).
+- **Tests:** two splits of one image from two versions of its sheet (the second numbered " (2)"), the source
+  picker, the destination, and a split that leaves the image and its sheet byte-identical.
 
 ## Tests
 - **Fixtures** (`make_fixtures.py`, ffmpeg, dev-only; non-repeating audio):
@@ -397,7 +428,7 @@ user agreed).
   shifted by one sample; extracting only track 3 proves its length and MD5 against the source's range, and fails
   on a one-sample shift.
 - **UI (task 6):** the button on every `.cue` preview; the page's fields, table, Add and Delete, validation marks
-  and the disabled buttons; the options' enabling (recycling only with every track ticked); the encoding picker
-  and the unsaved-edits questions (Split, back, another `.cue`, quit); the job with the lock, Stop, recycling
-  through an injected recycler (never the real bin), and ReplayGain chaining; no split key in the saved
-  settings.
+  and the disabled buttons; the source picker and the destination; the encoding picker and the unsaved-edits
+  questions (Split, back, another `.cue`, quit); Save and Save as through an injected recycler (never the real
+  bin); the job with the lock, Stop, and the image and its sheet left byte-identical; one image split twice from
+  two versions of its sheet; no split key in the saved settings.

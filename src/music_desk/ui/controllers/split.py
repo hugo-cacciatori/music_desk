@@ -3,8 +3,9 @@
 One page, one `.cue`: the side panel's "Split into tracks…" on a .cue preview opens it. The sheet is a
 cue_edit.CueDocument; every edit is applied to it, validated at once on the UI thread (pure Python, no file read),
 then planned again on the runner's worker after a short pause, so the lengths and new names follow. The app keeps
-no split state: edits live only in the open document until they are saved into a .cue, and the ticks and options
-start afresh each time the page opens.
+no split state: edits live only in the open document until they are saved into a .cue, and the ticks and the
+destination start afresh each time the page opens. A split is just a split (Hugo, 2026-10-17): it writes the
+tracks, and nothing runs after it.
 
 Dialogs go through ask_* / confirm_* / choose_* methods, which tests replace.
 """
@@ -16,7 +17,7 @@ from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from music_desk.core import fsops
-from music_desk.core.cue import FRAMES_PER_SECOND, CueError, SourceInfo
+from music_desk.core.cue import FRAMES_PER_SECOND, SUPPORTED, CueError, SourceInfo
 from music_desk.core.cue_edit import (
     CueDocument,
     CueEncodingError,
@@ -27,7 +28,6 @@ from music_desk.core.cue_edit import (
     validate,
 )
 from music_desk.core.path_locks import LockedError
-from music_desk.core.split import SplitOptions
 from music_desk.services import jobs as jobs_module
 from music_desk.services.split_job import Loaded, Planned, SplitFinished, SplitRunner
 from music_desk.ui.split_page import SplitPage
@@ -67,23 +67,13 @@ def report_text(result: SplitFinished) -> str:
         lines = [f"Done: {plural(written, 'track')} split, all identical to the original."]
     else:
         lines = [f"Done: {written} of {total} tracks split, each identical to its part of the original."]
-    lines += ["", "Written:"] + [f"    {path.name}" for path in result.finished.tracks]
+    lines += ["", f"Written to {result.folder}:"] + [f"    {path.name}" for path in result.finished.tracks]
     lines += ["", "The proof: each track has its planned number of samples, and its audio has the same MD5 as its "
                   "part of the original."]
     if result.cut.md5:
         lines.append(f"Together, the tracks have the original's MD5 ({result.cut.md5[:8]}…).")
-    lines.append("")
-    if result.finished.recycled:
-        lines.append("The album file and its .cue are in the Recycle Bin.")
-    elif result.finished.kept_reason:
-        lines.append(f"The originals stayed: {result.finished.kept_reason}")
-    else:
-        lines.append("The album file and its .cue stay where they are.")
+    lines += ["", "The image and its cue sheet are as they were."]
     lines += [f"Warning: {w}" for w in result.finished.warnings]
-    if result.replaygain is not None:
-        lines.append(f"ReplayGain: {result.replaygain.result()}")
-    elif result.replaygain_note:
-        lines.append(result.replaygain_note)
     return "\n".join(lines)
 
 
@@ -93,11 +83,14 @@ class SplitController(QObject):
         self.window = window
         self.page = SplitPage()
         self.runner = SplitRunner(locks, self)
-        self.check_recycle = fsops.can_recycle  # replaced in tests with the recycler
+        self.recycle = fsops.send_to_recycle_bin  # a saved-over .cue goes there; replaced in tests (a recorder)
+        self.check_recycle = fsops.can_recycle  # replaced in tests with the recorder
         self.unavailable: str | None = None  # flac's self-check failed
         self.doc: CueDocument | None = None
         self.path: Path | None = None
         self.codec: str | None = None  # the encoding picked (None: Auto)
+        self.destination: Path | None = None  # where the tracks go; None: the image's folder
+        self.audio: tuple[str, ...] = ()  # the audio files beside the sheet (the source picker)
         self.auto_label: str | None = None  # what Auto chose when the sheet was read
         self.plan = None
         self.info: SourceInfo | None = None
@@ -122,7 +115,9 @@ class SplitController(QObject):
         page.splitRequested.connect(self.split)
         page.stopRequested.connect(self.runner.cancel)
         page.encodingPicked.connect(self.pick_encoding)
-        page.fileEdited.connect(lambda name: self._edit(lambda d: d.set_file(name)))
+        page.sourcePicked.connect(lambda name: self._edit(lambda d: d.set_file(name)) if name else None)
+        page.destinationEdited.connect(self.set_destination)
+        page.browseRequested.connect(self.browse_destination)
         page.albumEdited.connect(lambda key, value: self._edit(lambda d: d.set_album(key, value)))
         page.albumOtherEdited.connect(lambda text: self._edit(lambda d: d.set_album_other(text)))
         page.trackEdited.connect(lambda row, key, value: self._edit(lambda d: d.set_track(row, key, value)))
@@ -130,7 +125,6 @@ class SplitController(QObject):
         page.tickToggled.connect(self._tick)
         page.addRequested.connect(self.add_track)
         page.deleteRequested.connect(self.delete_tracks)
-        page.optionsChanged.connect(self._refresh_buttons)
         self.runner.loaded.connect(self._loaded)
         self.runner.planned.connect(self._planned)
         self.runner.progress.connect(self._progress)
@@ -160,7 +154,8 @@ class SplitController(QObject):
             return
         self.doc, self.path, self.codec, self.plan, self.info = None, path, None, None, None
         self.ticked, self.hidden_ticked, self.hidden, self.problems = {}, True, False, []
-        self.page.reset_options()
+        self.destination, self.audio = None, ()
+        self.page.show_destination(str(path.parent))
         self.page.set_encoding(None)
         self.page.show_loading(path)
         self._load_token = self.runner.load(path)
@@ -200,6 +195,7 @@ class SplitController(QObject):
             self.page.show_error(loaded.error)
             return
         self.doc = loaded.document
+        self.audio = loaded.audio
         if self.codec is None:
             self.auto_label = self.doc.encoding
         self.ticked = {row: True for row in range(len(self.doc.tracks()))}
@@ -267,6 +263,31 @@ class SplitController(QObject):
         self.page.show_loading(self.path)
         self._load_token = self.runner.load(self.path, codec)
 
+    def _show_sources(self) -> None:
+        current = self.doc.file
+        problem = None
+        if current and Path(current).suffix.lower() not in SUPPORTED:
+            problem = "not supported"
+        elif current and not any(n.casefold() == current.casefold() for n in self.audio):
+            problem = "not found"
+        self.page.show_sources(self.audio, current, problem)
+
+    def set_destination(self, text: str) -> None:
+        """The destination field, as typed: empty, or the image's folder, is the default."""
+        text = text.strip().strip('"')
+        folder = Path(text) if text else None
+        if folder is not None and self.path is not None and folder == self.path.parent:
+            folder = None
+        if folder != self.destination:
+            self.destination = folder
+            self._refresh()
+
+    def browse_destination(self) -> None:
+        chosen = self.choose_destination_folder(str(self.destination or (self.path.parent if self.path else "")))
+        if chosen:
+            self.page.show_destination(chosen)
+            self.set_destination(chosen)
+
     # -- validation and the plan --
 
     def _refresh(self) -> None:
@@ -275,6 +296,7 @@ class SplitController(QObject):
             return
         self.problems = validate(self.doc, self.info)
         self.page.show_document(self.doc, self.path, self.auto_label)
+        self._show_sources()
         self.page.show_tracks(self.doc, self.plan, self.ticked_numbers(), self.problems, self.hidden)
         self._show_problems()
         self._planning = True
@@ -292,13 +314,17 @@ class SplitController(QObject):
             self._refresh_buttons()
             return
         masks, replacement = self.window._name_masks()
-        self._plan_token = self.runner.plan(sheet, self.path, masks, replacement, self.ticked_numbers())
+        self._plan_token = self.runner.plan(sheet, self.path, masks, replacement, self.ticked_numbers(),
+                                            self.destination)
 
     def _planned(self, planned: Planned) -> None:
         if planned.token != self._plan_token or self.doc is None:
             return
         self._planning = self._plan_timer.isActive()
         self.plan = planned.plan
+        if planned.audio != self.audio:
+            self.audio = planned.audio
+            self._show_sources()
         if self.plan.tracks:
             self.hidden = self.plan.tracks[0].row is None
         if self.plan.info is not None and self.plan.info != self.info:
@@ -329,10 +355,8 @@ class SplitController(QObject):
             return
         sheet_ok = not any(p.blocks_save for p in self.problems)
         # From the ticks themselves: a refused plan has no tracks to count.
-        rows = len(self.doc.tracks()) + (1 if self.hidden else 0)
         ticked = sum(self.ticked.get(row, True) for row in range(len(self.doc.tracks()))) + (
             1 if self.hidden and self.hidden_ticked else 0)
-        all_ticked = ticked == rows
         reasons = []
         if not self.window.tools_page.names_card.valid:
             reasons.append(FIX_NAMES)
@@ -349,8 +373,7 @@ class SplitController(QObject):
         self.page.set_buttons(
             save=sheet_ok and self.doc.modified, save_as=sheet_ok, split=ready,
             split_text=f"Split {plural(ticked, 'track')}",
-            split_note=" ".join(reasons), recycle_enabled=all_ticked, replaygain_enabled=all_ticked,
-            can_delete=bool(self.doc.tracks()))
+            split_note=" ".join(reasons), can_delete=bool(self.doc.tracks()))
 
     # -- saving --
 
@@ -367,7 +390,12 @@ class SplitController(QObject):
         target = Path(chosen)
         if target.suffix.lower() != ".cue":
             target = target.with_name(target.name + ".cue")
-        if target.exists() and not fsops.is_same_file(target, self.path):
+        if not fsops.is_same_file(target.parent, self.path.parent):
+            # A cue sheet is useless without its audio file (Hugo, 2026-10-17): its FILE line names a file beside it.
+            self.window.toast.show_message(f"A cue sheet must sit beside its audio file: save it in "
+                                           f"{self.path.parent}.")
+            return False
+        if target.exists():  # the sheet's own name too: Keep both is how a version is made
             answer = self.ask_replace_or_keep(target.name)
             if answer == "cancel":
                 return False
@@ -385,7 +413,7 @@ class SplitController(QObject):
         overwrite = False
         while True:
             try:
-                save_cue(self.doc, target, self.runner.recycle, self.check_recycle, overwrite_for_good=overwrite)
+                save_cue(self.doc, target, self.recycle, self.check_recycle, overwrite_for_good=overwrite)
                 break
             except CueEncodingError as e:
                 if not self.confirm_utf8(e.encoding, e.characters):
@@ -412,10 +440,6 @@ class SplitController(QObject):
 
     # -- the job --
 
-    def options(self) -> SplitOptions:
-        recycle = self.page.recycle.isChecked() and self.page.recycle.isEnabled()
-        return SplitOptions(recycle=recycle, replaygain=recycle and self.page.replaygain.isChecked())
-
     def split(self) -> None:
         if self.doc is None or not self.page.split_button.isEnabled() and not self._split_after_plan:
             return
@@ -431,17 +455,17 @@ class SplitController(QObject):
         plan = self.plan
         if plan is None or plan.refusal is not None or not self.window._library_open():
             return
-        folder = plan.cue.parent
+        folder = plan.folder
         if self.window._unsaved_edits_under(folder):
             return
         try:
-            token = self.runner.run(plan, self.options(), self.window.tools_page.replaygain_card.options())
+            token = self.runner.run(plan)
         except LockedError as e:
             self.window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
             return
         self._run_token = token
         self.job = self.window._start_job(jobs_module.SPLIT, folder)
-        self.window._pause_indexing(True)  # flac reads the whole album: the drive is the split's meanwhile
+        self.window._pause_indexing(True)  # flac reads the whole image: the drive is the split's meanwhile
         self.page.show_running()
         self._refresh_buttons()
 
@@ -457,7 +481,7 @@ class SplitController(QObject):
             return
         self.window._pause_indexing(False)
         if self.window._library_open():
-            self.window.refresh_after_tool(result.folder)  # new tracks, recycled originals
+            self.window.refresh_after_tool(result.folder)  # the new tracks
         self.page.show_result(report_text(result))
         if self.job is not None:
             self.window.jobs.report(self.job, "split", result)
@@ -519,6 +543,10 @@ class SplitController(QObject):
             self.window, "Unsaved changes",
             "Reading the cue sheet with another encoding loses the unsaved changes. Go on?")
         return answer == QMessageBox.StandardButton.Yes
+
+    def choose_destination_folder(self, start: str) -> str:
+        """The destination's Browse…: an existing folder, or '' when cancelled (the app creates no folder)."""
+        return QFileDialog.getExistingDirectory(self.window, "Write the tracks to", start)
 
     def choose_cue_file(self, suggested: str) -> str:
         """Save as: a path, or '' when cancelled. The app asks about an existing file itself."""

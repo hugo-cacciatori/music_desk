@@ -209,12 +209,13 @@ def test_stopping_the_real_flac(fixtures_dir, tmp_path, runner):
 # -- finishing an album --
 
 @pytest.mark.slow
-def test_finish_names_tags_and_recycles(fixtures_dir, tmp_path, runner):
+def test_finish_names_and_tags_and_touches_nothing_else(fixtures_dir, tmp_path, runner):
     plan = real_plan(fixtures_dir, tmp_path, "hidden_track", runner)
     cut = split.cut_album(plan, runner)
-    recycled = []
-    done = split.finish_album(plan, cut, True, recycled.append)
-    assert done.error is None and done.warnings == [] and recycled == [plan.source, plan.cue]
+    image, sheet = plan.source.read_bytes(), plan.cue.read_bytes()
+    done = split.finish_album(plan, cut)
+    assert done.error is None and done.warnings == []
+    assert plan.source.read_bytes() == image and plan.cue.read_bytes() == sheet  # a split is just a split
     assert [p.name for p in done.tracks] == ["00 Hidden track.flac", "01 Opening.flac", "02 Second Song.flac",
                                              "03 Duet.flac"]
     from mutagen.flac import FLAC
@@ -240,19 +241,32 @@ def test_a_name_taken_meanwhile_renames_nothing(album):
     assert (album / "02 Two.flac").read_bytes() == b"arrived meanwhile"
 
 
-def test_originals_that_cant_be_recycled_stay(album):
-    from music_desk.core.fsops import CannotRecycle
-
-    def refuse(path):
-        raise CannotRecycle("X: has no Recycle Bin")
-
-    plan = make_plan(album)
-    cut = split.cut_album(plan, FakeRunner(), free_space=lambda _f: 10**9)
-    for partial in cut.partials:  # the fake writes raw bytes: give the tag writer nothing to choke on
+def test_tracks_go_to_the_chosen_destination(album, tmp_path):
+    """The destination folder (Hugo, 2026-10-17): names are checked, and numbered, there."""
+    elsewhere = tmp_path / "Elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "02 Two.flac").write_bytes(b"an earlier split")
+    info = cue.SourceInfo("FLAC", 75, SAMPLES, 1, 8)
+    path = album / "image.cue"
+    plan = cue.plan_sheet(cue.read_cue_sheet(path), path, DEFAULT_MASKS, "-", read_info=lambda _p: info,
+                          destination=elsewhere)
+    assert plan.refusal is None and plan.folder == elsewhere
+    assert [t.path for t in plan.tracks] == [elsewhere / "01 One.flac", elsewhere / "02 Two (2).flac",
+                                             elsewhere / "03 Three.flac"]
+    cut = split.cut_album(plan, FakeRunner(), free_space=lambda folder: 10**9 if folder == elsewhere else 0)
+    assert cut.ok and all(p.parent == elsewhere for p in cut.partials)
+    for partial in cut.partials:
         partial.write_bytes(b"")
-    done = split.finish_album(plan, cut, True, refuse)
-    assert done.recycled == [] and done.kept_reason == "image.flac stayed: X: has no Recycle Bin"
-    assert (album / "image.flac").exists() and (album / "image.cue").exists()
+    done = split.finish_album(plan, cut)
+    assert sorted(p.name for p in elsewhere.iterdir()) == ["01 One.flac", "02 Two (2).flac", "02 Two.flac",
+                                                           "03 Three.flac"]
+    assert names(album) == ORIGINALS and (elsewhere / "02 Two.flac").read_bytes() == b"an earlier split"
+    assert [p.name for p in done.tracks] == ["01 One.flac", "02 Two (2).flac", "03 Three.flac"]
+
+    missing = cue.plan_sheet(cue.read_cue_sheet(path), path, DEFAULT_MASKS, "-", read_info=lambda _p: info,
+                             destination=tmp_path / "Nowhere")
+    assert missing.refusal.startswith("The destination folder ") and "doesn't exist" in missing.refusal
+    assert not (tmp_path / "Nowhere").exists()  # the app never creates folders
 
 
 def test_progress_is_reported_before_each_track(album):
@@ -319,15 +333,14 @@ def test_a_leftover_partial_of_an_unticked_track_is_ignored(album):
     assert result.ok and (album / "02 Two.flac.partial").read_bytes() == b"someone else's"
 
 
-def test_the_originals_stay_unless_every_track_was_split(album):
+def test_finishing_some_tracks_writes_only_those(album):
     plan = ticked_plan(album, {1, 3})
     cut = split.cut_album(plan, FakeRunner(), free_space=lambda _f: 10**9)
     for partial in cut.partials:
         partial.write_bytes(b"")
-    recycled = []
-    done = split.finish_album(plan, cut, True, recycled.append)
-    assert [p.name for p in done.tracks] == ["01 One.flac", "03 Three.flac"] and recycled == []
-    assert done.kept_reason == "Not every track was split, so the album file and its .cue stay."
+    done = split.finish_album(plan, cut)
+    assert [p.name for p in done.tracks] == ["01 One.flac", "03 Three.flac"]
+    assert names(album) == sorted(ORIGINALS + ["01 One.flac", "03 Three.flac"])
 
 
 @pytest.mark.slow

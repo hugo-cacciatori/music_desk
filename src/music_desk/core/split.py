@@ -23,14 +23,6 @@ from music_desk.core.flac import Cancelled, FlacError
 PARTIAL = ".partial"
 
 
-@dataclass(frozen=True)
-class SplitOptions:
-    """The Split page's options (SPEC §22), at their defaults each time the page opens: nothing is remembered."""
-
-    recycle: bool = False  # the album file and its .cue, once the tracks are proved; only with every track ticked
-    replaygain: bool = False  # only with `recycle`: ReplayGain measures every audio file in the folder
-
-
 def partial_path(track: PlannedTrack) -> Path:
     return track.path.with_name(track.name + PARTIAL)
 
@@ -63,7 +55,7 @@ def cut_album(plan: AlbumPlan, runner, cancel: CancelToken | None = None,
         return CutResult(error=plan.refusal or "The album wasn't planned.")
     if not plan.written:
         return CutResult(error="No track is ticked.")
-    folder = plan.cue.parent
+    folder = plan.folder
     share = sum(t.length for t in plan.written) / max(plan.info.samples, 1)  # the ticked tracks' part
     needed = math.ceil(plan.source.stat().st_size * share)
     free = free_space(folder)
@@ -133,19 +125,17 @@ def prove(plan: AlbumPlan, partials: list[Path], runner, cancel: CancelToken | N
 
 @dataclass
 class Finished:
-    """One album after its proof: the tracks under their real names, and what happened to the originals."""
+    """One album after its proof: the tracks under their real names. The image and its .cue are never touched."""
 
     tracks: list[Path] = field(default_factory=list)
-    recycled: list[Path] = field(default_factory=list)  # the album file and its .cue, when asked and possible
-    kept_reason: str | None = None  # why the originals stayed although recycling was asked
     error: str | None = None  # a final name was taken meanwhile: nothing was renamed, the .partial files are gone
     warnings: list[str] = field(default_factory=list)
 
 
-def finish_album(plan: AlbumPlan, cut: CutResult, recycle_originals: bool = False,
-                 recycle: Callable[[Path], None] | None = None) -> Finished:
-    """Give the proved tracks their names (checked free again), write their tags and cover, then recycle the
-    originals if asked. Nothing is ever overwritten: if a name was taken since the plan, no track is renamed."""
+def finish_album(plan: AlbumPlan, cut: CutResult) -> Finished:
+    """Give the proved tracks their names (checked free again) and write their tags and cover. A split is just a
+    split (Hugo, 2026-10-17): nothing else is changed, and nothing is deleted. Nothing is ever overwritten: if a
+    name was taken since the plan, no track is renamed."""
     taken = [t.name for t in plan.written if t.path.exists()]
     if taken:
         _delete(cut.partials)
@@ -160,19 +150,6 @@ def finish_album(plan: AlbumPlan, cut: CutResult, recycle_originals: bool = Fals
             write_tags(track, plan.info.cover)
         except Exception as e:  # noqa: BLE001 - the audio is proved and in place; say which tags are missing
             finished.warnings.append(f"{track.name}: the tags couldn't be written ({type(e).__name__}: {e})")
-    if recycle_originals and not plan.all_ticked:
-        finished.kept_reason = "Not every track was split, so the album file and its .cue stay."
-    elif recycle_originals:
-        from music_desk.core import fsops
-
-        recycle = recycle or fsops.send_to_recycle_bin
-        for original in (plan.source, plan.cue):
-            try:
-                recycle(original)
-            except OSError as e:  # CannotRecycle included: the originals stay, never deleted for good
-                finished.kept_reason = f"{original.name} stayed: {e.strerror or e}"
-                break
-            finished.recycled.append(original)
     return finished
 
 

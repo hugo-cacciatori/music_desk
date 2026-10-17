@@ -1,17 +1,16 @@
 """The Split page (SPEC §22): one cue sheet, every control. It shows what the controller gives it and reports what
 the user does; the editing, saving and the job live in ui/controllers/split.py.
 
-Top to bottom: the source (the FILE line), the encoding picker, the album fields and their other lines, the
-track table (a tick per track, the editable values, the computed length and new name, validation marks), the
-selected track's other lines, Add and Delete, the options, then Save, Save as…, Split and Stop. While the job
-runs the editor is read-only; afterwards the report replaces it.
+Top to bottom: the source (which audio file the sheet points to), the encoding picker, the destination folder,
+the album fields and their other lines, the track table (a tick per track, the editable values, the computed
+length and new name, validation marks), the selected track's other lines, Add and Delete, then Save, Save as…,
+Split and Stop. While the job runs the editor is read-only; afterwards the report replaces it.
 """
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QCheckBox,
     QComboBox,
     QGridLayout,
     QHBoxLayout,
@@ -41,10 +40,6 @@ ALBUM_LABELS = (("performer", "Performer"), ("title", "Title"), ("genre", "Genre
                 ("songwriter", "Songwriter"))
 BAD = QColor(255, 205, 205)
 TICK_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsSelectable
-RECYCLE_TEXT = "Send the album file and its .cue to the Recycle Bin once the tracks are verified"
-RECYCLE_TIP = "Only when every track is ticked: otherwise the unticked audio would be lost."
-REPLAYGAIN_TIP = ("ReplayGain measures every audio file in the album's folder, so it would count the album file "
-                  "too. It runs only once the originals are in the Recycle Bin, with the ReplayGain card's options.")
 
 
 def frames_text(samples: int, rate: int) -> str:
@@ -59,7 +54,9 @@ class SplitPage(QWidget):
     stopRequested = Signal()
     doneRequested = Signal()
     encodingPicked = Signal(object)  # a codec, None for Auto
-    fileEdited = Signal(str)
+    sourcePicked = Signal(str)  # an audio file's name: the FILE line
+    destinationEdited = Signal(str)  # a folder path, as typed ("" for the image's folder)
+    browseRequested = Signal()
     albumEdited = Signal(str, str)  # field, value
     albumOtherEdited = Signal(str)
     trackEdited = Signal(int, str, str)  # sheet row, field, value
@@ -67,7 +64,6 @@ class SplitPage(QWidget):
     tickToggled = Signal(int, bool)  # track number (0: a hidden track), ticked
     addRequested = Signal(object)  # the sheet row to add after, or None
     deleteRequested = Signal(list)  # sheet rows
-    optionsChanged = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -85,10 +81,12 @@ class SplitPage(QWidget):
         header.addWidget(self.back_button)
         header.addWidget(self.heading, 1)
 
-        # -- the source and the encoding --
-        self.file_edit = QLineEdit()
-        self.file_edit.setToolTip("The FILE line: a FLAC, WAV or AIFF file in the .cue's folder.")
-        self.file_edit.textEdited.connect(self.fileEdited)
+        # -- the source, the encoding and the destination --
+        self.source = QComboBox()
+        self.source.setToolTip("The audio file this cue sheet points to (its FILE line): a FLAC, WAV or AIFF file in "
+                               "the .cue's folder.")
+        self.source.activated.connect(
+            lambda i: None if self._refreshing else self.sourcePicked.emit(self.source.itemData(i) or ""))
         self.source_note = QLabel()
         self.source_note.setWordWrap(True)
         self.encoding = QComboBox()
@@ -98,13 +96,22 @@ class SplitPage(QWidget):
         self.encoding.activated.connect(lambda i: self.encodingPicked.emit(self.encoding.itemData(i)))
         self.encoding_note = QLabel("If the titles look wrong, pick the cue sheet's encoding.")
         self.encoding_note.hide()
+        self.destination = QLineEdit()
+        self.destination.setToolTip("The folder the tracks are written to: the image's folder unless you choose "
+                                    "another. A name already taken there gets a number.")
+        self.destination.textEdited.connect(self.destinationEdited)
+        self.browse_button = QPushButton("Browse…")
+        self.browse_button.clicked.connect(self.browseRequested)
         source_row = QGridLayout()
         source_row.addWidget(QLabel("Source:"), 0, 0)
-        source_row.addWidget(self.file_edit, 0, 1)
+        source_row.addWidget(self.source, 0, 1)
         source_row.addWidget(QLabel("Encoding:"), 0, 2)
-        source_row.addWidget(self.encoding, 0, 3)
+        source_row.addWidget(self.encoding, 0, 3, 1, 2)
         source_row.addWidget(self.source_note, 1, 1)
-        source_row.addWidget(self.encoding_note, 1, 2, 1, 2)
+        source_row.addWidget(self.encoding_note, 1, 2, 1, 3)
+        source_row.addWidget(QLabel("Destination:"), 2, 0)
+        source_row.addWidget(self.destination, 2, 1, 1, 3)
+        source_row.addWidget(self.browse_button, 2, 4)
         source_row.setColumnStretch(1, 1)
 
         # -- the album --
@@ -163,13 +170,7 @@ class SplitPage(QWidget):
         self.notes = QLabel()
         self.notes.setWordWrap(True)
 
-        # -- the options and the buttons --
-        self.recycle = QCheckBox(RECYCLE_TEXT)
-        self.recycle.setToolTip(RECYCLE_TIP)
-        self.replaygain = QCheckBox("Then run ReplayGain on the album")
-        self.replaygain.setToolTip(REPLAYGAIN_TIP)
-        for box in (self.recycle, self.replaygain):
-            box.toggled.connect(self._option_toggled)
+        # -- the buttons --
         self.save_button = QPushButton("Save")
         self.save_button.clicked.connect(self.saveRequested)
         self.save_as_button = QPushButton("Save as…")
@@ -189,8 +190,6 @@ class SplitPage(QWidget):
         editor.addWidget(self.track_other)
         editor.addWidget(self.problems)
         editor.addWidget(self.notes)
-        editor.addWidget(self.recycle)
-        editor.addWidget(self.replaygain)
 
         self.busy = QProgressBar()
         self.busy.setRange(0, 0)
@@ -265,7 +264,6 @@ class SplitPage(QWidget):
         self.heading.setText(f"<b>Split</b> · {path}")
         self._refreshing = True
         try:
-            _set_text(self.file_edit, doc.file)
             album = doc.album()
             for key, edit in self.album_edits.items():
                 _set_text(edit, album[key])
@@ -277,6 +275,27 @@ class SplitPage(QWidget):
             self._refreshing = False
         if self.state != "editing" and self.state != "running":
             self._show("editing", "")
+
+    def show_sources(self, names: tuple[str, ...], current: str, problem: str | None) -> None:
+        """The audio files beside the sheet; the FILE line's own name is listed too when it isn't one of them,
+        marked with `problem` ("not found", "not supported")."""
+        self._refreshing = True
+        try:
+            self.source.clear()
+            if current and not any(n.casefold() == current.casefold() for n in names):
+                self.source.addItem(f"{current} ({problem or 'not found'})", current)
+            elif not current:
+                self.source.addItem("(no audio file)", "")
+            for name in names:
+                self.source.addItem(name, name)
+            index = next((i for i in range(self.source.count())
+                          if (self.source.itemData(i) or "").casefold() == current.casefold()), 0)
+            self.source.setCurrentIndex(index)
+        finally:
+            self._refreshing = False
+
+    def show_destination(self, text: str) -> None:
+        _set_text(self.destination, text)
 
     def set_encoding(self, codec) -> None:
         self.encoding.setCurrentIndex(max(0, self.encoding.findData(codec)))
@@ -369,29 +388,13 @@ class SplitPage(QWidget):
         self.source_note.setStyleSheet("color: #c42b1c;" if source_bad else "")
 
     def set_buttons(self, *, save: bool, save_as: bool, split: bool, split_text: str, split_note: str,
-                    recycle_enabled: bool, replaygain_enabled: bool, can_delete: bool) -> None:
+                    can_delete: bool) -> None:
         self.save_button.setEnabled(save)
         self.save_as_button.setEnabled(save_as)
         self.split_button.setEnabled(split)
         self.split_button.setText(split_text)
         self.split_note.setText(split_note)
-        self.recycle.blockSignals(True)
-        self.replaygain.blockSignals(True)
-        if not recycle_enabled:
-            self.recycle.setChecked(False)
-        if not replaygain_enabled or not self.recycle.isChecked():
-            self.replaygain.setChecked(False)
-        self.recycle.setEnabled(recycle_enabled)
-        self.replaygain.setEnabled(replaygain_enabled and self.recycle.isChecked())
-        self.recycle.blockSignals(False)
-        self.replaygain.blockSignals(False)
         self.delete_button.setEnabled(can_delete)
-
-    def reset_options(self) -> None:
-        for box in (self.recycle, self.replaygain):
-            box.blockSignals(True)
-            box.setChecked(False)
-            box.blockSignals(False)
 
     # -- what the user does --
 
@@ -440,14 +443,6 @@ class SplitPage(QWidget):
         rows = self._selected_rows()
         if not self._refreshing and len(rows) == 1:
             self.trackOtherEdited.emit(rows[0], self.track_other.toPlainText())
-
-    def _option_toggled(self, _checked: bool) -> None:
-        if not self.recycle.isChecked():
-            self.replaygain.blockSignals(True)
-            self.replaygain.setChecked(False)
-            self.replaygain.blockSignals(False)
-        self.replaygain.setEnabled(self.recycle.isChecked() and self.recycle.isEnabled())
-        self.optionsChanged.emit()
 
     # -- for tests --
 

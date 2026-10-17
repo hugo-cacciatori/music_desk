@@ -37,14 +37,15 @@ you save over, and junk files when you tick that option, go to the Recycle Bin.
   - **Tidy**: the rename, then ReplayGain.
 
   Jobs run in the background, and you can keep browsing meanwhile.
-- **Split a single-file album** (one FLAC, WAV or AIFF image and its `.cue`) into one FLAC file per track: select
-  the `.cue`, then "Split into tracks…" on its preview. The Split page shows the whole sheet, editable: start
-  times and gaps, titles and the other fields, tracks to add or delete, and the text encoding of old sheets.
-  Save writes your edits back into the `.cue`, changing only the lines you edited. Tick the tracks you want,
-  and each one is cut with the bundled [flac](https://xiph.org/flac/), tagged from the sheet with the album's
-  cover, named with your file name masks, and checked sample for sample against its part of the original.
-  Nothing is overwritten (a taken name gets a number), and the original files stay unless you choose to send
-  them to the Recycle Bin.
+- **Split a single-file album**, such as an EAC rip (one FLAC, WAV or AIFF image, its `.cue` and its log), into
+  one FLAC file per track: select the `.cue`, then "Split into tracks…" on its preview. The Split page shows the
+  whole sheet, editable: which audio file it points to, start times and gaps, titles and the other fields,
+  tracks to add or delete, and the text encoding of old sheets. Save writes your edits back into the `.cue`,
+  changing only the lines you edited; Save as makes another version of the sheet, so one image can be split in
+  several ways. Tick the tracks you want and choose where they go; each one is cut with the bundled
+  [flac](https://xiph.org/flac/), tagged from the sheet with the album's cover, named with your file name masks,
+  and checked sample for sample against its part of the original. Nothing is overwritten (a taken name gets a
+  number), and the image, its sheet and its log are never touched.
 - **Play** a folder, a selection or search results in your default music player, through a temporary playlist.
 - **Build a playlist** (View › Playlist builder, Ctrl+Shift+P): drag folders and songs in from the folder tree,
   the file list or search results, in the order Explorer shows them. Rearrange it by dragging, with Ctrl+↑/↓ or

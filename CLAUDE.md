@@ -16,11 +16,11 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 13):** 0.3.0 is on `main` and pushed, not released. M10 is complete (the Split
-  page); its installer is built (`dist/installer/MusicDesk-Setup-0.3.0.exe`). All 1114 tests passed in the last
-  full run, slow ones included.
-- **Optional, for later (Hugo):** installed-app checks: the split on a copied album (M10), an exported playlist
-  in a real player, a mouse drag. A release when he asks.
+- **State (2026-10-17, session 13):** 0.3.1 is on `main`, not released: the Split page gained the source picker
+  and the destination, and a split now only splits (no recycling, no ReplayGain). M10 is complete. All 1115 tests
+  passed in the last full run, slow ones included.
+- **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
+  version of the cue with other split points and split from it. A release when he asks.
 - **Next step:** M11 (not urgent, when Hugo says so) or M12 (to specify with Hugo first). Give Hugo full manual
   steps for checks (memory: manual-check-instructions).
 
@@ -85,8 +85,9 @@ Code and tests cite these by number; keep the numbering.
      `.lrc` files not yet in the tags are never junk (SPEC §10);
    - (M8) sending the files and folders the user selects to the **Recycle Bin** with Delete, after a
      confirmation (SPEC §19);
-   - (M10) creating the track files of a cue split's ticked tracks, never over an existing file, and deleting
-     that run's own `.partial` files; its originals go to the Recycle Bin only when the user ticks it (SPEC §22);
+   - (M10) creating the track files of a cue split's ticked tracks in the destination folder the user chose
+     (an existing one), never over an existing file, and deleting that run's own `.partial` files. A split
+     touches nothing else (SPEC §22);
    - (M10) saving a cue sheet from the Split page: Save overwrites the selected `.cue` after its old version
      goes to the Recycle Bin, Save as creates a `.cue` (a replaced one goes to the Recycle Bin first). Where
      Windows has no Recycle Bin, a `.cue` is overwritten only after the user agrees to lose it (SPEC §22).

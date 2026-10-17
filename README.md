@@ -63,6 +63,10 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
   the file list or search results, in the order Explorer shows them. Rearrange it by dragging, with Ctrl+↑/↓ or
   by sorting on a column, then play it or export it as a `.m3u8`, with paths relative to the playlist so it keeps
   working when it moves with your music. It is kept until you clear it.
+- **Says what it does.** Hover any button or field for a one-line description of what happens to which files
+  (with its shortcut); the less obvious menu entries describe themselves in the status bar.
+- **No accidental changes from the mouse wheel.** Scrolling a page over a number field, a drop-down or a slider
+  scrolls the page and never changes the value.
 
 ## Install
 

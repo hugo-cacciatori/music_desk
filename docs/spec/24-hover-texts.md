@@ -50,3 +50,8 @@ Asked by Hugo on 2026-10-17; scheduled as M15 the same day. Every button and con
   Trim page's Start, End and subfolder fields used to lose their text after a check: a problem's reason now
   falls back to it. The guard covers the whole main window (every page is built with it, shown or not) and the
   other windows and dialogs.
+- M15 task 3 (0.5.4): menu status tips. `ui/hover.py` keeps one `MENU_TIPS` table keyed by an entry's text
+  (without `&`, `…` or its shortcut), applied by `with_status_tips` to the menu bar's menus and to each context
+  menu as it is built (file list, folder tree, search results, the file list's and the playlist's column
+  headers). The address bar's subfolder menu and the Insert field menu get none: their entries are folder and
+  field names.

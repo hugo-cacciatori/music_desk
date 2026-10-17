@@ -39,7 +39,7 @@ from music_desk.core.fsops import natural_key
 from music_desk.core.index import queries
 from music_desk.core.index.queries import FileRow
 from music_desk.ui.entry_drag import EntryDragView
-from music_desk.ui.hover import exempt
+from music_desk.ui.hover import exempt, with_status_tips
 from music_desk.ui.qt_util import shortcut
 
 ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
@@ -458,5 +458,5 @@ class FileView(QWidget):
             menu.addAction(action)
         menu.addSeparator()
         menu.addAction("Reset columns", self.reset_layout)
-        return menu
+        return with_status_tips(menu)
 

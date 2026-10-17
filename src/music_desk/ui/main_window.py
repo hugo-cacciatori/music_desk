@@ -57,6 +57,7 @@ from music_desk.ui.controllers.split import SplitController
 from music_desk.ui.controllers.tools import ToolsController
 from music_desk.ui.controllers.trim import TrimController
 from music_desk.ui.file_view import FileView
+from music_desk.ui.hover import with_status_tips
 from music_desk.ui.jobs_panel import JobsPanel
 from music_desk.ui.no_wheel import install_no_wheel
 from music_desk.ui.playlist_panel import PlaylistPanel
@@ -252,6 +253,8 @@ class MainWindow(QMainWindow):
         self.advanced_search: AdvancedSearchWindow | None = None  # made on first use
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About MusicDesk", self.open_about)
+        for menu in (file_menu, view_menu, action_menu, help_menu):
+            with_status_tips(menu)
 
         self.overlay = DropOverlay(self)
         self.toast = Toast(self)
@@ -951,15 +954,15 @@ class MainWindow(QMainWindow):
         """The file list's menu: for the selection, or for the open folder when the click was on the background."""
         menu = QMenu(self)
         if not self._library_open():
-            return menu
+            return with_status_tips(menu)
         if not ids:
             if self.folder_id is not None:
                 self.add_folder_actions(menu, self.folder_id, include_open=False)
-            return menu
+            return with_status_tips(menu)
         if len(ids) == 1 and self.file_view.is_dir(ids[0]):
             self.add_folder_actions(menu, ids[0], rename=lambda: self.file_view.start_rename(ids[0]),
                                     delete=lambda: self.delete.delete_entries(ids, self.file_view.view))
-            return menu
+            return with_status_tips(menu)
         open_action = menu.addAction("Open", lambda: self.open_files(ids))
         open_action.setEnabled(len(ids) == 1)
         play = menu.addAction("Play selection", lambda: self.play_selection(ids))
@@ -978,7 +981,7 @@ class MainWindow(QMainWindow):
         remove.setEnabled(any_audio)
         menu.addSeparator()
         menu.addAction("Delete\tDel", lambda: self.delete.delete_entries(ids, self.file_view.view))
-        return menu
+        return with_status_tips(menu)
 
     def add_folder_actions(self, menu: QMenu, entry_id: int, include_open: bool = True, rename=None,
                            delete=None) -> None:

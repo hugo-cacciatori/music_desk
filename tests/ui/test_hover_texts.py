@@ -87,3 +87,25 @@ def test_the_other_windows_and_dialogs(window, qtbot):
     for widget in (window.advanced_search, about, lengths):
         qtbot.addWidget(widget)
         assert_all_have_hover_texts(widget)
+
+
+def test_menu_entries_show_a_status_bar_tip(window, service):
+    from music_desk.ui.hover import MENU_TIPS, menu_key
+
+    album = entry(service, "Artist", "Album")
+    window.open_folder(album)
+    menus = [window.list_menu([entry(service, "Artist", "Album", "track 1.flac")]), window.list_menu([]),
+             window.sidebar.context_menu_for(window.sidebar.model.index(0, 0)), window.file_view.header_menu(),
+             window.playlist_panel.header_menu()]
+    menus += [action.menu() for action in window.menuBar().actions()]
+    tipped = set()
+    for menu in menus:
+        for action in menu.actions():
+            key = menu_key(action.text())
+            assert action.statusTip() == MENU_TIPS.get(key, ""), key
+            if action.statusTip():
+                tipped.add(key)
+    assert {"Play selection", "Play folder", "Rescan library", "Remove from library", "Reset columns"} <= tipped
+    play = next(a for a in menus[0].actions() if a.text() == "Play selection")
+    play.showStatusText(window)  # what hovering it does
+    assert window.statusBar().currentMessage() == MENU_TIPS["Play selection"]

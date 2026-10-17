@@ -15,6 +15,7 @@ from music_desk.core.index.search import LIMIT
 from music_desk.services.library import LibraryService
 from music_desk.services.search_service import SearchResults, SearchService
 from music_desk.ui.controllers import STATUS_MS
+from music_desk.ui.hover import with_status_tips
 from music_desk.ui.qt_util import shortcut
 from music_desk.ui.search_view import SearchView
 from music_desk.ui.search_view import sort_keys as search_sort_keys
@@ -175,7 +176,7 @@ class SearchController(QObject):
         window = self.window
         menu = QMenu(window)
         if not window._library_open() or not ids:
-            return menu
+            return with_status_tips(menu)
         go = menu.addAction("Go to folder", lambda: self.go_to_result(ids[0]))
         go.setEnabled(len(ids) == 1)
         open_action = menu.addAction("Open", lambda: window.open_files(ids))
@@ -193,4 +194,4 @@ class SearchController(QObject):
         if artist:
             menu.addSeparator()
             menu.addAction(f"Filter by {artist}", lambda: self.add_artist_filter(artist))
-        return menu
+        return with_status_tips(menu)

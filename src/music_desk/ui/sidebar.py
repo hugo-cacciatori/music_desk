@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QLabel, QMenu, QPushButton, QVBoxLayout, QWidget
 
 from music_desk.core.index.roots import Root
 from music_desk.ui.folder_tree import ENTRY_ID_ROLE, FolderTreeModel, FolderTreeView
-from music_desk.ui.hover import exempt
+from music_desk.ui.hover import exempt, with_status_tips
 
 
 class Sidebar(QWidget):
@@ -78,7 +78,7 @@ class Sidebar(QWidget):
             menu.addAction("Remove from library", lambda: self.removeRequested.emit(root))
             menu.addSeparator()
         menu.addAction("Add folder…", self.addFolderRequested.emit)
-        return menu
+        return with_status_tips(menu)
 
     def _context_menu(self, pos: QPoint) -> None:
         self.context_menu_for(self.tree.indexAt(pos)).exec(self.tree.viewport().mapToGlobal(pos))

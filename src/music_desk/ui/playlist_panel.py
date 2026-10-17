@@ -41,6 +41,7 @@ from music_desk.core.playlist_builder import Builder, Item
 from music_desk.core.playlists import PlaylistEntry
 from music_desk.ui.entry_drag import ENTRY_IDS_MIME, entry_ids
 from music_desk.ui.file_view import format_duration
+from music_desk.ui.hover import with_status_tips
 from music_desk.ui.qt_util import shortcut
 
 PLACEHOLDER = "Drag folders or songs here to build a playlist"
@@ -507,7 +508,7 @@ class PlaylistPanel(QWidget):
             menu.addAction(action)
         menu.addSeparator()
         menu.addAction("Reset columns", self.reset_layout)
-        return menu
+        return with_status_tips(menu)
 
     # -- tests --
 

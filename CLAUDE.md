@@ -43,7 +43,7 @@ Read SPEC §28 (and §10, §22, §26 for what it reuses). Each task bumps the pa
 
 ### M18: the `musicdesk` keyword in File Explorer (Hugo, 2026-10-17)
 Read SPEC §29. Comes before M17 tasks 2-4 (Hugo asked for it first).
-- [ ] 1. Single instance, a folder argument, MusicDeskHere.exe, the App Paths key; tests. 0.6.3.
+- [x] 1. Single instance, a folder argument, MusicDeskHere.exe, the App Paths key; tests. 0.6.3.
 
 ## Session protocol
 1. Read this file, then the spec files of the current milestone. Pick up the first unchecked task. A block that

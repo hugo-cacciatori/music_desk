@@ -24,6 +24,8 @@ delete, a cue sheet you save over, and junk files when you tick that option, go 
   Names are found as soon as a folder is listed, before its tags are read. Accents and case are ignored, and
   filters such as `artist:`, `year:`, `ext:`, `lrclib:notfound` or `rg:none` narrow it. The matching lyric line
   is shown in the results.
+- **Open a folder from File Explorer**: type `musicdesk` in Explorer's address bar (as you would `cmd`).
+  MusicDesk opens, or comes to the front, on that folder, and adds it to the library first if it isn't in it.
 - **Advanced search** (the toolbar's Advanced search button), a window of its own beside the app: lists of albums to go
   through and fix by hand, such as the albums missing ReplayGain tags or the EAC rips not split yet. Double-click
   an album to open its folder; Refresh search updates the list as you fix them.

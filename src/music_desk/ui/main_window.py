@@ -70,6 +70,7 @@ log = logging.getLogger(__name__)
 
 APP_TITLE = "MusicDesk"
 PAUSED_NOTE = " (paused while ReplayGain runs)"
+WAIT_FOR_INDEX_S = 120  # a folder from outside the app opens once indexed, within this (SPEC §29)
 
 
 LYRICS_BUTTON_TIPS = {  # the status bar's lyrics button, by what it says
@@ -114,6 +115,7 @@ class MainWindow(QMainWindow):
         self.rsgain_version: str | None = None  # from the startup self-check (About)
         self.flac_version: str | None = None  # likewise; the cue split needs it (SPEC §22)
         self._indexing_paused = False  # while a ReplayGain job runs
+        self._waiting_folder: tuple[str, float] | None = None  # (path, deadline): opens once indexed (SPEC §29)
         # Handing files to Windows can stall (a slow drive, a busy shell), so it happens off the UI thread.
         # These three are replaced in tests, which never launch anything.
         self.launch = fsops.open_with_default_app
@@ -294,6 +296,10 @@ class MainWindow(QMainWindow):
             library.indexer.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
             library.indexer.folderUpdated.connect(self.folder_updated)
             library.indexer.scanFinished.connect(self.scan_finished)
+            # A folder asked for from File Explorer (SPEC §29) opens as soon as the index has it.
+            for signal in (library.indexer.progress, library.indexer.folderUpdated, library.indexer.scanFinished,
+                           library.rootsChanged):
+                signal.connect(self._open_waiting_folder)
             library.lyrics.foldersChanged.connect(self.lyrics_updated)
             library.lyrics.unreachable.connect(self.lrclib_unreachable)
             library.lyrics.progress.connect(self.show_lyrics_progress)
@@ -344,6 +350,47 @@ class MainWindow(QMainWindow):
         self.advanced_search.show()
         self.advanced_search.raise_()
         self.advanced_search.activateWindow()
+
+    # -- a folder from outside the app (SPEC §29) --
+
+    def bring_to_front(self) -> None:
+        if self.isMinimized():
+            self.showNormal()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def open_from_outside(self, path: str | None) -> None:
+        """A folder from File Explorer's `musicdesk` keyword, the command line or a later start: the window comes to
+        the front and shows it, adding it to the library first when it isn't in it. None: only to the front."""
+        self.bring_to_front()
+        if not path or not self._library_open():
+            return
+        path = os.path.normpath(os.path.abspath(path))
+        if not os.path.isdir(path):
+            self._waiting_folder = None
+            self.statusBar().showMessage(f"{path} isn't a folder that can be reached.", STATUS_MS)
+            return
+        self._waiting_folder = (path, time.monotonic() + WAIT_FOR_INDEX_S)
+        found = find_folder(self.open_library.conn, path)
+        if found is not None and found[1]:
+            self._open_waiting_folder()
+        elif found is None:
+            self.open_library.add_folders([path])  # the status bar says it was added; it opens once indexed
+        else:
+            self.open_library.indexer.request_path(path)  # inside a root, not indexed yet
+
+    def _open_waiting_folder(self, *_args) -> None:
+        if self._waiting_folder is None or not self._library_open():
+            return
+        path, deadline = self._waiting_folder
+        if time.monotonic() > deadline:
+            self._waiting_folder = None
+            return
+        found = find_folder(self.open_library.conn, path)
+        if found is not None and found[1]:
+            self._waiting_folder = None
+            self.show_folder(found[0], path)
 
     def show_folder(self, folder_id: int, shown: str = "") -> None:
         """A folder from another window (an Advanced search result): the file list on it, in front."""

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from music_desk import __version__
 from music_desk.core.flac import flac_version
 from music_desk.core.rsgain import rsgain_version
+from music_desk.instance import InstanceServer, hand_over
 from music_desk.logging_setup import setup_logging
 from music_desk.paths import app_data_dir, flac_path, icon_path, library_db_path, rsgain_path
 from music_desk.services.library import LibraryService
@@ -52,6 +53,11 @@ def set_app_user_model_id() -> None:
         pass  # not Windows, or an older shell: only the taskbar grouping differs
 
 
+def folder_argument(arguments: list[str]) -> str | None:
+    """The folder to open (SPEC §29): the first argument that isn't an option, as MusicDeskHere.exe passes it."""
+    return next((argument for argument in arguments if argument and not argument.startswith("-")), None)
+
+
 def main() -> int:
     setup_logging()
     log.info("%s %s starting (Python %s, frozen=%s)", APP_TITLE, __version__, sys.version.split()[0],
@@ -63,6 +69,13 @@ def main() -> int:
     app.setApplicationName(APP_TITLE)
     app.setApplicationVersion(__version__)
     app.setWindowIcon(QIcon(str(icon_path())))
+
+    # One MusicDesk at a time (SPEC §29): a running one gets this start's folder and comes to the front.
+    folder = folder_argument(app.arguments()[1:])
+    if hand_over(folder):
+        log.info("Another MusicDesk is running: handed over, exiting")
+        return 0
+    instance = InstanceServer(parent=app)
 
     settings = Settings.load()
     try:
@@ -77,6 +90,9 @@ def main() -> int:
 
     window = MainWindow(library, settings)
     window.show()
+    instance.folderRequested.connect(window.open_from_outside)
+    if folder:
+        window.open_from_outside(folder)
     if not getattr(sys, "frozen", False):  # running from source: log UI-thread stalls (SPEC §18)
         StallWatch(app)
 

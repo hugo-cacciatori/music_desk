@@ -31,6 +31,7 @@ def test_version_info_matches_the_app_version():
 def test_the_spec_uses_them():
     spec = (ROOT / "packaging" / "music_desk.spec").read_text(encoding="utf-8")
     assert "music_desk.ico" in spec and "version_info.txt" in spec and '"resources/icons"' in spec
+    assert 'name="MusicDeskHere"' in spec and "here_exe," in spec and "here_launcher.py" in spec  # SPEC §29
 
 
 def test_installer_script():
@@ -50,6 +51,9 @@ def test_installer_script():
     assert "DefaultGroupName={#AppName}" in iss
     assert "[InstallDelete]" in iss and r'Type: files; Name: "{autoprograms}\{#AppName}.lnk"' in iss
     assert r'Name: "{autoprograms}\{#AppName}"; Filename' not in iss
+    # The musicdesk keyword (SPEC §29): App Paths points to MusicDeskHere.exe, and the uninstaller removes it.
+    assert (r'Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\musicdesk.exe"; '
+            r'ValueType: string; ValueName: ""; ValueData: "{app}\MusicDeskHere.exe"; Flags: uninsdeletekey') in iss
     for path in ("LICENSE", "resources/icons/music_desk.ico"):
         assert (ROOT / path).is_file()
 

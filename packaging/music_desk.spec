@@ -37,10 +37,40 @@ exe = EXE(
     icon=str(ROOT / "resources" / "icons" / "music_desk.ico"),
     version=str(ROOT / "packaging" / "version_info.txt"),
 )
+# MusicDeskHere.exe (SPEC §29): what the `musicdesk` keyword in File Explorer's address bar runs. Plain Python, no
+# Qt, so it starts at once; it starts MusicDesk.exe on its working directory.
+here = Analysis(
+    [str(ROOT / "packaging" / "here_launcher.py")],
+    pathex=[str(ROOT / "src")],
+    binaries=[],
+    datas=[],
+    hiddenimports=[],
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=["tkinter", "PySide6", "shiboken6", "mutagen", "natsort", "send2trash", "watchdog"],
+    noarchive=False,
+)
+here_exe = EXE(
+    PYZ(here.pure),
+    here.scripts,
+    [],
+    exclude_binaries=True,
+    name="MusicDeskHere",
+    debug=False,
+    strip=False,
+    upx=False,
+    console=False,
+    icon=str(ROOT / "resources" / "icons" / "music_desk.ico"),
+    version=str(ROOT / "packaging" / "version_info.txt"),
+)
+
 coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
+    here_exe,
+    here.binaries,
+    here.datas,
     strip=False,
     upx=False,
     name="MusicDesk",

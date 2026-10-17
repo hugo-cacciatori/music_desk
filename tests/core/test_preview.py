@@ -3,7 +3,6 @@
 import pytest
 
 from music_desk.core import preview
-from music_desk.core.metadata import decode_text
 
 PREVIEW = "preview"
 
@@ -103,7 +102,6 @@ def test_reading_errors_raise_os_error(tmp_path):
         preview.read_text(tmp_path / "missing.txt")
 
 
-def test_lrc_import_reads_utf16_too(preview_dir):
-    """metadata.decode_text (the .lrc import, SPEC §7) shares the preview's rule."""
-    assert decode_text((preview_dir / "utf16.lrc").read_bytes()) == "[00:01.00]Première ligne\r\n"
-    assert decode_text("Café".encode("cp1252")) == "Café"
+def test_an_lrc_reads_utf16_too(preview_dir):
+    assert preview.decode((preview_dir / "utf16.lrc").read_bytes())[0] == "[00:01.00]Première ligne\r\n"
+    assert preview.decode("Café".encode("cp1252"))[0] == "Café"

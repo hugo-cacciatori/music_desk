@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from music_desk.core import masks, preview
+from music_desk.core import masks
 from music_desk.core.formats import format_for
 from music_desk.core.fsops import open_shared
 from music_desk.core.tags import Fields, TaggedFile
@@ -38,8 +38,6 @@ class Snapshot:
     cover: bytes | None
     cover_source: str  # "embedded", the folder image's file name, or "" for none
     id3_version: str | None  # "2.3" / "2.4" for ID3 files
-    lrc_name: str | None = None  # a same-stem .lrc next to the file (SPEC §7: "Import from <name>.lrc")
-    lrc_text: str | None = None
     suggested_name: str | None = None  # the name the rename masks give, when it differs (SPEC §7's hint)
 
     @property
@@ -93,30 +91,6 @@ def suggested_name(tagged: TaggedFile, name_masks: Sequence[str] = masks.DEFAULT
     return None if name is None or name == tagged.path.name else name
 
 
-def decode_text(data: bytes) -> str:
-    """A text file of unknown encoding: a UTF-8 or UTF-16 BOM, else UTF-8, else Windows-1252, the usual encoding
-    of .lrc files written by older Windows tools. Undecodable bytes become U+FFFD rather than failing. The same
-    rule as the file preview (SPEC §20)."""
-    return preview.decode(data)[0]
-
-
-def lrc_sidecar(path: Path) -> tuple[str, str] | None:
-    """The .lrc file with the same stem next to an audio file (matched ignoring case): (name, text)."""
-    try:
-        names = os.listdir(path.parent)
-    except OSError:
-        return None
-    wanted = (path.stem + ".lrc").casefold()
-    for name in names:
-        if name.casefold() == wanted:
-            try:
-                with open_shared(path.parent / name) as f:
-                    return name, decode_text(f.read())
-            except OSError:
-                return None
-    return None
-
-
 def folder_cover(folder: Path) -> tuple[bytes, str] | None:
     """The first folder image (folder.jpg, cover.jpg, front.jpg), matched ignoring case."""
     try:
@@ -148,7 +122,6 @@ def read_snapshot(path: str | Path, name_masks: Sequence[str] = masks.DEFAULT_MA
     id3_version = None
     if tagged.info.family.value == "ID3" and tags is not None and hasattr(tags, "version"):
         id3_version = f"2.{tags.version[1]}"
-    sidecar = lrc_sidecar(path)
     suggestion = suggested_name(tagged, name_masks, replacement)
     return Snapshot(
         path=path, size=stat.st_size, mtime=stat.st_mtime, editable=tagged.info.tags,
@@ -157,7 +130,6 @@ def read_snapshot(path: str | Path, name_masks: Sequence[str] = masks.DEFAULT_MA
         bits_per_sample=stream.bits_per_sample, channels=stream.channels,
         replaygain={key: tagged.get_replaygain(key) for key in RG_KEYS},
         cover=cover, cover_source=source, id3_version=id3_version,
-        lrc_name=sidecar[0] if sidecar else None, lrc_text=sidecar[1] if sidecar else None,
         suggested_name=suggestion,
     )
 

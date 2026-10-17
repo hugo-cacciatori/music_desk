@@ -27,7 +27,7 @@ def test_the_preview_reports_what_apply_then_does(fixture_copy):
     for name in LISTS:
         assert getattr(preview, name) == getattr(applied, name), name
     assert preview.scanned == applied.scanned
-    assert applied.recycled == recycled and len(recycled) == len(applied.junk) == 6
+    assert applied.recycled == recycled and len(recycled) == len(applied.junk) == 7
 
 
 def test_steps_record_every_rename_in_order(fixture_copy):
@@ -47,9 +47,10 @@ def test_summary_sections_wording(fixture_copy):
     plan = plan_renames(folder, RenameOptions(cleanup=True))
     titles = [title for title, _entries in summary_sections(preview_report(plan), dry_run=True)]
     assert titles[0].endswith("files would be renamed")
-    assert "6 files would be sent to the Recycle Bin as junk" in titles
+    assert "7 files would be sent to the Recycle Bin as junk" in titles
     assert "2 files kept" in titles
-    assert "1 .lrc file would follow its music file" in titles
+    titles = [title for title, _entries in summary_sections(preview_report(plan_renames(folder)), dry_run=True)]
+    assert "2 .lrc files would follow their music file" in titles  # without the cleanup, both follow
     empty = summary_sections(preview_report(plan_renames(folder / "lrc", RenameOptions(masks=("{composer}",)))),
                              dry_run=False)
     assert [title for title, _e in empty][0] == "0/2 files were renamed"

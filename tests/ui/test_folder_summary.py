@@ -10,7 +10,7 @@ from music_desk.core.tags import TaggedFile
 
 def stats(service, folder_id):
     return service.conn.execute(
-        "SELECT n_tracks, duration, formats, n_with_rg, n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
+        "SELECT n_tracks, duration, formats, n_with_rg FROM folder_stats WHERE entry_id = ?",
         (folder_id,)).fetchone()
 
 
@@ -19,9 +19,8 @@ def stats(service, folder_id):
 def test_summary_matches_folder_stats(service, library_dir):
     album = entry(service, "Artist", "Album")
     summary = queries.folder_summary(service.conn, album)
-    n_tracks, duration, formats, n_rg, n_lyrics = stats(service, album)
-    assert (summary.n_tracks, summary.formats, summary.n_with_rg, summary.n_with_lyrics_tag) == (
-        n_tracks, formats, n_rg, n_lyrics)
+    n_tracks, duration, formats, n_rg = stats(service, album)
+    assert (summary.n_tracks, summary.formats, summary.n_with_rg) == (n_tracks, formats, n_rg)
     assert summary.n_tracks == 4 and summary.formats == "FLAC, MP3" and abs(summary.duration - duration) < 1e-6
     assert (summary.n_subfolders, summary.n_files) == (2, 5)
     assert summary.first_track == library_dir / "Artist" / "Album" / "track 1.flac"
@@ -46,7 +45,7 @@ def test_open_folder_shows_its_summary(qtbot, window, service, library_dir):
     view = panel.summary
     assert view.name_label.text() == "Album" and view.path_label.text() == str(library_dir / "Artist" / "Album")
     assert view.values["tracks"].text() == "4" and view.values["formats"].text() == "FLAC, MP3"
-    assert view.values["rg"].text() == "0 of 4 tracks" and view.values["lyrics"].text() == "0 of 4 tracks"
+    assert view.values["rg"].text() == "0 of 4 tracks" and "lyrics" not in view.values
     assert view.values["lrclib"].text() == "0 of 4 tracks"
     assert view.values["contents"].text() == "2 subfolders, 5 files"
     assert view.play_button.isEnabled() and view.play_all_button.isEnabled()
@@ -111,10 +110,10 @@ def test_summary_follows_the_index(qtbot, window, service, library_dir):
     window.open_folder(album)
     track = library_dir / "Artist" / "Album" / "Track 2.flac"
     tagged = TaggedFile(track)
-    tagged.set_fields({"lyrics": "words"})
+    tagged.set_replaygain("replaygain_track_gain", "-6.00 dB")
     tagged.save()
     service.indexer.update_file(str(track))
-    qtbot.waitUntil(lambda: window.side_panel.summary.values["lyrics"].text() == "1 of 4 tracks", timeout=10000)
+    qtbot.waitUntil(lambda: window.side_panel.summary.values["rg"].text() == "1 of 4 tracks", timeout=10000)
 
 
 def test_lrclib_coverage_follows_lookups(qtbot, window, service):

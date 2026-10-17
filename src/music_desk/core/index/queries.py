@@ -43,7 +43,6 @@ class FileRow:
     format: str | None = None
     bitrate: int | None = None
     rg: str | None = None  # "full", "partial", "none" (audio only)
-    lyrics_tag: str | None = None  # "tag", "lrc", "none" (audio only)
     # "synced", "plain", "instrumental", "not found", "pending", "no tags", "" when unreadable (audio only); the
     # window shows "error" or "offline" in place of "pending" from the lyrics service's state
     lrclib: str | None = None
@@ -92,7 +91,7 @@ LISTING_SELECT = """
     SELECT e.id, e.name, e.is_dir, e.ext, e.size, e.mtime,
            t.entry_id IS NOT NULL, t.track, t.title, t.artist, t.album, t.date, coalesce(t.duration, s.duration),
            t.format, t.bitrate, t.rg_track_gain, t.rg_track_peak, t.rg_album_gain, t.rg_album_peak,
-           t.has_lyrics_tag, t.has_lrc_sidecar, l.status, l.synced, t.read_error, s.n_tracks, t.lyrics_key
+           l.status, l.synced, t.read_error, s.n_tracks, t.lyrics_key
     FROM entries e
     LEFT JOIN tracks t ON t.entry_id = e.id
     LEFT JOIN lyrics l ON l.key = t.lyrics_key
@@ -108,9 +107,8 @@ def listing_fields(r: tuple) -> dict:
         track=r[7], title=r[8], artist=r[9], album=r[10], year=r[11], duration=r[12], format=r[13],
         bitrate=r[14],
         rg=_rg_state(r[15:19]) if is_audio else None,
-        lyrics_tag=("tag" if r[19] else "lrc" if r[20] else "none") if is_audio else None,
-        lrclib=_lrclib_state(r[21], r[22], r[25], r[23]) if is_audio else None,
-        read_error=r[23], n_tracks=r[24] if r[2] else None, lyrics_key=r[25],
+        lrclib=_lrclib_state(r[19], r[20], r[23], r[21]) if is_audio else None,
+        read_error=r[21], n_tracks=r[22] if r[2] else None, lyrics_key=r[23],
     )
 
 
@@ -284,7 +282,6 @@ class FolderSummary:
     duration: float
     formats: str | None
     n_with_rg: int
-    n_with_lyrics_tag: int
     n_lrclib_found: int
     n_subfolders: int  # direct
     n_files: int  # direct
@@ -318,13 +315,13 @@ def _folder_summary(conn: sqlite3.Connection, folder_id: int) -> FolderSummary |
     if conn.execute("SELECT 1 FROM entries WHERE id = ? AND is_dir = 1", (folder_id,)).fetchone() is None:
         return None
     stats = conn.execute(
-        "SELECT n_tracks, duration, formats, n_with_rg, n_with_lyrics_tag, n_lrclib_found FROM folder_stats "
-        "WHERE entry_id = ?", (folder_id,)).fetchone() or (0, 0.0, None, 0, 0, 0)
+        "SELECT n_tracks, duration, formats, n_with_rg, n_lrclib_found FROM folder_stats "
+        "WHERE entry_id = ?", (folder_id,)).fetchone() or (0, 0.0, None, 0, 0)
     subfolders, files = conn.execute(
         "SELECT coalesce(sum(is_dir), 0), coalesce(sum(1 - is_dir), 0) FROM entries WHERE parent_id = ?",
         (folder_id,)).fetchone()
     return FolderSummary(
         id=folder_id, path=path_of(conn, folder_id), n_tracks=stats[0] or 0, duration=stats[1] or 0.0,
-        formats=stats[2], n_with_rg=stats[3] or 0, n_with_lyrics_tag=stats[4] or 0, n_lrclib_found=stats[5] or 0,
+        formats=stats[2], n_with_rg=stats[3] or 0, n_lrclib_found=stats[4] or 0,
         n_subfolders=subfolders, n_files=files, first_track=first_track(conn, folder_id),
     )

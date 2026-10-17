@@ -50,6 +50,26 @@ files' tags stay where they are; the app just no longer shows, searches, writes 
   extensions when that option is ticked. A `.lrc` sidecar still follows its audio file's rename.
 - **Action › Show tracks without ReplayGain tags** (§5): Advanced search's album search replaces it.
 
+### Built (M12 task 1, 0.4.1)
+- Removed: the Lyrics menu and `main_window.FIND_QUERIES`; `services/lyrics_embedder.py`, `TagWriter.embed_lyrics`
+  and `LyricsEmbedded`, `core.lyrics.embed_lyrics`/`embed_text`/`EmbedResult`, `lyrics_index.embed_candidates`;
+  the Lyrics tab's Save to file tags and tag note; the Metadata tab's Lyrics field and `.lrc` import
+  (`metadata.lrc_sidecar`, `decode_text`, `Snapshot.lrc_name`/`lrc_text`); the ♪ column (`FileRow.lyrics_tag`);
+  the folder summary's lyrics-tag row (`FolderSummary.n_with_lyrics_tag`); `lyricstag:`; `rename.has_lyrics` and
+  the `.lrc` keep; `Settings.lyrics_offline` and `lyrics_auto_save` (an older settings file loads, and loses
+  them at the next save).
+- Kept, unused by any feature: the schema's `tracks.has_lyrics_tag`, `search.lyrics` and
+  `folder_stats.n_with_lyrics_tag` (no migration). The scanner now writes 0 and NULL there; values from before
+  stay until a file is read again, and nothing reads them. `Track.embedded` (core.lyrics, the ported script's
+  read) stays for the parity tests. `TaggedFile` still reads and writes the lyrics field generically (the trim and
+  the split drop it from their copies).
+- `LibraryService(lyrics_offline=…)` and `LyricsService.set_offline` stay for the tests (`lyrics_offline_default`
+  keeps a test library off the network). The status bar's text for that state reads "Lyrics: lookups off", and
+  the Lyrics tab's "Lyrics lookups are off, so LRCLIB isn't contacted."
+- The file list's saved header layout gains a "v2:" prefix: one saved with the ♪ column (by position, as Qt
+  restores it) is dropped for the defaults once, so the columns after it don't shift.
+- Ctrl+K's seek_lyrics parity test no longer compares songs with a lyrics tag (the page searched those lyrics).
+
 ## Tests
 - The two searches over a fixture library: a folder with all tracks tagged (not listed), one with one track
   untagged (listed), one with no track tagged (listed), one not read yet (not listed); an EAC-style folder (image,

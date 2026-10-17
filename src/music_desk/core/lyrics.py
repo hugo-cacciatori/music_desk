@@ -17,12 +17,11 @@ import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
-from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
 import music_desk
-from music_desk.core.tags import Fields, TagError, TaggedFile
+from music_desk.core.tags import Fields, TaggedFile
 
 FOUND = "found"
 INSTRUMENTAL = "instrumental"
@@ -291,47 +290,6 @@ class CircuitBreaker:
 
     def reset(self) -> None:
         self.consecutive = 0
-
-
-# ---------------------------------------------------------------------------
-# Writing lyrics into the file
-# ---------------------------------------------------------------------------
-
-class EmbedResult(Enum):
-    WRITTEN = "written"
-    SAME_TEXT = "same_text"  # the tag already holds these lyrics
-    HAS_OTHER_LYRICS = "has_other_lyrics"  # only_if_empty, and the tag holds something else
-    NOTHING_TO_EMBED = "nothing_to_embed"  # the entry isn't a found LRCLIB result
-    NOT_EMBEDDABLE = "not_embeddable"  # the format has no tags
-
-
-def embed_text(entry: dict) -> str | None:
-    """What the script's --embed writes: the synced lyrics when available, else the plain ones."""
-    if entry.get("status") != FOUND:
-        return None
-    return entry.get("synced") or entry.get("plain")
-
-
-def embed_lyrics(path: str | Path, entry: dict, *, only_if_empty: bool) -> EmbedResult:
-    """Write an LRCLIB result into the Lyrics tag. Auto-embed passes only_if_empty=True and never replaces a tag;
-    "Save to file tags" passes False once the user confirmed replacing different lyrics."""
-    text = embed_text(entry)
-    if not text:
-        return EmbedResult.NOTHING_TO_EMBED
-    tagged = TaggedFile(path)
-    if not tagged.info.tags:
-        return EmbedResult.NOT_EMBEDDABLE
-    current = tagged.fields().lyrics
-    if current is not None and current.strip() == text.strip():
-        return EmbedResult.SAME_TEXT
-    if only_if_empty and current is not None and current.strip():
-        return EmbedResult.HAS_OTHER_LYRICS
-    try:
-        tagged.set_fields({"lyrics": text})
-    except TagError:
-        return EmbedResult.NOT_EMBEDDABLE
-    tagged.save()
-    return EmbedResult.WRITTEN
 
 
 def search_urls(artist: str | None, title: str | None) -> tuple[str, str]:

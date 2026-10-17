@@ -125,7 +125,8 @@ def list_folder(path: str) -> list[_Child]:
 
 
 def read_file(path: Path, size: int | None, mtime: float | None) -> tuple[dict, str | None]:
-    """A `tracks` row for an audio file, and the lyrics text for the search index. Never raises."""
+    """A `tracks` row for an audio file, and the lyrics text for the search index: always None, since the files'
+    own lyrics tags are no longer shown or searched (M12, SPEC §26). Never raises."""
     row: dict[str, Any] = dict.fromkeys(TRACK_COLUMNS)
     row.update(format=path.suffix.lstrip(".").upper(), read_size=size, read_mtime=mtime,
                has_lyrics_tag=0, has_cover=0)
@@ -138,14 +139,14 @@ def read_file(path: Path, size: int | None, mtime: float | None) -> tuple[dict, 
             tag_family=tagged.info.family.value, title=fields.title, artist=fields.artist,
             albumartist=fields.albumartist, album=fields.album, track=fields.track, track_total=fields.track_total,
             disc=fields.disc, disc_total=fields.disc_total, date=fields.year, genre=fields.genre,
-            composer=fields.composer, comment=fields.comment, has_lyrics_tag=int(bool(track.embedded)),
+            composer=fields.composer, comment=fields.comment,
             has_cover=int(tagged.cover() is not None), duration=stream.duration, bitrate=stream.bitrate,
             sample_rate=stream.sample_rate, bit_depth=stream.bits_per_sample, channels=stream.channels,
             lyrics_key=cache_key(track.artist, track.title) if track.artist and track.title else None,
         )
         for key in RG_KEYS:
             row["rg_" + key.removeprefix("replaygain_")] = tagged.get_replaygain(key)
-        return row, track.embedded
+        return row, None
     except Exception as e:  # noqa: BLE001 - a broken file is indexed with its error, the scan goes on
         row["read_error"] = f"{type(e).__name__}: {e}"
         return row, None

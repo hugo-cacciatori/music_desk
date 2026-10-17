@@ -16,11 +16,11 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 16):** 0.4.0 is on `main`, not released: M13 (trim and new cue sheets) is done.
-  Full suite passed, slow included.
+- **State (2026-10-17, session 16):** 0.4.1 is on `main`, not released: M12 task 1 is done (the lyrics-tag
+  features, the Lyrics menu and Offline mode retired). Full suite passed, slow included.
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip, save a second version of the
   cue and split from it; Preview in player opens in foobar2000 (Trim page and Split page). A release when he asks.
-- **Next step:** M12 task 1 (SPEC §26 "Retired with M12"). Give Hugo full manual steps for checks (memory:
+- **Next step:** M12 task 2 (SPEC §26 "The searches"). Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
 ## Work plan
@@ -29,7 +29,7 @@ they are done. A task is done when its code, tests and docs are; releases and in
 of it (see Session protocol 5).
 
 **M12 Advanced search** (Hugo, 2026-10-17; read SPEC §26, then §5, §6, §7, §8, §9, §10 where they retire).
-- [ ] 1. Retire the lyrics-tag features, the Lyrics menu (Find entries, auto-save, Offline mode as a setting).
+- [x] 1. Retire the lyrics-tag features, the Lyrics menu (Find entries, auto-save, Offline mode as a setting).
 - [ ] 2. Core: the two album searches over the index (no ReplayGain on some track; cue + image, no tracks).
 - [ ] 3. UI: the Advanced search window (not modal), Start, results, double-click to the folder, Refresh search.
 - [ ] 4. README and the minor version (0.5.0).
@@ -74,15 +74,14 @@ Code and tests cite these by number; keep the numbering.
 1. The app never copies, moves, deletes or creates files or folders in the library. The only exceptions:
    - renaming files and folders (inline F2, or the Rename tool), including an audio file's same-stem `.lrc`
      sidecar, which follows its rename;
-   - writing tags into music files (metadata editor, "Save to file tags" in the Lyrics tab until M12 retires it,
-     ReplayGain tool);
+   - writing tags into music files (metadata editor, ReplayGain tool);
    - writing `replaygain.log` in album folders (ReplayGain tool; each run replaces it, while the script
      appended);
    - writing a playlist the user exports from the playlist builder, where the user saves it (the Save dialog
      asks before replacing a file);
    - sending junk files to the **Recycle Bin**, only when the user ticks that option in the Rename tool and
-     confirms. Audio files, playlists, cover images, the ReplayGain log, cue sheets of single-file albums and
-     `.lrc` files not yet in the tags are never junk (SPEC §10);
+     confirms. Audio files, playlists, cover images, the ReplayGain log and cue sheets of single-file albums are
+     never junk (SPEC §10; `.lrc` files are junk again since M12, SPEC §26);
    - (M8) sending the files and folders the user selects to the **Recycle Bin** with Delete, after a
      confirmation (SPEC §19);
    - (M10) creating the track files of a cue split's ticked tracks in the destination folder the user chose

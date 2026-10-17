@@ -106,7 +106,7 @@ def test_track_rows(writer, read, library, root_id):
     assert row["read_error"] is None and row["read_size"] == (library / "Formats/tone.flac").stat().st_size
 
     lyrics = track(read, library, "Fixture Artist/Lrc/with_lyrics.flac")
-    assert lyrics["has_lyrics_tag"] == 1
+    assert lyrics["has_lyrics_tag"] == 0  # the lyrics tag is no longer indexed (M12, SPEC §26)
     raw = track(read, library, "Formats/tone.aac")
     assert (raw["tag_family"], raw["title"], raw["read_error"]) == ("none", None, None)
     assert raw["lyrics_key"] is None  # no artist in the tags or the file name
@@ -148,7 +148,7 @@ def test_search_index(writer, read, library, root_id):
     assert hits('"tone.flac"') >= {"tone.flac"}
     assert hits('title:"Tone tone.mp3"') == {"tone.mp3"}
     assert "notes.txt" in hits("notes")
-    assert "with_lyrics.flac" in hits('lyrics:"Fixture"')
+    assert "with_lyrics.flac" not in hits('lyrics:"Fixture"')  # the lyrics tag isn't indexed (M12)
 
 
 def test_folder_stats_count_the_subtree(writer, read, library, root_id):
@@ -440,13 +440,13 @@ def test_update_file_rereads_one_file(writer, read, library, root_id):
     assert report.folder_id == formats and report.tags_read == 1
 
     row = track(read, library, "Formats/tone.flac")
-    assert row["title"] == "Retitled" and row["has_lyrics_tag"] == 1
+    assert row["title"] == "Retitled" and row["has_lyrics_tag"] == 0
     assert row["read_size"] == path.stat().st_size
     stats = read.execute("SELECT n_tracks, n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
                          (formats,)).fetchone()
-    assert tuple(stats) == (stats_before[0], stats_before[1] + 1)  # adjusted by the difference only
+    assert tuple(stats) == (stats_before[0], stats_before[1])  # the lyrics tag isn't counted (M12)
     assert read.execute("SELECT n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
-                        (top,)).fetchone()[0] == top_before + 1  # up to the root
+                        (top,)).fetchone()[0] == top_before
     hits = [r[0] for r in read.execute("SELECT rowid FROM search WHERE search MATCH 'Retitled'")]
     assert hits == [entry_id(read, library, "Formats/tone.flac")]
     assert scanner(writer).scan_root(root_id).tags_read == 0  # the index is already up to date

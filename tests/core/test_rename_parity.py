@@ -86,11 +86,11 @@ def test_junk_parity_with_deliberate_keeps(script, monkeypatch, fixtures_dir, tm
     sidecar_kept = {item.sidecar.source.name: item.sidecar.detail for item in plan.items
                     if item.sidecar is not None and item.sidecar.detail}
 
-    deliberate = {"playlist.m3u", "Fixture Album.cue", "no_lyrics.lrc"}
+    deliberate = {"playlist.m3u", "Fixture Album.cue"}  # an .lrc is junk again since M12, as in the script
     assert app_junk == set(script_report.junk_deleted) - deliberate
     assert deliberate <= set(script_report.junk_deleted)  # the script did treat them as junk
     assert kept["Fixture Album.cue"] == "needed to play Fixture Album.flac"
-    assert sidecar_kept == {"no_lyrics.lrc": "lyrics not in the tags yet"}
+    assert sidecar_kept == {}
 
 
 def test_summary_wording_matches_the_script(script, fixtures_dir, tmp_path, capsys):

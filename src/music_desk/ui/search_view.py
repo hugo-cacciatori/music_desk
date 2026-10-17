@@ -46,7 +46,6 @@ SEARCH_COLUMNS: tuple[Column, ...] = (
     Column("size", "Size", _BY_KEY["size"].text, _BY_KEY["size"].sort_key, True, hidden_by_default=True),
     _BY_KEY["modified"],
     _BY_KEY["rg"],
-    _BY_KEY["lyrics"],
     _BY_KEY["lrclib"],
 )
 SEARCH_COLUMN_INDEX = {column.key: i for i, column in enumerate(SEARCH_COLUMNS)}
@@ -313,7 +312,7 @@ class SearchView(QWidget):
         self.count_label.setText("")
         self.play_button.setEnabled(False)
         self._set_note("Type to search folder and file names, titles, artists, albums and lyrics. Filters: "
-                       "artist: album: year: genre: ext: lyricstag:yes|no|lrc lrclib:synced|plain|instrumental|"
+                       "artist: album: year: genre: ext: lrclib:synced|plain|instrumental|"
                        "notfound|pending|error|notags rg:none|partial|full, and \"quoted text\".")
 
     def show_results(self, rows: list[SearchRow], total: int, errors: tuple[str, ...] = (),

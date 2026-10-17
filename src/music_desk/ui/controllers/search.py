@@ -78,7 +78,7 @@ class SearchController(QObject):
         self.field.selectAll()
 
     def find(self, query: str) -> None:
-        """A ready-made search over the whole library (the Lyrics menu's Find entries, the Action menu)."""
+        """A ready-made search over the whole library (the Action menu)."""
         if not self.window._library_open():
             return
         self.open()

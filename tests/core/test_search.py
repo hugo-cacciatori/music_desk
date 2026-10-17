@@ -115,9 +115,9 @@ def test_case_and_accents_are_ignored_both_ways(lib, songs):
     assert find(lib, "Bjôrk") == bjork
 
 
-def test_lrclib_text_and_tag_lyrics_both_match(lib, songs):
+def test_lrclib_text_matches_and_tag_lyrics_dont(lib, songs):
     assert find(lib, "travel is") == {"01 Hunter.flac"}  # LRCLIB plain
-    assert find(lib, "accidents") == {"02 Jóga.flac"}  # the file's lyrics tag
+    assert find(lib, "accidents") == set()  # only in the file's lyrics tag: not searched (M12, SPEC §26)
 
 
 def test_the_whole_remainder_is_one_substring(lib, songs):
@@ -176,7 +176,7 @@ def test_names_are_found_before_the_tags_are_read(lib, songs):
     assert find(lib, "ós") == {"Sigur Rós - Takk", "02 Glósóli.FLAC"}  # short and folded
     assert find(lib, "ext:flac takk") == {"01 Takk.flac"}  # ext: limits to files, read or not
     # A filter on tags limits the results to read files: never a folder, nor a file not read yet.
-    for text in ("rg:none", "lyricstag:no", "lrclib:notags", "lrclib:pending", "year:2", "artist:s", "genre:e"):
+    for text in ("rg:none", "rg:partial", "lrclib:notags", "lrclib:pending", "year:2", "artist:s", "genre:e"):
         assert not find(lib, text) & {"Sigur Rós - Takk", "01 Takk.flac", "02 Glósóli.FLAC"}, text
     assert find(lib, "rg:none") == {"Glove.mp3", "lovely.opus", "untitled.flac"}
 
@@ -239,9 +239,6 @@ def test_value_fields(lib, songs):
     assert find(lib, "year:200") == {"Glove.mp3"}
     assert find(lib, "ext:opus") == {"lovely.opus"}
     assert find(lib, "ext:.MP3") == {"Glove.mp3"}
-    assert find(lib, "lyricstag:yes") == {"02 Jóga.flac"}
-    assert find(lib, "lyricstag:lrc") == {"lovely.opus"}
-    assert find(lib, "lyricstag:no") == {"01 Hunter.flac", "Glove.mp3", "untitled.flac"}
     assert find(lib, "rg:full") == {"01 Hunter.flac"}
     assert find(lib, "rg:partial") == {"02 Jóga.flac"}
     assert find(lib, "rg:none") == {"Glove.mp3", "lovely.opus", "untitled.flac"}

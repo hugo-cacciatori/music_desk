@@ -73,15 +73,14 @@ def test_round_trip(qtbot, panel, fixture_copy, name):
 
     tab.edits["title"].setText("New Title")
     tab.edits["title"].textEdited.emit("New Title")
-    tab.lyrics.setPlainText("[00:01.00]First line\nSecond line")
     assert tab.dirty and panel.tabs.tabText(0) == "Metadata •"
-    assert tab.changes() == {"title": "New Title", "lyrics": "[00:01.00]First line\nSecond line"}
+    assert tab.changes() == {"title": "New Title"}
     save(qtbot, tab)
 
     after = TaggedFile(path).fields()
-    assert after.title == "New Title" and after.lyrics == "[00:01.00]First line\nSecond line"
+    assert after.title == "New Title"
     for field in FIELD_NAMES:
-        if field not in ("title", "lyrics"):
+        if field != "title":
             assert getattr(after, field) == getattr(before_fields, field), field
     assert not tab.dirty and panel.tabs.tabText(0) == "Metadata"
     assert tab.edits["title"].text() == "New Title"  # the tab shows the saved file
@@ -124,18 +123,24 @@ def test_revert_with_escape(qtbot, panel, fixture_copy):
     assert not tab.dirty and tab.edits["album"].text() == "Fixture Formats"
 
 
-def test_unchanged_lyrics_with_crlf_are_not_rewritten(qtbot, panel, fixture_copy):
+def test_a_lyrics_tag_is_neither_shown_nor_touched(qtbot, panel, fixture_copy):
+    """No Lyrics field since M12 (SPEC §26): a file's lyrics tag stays as it is through a save."""
     path = fixture_copy("formats/tone.flac")
     tagged = TaggedFile(path)
     tagged.set_fields({"lyrics": "one\r\ntwo"})
     tagged.save()
     tab = load(qtbot, panel, path)
-    assert tab.lyrics.toPlainText() == "one\ntwo" and tab.changes() == {}
+    assert not hasattr(tab, "lyrics") and "lyrics" not in tab.edits
+    tab.edits["title"].setText("New Title")
+    tab.edits["title"].textEdited.emit("New Title")
+    assert tab.changes() == {"title": "New Title"}
+    save(qtbot, tab)
+    assert TaggedFile(path).fields().lyrics == "one\r\ntwo"
 
 
 def test_raw_aac_is_read_only(qtbot, panel, fixture_copy):
     tab = load(qtbot, panel, fixture_copy("formats/tone.aac"))
-    assert not tab.edits["title"].isEnabled() and not tab.lyrics.isEnabled()
+    assert not tab.edits["title"].isEnabled()
     assert "no tags" in tab.note.text() and tab.note.isVisibleTo(tab)
     assert tab.changes() == {}
 
@@ -288,7 +293,7 @@ def test_a_locked_file_is_read_only(qtbot, panel, locks, fixture_copy):
     tab = load(qtbot, panel, path)
     token = locks.acquire([path.parent], "ReplayGain (album)")
     qtbot.waitUntil(lambda: tab.locked_by == "ReplayGain (album)", timeout=3000)
-    assert tab.edits["title"].isReadOnly() and tab.lyrics.isReadOnly()
+    assert tab.edits["title"].isReadOnly()
     assert tab.edits["title"].toolTip() == "Read-only while ReplayGain (album) is running."
     assert tab.note.isVisibleTo(tab) and not tab.save_button.isEnabled()
     locks.release(token)
@@ -332,21 +337,14 @@ def test_saving_updates_the_index_without_a_rescan(qtbot, window, service, monke
         raise AssertionError("a save shouldn't rescan the folder")
 
     window.open_folder(entry(service, "Artist", "Album"))
-    album = entry(service, "Artist", "Album")
-    lyrics_before = service.conn.execute("SELECT n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
-                                         (album,)).fetchone()[0]
     tab = select_file(qtbot, window, "Track 3.mp3")
     monkeypatch.setattr(service.indexer, "scan_path", no_rescan)
     monkeypatch.setattr(service.indexer.scanner, "scan_folder", no_rescan)
     tab.edits["title"].setText("Third")
     tab.edits["title"].textEdited.emit("Third")
-    tab.lyrics.setPlainText("words")
     save(qtbot, tab)
     row = column(window, "name").index("Track 3.mp3")
     qtbot.waitUntil(lambda: column(window, "title")[row] == "Third", timeout=10000)
-    qtbot.waitUntil(lambda: column(window, "lyrics")[row] == "✓", timeout=10000)
-    assert service.conn.execute("SELECT n_with_lyrics_tag FROM folder_stats WHERE entry_id = ?",
-                                (album,)).fetchone()[0] == lyrics_before + 1
 
 
 def test_a_job_lock_reaches_the_window(qtbot, window, service):
@@ -398,7 +396,6 @@ def test_shared_and_differing_values(qtbot, panel, album):
     assert tab.edits["genre"].text() == "" and tab.edits["genre"].placeholderText() == "(multiple values)"
     for key in ("title", "track"):
         assert not tab.edits[key].isEnabled() and tab.edits[key].toolTip() == "Edited one file at a time."
-    assert not tab.lyrics.isEnabled()
     assert all(tab.clear_actions[k].isVisible() for k in ("artist", "genre", "comment"))
     assert not tab.details_box.isVisibleTo(tab) and tab.changes() == {} and not tab.dirty
 
@@ -692,61 +689,3 @@ def test_index_follows_cover_changes(qtbot, window, service, new_cover, monkeypa
 def test_blank_text_in_a_file_isnt_an_edit(qtbot, panel, fixture_copy):
     tab = load(qtbot, panel, fixture_copy("edge/edge.flac"))  # its artist is blank padding
     assert tab.changes() == {} and not tab.dirty
-
-
-# -- lyrics from a .lrc sidecar (SPEC §7) --
-
-def test_import_from_lrc(qtbot, panel, fixture_copy):
-    folder = fixture_copy("cleanup/lrc")
-    lrc = folder / "no_lyrics.lrc"
-    lrc_bytes = lrc.read_bytes()
-    tab = load(qtbot, panel, folder / "no_lyrics.flac")
-    assert tab.import_link.isVisibleTo(tab) and "Import from no_lyrics.lrc" in tab.import_link.text()
-    tab.import_link.linkActivated.emit("import")
-    expected = lrc_bytes.decode("utf-8").replace("\r\n", "\n").strip("\n")
-    assert tab.lyrics.toPlainText() == expected and tab.dirty
-    assert not tab.import_link.isVisibleTo(tab)  # the field isn't empty any more
-    save(qtbot, tab)
-    assert TaggedFile(folder / "no_lyrics.flac").fields().lyrics == expected
-    assert lrc.read_bytes() == lrc_bytes  # the .lrc file itself is never touched
-
-
-def test_no_link_when_the_tag_has_lyrics(qtbot, panel, fixture_copy):
-    folder = fixture_copy("cleanup/lrc")
-    tab = load(qtbot, panel, folder / "with_lyrics.flac")
-    assert not tab.import_link.isVisibleTo(tab)
-    tab.lyrics.setPlainText("")  # emptied by hand: the sidecar is offered again
-    assert tab.import_link.isVisibleTo(tab)
-
-
-def test_no_link_without_a_sidecar(qtbot, panel, fixture_copy):
-    tab = load(qtbot, panel, fixture_copy("formats/tone.flac"))
-    assert not tab.import_link.isVisibleTo(tab)
-
-
-def test_cp1252_sidecar(qtbot, panel, fixture_copy):
-    path = fixture_copy("formats/tone.mp3")
-    path.with_suffix(".LRC").write_bytes("[00:01.00]Café crème".encode("cp1252"))
-    tab = load(qtbot, panel, path)
-    assert "Import from tone.LRC" in tab.import_link.text()
-    tab.import_lrc()
-    assert tab.lyrics.toPlainText() == "[00:01.00]Café crème"
-
-
-def test_no_link_in_multi_or_when_locked(qtbot, panel, locks, fixture_copy):
-    folder = fixture_copy("cleanup/lrc")
-    tab = load_many(qtbot, panel, [folder / "no_lyrics.flac", folder / "with_lyrics.flac"])
-    assert not tab.import_link.isVisibleTo(tab)
-    tab = load(qtbot, panel, folder / "no_lyrics.flac")
-    assert tab.import_link.isVisibleTo(tab)
-    with locks.lock([folder], "Tidy album"):
-        qtbot.waitUntil(lambda: not tab.import_link.isVisibleTo(tab), timeout=3000)
-    qtbot.waitUntil(lambda: tab.import_link.isVisibleTo(tab), timeout=3000)
-
-
-def test_revert_after_import(qtbot, panel, fixture_copy):
-    folder = fixture_copy("cleanup/lrc")
-    tab = load(qtbot, panel, folder / "no_lyrics.flac")
-    tab.import_lrc()
-    tab.revert()
-    assert tab.lyrics.toPlainText() == "" and not tab.dirty and tab.import_link.isVisibleTo(tab)

@@ -28,8 +28,8 @@ def test_child_folders_natural_order(service):
 def test_folder_listing_columns(service):
     rows = {r.name: r for r in queries.folder_listing(service.conn, entry(service, "Artist", "Album"))}
     flac = rows["Track 2.flac"]
-    assert (flac.is_audio, flac.format, flac.title, flac.rg, flac.lyrics_tag, flac.lrclib) == (
-        True, "FLAC", "Tone tone.flac", "none", "none", "pending")
+    assert (flac.is_audio, flac.format, flac.title, flac.rg, flac.lrclib) == (
+        True, "FLAC", "Tone tone.flac", "none", "pending")
     assert rows["cover.jpg"].is_audio is False and rows["cover.jpg"].rg is None
     assert rows["CD 2"].is_dir and rows["CD 2"].n_tracks == 0
     assert queries.folder_path_ids(service.conn, entry(service, "Artist", "Album")) == [
@@ -217,3 +217,12 @@ def test_bad_saved_layout_is_ignored(qtbot, service):
     window = MainWindow(service, Settings(file_list_header="not base64!", window_geometry="%%%"))
     qtbot.addWidget(window)
     assert window.file_view.view.header().sortIndicatorSection() == 0
+
+
+def test_a_layout_saved_before_m12_is_dropped(window):
+    """Qt restores a header by position: a layout saved with the ♪ column would shift the columns after it."""
+    view = window.file_view
+    assert view.save_layout().startswith("v2:")
+    assert view.restore_layout(view.save_layout())
+    old = view.save_layout().removeprefix("v2:")  # what 0.4.0 and earlier saved
+    assert not view.restore_layout(old)

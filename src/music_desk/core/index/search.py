@@ -21,12 +21,12 @@ from music_desk.core.index.queries import LISTING_SELECT, FileRow, listing_field
 from music_desk.core.index.store import consistent_read
 from music_desk.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND, strip_timestamps
 
-# Every column free text searches: the file name, the tags, the tags' lyrics and the LRCLIB plain text.
-FREE_COLUMNS = ("name", "title", "artist", "albumartist", "album", "genre", "lyrics", "lrclib")
+# Every column free text searches: the file name, the tags and the LRCLIB plain text. The files' own lyrics tags
+# aren't searched (M12, SPEC §26: no function relies on the lyrics tag).
+FREE_COLUMNS = ("name", "title", "artist", "albumartist", "album", "genre", "lrclib")
 META_COLUMNS = ("name", "title", "artist", "albumartist", "album", "genre")  # a match here shows no snippet
 TEXT_FIELDS = {"artist": ("artist", "albumartist"), "album": ("album",), "genre": ("genre",)}
 VALUE_FIELDS = {
-    "lyricstag": ("yes", "no", "lrc"),
     "lrclib": ("synced", "plain", "instrumental", "notfound", "pending", "error", "notags"),
     "rg": ("none", "partial", "full"),
 }
@@ -183,9 +183,6 @@ def _value_condition(name: str, value: str, params: list) -> str:
     if name == "ext":
         params.append(value)
         return "e.ext = ?"
-    if name == "lyricstag":
-        return {"yes": "t.has_lyrics_tag = 1", "lrc": "(t.has_lyrics_tag = 0 AND t.has_lrc_sidecar = 1)",
-                "no": "(t.has_lyrics_tag = 0 AND t.has_lrc_sidecar = 0)"}[value]
     if name == "rg":
         return {"none": f"{_RG_COUNT} = 0", "full": f"{_RG_COUNT} = 4",
                 "partial": f"{_RG_COUNT} BETWEEN 1 AND 3"}[value]
@@ -303,7 +300,7 @@ class SearchRow(FileRow):
 
 
 def snippet(texts: list[str | None], needles: list[str]) -> str:
-    """The first line, in the LRCLIB text and then the tags' lyrics, that contains a needle (folded)."""
+    """The first line of these texts (the LRCLIB lyrics) that contains a needle (folded)."""
     for text in texts:
         if not text:
             continue
@@ -327,7 +324,7 @@ def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery,
         rows = {r[0]: r for r in conn.execute(
             f"{LISTING_SELECT} WHERE e.id IN (SELECT value FROM json_each(?))", (json.dumps(ids),))}
         extra = {r[0]: r[1:] for r in conn.execute(
-            "SELECT e.id, e.parent_id, s.albumartist, s.name, s.genre, s.lyrics, s.lrclib FROM entries e "
+            "SELECT e.id, e.parent_id, s.albumartist, s.name, s.genre, s.lrclib FROM entries e "
             "JOIN search s ON s.rowid = e.id WHERE e.id IN (SELECT value FROM json_each(?))", (json.dumps(ids),))}
         folders = _Folders(conn)
         free = query.needles()
@@ -341,10 +338,10 @@ def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery,
             fields = listing_fields(rows[entry_id])
             if fields["is_dir"]:
                 fields.update(n_tracks=None, mtime=None)  # a folder row: its name and parent, nothing else
-            parent_id, albumartist, name, genre, tag_lyrics, lrclib = extra[entry_id]
+            parent_id, albumartist, name, genre, lrclib = extra[entry_id]
             meta = (name, fields["title"], fields["artist"], albumartist, fields["album"], genre)
             lyric_only = [n for n in free if not any(_contains(n, text) for text in meta)]
-            line = snippet([lrclib, tag_lyrics], lyric_only) if lyric_only else ""
+            line = snippet([lrclib], lyric_only) if lyric_only else ""
             results.append(SearchRow(
                 **fields, folder_id=parent_id, folder=folders.path(parent_id), albumartist=albumartist,
                 snippet=line, title_spans=spans(fields["title"], title_needles),

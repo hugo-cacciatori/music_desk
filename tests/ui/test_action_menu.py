@@ -35,8 +35,8 @@ def without_replaygain(library_dir: Path) -> set[Path]:
     return found
 
 
-def test_the_menu_sits_between_lyrics_and_help(window):
-    assert menu_titles(window) == ["&File", "&View", "&Lyrics", "&Action", "&Help"]
+def test_the_menu_sits_before_help(window):
+    assert menu_titles(window) == ["&File", "&View", "&Action", "&Help"]  # no Lyrics menu since M12 (SPEC §26)
     assert [a.text() for a in action_menu(window).actions()] == [text for text, _query in ACTION_QUERIES]
     assert action_menu(window).isEnabled()
 

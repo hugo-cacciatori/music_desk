@@ -8,7 +8,7 @@ from music_desk.settings import Settings
 def test_defaults_when_missing(tmp_path):
     settings = Settings.load(tmp_path / "settings.json")
     assert settings == Settings()
-    assert not settings.hide_folders_without_music and not settings.lyrics_offline and settings.expanded_folders == []
+    assert not settings.hide_folders_without_music and settings.expanded_folders == []
 
 
 def test_round_trip(tmp_path):
@@ -24,20 +24,24 @@ def test_round_trip(tmp_path):
 
 def test_bad_values_fall_back(tmp_path):
     path = tmp_path / "settings.json"
-    path.write_text(json.dumps({"hide_folders_without_music": "yes", "last_folder": "C:/Music", "lyrics_offline": 1,
+    path.write_text(json.dumps({"hide_folders_without_music": "yes", "last_folder": "C:/Music", "trim_subfolder": 1,
                                 "expanded_folders": "C:/x", "unknown": 3}))
     settings = Settings.load(path)
-    assert (settings.hide_folders_without_music, settings.last_folder, settings.lyrics_offline,
-            settings.expanded_folders) == (False, "C:/Music", False, [])
+    assert (settings.hide_folders_without_music, settings.last_folder, settings.trim_subfolder,
+            settings.expanded_folders) == (False, "C:/Music", "lite", [])
 
 
 def test_removed_settings_are_ignored(tmp_path):
-    """Settings files from before the Settings dialog was dropped still load (their extra keys are unknown)."""
+    """Settings files from before the Settings dialog was dropped, or before M12 retired the lyrics settings, still
+    load (their extra keys are unknown) and lose those keys when saved again."""
     path = tmp_path / "settings.json"
     path.write_text(json.dumps({"watch_for_changes": False, "tag_workers": 8, "theme": "dark",
-                                "lyrics_auto_save": True}))
+                                "lyrics_auto_save": True, "lyrics_offline": True, "last_folder": "C:/Music"}))
     settings = Settings.load(path)
-    assert settings.lyrics_auto_save and not hasattr(settings, "tag_workers")
+    assert settings.last_folder == "C:/Music" and not hasattr(settings, "tag_workers")
+    assert not hasattr(settings, "lyrics_offline") and not hasattr(settings, "lyrics_auto_save")
+    settings.save()
+    assert "lyrics_offline" not in json.loads(path.read_text(encoding="utf-8"))
 
 
 def test_corrupt_file_gives_defaults(tmp_path):

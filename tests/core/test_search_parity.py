@@ -3,7 +3,8 @@
 The page script's rule, re-implemented: `[title, artist, album, plain].join('\\n').toLowerCase().includes(q)`
 with `q = box.value.trim().toLowerCase()`. The songs are the frozen script's own scan of the fixture library, and
 their lyrics follow its tags-first rule; LRCLIB texts are scripted. The app's free text, narrowed to the same
-fields, must select the same tracks, apart from the accent difference (SPEC §17).
+fields, must select the same tracks, apart from the accent difference (SPEC §17). Songs with a lyrics tag aren't
+compared: the page searched those lyrics, and the app no longer searches the lyrics tag (M12, SPEC §26).
 """
 
 import importlib.util
@@ -29,7 +30,7 @@ QUERIES = ["ove", "lovely day", "fir", "e", "xt", "Fi", "fixture", "Fixture Arti
            "the hand", "d,", "s w"]
 TESTS = Path(__file__).parents[1]
 FIXTURES, REFERENCE = TESTS / "fixtures" / "generated", TESTS / "reference"
-FIELDS = ("title", "artist", "album", "lyrics", "lrclib")  # the tags' lyrics stand for the script's tags-first plain
+FIELDS = ("title", "artist", "album", "lrclib")
 
 
 def page_matches(song: dict, query: str) -> bool:
@@ -72,16 +73,15 @@ def corpus(tmp_path_factory, script):
                 continue
             entry_id, _fields, key = found
             if song["embedded"]:
-                song["plain"] = script.from_tags(song["embedded"])["plain"]  # the script's tags-first rule
-            else:
-                if key not in texts:
-                    n = len(texts)
-                    texts[key] = LRCLIB_TEXTS[n % len(LRCLIB_TEXTS)] if n % 3 and key not in tagged else None
-                    if texts[key]:
-                        assert key == script.cache_key(song)
-                        entry = {"status": "found", "source": "lrclib", "plain": texts[key], "checked": "2026-10-15"}
-                        writer.submit(lambda conn, k=key, e=entry: record_lyrics(conn, k, e)).result()
-                song["plain"] = texts[key]
+                continue  # the page searched the tag's lyrics; the app doesn't any more (M12)
+            if key not in texts:
+                n = len(texts)
+                texts[key] = LRCLIB_TEXTS[n % len(LRCLIB_TEXTS)] if n % 3 and key not in tagged else None
+                if texts[key]:
+                    assert key == script.cache_key(song)
+                    entry = {"status": "found", "source": "lrclib", "plain": texts[key], "checked": "2026-10-15"}
+                    writer.submit(lambda conn, k=key, e=entry: record_lyrics(conn, k, e)).result()
+            song["plain"] = texts[key]
             compared.append((entry_id, song))
         yield read, compared
         read.close()
@@ -90,7 +90,6 @@ def corpus(tmp_path_factory, script):
 def test_enough_songs_are_compared(corpus):
     _read, compared = corpus
     assert len(compared) >= 20
-    assert any(song["embedded"] for _id, song in compared)
     assert sum(bool(song["plain"]) and not song["embedded"] for _id, song in compared) >= 5
 
 

@@ -30,7 +30,7 @@ def test_status_bar_label_and_button(window, service, monkeypatch):
     assert calls == ["pause", "resume", "retry_now"]
 
     window.show_lyrics_progress(progress(OFFLINE))
-    assert label.text() == "Lyrics: offline mode" and not button.isVisible()
+    assert label.text() == "Lyrics: lookups off" and not button.isVisible()
     window.show_lyrics_progress(progress(RUNNING, None))
     assert label.text() == "Looking up lyrics: starting"
     window.show_lyrics_progress(progress(IDLE, 2))

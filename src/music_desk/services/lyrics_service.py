@@ -7,7 +7,7 @@ entry is still pending at the next start.
 
 Errors aren't cached (core.lyrics.lookup): a key that failed sits out for the pause delay before it is tried
 again. After 10 failures in a row the circuit breaker pauses every lookup for 10 minutes; `retry_now` ends the
-pause early. Offline mode makes no LRCLIB call at all.
+pause early. Offline (tests only since M12) makes no LRCLIB call at all.
 """
 
 import logging

@@ -134,7 +134,7 @@ def test_looking_up_then_found(qtbot, make, read, library):
     assert tab.shown_text() == "la la"
     assert tab.source.text() == f"LRCLIB #42 · checked {TODAY.isoformat()}"
     assert not tab.timestamps.isEnabled()  # plain lyrics only
-    assert visible(tab.copy_button, tab.genius_button, tab.retry_button, tab.note) == [True, False, False, False]
+    assert visible(tab.copy_button, tab.genius_button, tab.retry_button) == [True, False, False]
 
 
 def test_synced_lyrics_toggle_timestamps_and_copy(qtbot, make, read, library):
@@ -149,15 +149,13 @@ def test_synced_lyrics_toggle_timestamps_and_copy(qtbot, make, read, library):
     assert QApplication.clipboard().text() == SYNCED
 
 
-def test_a_lyrics_tag_is_compared(qtbot, make, read, library):
+def test_a_lyrics_tag_plays_no_part(qtbot, make, read, library):
     service, tab = make()
     select(service, tab, track(read, library, "tagged.flac"))
     qtbot.waitUntil(lambda: tab.state == tab_module.FOUND_STATE, timeout=5000)
-    assert tab.note.isVisible()
-    assert tab.note.text() == "This file's lyrics tag holds the same lyrics."
-    select(service, tab, track(read, library, "other.flac"))
-    qtbot.waitUntil(lambda: tab.state == tab_module.FOUND_STATE and tab.info.track.title == "Other", timeout=5000)
-    assert tab.note.text().startswith("This file also has lyrics in its tag, different from LRCLIB's.")
+    # The file's own lyrics tag plays no part (M12, SPEC §26): no note about it, nothing to save into it.
+    assert tab.shown_text() and not hasattr(tab, "note") and not hasattr(tab, "save_button")
+    assert "tag" not in tab.status.text()
 
 
 def test_instrumental(qtbot, make, read, library):
@@ -223,7 +221,7 @@ def test_offline(qtbot, make, read, library):
     service, tab = make(offline=True)
     select(service, tab, track(read, library, "01 First.flac"))
     assert tab.state == tab_module.OFFLINE_STATE
-    assert tab.status.text() == "Offline mode is on, so LRCLIB isn't contacted."
+    assert tab.status.text() == "Lyrics lookups are off, so LRCLIB isn't contacted."
     assert visible(tab.genius_button, tab.retry_button) == [True, False]
     service.set_offline(False)
     qtbot.waitUntil(lambda: tab.state == tab_module.FOUND_STATE, timeout=5000)

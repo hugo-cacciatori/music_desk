@@ -22,9 +22,6 @@ log = logging.getLogger(__name__)
 class Settings:
     # Library
     hide_folders_without_music: bool = False
-    # Lyrics
-    lyrics_offline: bool = False
-    lyrics_auto_save: bool = False
     # File names (SPEC §21): how music files are named from their tags, wherever the app names one
     name_masks: list[str] = field(default_factory=lambda: list(masks.DEFAULT_MASKS))
     name_replacement: str = masks.DEFAULT_REPLACEMENT

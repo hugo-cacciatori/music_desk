@@ -66,7 +66,7 @@ def main() -> int:
 
     settings = Settings.load()
     try:
-        library = LibraryService(library_db_path(), lyrics_offline=settings.lyrics_offline)
+        library = LibraryService(library_db_path())
     except Exception as e:  # noqa: BLE001 - the window still opens, without a library
         log.exception("could not open the library index")
         library = None

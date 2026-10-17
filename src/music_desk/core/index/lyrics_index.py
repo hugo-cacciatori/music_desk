@@ -123,34 +123,6 @@ def lyrics_info(conn: sqlite3.Connection, entry_id: int) -> LyricsInfo | None:
                       can_tag=family not in (None, TagFamily.NONE.value))
 
 
-def embed_candidates(conn: sqlite3.Connection, *, key: str | None = None, skip: set[int] | frozenset[int] = frozenset(),
-                     limit: int | None = None) -> list[tuple[int, dict]]:
-    """Tracks whose key is found on LRCLIB and whose lyrics tag is empty in the index: what auto-save fills
-    (SPEC §9). `key` narrows it to one key's tracks; entry ids in `skip` are left out. (entry id, cache entry)."""
-    where, params = "", [FOUND, TagFamily.NONE.value]
-    if key is not None:
-        where, params = " AND t.lyrics_key = ?", [*params, key]
-    rows = conn.execute(
-        f"""
-        SELECT t.entry_id, t.lyrics_key FROM tracks t JOIN lyrics l ON l.key = t.lyrics_key
-        WHERE l.status = ? AND t.has_lyrics_tag = 0 AND t.read_error IS NULL AND t.tag_family IS NOT NULL
-          AND t.tag_family != ?{where}
-        ORDER BY t.entry_id
-        """, params)
-    found, entries = [], {}
-    try:
-        for entry_id, track_key in rows:
-            if entry_id in skip:
-                continue
-            if track_key not in entries:
-                entries[track_key] = read_lyrics(conn, track_key)
-            found.append((entry_id, entries[track_key]))
-            if limit is not None and len(found) >= limit:
-                break
-    finally:
-        rows.close()
-    return found
-
 
 def record_lyrics(conn: sqlite3.Connection, key: str, entry: dict) -> list[int]:
     """Store a lookup result (a writer job). When the key becomes found, or stops being found, n_lrclib_found

@@ -6,7 +6,6 @@ from datetime import date
 
 import pytest
 from lrclib_fake import FakeUrlopen, SleepRecorder, http_error, no_jitter
-from mutagen.id3 import ID3
 
 from music_desk.core.lyrics import (
     ERROR,
@@ -17,12 +16,10 @@ from music_desk.core.lyrics import (
     NOT_LOOKED_UP,
     CircuitBreaker,
     DictCache,
-    EmbedResult,
     LrclibClient,
     LyricsOptions,
     Track,
     cache_key,
-    embed_lyrics,
     fetch_lyrics,
     is_fresh,
     lookup,
@@ -252,51 +249,6 @@ def test_read_track_file_name_fallback(tmp_path, fixtures_dir):
 def test_read_track_on_a_file_without_tags(fixtures_dir):
     track = read_track(fixtures_dir / "formats/tone.aac")
     assert (track.artist, track.title, track.album, track.embedded) == (None, "tone", None, None)
-
-
-# -- embedding --
-
-FOUND_ENTRY = {"status": FOUND, "source": "lrclib", "lrclib_id": 7, "plain": "Line one\nLine two", "synced": SYNCED,
-               "checked": "2026-10-15"}
-
-
-@pytest.mark.parametrize("name", ["tone.flac", "tone.mp3", "tone_aac.m4a", "tone.ogg", "tone.wma"])
-def test_embed_writes_synced_lyrics(fixture_copy, name):
-    path = fixture_copy(f"formats/{name}")
-    assert embed_lyrics(path, FOUND_ENTRY, only_if_empty=True) is EmbedResult.WRITTEN
-    assert TaggedFile(path).fields().lyrics == SYNCED
-    assert embed_lyrics(path, FOUND_ENTRY, only_if_empty=False) is EmbedResult.SAME_TEXT
-
-
-def test_embed_plain_when_not_synced(fixture_copy):
-    path = fixture_copy("formats/tone.flac")
-    embed_lyrics(path, dict(FOUND_ENTRY, synced=None), only_if_empty=True)
-    assert TaggedFile(path).fields().lyrics == "Line one\nLine two"
-
-
-def test_auto_embed_never_replaces_lyrics(fixture_copy):
-    path = fixture_copy("cleanup/lrc/with_lyrics.flac")
-    before = TaggedFile(path).fields().lyrics
-    assert embed_lyrics(path, FOUND_ENTRY, only_if_empty=True) is EmbedResult.HAS_OTHER_LYRICS
-    assert TaggedFile(path).fields().lyrics == before
-    assert embed_lyrics(path, FOUND_ENTRY, only_if_empty=False) is EmbedResult.WRITTEN
-    assert TaggedFile(path).fields().lyrics == SYNCED
-
-
-def test_embed_keeps_id3v23(fixture_copy):
-    path = fixture_copy("replaygain/Fixture Artist/Album B/02 Quiet.mp3")
-    assert ID3(path).version[1] == 3
-    embed_lyrics(path, FOUND_ENTRY, only_if_empty=True)
-    assert ID3(path).version[1] == 3
-
-
-def test_embed_refusals(fixture_copy):
-    assert embed_lyrics(fixture_copy("formats/tone.aac"), FOUND_ENTRY, only_if_empty=True) \
-        is EmbedResult.NOT_EMBEDDABLE
-    path = fixture_copy("formats/tone.flac")
-    for entry in ({"status": NOT_FOUND, "checked": "x"}, {"status": INSTRUMENTAL}, {"status": ERROR, "error": "x"}):
-        assert embed_lyrics(path, entry, only_if_empty=False) is EmbedResult.NOTHING_TO_EMBED
-    assert TaggedFile(path).fields().lyrics is None
 
 
 def test_search_urls():

@@ -165,14 +165,6 @@ def read_cue(path: Path) -> tuple[list[str], int]:
     return files, tracks
 
 
-def has_lyrics(path: Path) -> bool:
-    try:
-        lyrics = TaggedFile(path).fields().lyrics
-    except Exception:  # noqa: BLE001 - unreadable: keep the .lrc, losing lyrics is worse
-        return False
-    return bool(lyrics and lyrics.strip())
-
-
 @dataclass
 class _FolderFacts:
     """What the plan needs to know about a folder before walking it."""
@@ -181,7 +173,6 @@ class _FolderFacts:
     cue_audio: dict[str, str]  # lowercased cue name -> the audio file name it plays (single-file albums)
     cue_files: dict[str, list[str]]  # cue name -> the file names it lists
     sidecars: dict[str, Path]  # lowercased audio name -> its .lrc (only when exactly one audio file has the stem)
-    lrc_kept: set[str]  # lowercased .lrc names kept because their lyrics aren't in the tags yet
 
 
 def folder_facts(entries: list[Path], options: RenameOptions) -> _FolderFacts:
@@ -203,14 +194,14 @@ def folder_facts(entries: list[Path], options: RenameOptions) -> _FolderFacts:
                 single_file_cues[target.name.lower()] = cue.name
                 cue_audio[cue.name.lower()] = target.name
 
-    sidecars, lrc_kept = {}, set()
+    # An .lrc is junk like the other default extensions when cleanup is ticked: its lyrics aren't protected since
+    # no function relies on the lyrics tag (M12, SPEC §26). A sidecar that stays still follows its audio file.
+    sidecars = {}
     for lrc in (p for p in files if p.suffix.lower() == ".lrc"):
         owners = [a for a in audio if a.stem.lower() == lrc.stem.lower()]
         if len(owners) == 1:
             sidecars[owners[0].name.lower()] = lrc
-        if any(not has_lyrics(owner) for owner in owners):
-            lrc_kept.add(lrc.name.lower())
-    return _FolderFacts(single_file_cues, cue_audio, cue_files, sidecars, lrc_kept)
+    return _FolderFacts(single_file_cues, cue_audio, cue_files, sidecars)
 
 
 DEFAULT_OPTIONS = RenameOptions()
@@ -251,7 +242,7 @@ def _plan_folder(folder: Path, options: RenameOptions, selected: set[Path] | Non
         lower = path.name.lower()
         if not cleanup or path.suffix.lower() not in junk_extensions or lower in protected:
             return False
-        return lower not in facts.lrc_kept and lower not in facts.cue_audio
+        return lower not in facts.cue_audio
 
     # A sidecar follows its audio file only if it stays; a junk .lrc goes to the Recycle Bin instead.
     staying_sidecars = {audio: lrc for audio, lrc in facts.sidecars.items() if not is_junk(lrc)}
@@ -282,12 +273,8 @@ def _plan_folder(folder: Path, options: RenameOptions, selected: set[Path] | Non
             plan.items.append(snapshot(PlanItem(path, Status.JUNK)))
             state.remove(path.name)
         elif cleanup and extension in junk_extensions and lower not in protected:
-            # A junk extension, kept case by case (SPEC §10).
-            if lower in facts.cue_audio:
-                detail = f"needed to play {facts.cue_audio[lower]}"
-            else:
-                detail = "lyrics not in the tags yet"
-            plan.items.append(snapshot(PlanItem(path, Status.KEPT, detail=detail)))
+            # A junk extension, kept case by case (SPEC §10): a single-file album's cue sheet.
+            plan.items.append(snapshot(PlanItem(path, Status.KEPT, detail=f"needed to play {facts.cue_audio[lower]}")))
 
     if not cleanup:
         for cue, names in facts.cue_files.items():
@@ -334,8 +321,7 @@ def _plan_audio(path: Path, options: RenameOptions, facts: _FolderFacts, sidecar
             item.sidecar = snapshot(PlanItem(lrc, Status.NAME_TAKEN, target=lrc_target))
             plan.warnings.append(f"{lrc.name} stays: {lrc_target.name} already exists")
         else:
-            detail = "lyrics not in the tags yet" if lrc.name.lower() in facts.lrc_kept else ""
-            item.sidecar = snapshot(PlanItem(lrc, Status.RENAME, target=lrc_target, detail=detail))
+            item.sidecar = snapshot(PlanItem(lrc, Status.RENAME, target=lrc_target))
             state.rename(lrc.name, lrc_target.name)
     return item
 

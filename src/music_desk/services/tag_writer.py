@@ -14,8 +14,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from music_desk.core import lyrics, masks, metadata, replaygain
-from music_desk.core.lyrics import EmbedResult
+from music_desk.core import masks, metadata, replaygain
 from music_desk.core.metadata import Snapshot
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.core.replaygain import ReplayGainOptions
@@ -36,18 +35,6 @@ class BatchWritten:
 
 
 @dataclass(frozen=True)
-class LyricsEmbedded:
-    """The result of embed_lyrics: per file, the core result, or None with the reason it failed."""
-
-    token: int
-    results: list[tuple[str, EmbedResult | None, str | None]]  # (path, result, error)
-
-    @property
-    def written(self) -> list[str]:
-        return [path for path, result, _error in self.results if result is EmbedResult.WRITTEN]
-
-
-@dataclass(frozen=True)
 class ReplayGainRemoved:
     """The result of remove_replaygain: the files changed, how many had nothing to remove, and the failures."""
 
@@ -60,7 +47,6 @@ class ReplayGainRemoved:
 class TagWriter(QObject):
     written = Signal(object)  # Loaded: the fresh snapshot, or an error
     batchWritten = Signal(object)  # BatchWritten
-    lyricsEmbedded = Signal(object)  # LyricsEmbedded
     replaygainRemoved = Signal(object)  # ReplayGainRemoved
     locksChanged = Signal()  # a job took or released a lock: locked files turn read-only, or editable again
 
@@ -109,19 +95,6 @@ class TagWriter(QObject):
         self._pool.submit(self._write_many, token, [(str(p), dict(c)) for p, c in items])
         return token
 
-    def embed_lyrics(self, items: list[tuple[str | Path, dict]], *, only_if_empty: bool) -> int:
-        """Queue writes of LRCLIB entries into the files' Lyrics tags (core.lyrics.embed_lyrics: synced lyrics
-        first, nothing written when the tag already holds them). Any thread; one `lyricsEmbedded` reports them."""
-        token = self._next_token()
-        if self._closed:
-            self.lyricsEmbedded.emit(LyricsEmbedded(token, [(str(p), None, "The app is closing.") for p, _e in items]))
-            return token
-        try:
-            self._pool.submit(self._embed_many, token, [(str(p), dict(e)) for p, e in items], only_if_empty)
-        except RuntimeError:  # closed meanwhile (the auto-save worker)
-            self.lyricsEmbedded.emit(LyricsEmbedded(token, [(str(p), None, "The app is closing.") for p, _e in items]))
-        return token
-
     def remove_replaygain(self, paths: Sequence[str | Path], options: ReplayGainOptions) -> int:
         """Queue the removal of the files' ReplayGain tags (core.replaygain.remove_replaygain: the REPLAYGAIN_*
         values and the LUFS comment lines). A file under a job's lock is refused; the others go on. One
@@ -158,29 +131,6 @@ class TagWriter(QObject):
             except Exception:  # noqa: BLE001 - the file is saved; the index catches up at the next scan
                 log.exception("index update after saving %s failed", path)
         self.replaygainRemoved.emit(ReplayGainRemoved(token, removed, unchanged, failed))
-
-    def _embed_many(self, token: int, items: list[tuple[str, dict]], only_if_empty: bool) -> None:
-        results = []
-        for path, entry in items:
-            name = os.path.basename(path)
-            try:
-                with self.locks.lock([path], SAVE_OWNER):
-                    result = lyrics.embed_lyrics(path, entry, only_if_empty=only_if_empty)
-            except LockedError as e:
-                results.append((path, None, f"{name} is in use by {e.owner}. Try again when it has finished."))
-                continue
-            except Exception as e:  # noqa: BLE001 - reported; the other files go on
-                log.warning("saving lyrics into %s failed: %s", path, e)
-                results.append((path, None, f"{name}: {type(e).__name__}: {e}"))
-                continue
-            results.append((path, result, None))
-            if result is EmbedResult.WRITTEN:
-                log.info("saved LRCLIB lyrics to %s", path)
-                try:
-                    self.on_written(path)
-                except Exception:  # noqa: BLE001 - the file is saved; the index catches up at the next scan
-                    log.exception("index update after saving %s failed", path)
-        self.lyricsEmbedded.emit(LyricsEmbedded(token, results))
 
     def _write(self, token: int, path: str, changes: dict, name_masks: tuple[Sequence[str], str]) -> None:
         snapshot, error = self._write_one(path, changes, name_masks)

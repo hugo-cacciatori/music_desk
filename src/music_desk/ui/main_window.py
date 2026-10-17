@@ -42,7 +42,6 @@ from music_desk.core.playlist_builder import Builder
 from music_desk.licenses import licenses_dir
 from music_desk.services.jobs import JobList
 from music_desk.services.library import LibraryService
-from music_desk.services.lyrics_embedder import AutoEmbedder
 from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
@@ -66,11 +65,6 @@ from music_desk.ui.toast import Toast
 log = logging.getLogger(__name__)
 
 APP_TITLE = "MusicDesk"
-FIND_QUERIES = (  # the Lyrics menu's Find entries: (menu text, search query)
-    ("Find songs LRCLIB didn't find", "lrclib:notfound"),
-    ("Find songs without lyrics in their tags", "lyricstag:no lyricstag:lrc"),
-    ("Find songs LRCLIB can't look up (no artist or title)", "lrclib:notags"),
-)
 ACTION_QUERIES = (  # the Action menu's entries over the whole library: (menu text, search query)
     ("Show tracks without ReplayGain tags", "rg:none"),
 )
@@ -246,34 +240,12 @@ class MainWindow(QMainWindow):
         self.jobs_action.setShortcut(QKeySequence("Ctrl+J"))
         view_menu.addAction(self.jobs_action)
         view_menu.addAction(self.playlist_action)
-        lyrics_menu = self.menuBar().addMenu("&Lyrics")
-        self.offline_action = QAction("&Offline mode (no LRCLIB lookups)", self, checkable=True)
-        self.offline_action.setChecked(self.settings.lyrics_offline)
-        self.offline_action.toggled.connect(self.set_lyrics_offline)
-        self.auto_save_action = QAction("&Automatically save found lyrics into tags", self, checkable=True)
-        self.auto_save_action.setToolTip("Only empty Lyrics tags are filled; existing lyrics are never replaced.")
-        self.auto_save_action.setChecked(self.settings.lyrics_auto_save)
-        self.auto_save_action.toggled.connect(self.set_lyrics_auto_save)
-        lyrics_menu.addAction(self.offline_action)
-        lyrics_menu.addAction(self.auto_save_action)
-        lyrics_menu.addSeparator()
-        # Library-wide lists for a lyrics action, as ready-made searches (SPEC §5: instead of smart views).
-        for text, query in FIND_QUERIES:
-            lyrics_menu.addAction(text, lambda q=query: self.search.find(q))
-        lyrics_menu.setEnabled(library is not None)
         action_menu = self.menuBar().addMenu("&Action")  # actions over the whole library (SPEC §5)
         for text, query in ACTION_QUERIES:
             action_menu.addAction(text, lambda q=query: self.search.find(q))
         action_menu.setEnabled(library is not None)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About MusicDesk", self.open_about)
-        self.embedder = None
-        if library is not None:
-            self.embedder = AutoEmbedder(library.db_path, library.lyrics, self.tag_writer, self,
-                                         enabled=self.settings.lyrics_auto_save)
-            self.embedder.embedded.connect(
-                lambda n: self.statusBar().showMessage(
-                    f"Saved LRCLIB lyrics into the tags of {n} file{'s' if n != 1 else ''}.", STATUS_MS))
 
         self.overlay = DropOverlay(self)
         self.toast = Toast(self)
@@ -672,16 +644,6 @@ class MainWindow(QMainWindow):
             "deletes the tracks it was writing and leaves its album as it was; a stopped trim deletes its copy.")
         return answer == QMessageBox.StandardButton.Yes
 
-    def set_lyrics_offline(self, offline: bool) -> None:
-        self.settings.lyrics_offline = offline
-        if self._library_open():
-            self.open_library.lyrics.set_offline(offline)
-
-    def set_lyrics_auto_save(self, enabled: bool) -> None:
-        self.settings.lyrics_auto_save = enabled
-        if self.embedder is not None:
-            self.embedder.set_enabled(enabled)
-
     def lyrics_updated(self, folder_ids: list[int]) -> None:
         """LRCLIB results: the open folder's LRCLIB column follows, and the search results (their text too)."""
         if not self._library_open():
@@ -703,7 +665,7 @@ class MainWindow(QMainWindow):
         left = f"{progress.pending:,} to look up" if progress.pending is not None else "starting"
         button = None
         if progress.state == OFFLINE:
-            text = "Lyrics: offline mode"
+            text = "Lyrics: lookups off"
         elif progress.state == PAUSED:
             text, button = f"Lyrics paused: {left}", "Resume"
         elif progress.state == UNREACHABLE:
@@ -928,8 +890,6 @@ class MainWindow(QMainWindow):
         if running and not self.confirm_quit_with_jobs(running):
             event.ignore()
             return
-        if self.embedder is not None:
-            self.embedder.close()  # before the writer: it may still hand it a batch
         self.tools.shutdown()  # a running rename stops between two files; a running rsgain is killed
         self.split.close()  # a running flac is killed; this run's .partial files are deleted
         self.trim.close()  # likewise for a trim's .partial

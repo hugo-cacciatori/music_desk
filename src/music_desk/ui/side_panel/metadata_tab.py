@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -44,7 +43,7 @@ from music_desk.ui.qt_util import shortcut
 TEXT_FIELDS = (("title", "Title"), ("artist", "Artist"), ("albumartist", "Album artist"), ("album", "Album"))
 LATER_TEXT_FIELDS = (("year", "Year"), ("genre", "Genre"), ("composer", "Composer"), ("comment", "Comment"))
 NUMBER_FIELDS = ("track", "track_total", "disc", "disc_total")
-PER_TRACK_FIELDS = ("title", "track")  # and the lyrics: one file at a time (SPEC §7)
+PER_TRACK_FIELDS = ("title", "track")  # one file at a time (SPEC §7)
 WMA_TRACK_TOTAL = "WMA has no standard field for the track total, so it can't be set on .wma files."
 SHARED_FIELDS = ("artist", "albumartist", "album", "track_total", "disc", "disc_total", "year", "genre", "composer",
                  "comment")
@@ -85,10 +84,6 @@ class CoverLabel(QLabel):
             self.pictureDropped.emit(path)
         else:
             event.ignore()
-
-
-def _normalize_lyrics(text: str | None) -> str:
-    return (text or "").replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _parse(key: str, text: str):
@@ -219,21 +214,6 @@ class MetadataTab(QWidget):
         form.addRow("Disc # / total", self._pair("disc", "disc_total"))
         for key, label in LATER_TEXT_FIELDS:
             form.addRow(label, self._line(key))
-        self.lyrics = QPlainTextEdit()
-        self.lyrics.setMinimumHeight(120)
-        self.lyrics.textChanged.connect(lambda: self._edited("lyrics"))
-        self.lyrics.textChanged.connect(self._update_import_link)
-        self.import_link = QLabel()
-        self.import_link.setTextFormat(Qt.TextFormat.RichText)
-        self.import_link.linkActivated.connect(lambda _link: self.import_lrc())
-        self.import_link.hide()
-        lyrics_box = QVBoxLayout()
-        lyrics_box.setContentsMargins(0, 0, 0, 0)
-        lyrics_box.addWidget(self.lyrics)
-        lyrics_box.addWidget(self.import_link)
-        lyrics_widget = QWidget()
-        lyrics_widget.setLayout(lyrics_box)
-        form.addRow("Lyrics", lyrics_widget)
         outer.addLayout(form)
 
         self.rename_hint = QLabel()
@@ -385,8 +365,6 @@ class MetadataTab(QWidget):
             edit.setPlaceholderText("")
         for action in self.clear_actions.values():
             action.setVisible(False)
-        self.lyrics.setPlainText(_normalize_lyrics(fields.lyrics))
-        self.lyrics.setPlaceholderText("No lyrics in the tags. LRC timestamps are kept as typed.")
         self._filling = False
         self.name_label.setText(snapshot.path.name)
         self.format_label.setText(snapshot.format_line)
@@ -447,8 +425,6 @@ class MetadataTab(QWidget):
             else:
                 edit.setText("")
                 edit.setPlaceholderText("(one file at a time)")
-        self.lyrics.setPlainText("")
-        self.lyrics.setPlaceholderText("Lyrics are edited one file at a time.")
         self._filling = False
 
         self.name_label.setText(f"{len(snapshots)} files selected")
@@ -506,12 +482,8 @@ class MetadataTab(QWidget):
                             else tooltip)
             if key in self.clear_actions:
                 self.clear_actions[key].setEnabled(editable)
-        self.lyrics.setEnabled(can_tag and not self.multi)
-        self.lyrics.setReadOnly(not editable)
-        self.lyrics.setToolTip(tooltip)
         self._can_edit_cover = editable
         self._update_cover_buttons()
-        self._update_import_link()
         notes = self._multi_notes() if self.multi else []
         if not can_tag:
             notes.insert(0, f"{files[0].container} files have no tags, so they can't be edited here."
@@ -562,9 +534,6 @@ class MetadataTab(QWidget):
             value = _parse(key, edit.text())
             if value != original:
                 changed[key] = value
-        lyrics = self.lyrics.toPlainText()
-        if lyrics != _normalize_lyrics(fields.lyrics):
-            changed["lyrics"] = lyrics if lyrics.strip() else None
         self._add_cover_change(changed)
         return changed
 
@@ -688,22 +657,6 @@ class MetadataTab(QWidget):
             self.error_label.show()
         self._set_dirty(self.dirty)
         self.saveFailed.emit(message)
-
-    # -- lyrics from a .lrc sidecar --
-
-    def _update_import_link(self) -> None:
-        """"Import from <name>.lrc" when the Lyrics field is empty and a same-stem .lrc sits next to the file."""
-        s = self.snapshot
-        show = (not self.multi and s is not None and s.lrc_text is not None and s.editable
-                and self.locked_by is None and not self.lyrics.toPlainText().strip())
-        if show and s is not None and s.lrc_name is not None:
-            self.import_link.setText(f'<a href="import">Import from {html.escape(s.lrc_name)}</a>')
-        self.import_link.setVisible(show)
-
-    def import_lrc(self) -> None:
-        """Fill the Lyrics field from the sidecar. Saving is the usual Save; the .lrc file is never touched."""
-        if self.snapshot is not None and self.snapshot.lrc_text is not None:
-            self.lyrics.setPlainText(_normalize_lyrics(self.snapshot.lrc_text).strip("\n"))
 
     # -- the cover --
 

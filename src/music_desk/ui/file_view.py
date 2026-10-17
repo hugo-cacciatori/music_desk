@@ -46,7 +46,6 @@ IS_DIR_ROLE = Qt.ItemDataRole.UserRole + 1
 _NO_PARENT = QModelIndex()
 
 RG_MARKS = {"full": "✓", "partial": "◐", "none": "–"}
-LYRICS_MARKS = {"tag": "✓", "lrc": ".lrc", "none": "–"}
 
 
 def format_duration(seconds: float | None) -> str:
@@ -107,10 +106,10 @@ COLUMNS: tuple[Column, ...] = (
            lambda r: datetime.fromtimestamp(r.mtime).strftime("%Y-%m-%d %H:%M") if r.mtime else "",
            lambda r: _number_key(r.mtime), hidden_by_default=True),
     Column("rg", "RG", lambda r: RG_MARKS.get(r.rg or "", ""), lambda r: _text_key(r.rg)),
-    Column("lyrics", "♪", lambda r: LYRICS_MARKS.get(r.lyrics_tag or "", ""), lambda r: _text_key(r.lyrics_tag)),
     Column("lrclib", "LRCLIB", lambda r: r.lrclib or "", lambda r: _text_key(r.lrclib)),
 )
 COLUMN_INDEX = {column.key: i for i, column in enumerate(COLUMNS)}
+LAYOUT_VERSION = "v2:"  # the saved header layout; v2 since the ♪ column went (M12)
 
 
 class FileListModel(QAbstractTableModel):
@@ -427,13 +426,15 @@ class FileView(QWidget):
         self.view.sortByColumn(0, Qt.SortOrder.AscendingOrder)
 
     def save_layout(self) -> str:
-        return base64.b64encode(self.view.header().saveState().data()).decode("ascii")
+        return LAYOUT_VERSION + base64.b64encode(self.view.header().saveState().data()).decode("ascii")
 
     def restore_layout(self, state: str) -> bool:
-        if not state:
+        """A layout saved for these columns. One saved before a column was removed would map the columns after it
+        to the wrong sections (Qt restores by position), so it is dropped for the defaults."""
+        if not state.startswith(LAYOUT_VERSION):
             return False
         try:
-            data = QByteArray(base64.b64decode(state, validate=True))
+            data = QByteArray(base64.b64decode(state.removeprefix(LAYOUT_VERSION), validate=True))
         except ValueError:
             return False
         if not self.view.header().restoreState(data):
@@ -448,7 +449,7 @@ class FileView(QWidget):
         for i, column in enumerate(COLUMNS):
             if i == 0:
                 continue  # Name always stays
-            action = QAction(column.title if column.key != "lyrics" else "Lyrics tag (♪)", menu, checkable=True)
+            action = QAction(column.title, menu, checkable=True)
             action.setChecked(not header.isSectionHidden(i))
             action.toggled.connect(lambda shown, section=i: header.setSectionHidden(section, not shown))
             menu.addAction(action)

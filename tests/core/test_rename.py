@@ -121,21 +121,19 @@ def test_cleanup_plan(fixture_copy):
     result = statuses(plan)
     assert result["single_file_album/Fixture Album.flac"] == (Status.KEPT, None)
     assert result["single_file_album/Fixture Album.cue"] == (Status.KEPT, None)
-    for junk in ("per_track_cue/album.cue", "per_track_cue/missing.cue", "lrc/with_lyrics.lrc",
+    # An .lrc is junk like the others, its lyrics in the tags or not (M12, SPEC §26: no .lrc protection).
+    for junk in ("per_track_cue/album.cue", "per_track_cue/missing.cue", "lrc/with_lyrics.lrc", "lrc/no_lyrics.lrc",
                  "single_file_album/info.nfo", "single_file_album/notes.txt", "single_file_album/checksums.sfv"):
         assert result[junk] == (Status.JUNK, None), junk
     for never in ("single_file_album/replaygain.log", "single_file_album/folder.jpg",
-                  "single_file_album/playlist.m3u", "lrc/no_lyrics.lrc"):
-        assert never not in result, never  # not junk (no_lyrics.lrc moves as a sidecar)
+                  "single_file_album/playlist.m3u"):
+        assert never not in result, never
 
     by_name = {item.source.name: item for item in plan.items}
     assert by_name["Fixture Album.flac"].detail == "used by Fixture Album.cue"
     assert by_name["Fixture Album.cue"].detail == "needed to play Fixture Album.flac"
-    sidecar = by_name["no_lyrics.flac"].sidecar
-    assert (sidecar.source.name, sidecar.target.name, sidecar.status) == ("no_lyrics.lrc", "02 No Lyrics.lrc",
-                                                                         Status.RENAME)
-    assert sidecar.detail == "lyrics not in the tags yet"
-    assert by_name["with_lyrics.flac"].sidecar is None  # its .lrc is junk
+    assert by_name["no_lyrics.flac"].sidecar is None  # its .lrc is junk
+    assert by_name["with_lyrics.flac"].sidecar is None
 
 
 def test_protected_log_even_if_log_is_junk(fixture_copy):
@@ -210,13 +208,14 @@ def test_apply_cleanup_recycles_only_junk(fixture_copy):
     recorder = Recorder()
     report = apply_plan(plan_renames(folder, RenameOptions(cleanup=True)), recycle=recorder)
     recycled = sorted(p.relative_to(folder).as_posix() for p in recorder.paths)
-    assert recycled == ["lrc/with_lyrics.lrc", "per_track_cue/album.cue", "per_track_cue/missing.cue",
+    assert recycled == ["lrc/no_lyrics.lrc", "lrc/with_lyrics.lrc", "per_track_cue/album.cue",
+                        "per_track_cue/missing.cue",
                         "single_file_album/checksums.sfv", "single_file_album/info.nfo",
                         "single_file_album/notes.txt"]
     assert sorted(report.junk) == sorted(p.rsplit("/", 1)[1] for p in recycled)
-    assert report.sidecars_renamed == ["no_lyrics.lrc -> 02 No Lyrics.lrc"]
-    assert (folder / "lrc" / "02 No Lyrics.lrc").exists()
-    assert (folder / "lrc" / "with_lyrics.lrc").exists()  # the recorder didn't really recycle it
+    assert report.sidecars_renamed == []
+    assert (folder / "lrc" / "no_lyrics.lrc").exists()  # the recorder didn't really recycle it
+    assert (folder / "lrc" / "with_lyrics.lrc").exists()
     assert any("used by Fixture Album.cue" in kept for kept in report.kept)
 
 
@@ -257,5 +256,5 @@ def test_junk_that_cant_be_recycled_is_kept_and_reported(fixture_copy):
     assert sent == [] and report.junk == [] and report.recycled == []
     kept = [k for k in report.kept if "can't be sent to the Recycle Bin: X: is a network location" in k]
     assert sorted(k.split(" (kept:")[0] for k in kept) == ["album.cue", "checksums.sfv", "info.nfo", "missing.cue",
-                                                           "notes.txt", "with_lyrics.lrc"]
+                                                           "no_lyrics.lrc", "notes.txt", "with_lyrics.lrc"]
     assert (folder / "single_file_album" / "notes.txt").exists() and report.errors == []

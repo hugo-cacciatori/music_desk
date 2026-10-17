@@ -134,7 +134,8 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.lyrics_label)
         self.statusBar().addPermanentWidget(self.lyrics_button)
         self._lyrics_state = ""
-        self.jobs_button = QToolButton(text="Jobs")  # always there: the jobs panel's only toggle (SPEC §10)
+        self.jobs_button = QToolButton()  # always there: the jobs panel's only toggle (SPEC §10)
+        self.jobs_button.setText("Jobs")
         self.jobs_button.setAutoRaise(True)
         self.jobs_button.setToolTip("Show or hide the jobs panel: this session's Rename, ReplayGain, Tidy, Split and "
                                     "Trim runs (Ctrl+J)")

@@ -567,8 +567,9 @@ def process_discography(root: str | Path, options: ReplayGainOptions = DEFAULT_O
 
     # 2. Level the albums that were processed successfully (not after a cancel)
     leveled = [album for album in albums if album.gain is not None] if not cancelled else []
-    target = min((album.gain for album in leveled), default=None)
+    target = min((album.gain for album in leveled if album.gain is not None), default=None)
     for album in leveled:
+        assert target is not None  # the lowest of the leveled albums' gains
         album.changed, album.skipped, album.errors = level_album(album.folder, target, options)
         if album.gain == target:
             line = f"album gain already at the discography target ({target} dB)"
@@ -704,8 +705,9 @@ def options_from_json(data) -> ReplayGainOptions:
 
     def strings(key):
         value = data.get(key)
-        ok = isinstance(value, list) and all(isinstance(v, str) for v in value)
-        return tuple(value) if ok else getattr(default, key)
+        if isinstance(value, list) and all(isinstance(v, str) for v in value):
+            return tuple(value)
+        return getattr(default, key)
 
     def text(key):
         value = data.get(key)

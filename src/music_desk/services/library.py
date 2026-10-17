@@ -3,6 +3,7 @@ changes and online checks off the UI thread (Ground rule 2). Results come back t
 
 import logging
 import sqlite3
+from collections.abc import Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
@@ -78,7 +79,7 @@ class LibraryService(QObject):
 
     # -- actions (they return at once; results arrive as signals) --
 
-    def add_folders(self, paths: list[str | Path]) -> Future:
+    def add_folders(self, paths: Sequence[str | Path]) -> Future:
         return self._run(self._add_all, [str(p) for p in paths])
 
     def remove_root(self, root_id: int) -> Future:
@@ -126,6 +127,7 @@ class LibraryService(QObject):
         added = [r for r in results if r.status in (roots.AddStatus.ADDED, roots.AddStatus.MERGED)]
         for result in added:
             self._import_lyrics_cache(result.path)  # before the scan, whose folder totals then count it
+            assert result.root_id is not None  # an added or merged root has its id
             self.indexer.scan_root(result.root_id)
         if added:
             self._sync_watches()

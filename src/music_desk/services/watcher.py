@@ -18,6 +18,7 @@ from collections.abc import Callable
 from PySide6.QtCore import QObject, Signal
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver, ObservedWatch
 
 log = logging.getLogger(__name__)
 
@@ -52,14 +53,14 @@ class Watcher(QObject):
 
     def __init__(self, on_flush: Callable[[str, bool], None], parent: QObject | None = None, *,
                  debounce: float = DEBOUNCE, max_delay: float = MAX_DELAY,
-                 observer_factory: Callable[[], Observer] = Observer) -> None:
+                 observer_factory: Callable[[], BaseObserver] = Observer) -> None:
         super().__init__(parent)
         self.on_flush = on_flush  # (folder path, recursive), called from the debounce thread
         self.debounce = debounce
         self.max_delay = max_delay
         self._observer = observer_factory()
         self._observer.start()
-        self._watches: dict[int, tuple[str, object]] = {}  # root id -> (path, watch)
+        self._watches: dict[int, tuple[str, ObservedWatch]] = {}  # root id -> (path, watch)
         self._pending: dict[str, tuple[str, bool]] = {}  # normcase path -> (path, recursive)
         self._first = self._last = 0.0
         self._condition = threading.Condition()

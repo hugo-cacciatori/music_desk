@@ -48,7 +48,7 @@ def short_result(result: SplitFinished) -> str:
         return result.error
     if result.cancelled:
         return "nothing left half-done"
-    if result.split:
+    if result.split and result.finished is not None:
         return f"{plural(len(result.finished.tracks), 'track')} split"
     return "not split"
 
@@ -59,21 +59,22 @@ def report_text(result: SplitFinished) -> str:
         return f"The split failed: {result.error}\nThe album is as it was."
     if result.cancelled:
         return "Stopped: nothing left half-done. The tracks being written were deleted; the album is as it was."
-    if not result.split:
-        reason = result.finished.error if result.finished else result.cut.error if result.cut else "not started"
+    finished = result.finished
+    if not result.split or finished is None:
+        reason = finished.error if finished else result.cut.error if result.cut else "not started"
         return f"Not split: {reason}\nNothing was written; the album is as it was."
-    written, total = len(result.finished.tracks), len(plan.tracks)
+    written, total = len(finished.tracks), len(plan.tracks)
     if plan.all_ticked:
         lines = [f"Done: {plural(written, 'track')} split, all identical to the original."]
     else:
         lines = [f"Done: {written} of {total} tracks split, each identical to its part of the original."]
-    lines += ["", f"Written to {result.folder}:"] + [f"    {path.name}" for path in result.finished.tracks]
+    lines += ["", f"Written to {result.folder}:"] + [f"    {path.name}" for path in finished.tracks]
     lines += ["", "The proof: each track has its planned number of samples, and its audio has the same MD5 as its "
                   "part of the original."]
-    if result.cut.md5:
+    if result.cut is not None and result.cut.md5:
         lines.append(f"Together, the tracks have the original's MD5 ({result.cut.md5[:8]}…).")
     lines += ["", "The image and its cue sheet are as they were."]
-    lines += [f"Warning: {w}" for w in result.finished.warnings]
+    lines += [f"Warning: {w}" for w in finished.warnings]
     return "\n".join(lines)
 
 
@@ -161,11 +162,17 @@ class SplitController(QObject):
         self._load_token = self.runner.load(path)
         self.window.center.setCurrentWidget(self.page)
 
+    @property
+    def cue_path(self) -> Path:
+        """The sheet's file, for code that runs only once one was opened."""
+        assert self.path is not None
+        return self.path
+
     def can_leave(self) -> bool:
         """True if the page's sheet may be dropped: no unsaved edits, or they were saved or discarded."""
         if self.doc is None or not self.doc.modified or self.page.state != "editing":
             return True
-        answer = self.ask_leave(self.path.name)
+        answer = self.ask_leave(self.cue_path.name)
         if answer == "cancel":
             return False
         if answer == "save":
@@ -192,7 +199,7 @@ class SplitController(QObject):
         if loaded.token != self._load_token:
             return
         if loaded.document is None:
-            self.page.show_error(loaded.error)
+            self.page.show_error(loaded.error or "")
             return
         self.doc = loaded.document
         self.audio = loaded.audio
@@ -260,10 +267,11 @@ class SplitController(QObject):
             return
         self.codec = codec
         self.page.set_encoding(codec)
-        self.page.show_loading(self.path)
-        self._load_token = self.runner.load(self.path, codec)
+        self.page.show_loading(self.cue_path)
+        self._load_token = self.runner.load(self.cue_path, codec)
 
     def _show_sources(self) -> None:
+        assert self.doc is not None  # called once a sheet is shown
         current = self.doc.file
         problem = None
         if current and Path(current).suffix.lower() not in SUPPORTED:
@@ -314,7 +322,7 @@ class SplitController(QObject):
             self._refresh_buttons()
             return
         masks, replacement = self.window._name_masks()
-        self._plan_token = self.runner.plan(sheet, self.path, masks, replacement, self.ticked_numbers(),
+        self._plan_token = self.runner.plan(sheet, self.cue_path, masks, replacement, self.ticked_numbers(),
                                             self.destination)
 
     def _planned(self, planned: Planned) -> None:
@@ -379,21 +387,21 @@ class SplitController(QObject):
 
     def save(self) -> bool:
         """Save over the sheet's own file. True once saved."""
-        return self._save_to(self.path)
+        return self._save_to(self.cue_path)
 
     def save_as(self) -> bool:
         if self.doc is None or any(p.blocks_save for p in self.problems):
             return False
-        chosen = self.choose_cue_file(str(self.path))
+        chosen = self.choose_cue_file(str(self.cue_path))
         if not chosen:
             return False
         target = Path(chosen)
         if target.suffix.lower() != ".cue":
             target = target.with_name(target.name + ".cue")
-        if not fsops.is_same_file(target.parent, self.path.parent):
+        if not fsops.is_same_file(target.parent, self.cue_path.parent):
             # A cue sheet is useless without its audio file (Hugo, 2026-10-17): its FILE line names a file beside it.
             self.window.toast.show_message(f"A cue sheet must sit beside its audio file: save it in "
-                                           f"{self.path.parent}.")
+                                           f"{self.cue_path.parent}.")
             return False
         if target.exists():  # the sheet's own name too: Keep both is how a version is made
             answer = self.ask_replace_or_keep(target.name)
@@ -444,7 +452,7 @@ class SplitController(QObject):
         if self.doc is None or not self.page.split_button.isEnabled() and not self._split_after_plan:
             return
         if self.doc.modified:
-            answer = self.ask_save_first(self.path.name)
+            answer = self.ask_save_first(self.cue_path.name)
             if answer == "cancel":
                 return
             if not (self.save() if answer == "save" else self.save_as()):
@@ -490,7 +498,7 @@ class SplitController(QObject):
             self.window.jobs.finish(self.job, state, short_result(result))
             self.job = None
         self.doc = None  # the page shows the report; the sheet is read again if opened again
-        if result.split:
+        if result.split and result.finished is not None:
             self.window.statusBar().showMessage(f"Split {plural(len(result.finished.tracks), 'track')}.", 8000)
 
     def show_report(self, result: SplitFinished) -> None:

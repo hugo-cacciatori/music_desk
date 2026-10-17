@@ -5,6 +5,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import cast
 
 from PySide6.QtCore import QByteArray, QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import (
@@ -14,7 +15,7 @@ from PySide6.QtGui import (
     QDragLeaveEvent,
     QDropEvent,
     QKeySequence,
-    QShortcut,
+    QMouseEvent,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -59,6 +60,7 @@ from music_desk.ui.controllers.split import SplitController
 from music_desk.ui.file_view import FileView
 from music_desk.ui.jobs_panel import JobsPanel
 from music_desk.ui.playlist_panel import PlaylistPanel
+from music_desk.ui.qt_util import app, shortcut
 from music_desk.ui.search_view import SearchView
 from music_desk.ui.search_view import sort_keys as search_sort_keys
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
@@ -114,7 +116,9 @@ class DropOverlay(QLabel):
         self.hide()
 
     def cover(self) -> None:
-        self.setGeometry(self.parentWidget().rect())
+        parent = self.parentWidget()
+        assert parent is not None  # an overlay always covers its parent
+        self.setGeometry(parent.rect())
         self.show()
         self.raise_()
 
@@ -168,7 +172,7 @@ class MainWindow(QMainWindow):
         self.jobs_button.hide()
         self.statusBar().addPermanentWidget(self.jobs_button)
 
-        conn = lambda: self.library.conn if self._library_open() else None  # noqa: E731
+        conn = lambda: self.open_library.conn if self._library_open() else None  # noqa: E731
         self.sidebar = Sidebar(conn, self.settings.expanded_folders)
         self.sidebar.model.only_music = self.settings.hide_folders_without_music
         self.file_view = FileView(conn)
@@ -176,7 +180,7 @@ class MainWindow(QMainWindow):
         self.tag_io.name_masks = self._name_masks
         self.tag_writer = TagWriter(
             library.locks if library is not None else PathLocks(),
-            on_written=lambda path: self.library.indexer.update_file(path) if self._library_open() else None,
+            on_written=lambda path: self.open_library.indexer.update_file(path) if self._library_open() else None,
             parent=self)
         self.tag_writer.name_masks = self._name_masks
         self.side_panel = SidePanel(self.tag_io, self.tag_writer, conn,
@@ -253,7 +257,7 @@ class MainWindow(QMainWindow):
         self._search_token: int | None = None
         self.search_shown: int | None = None
         self._search_request: str | None = None  # the query running, and shown
-        self._shown_request: tuple | None = None
+        self._shown_request: str | None = None
         self._search_timer = QTimer(self, singleShot=True, interval=120)  # runs as you type, debounced
         self._search_timer.timeout.connect(self._run_search)
         self._search_refresh = QTimer(self, singleShot=True, interval=1000)  # the index changed: run it again
@@ -373,7 +377,7 @@ class MainWindow(QMainWindow):
             lambda count: self.statusBar().showMessage(f"Saved the tags of {count} files.", STATUS_MS))
         self.side_panel.metadata.saveFailed.connect(lambda message: self.toast.show_message(message))
         self.shellFailed.connect(self._shell_failed)
-        QApplication.instance().installEventFilter(self)  # the mouse back/forward buttons, anywhere in the window
+        app().installEventFilter(self)  # the mouse back/forward buttons, anywhere in the window
 
         if library is None:
             self.add_folder_action.setEnabled(False)
@@ -434,21 +438,21 @@ class MainWindow(QMainWindow):
             return  # a row being removed can still be selected for a moment
         if not self.side_panel.can_leave():  # unsaved tag edits: Save, Discard or Cancel
             if self.folder_id is not None:
-                self.sidebar.tree.select_entry(queries.folder_path_ids(self.library.conn, self.folder_id))
+                self.sidebar.tree.select_entry(queries.folder_path_ids(self.open_library.conn, self.folder_id))
             return
         self.close_tools()  # browsing elsewhere goes back to the file list (the cards keep their options)
         if record and self.folder_id is not None:
             self.history_back.append(self.folder_id)
             self.history_forward.clear()
         self.folder_id = entry_id
-        self.folder_path = str(path_of(self.library.conn, entry_id))
+        self.folder_path = str(path_of(self.open_library.conn, entry_id))
         self.file_view.set_folder(entry_id)
-        crumbs = queries.folder_crumbs(self.library.conn, entry_id)
+        crumbs = queries.folder_crumbs(self.open_library.conn, entry_id)
         self.address_bar.set_location(crumbs, self.folder_path)
         self.sidebar.tree.select_entry([entry for entry, _name in crumbs])
         self._show_selection([])
-        self.library.folder_opened(entry_id)
-        self.library.lyrics.prioritize_folder(entry_id)
+        self.open_library.folder_opened(entry_id)
+        self.open_library.lyrics.prioritize_folder(entry_id)
         self._update_navigation()
 
     # -- history and navigation --
@@ -502,8 +506,8 @@ class MainWindow(QMainWindow):
         self.search_field.setMaximumWidth(320)
         self.search_field.textEdited.connect(self._search_edited)
         self.search_field.returnPressed.connect(lambda: self.search_view.focus_results())
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self.search_field, activated=self.close_search,
-                  context=Qt.ShortcutContext.WidgetShortcut)
+        shortcut(QKeySequence(Qt.Key.Key_Escape), self.search_field, self.close_search,
+                 Qt.ShortcutContext.WidgetShortcut)
         toolbar.addWidget(self.search_field)
         self.search_action = QAction("Search library", self, shortcut=QKeySequence("Ctrl+K"))
         self.search_action.triggered.connect(self.open_search)
@@ -512,23 +516,24 @@ class MainWindow(QMainWindow):
 
         # Backspace goes up, but only from the lists (it edits text everywhere else).
         for view in (self.file_view.view, self.sidebar.tree):
-            QShortcut(QKeySequence(Qt.Key.Key_Backspace), view, activated=self.go_up,
-                      context=Qt.ShortcutContext.WidgetShortcut)
+            shortcut(QKeySequence(Qt.Key.Key_Backspace), view, self.go_up, Qt.ShortcutContext.WidgetShortcut)
         # Del sends the focused view's selection to the Recycle Bin. Shift+Del does the same: the app never
         # deletes permanently (SPEC §19). The playlist's own Del only removes tracks from the playlist.
         for view, selected in ((self.file_view.view, self.file_view.selected_ids),
                                (self.sidebar.tree, self.sidebar.tree.selected_ids),
                                (self.search_view.view, self.search_view.selected_ids)):
             for key in ("Del", "Shift+Del"):
-                QShortcut(QKeySequence(key), view, context=Qt.ShortcutContext.WidgetShortcut,
-                          activated=lambda view=view, selected=selected: self.delete_entries(selected(), view))
+                shortcut(QKeySequence(key), view,
+                         lambda view=view, selected=selected: self.delete_entries(selected(), view),
+                         Qt.ShortcutContext.WidgetShortcut)
         self._update_navigation()
 
     def _update_navigation(self) -> None:
         open_ = self._library_open() and self.folder_id is not None
         self.back_action.setEnabled(bool(self.history_back))
         self.forward_action.setEnabled(bool(self.history_forward))
-        self.up_action.setEnabled(open_ and queries.parent_folder(self.library.conn, self.folder_id) is not None)
+        self.up_action.setEnabled(open_ and self.folder_id is not None
+                                  and queries.parent_folder(self.open_library.conn, self.folder_id) is not None)
         self.refresh_action.setEnabled(open_)
 
     def go_back(self) -> None:
@@ -554,7 +559,7 @@ class MainWindow(QMainWindow):
         if not self._library_open() or self.folder_id is None:
             return
         child = self.folder_id
-        parent = queries.parent_folder(self.library.conn, child)
+        parent = queries.parent_folder(self.open_library.conn, child)
         if parent is not None:
             self.open_folder(parent)
             self.file_view.select_ids([child])  # as Explorer does: the folder you came from is selected
@@ -563,19 +568,19 @@ class MainWindow(QMainWindow):
         """A tool changed files under `folder`: the index catches up on the whole subtree first, even during a
         long background scan, and the list follows as each folder is served."""
         if self._library_open():
-            self.library.indexer.request_path(str(folder), recursive=True)
+            self.open_library.indexer.request_path(str(folder), recursive=True)
 
     def rescan_folder(self) -> None:
         """F5: reconcile the open folder with the disk now."""
         if self._library_open() and self.folder_id is not None:
-            self.library.indexer.request_folder(self.folder_id)  # first, even during a long background scan
+            self.open_library.indexer.request_folder(self.folder_id)  # first, even during a long background scan
             self.statusBar().showMessage("Rescanning this folder…", 2000)
 
     def go_to_path(self, text: str) -> None:
         """A typed or pasted path: open it if it is an indexed folder, or open a file's folder and select it."""
         if not self._library_open():
             return
-        found = find_folder(self.library.conn, text)
+        found = find_folder(self.open_library.conn, text)
         if found is None:
             self.statusBar().showMessage(f"{text} isn't in the library. Add its folder first (File > Add folder…).",
                                          STATUS_MS)
@@ -584,8 +589,8 @@ class MainWindow(QMainWindow):
         if exact:
             self.open_folder(folder)
             return
-        rest = Path(os.path.normpath(os.path.abspath(text))).relative_to(path_of(self.library.conn, folder)).parts
-        file_id = queries.find_child(self.library.conn, folder, rest[0]) if len(rest) == 1 else None
+        rest = Path(os.path.normpath(os.path.abspath(text))).relative_to(path_of(self.open_library.conn, folder)).parts
+        file_id = queries.find_child(self.open_library.conn, folder, rest[0]) if len(rest) == 1 else None
         if file_id is not None:
             self.open_folder(folder)
             self.file_view.select_ids([file_id])
@@ -595,10 +600,11 @@ class MainWindow(QMainWindow):
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if event.type() == QEvent.Type.MouseButtonPress and isinstance(watched, QWidget) and \
                 watched.window() is self:
-            if event.button() == Qt.MouseButton.BackButton:
+            button = cast(QMouseEvent, event).button()
+            if button == Qt.MouseButton.BackButton:
                 self.go_back()
                 return True
-            if event.button() == Qt.MouseButton.ForwardButton:
+            if button == Qt.MouseButton.ForwardButton:
                 self.go_forward()
                 return True
         return False
@@ -638,7 +644,7 @@ class MainWindow(QMainWindow):
                 elif item.is_audio:
                     audio_ids.append(entry_id)
         if len(items) == 1 and audio_ids:
-            self.library.lyrics.prioritize_track(audio_ids[0])  # the selected track's lyrics first (SPEC §9)
+            self.open_library.lyrics.prioritize_track(audio_ids[0])  # the selected track's lyrics first (SPEC §9)
         if len(items) == 1 and folder_ids:
             self.side_panel.show_folder(folder_ids[0])  # one folder selected: its summary
         elif not items and self.folder_id is not None and not self.showing_search:
@@ -723,7 +729,7 @@ class MainWindow(QMainWindow):
             return
         self._search_request = self.search_field.text()
         self._search_token = self.search_service.search(
-            self.search_field.text(), error_keys=self.library.lyrics.error_keys(), limit=self.search_limit)
+            self.search_field.text(), error_keys=self.open_library.lyrics.error_keys(), limit=self.search_limit)
 
     def _refresh_search_later(self) -> None:
         if self.showing_search:
@@ -785,9 +791,10 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("Delete\tDel", lambda: self.delete_entries(ids, self.search_view.view))
         row = self.search_view.row(ids[0])
-        if len(ids) == 1 and row is not None and row.artist:
+        artist = row.artist if len(ids) == 1 and row is not None else None
+        if artist:
             menu.addSeparator()
-            menu.addAction(f"Filter by {row.artist}", lambda: self.add_artist_filter(row.artist))
+            menu.addAction(f"Filter by {artist}", lambda: self.add_artist_filter(artist))
         return menu
 
     # -- Tools (SPEC §10) --
@@ -797,15 +804,17 @@ class MainWindow(QMainWindow):
         files among the selected items in the open folder (a selection); with nothing selected, the open folder."""
         if not self._library_open():
             return None
-        conn = self.library.conn
+        conn = self.open_library.conn
         kinds = {i: row[0] for i in ids
                  if (row := conn.execute("SELECT is_dir FROM entries WHERE id = ?", (i,)).fetchone())}
         if len(ids) == 1 and kinds.get(ids[0]):
             folder_id, files = ids[0], ()
         elif ids:
+            if self.folder_id is None or self.folder_path is None:
+                return None
             rows = [self.file_view.model.rows[r] for i in ids if (r := self.file_view.model.row_for(i)) is not None]
             files = tuple(Path(self.folder_path, row.name) for row in rows if row.is_audio)
-            if not files or self.folder_id is None:
+            if not files:
                 return None
             folder_id = self.folder_id
         elif self.folder_id is not None:
@@ -815,7 +824,8 @@ class MainWindow(QMainWindow):
         if not self._folder_exists(folder_id):
             return None
         folder = path_of(conn, folder_id)
-        first = files[0] if files else queries.folder_summary(conn, folder_id).first_track
+        summary = None if files else queries.folder_summary(conn, folder_id)
+        first = files[0] if files else summary.first_track if summary else None
         return ToolScope(folder, folder_id, files, Path(first) if first else None)
 
     def open_tools(self, ids: list[int]) -> None:
@@ -855,6 +865,7 @@ class MainWindow(QMainWindow):
             busy = self._rg_job
         if busy is not None:
             job = self.jobs.get(busy)
+            assert job is not None  # a running job stays in the list
             self.toast.show_message(f"{job.kind} is still running in {job.folder}. It can be followed in the jobs "
                                     "panel; start another run when it has finished.")
             self.show_job(busy)
@@ -883,6 +894,7 @@ class MainWindow(QMainWindow):
         folder = request.scope.folder
         if self._unsaved_edits_under(folder):
             return False
+        assert request.replaygain_options is not None  # set for every ReplayGain and Tidy request
         try:
             self._rg_token = self.rg_runner.run(folder, request.replaygain_options, request.discography)
         except LockedError as e:
@@ -926,9 +938,9 @@ class MainWindow(QMainWindow):
             return
         self._indexing_paused = paused
         if paused:
-            self.library.indexer.pause()
+            self.open_library.indexer.pause()
         else:
-            self.library.indexer.resume()
+            self.open_library.indexer.resume()
         if self.index_label.isVisible():
             text = self.index_label.text().removesuffix(PAUSED_NOTE)
             self.index_label.setText(text + PAUSED_NOTE if paused else text)
@@ -942,6 +954,7 @@ class MainWindow(QMainWindow):
     def preview_rename(self, request: ToolRequest) -> None:
         scope = request.scope
         self._rename_request = request
+        assert request.rename_options is not None  # set for every Rename and Tidy request
         self.rename_preview.show_planning(scope.folder, len(scope.files), tidy=request.tool == TIDY)
         self.center.setCurrentWidget(self.rename_preview)
         self._rename_token = self.rename_runner.plan(scope.folder, request.rename_options,
@@ -1008,7 +1021,7 @@ class MainWindow(QMainWindow):
             for step in report.steps:  # the index applies renames one folder at a time
                 by_folder.setdefault(Path(step[0]).parent, []).append(step)
             for steps in by_folder.values():
-                self.library.indexer.apply_renames(steps)  # in place: ids, tags and selection kept
+                self.open_library.indexer.apply_renames(steps)  # in place: ids, tags and selection kept
             if self._rename_request is not None:  # then the whole scope: recycled junk, sidecars, anything else
                 self.refresh_after_tool(self._rename_request.scope.folder)
         self.rename_preview.show_report(report)
@@ -1095,7 +1108,7 @@ class MainWindow(QMainWindow):
     def set_lyrics_offline(self, offline: bool) -> None:
         self.settings.lyrics_offline = offline
         if self._library_open():
-            self.library.lyrics.set_offline(offline)
+            self.open_library.lyrics.set_offline(offline)
 
     def set_lyrics_auto_save(self, enabled: bool) -> None:
         self.settings.lyrics_auto_save = enabled
@@ -1127,7 +1140,7 @@ class MainWindow(QMainWindow):
         elif progress.state == PAUSED:
             text, button = f"Lyrics paused: {left}", "Resume"
         elif progress.state == UNREACHABLE:
-            resume = time.strftime("%H:%M", time.localtime(self.library.lyrics.resume_at))
+            resume = time.strftime("%H:%M", time.localtime(self.open_library.lyrics.resume_at))
             text, button = f"LRCLIB unreachable, retrying at {resume}", "Retry now"
         elif progress.state == RUNNING:
             text, button = f"Looking up lyrics: {left}", "Pause"
@@ -1143,7 +1156,7 @@ class MainWindow(QMainWindow):
     def _lyrics_button_clicked(self) -> None:
         if not self._library_open():
             return
-        lyrics = self.library.lyrics
+        lyrics = self.open_library.lyrics
         action = {"Pause": lyrics.pause, "Resume": lyrics.resume, "Retry now": lyrics.retry_now}.get(
             self.lyrics_button.text())
         if action:
@@ -1157,16 +1170,16 @@ class MainWindow(QMainWindow):
     def lrclib_unreachable(self, resume_at: float) -> None:
         minutes = max(1, round((resume_at - time.time()) / 60))
         self.toast.show_message(f"LRCLIB unreachable, retrying in {minutes} min.", "Retry now",
-                                self.library.lyrics.retry_now)
+                                self.open_library.lyrics.retry_now)
 
     def _refresh_location(self) -> None:
         """The open folder (or a folder above it) may have been renamed: its path and breadcrumb follow."""
         if self.folder_id is None or not self._folder_exists(self.folder_id):
             return
-        path = str(path_of(self.library.conn, self.folder_id))
+        path = str(path_of(self.open_library.conn, self.folder_id))
         if path != self.folder_path:
             self.folder_path = path
-            self.address_bar.set_location(queries.folder_crumbs(self.library.conn, self.folder_id), path)
+            self.address_bar.set_location(queries.folder_crumbs(self.open_library.conn, self.folder_id), path)
 
     def scan_finished(self, _report: ScanReport) -> None:
         if not self._library_open():
@@ -1184,7 +1197,7 @@ class MainWindow(QMainWindow):
         ancestor, as Explorer does. Done before the tree drops the row, which would select a neighbour."""
         if self.folder_id is None or self._folder_exists(self.folder_id):
             return
-        found = find_folder(self.library.conn, self.folder_path) if self.folder_path else None
+        found = find_folder(self.open_library.conn, self.folder_path) if self.folder_path else None
         if found is None:
             self._close_folder()
         else:
@@ -1198,8 +1211,14 @@ class MainWindow(QMainWindow):
         """False without a library, and once it is closed: queued signals can arrive after the shutdown."""
         return self.library is not None and not self.library.closed
 
+    @property
+    def open_library(self) -> LibraryService:
+        """The library, for code that runs only while one is open (after `_library_open()`, or from its signals)."""
+        assert self.library is not None
+        return self.library
+
     def _folder_exists(self, entry_id: int) -> bool:
-        return self.library.conn.execute("SELECT 1 FROM entries WHERE id = ?", (entry_id,)).fetchone() is not None
+        return self.open_library.conn.execute("SELECT 1 FROM entries WHERE id = ?", (entry_id,)).fetchone() is not None
 
     def _close_folder(self) -> None:
         self.folder_id = None
@@ -1227,7 +1246,7 @@ class MainWindow(QMainWindow):
     def _reopen_last_folder(self) -> None:
         if not self.settings.last_folder:
             return
-        found = find_folder(self.library.conn, self.settings.last_folder)
+        found = find_folder(self.open_library.conn, self.settings.last_folder)
         if found and found[1]:
             self.open_folder(found[0])
 
@@ -1325,13 +1344,13 @@ class MainWindow(QMainWindow):
             self.set_playlist_visible(False)
             self.settings.playlist_visible = True
         self.settings.playlist_header = self.playlist_panel.save_layout()
-        self.settings.window_geometry = base64.b64encode(bytes(self.saveGeometry())).decode("ascii")
-        self.settings.splitter_state = base64.b64encode(bytes(self.splitter.saveState())).decode("ascii")
+        self.settings.window_geometry = base64.b64encode(self.saveGeometry().data()).decode("ascii")
+        self.settings.splitter_state = base64.b64encode(self.splitter.saveState().data()).decode("ascii")
         self.settings.file_list_header = self.file_view.save_layout()
         self.settings.expanded_folders = self.sidebar.tree.expanded_paths()
         self.settings.last_folder = ""
         if self._library_open() and self.folder_id is not None and self._folder_exists(self.folder_id):
-            self.settings.last_folder = str(path_of(self.library.conn, self.folder_id))
+            self.settings.last_folder = str(path_of(self.open_library.conn, self.folder_id))
         self.settings.save()
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -1354,7 +1373,7 @@ class MainWindow(QMainWindow):
         if self.search_service is not None:
             self.search_service.close()
         self.save_state()
-        QApplication.instance().removeEventFilter(self)
+        app().removeEventFilter(self)
         self._shell.shutdown(wait=False)
         super().closeEvent(event)
 
@@ -1376,7 +1395,7 @@ class MainWindow(QMainWindow):
         open_action = menu.addAction("Open", lambda: self.open_files(ids))
         open_action.setEnabled(len(ids) == 1)
         play = menu.addAction("Play selection", lambda: self.play_selection(ids))
-        play.setEnabled(bool(queries.playlist_for_ids(self.library.conn, ids)))
+        play.setEnabled(bool(queries.playlist_for_ids(self.open_library.conn, ids)))
         menu.addSeparator()
         menu.addAction("Open in File Explorer", lambda: self.reveal(ids[0]))
         menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: self.copy_paths(ids))
@@ -1403,13 +1422,13 @@ class MainWindow(QMainWindow):
         menu.addAction("Open in File Explorer", lambda: self.reveal(entry_id))
         menu.addAction("Copy path", lambda: self.copy_paths([entry_id]))
         menu.addSeparator()
-        if rename is not None and queries.parent_folder(self.library.conn, entry_id) is not None:
+        if rename is not None and queries.parent_folder(self.open_library.conn, entry_id) is not None:
             menu.addAction("Rename\tF2", rename)  # not a library root
-        menu.addAction("Rescan", lambda: self.library.indexer.request_folder(entry_id))
+        menu.addAction("Rescan", lambda: self.open_library.indexer.request_folder(entry_id))
         menu.addSeparator()
         menu.addAction("Tools…", lambda: self.open_tools([entry_id]))
         menu.addAction("Remove ReplayGain tags…", lambda: self.remove_replaygain([entry_id]))
-        if delete is not None and queries.parent_folder(self.library.conn, entry_id) is not None:
+        if delete is not None and queries.parent_folder(self.open_library.conn, entry_id) is not None:
             menu.addSeparator()
             menu.addAction("Delete\tDel", delete)  # never a library root (Remove from library is below)
 
@@ -1426,7 +1445,7 @@ class MainWindow(QMainWindow):
         Windows can't recycle (checked off the UI thread, before asking)."""
         if not self._library_open() or not ids:
             return
-        conn = self.library.conn
+        conn = self.open_library.conn
         items: list[DeleteItem] = []
         for entry_id in dict.fromkeys(ids):
             row = conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()
@@ -1443,7 +1462,7 @@ class MainWindow(QMainWindow):
         if not items:
             return
         try:
-            lock = self.library.locks.acquire([item.path for item in items], DELETE_OWNER)
+            lock = self.open_library.locks.acquire([item.path for item in items], DELETE_OWNER)
         except LockedError as e:
             self.toast.show_message(f"{Path(e.path).name} is in use by {e.owner}. Try again when it has finished.")
             return
@@ -1483,7 +1502,7 @@ class MainWindow(QMainWindow):
         if not self._library_open():
             return
         if reasons:
-            self.library.locks.release(request.lock)
+            self.open_library.locks.release(request.lock)
             path, reason = reasons[0]
             is_dir = any(str(item.path) == path and item.is_dir for item in request.items)
             self.toast.show_message(
@@ -1493,7 +1512,7 @@ class MainWindow(QMainWindow):
             return
         unsaved = self._unsaved_edits_in(request.items)
         if not self.ask_delete(request.items, unsaved):
-            self.library.locks.release(request.lock)
+            self.open_library.locks.release(request.lock)
             return
         if unsaved:
             self.side_panel.metadata.discard_edits()  # the question said they would be lost
@@ -1525,7 +1544,7 @@ class MainWindow(QMainWindow):
         if len(items) == 1 and not items[0].is_dir:
             text = f"Send '{items[0].path.name}' to the Recycle Bin?"
         elif len(items) == 1:
-            count = queries.file_count(self.library.conn, items[0].entry_id)
+            count = queries.file_count(self.open_library.conn, items[0].entry_id)
             text = (f"Send the folder '{items[0].path.name}' and everything in it ({count} file"
                     f"{'' if count == 1 else 's'}) to the Recycle Bin?")
         else:
@@ -1550,9 +1569,9 @@ class MainWindow(QMainWindow):
     def _delete_done(self, request: DeleteRequest, sent: list[DeleteItem], failed: list[tuple[str, str]]) -> None:
         if not self._library_open():
             return
-        self.library.locks.release(request.lock)
+        self.open_library.locks.release(request.lock)
         for parent in dict.fromkeys(item.path.parent for item in sent):
-            self.library.indexer.request_path(str(parent))  # at once; the watcher would see it too, but later
+            self.open_library.indexer.request_path(str(parent))  # at once; the watcher would see it too, but later
         if sent:
             what = f"'{sent[0].path.name}'" if len(sent) == 1 else f"{len(sent)} items"
             self.statusBar().showMessage(f"Sent {what} to the Recycle Bin.", STATUS_MS)
@@ -1573,7 +1592,7 @@ class MainWindow(QMainWindow):
         REPLAYGAIN_* values and the comment lines the ReplayGain step writes. Asks first; runs on the TagWriter."""
         if not self._library_open():
             return
-        conn = self.library.conn
+        conn = self.open_library.conn
         track_ids = queries.track_ids_for(conn, ids)
         rows = queries.track_rows(conn, track_ids)
         paths = [str(rows[i].path) for i in track_ids if i in rows]
@@ -1637,8 +1656,8 @@ class MainWindow(QMainWindow):
         """A rename asked by path (the hint after a save)."""
         if not self._library_open():
             return
-        found = find_folder(self.library.conn, os.path.dirname(path))
-        entry_id = queries.find_child(self.library.conn, found[0], os.path.basename(path)) \
+        found = find_folder(self.open_library.conn, os.path.dirname(path))
+        entry_id = queries.find_child(self.open_library.conn, found[0], os.path.basename(path)) \
             if found and found[1] else None
         if entry_id is not None:
             self.rename_entry(entry_id, new_name)
@@ -1647,7 +1666,7 @@ class MainWindow(QMainWindow):
         """Rename a file or folder on disk (off the UI thread), then update the index in place."""
         if not self._library_open() or not self._folder_exists(entry_id):
             return
-        conn = self.library.conn
+        conn = self.open_library.conn
         if queries.parent_folder(conn, entry_id) is None:
             self.toast.show_message("A library folder can't be renamed here. Rename it in File Explorer, then "
                                     "add it again.")
@@ -1662,7 +1681,7 @@ class MainWindow(QMainWindow):
         edited = self.side_panel.metadata.path == path or path in self.side_panel.metadata.paths
         if (edited or is_dir) and not self.side_panel.can_leave():
             return
-        locks = self.library.locks
+        locks = self.open_library.locks
 
         def run() -> None:
             try:
@@ -1678,7 +1697,7 @@ class MainWindow(QMainWindow):
         if not result.steps:
             return
         if self._library_open():
-            self.library.indexer.apply_renames(result.steps)
+            self.open_library.indexer.apply_renames(result.steps)
         old, new = result.steps[0]
         if was_undo:
             self.statusBar().showMessage(f"Renamed {old.name} back to {new.name}.", STATUS_MS)
@@ -1689,7 +1708,7 @@ class MainWindow(QMainWindow):
         text += "."
         if result.warnings:
             text += " " + " ".join(result.warnings)
-        locks = self.library.locks if self._library_open() else None
+        locks = self.open_library.locks if self._library_open() else None
 
         def undo() -> None:
             def run() -> None:
@@ -1706,7 +1725,7 @@ class MainWindow(QMainWindow):
     # -- actions handed to Windows --
 
     def _paths(self, ids: list[int]) -> list[str]:
-        return [str(path_of(self.library.conn, entry_id)) for entry_id in ids if self._folder_exists(entry_id)]
+        return [str(path_of(self.open_library.conn, entry_id)) for entry_id in ids if self._folder_exists(entry_id)]
 
     def open_files(self, ids: list[int]) -> None:
         """Open with the default app, as a double-click in Explorer does."""
@@ -1724,8 +1743,9 @@ class MainWindow(QMainWindow):
     def reveal(self, entry_id: int) -> None:
         if not self._library_open() or not self._folder_exists(entry_id):
             return
-        path = str(path_of(self.library.conn, entry_id))
-        is_dir = bool(self.library.conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()[0])
+        conn = self.open_library.conn
+        path = str(path_of(conn, entry_id))
+        is_dir = bool(conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()[0])
         self._in_shell(lambda: self.show_in_explorer(path, is_dir), f"File Explorer couldn't show {path}.", "", True)
 
     def copy_paths(self, ids: list[int]) -> None:
@@ -1738,13 +1758,13 @@ class MainWindow(QMainWindow):
     def play_folder(self, entry_id: int, recursive: bool) -> None:
         if not self._library_open() or not self._folder_exists(entry_id):
             return
-        entries = queries.playlist_for_folder(self.library.conn, entry_id, recursive)
-        self._play(entries, str(path_of(self.library.conn, entry_id)), True)
+        entries = queries.playlist_for_folder(self.open_library.conn, entry_id, recursive)
+        self._play(entries, str(path_of(self.open_library.conn, entry_id)), True)
 
     def play_selection(self, ids: list[int]) -> None:
         if not self._library_open():
             return
-        entries = queries.playlist_for_ids(self.library.conn, ids)
+        entries = queries.playlist_for_ids(self.open_library.conn, ids)
         self._play(entries, str(entries[0].path) if entries else "", False)
 
     def _play(self, entries: list[playlists.PlaylistEntry], fallback: str, fallback_is_dir: bool) -> None:
@@ -1799,13 +1819,13 @@ class MainWindow(QMainWindow):
         if not self._library_open():
             return
         self._keep_open_folder()  # its root may have been removed, or merged into a new one
-        self.sidebar.set_roots(self.library.roots())
+        self.sidebar.set_roots(self.open_library.roots())
 
     def rescan_library(self) -> None:
         """Every library folder, incrementally: only new or changed files are read again (SPEC §4)."""
         if not self._library_open():
             return
-        count = self.library.rescan_all()
+        count = self.open_library.rescan_all()
         self.statusBar().showMessage(
             f"Rescanning {count} library folder{'s' if count != 1 else ''}…" if count
             else "The library is empty. Add a folder first (File > Add folder…).", STATUS_MS)
@@ -1854,14 +1874,14 @@ class MainWindow(QMainWindow):
         if messages:
             self.statusBar().showMessage(" ".join(messages), STATUS_MS)
         last = next((r for r in reversed(results) if r.root_id is not None), None)
-        if last is not None:
+        if last is not None and last.root_id is not None:
             self.sidebar.select_root(last.root_id)
         if files:
             folders = list(dict.fromkeys(os.path.dirname(path) for path in files))
             what = "its folder" if len(folders) == 1 else "their folders"
             self.toast.show_message(
                 "Only folders can be added to the library, not files.", f"Add {what}",
-                lambda: self.library.add_folders(folders))
+                lambda: self.open_library.add_folders(folders))
 
     # -- drag and drop (folders in; dragging out is disabled elsewhere) --
 
@@ -1889,4 +1909,4 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         event.acceptProposedAction()
-        self.library.add_folders(paths)  # files are sorted out off the UI thread, and come back as a toast
+        self.open_library.add_folders(paths)  # files are sorted out off the UI thread, and come back as a toast

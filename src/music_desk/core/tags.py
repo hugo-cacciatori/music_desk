@@ -14,7 +14,7 @@ from dataclasses import fields as dataclass_fields
 from pathlib import Path
 
 from mutagen.apev2 import BINARY, APEValue
-from mutagen.asf import ASFByteArrayAttribute
+from mutagen.asf import ASFByteArrayAttribute  # pyright: ignore[reportPrivateImportUsage]
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import APIC, COMM, TALB, TCOM, TCON, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX, USLT
 from mutagen.mp4 import AtomDataType, MP4Cover, MP4FreeForm
@@ -175,7 +175,7 @@ class _VorbisAdapter(_Adapter):
         tags = audio.tags
         if tags is None:
             return {}
-        values = {name: self.first(tags, key) for name, key in self.KEYS.items()}
+        values: dict[str, str | int | None] = {name: self.first(tags, key) for name, key in self.KEYS.items()}
         if values["lyrics"] is None:
             values["lyrics"] = self.first(tags, "UNSYNCEDLYRICS")
         for name, (number_key, total_key, legacy_total_key) in self.PAIRS.items():
@@ -317,7 +317,7 @@ class _ID3Adapter(_Adapter):
             audio.tags.add(frame_class(encoding=3, text=[text]))
 
     @staticmethod
-    def find_txxx(audio, name) -> list[TXXX]:
+    def find_txxx(audio, name) -> list:  # of TXXX frames (their `text` is set at run time)
         if audio.tags is None:
             return []
         return [frame for frame in audio.tags.getall("TXXX") if frame.desc.lower() == name.lower()]
@@ -381,7 +381,8 @@ class _MP4Adapter(_Adapter):
         tags = audio.tags
         if tags is None:
             return {}
-        values = {name: (str(tags[key][0]) if tags.get(key) else None) for name, key in self.KEYS.items()}
+        values: dict[str, str | int | None] = {name: (str(tags[key][0]) if tags.get(key) else None)
+                                               for name, key in self.KEYS.items()}
         for name, key in self.PAIRS.items():
             pair = tags.get(key)
             values[name], values[f"{name}_total"] = (pair[0][0], pair[0][1]) if pair else (None, None)
@@ -451,7 +452,8 @@ class _APEv2Adapter(_Adapter):
         tags = audio.tags  # APEv2 keys match ignoring case
         if tags is None:
             return {}
-        values = {name: (str(tags[key]) if key in tags else None) for name, key in self.KEYS.items()}
+        values: dict[str, str | int | None] = {name: (str(tags[key]) if key in tags else None)
+                                               for name, key in self.KEYS.items()}
         for name, key in self.PAIRS.items():
             values[name], values[f"{name}_total"] = parse_pair(str(tags[key]) if key in tags else None)
         return values
@@ -516,7 +518,8 @@ class _ASFAdapter(_Adapter):
 
     def read(self, audio) -> dict:
         tags = audio.tags
-        values = {name: (str(tags[key][0]) if tags.get(key) else None) for name, key in self.KEYS.items()}
+        values: dict[str, str | int | None] = {name: (str(tags[key][0]) if tags.get(key) else None)
+                                               for name, key in self.KEYS.items()}
         track = tags.get("WM/TrackNumber")
         values["track"], values["track_total"] = (parse_int(track[0].value) if track else None), None
         disc = tags.get("WM/PartOfSet")
@@ -582,7 +585,7 @@ class _NoTagsAdapter(_Adapter):
     def read(self, audio) -> dict:
         return {}
 
-    def refuse(self, *_args) -> None:
+    def refuse(self, *_args, **_kwargs) -> None:
         raise TagError("this format has no tags")
 
     write_text = write_pair = set_replaygain = set_comment = set_cover = refuse

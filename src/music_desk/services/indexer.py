@@ -12,6 +12,7 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
@@ -22,6 +23,10 @@ from music_desk.core.index.store import DbWriter, connect_read
 log = logging.getLogger(__name__)
 
 PROGRESS_INTERVAL = 0.1  # seconds
+
+# (kind, what): ("root", root id), ("folder", entry id), ("path", (path, recursive)), ("file", path),
+# ("renamed", steps)
+Job = tuple[str, Any]
 
 
 class Indexer(QObject):
@@ -37,9 +42,9 @@ class Indexer(QObject):
         self.scanner = Scanner(writer, workers=workers, on_progress=self._on_progress,
                                on_folder=self.folderUpdated.emit)
         # ("root", id), ("folder", id), ("path", (path, recursive)), ("file", path), ("renamed", steps)
-        self._jobs: deque[tuple[str, object]] = deque()
+        self._jobs: deque[Job] = deque()
         self._condition = threading.Condition()
-        self._current: tuple[str, object] | None = None
+        self._current: Job | None = None
         self._cancel = CancelToken()
         self._stopping = False
         self._last_progress = 0.0
@@ -147,11 +152,11 @@ class Indexer(QObject):
 
     # -- the thread --
 
-    def _queue(self, job: tuple[str, object], front: bool = False) -> None:
+    def _queue(self, job: Job, front: bool = False) -> None:
         with self._condition:
             self._queue_locked(job, front)
 
-    def _queue_locked(self, job: tuple[str, int], front: bool = False) -> None:
+    def _queue_locked(self, job: Job, front: bool = False) -> None:
         if self._stopping or (job == self._current and job[0] == "root"):
             return
         if job in self._jobs:

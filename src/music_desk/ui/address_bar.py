@@ -2,9 +2,10 @@
 of their subfolders. Clicking the empty part of the bar, or Ctrl+L, turns it into an editable path."""
 
 from collections.abc import Callable
+from typing import cast
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtGui import QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -118,6 +119,7 @@ class AddressBar(QStackedWidget):
         if entry_id is not None:
             button.clicked.connect(lambda: self.folderRequested.emit(entry_id))
         else:
+            assert menu_for is not None  # a separator opens its folder's subfolders
             button.setToolTip("Subfolders")
             button.clicked.connect(lambda: self.subfolder_menu(menu_for).exec(
                 button.mapToGlobal(button.rect().bottomLeft())))
@@ -152,7 +154,7 @@ class AddressBar(QStackedWidget):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self.line:
-            if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+            if event.type() == QEvent.Type.KeyPress and cast(QKeyEvent, event).key() == Qt.Key.Key_Escape:
                 self.show_crumbs()
                 return True
             if event.type() == QEvent.Type.FocusOut and self.currentWidget() is self.line:

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from music_desk import __version__
 from music_desk.licenses import COMPONENTS
+from music_desk.ui.qt_util import cell_text
 
 HEADERS = ("Component", "Version", "Licence")
 
@@ -68,5 +69,5 @@ class AboutDialog(QDialog):
 
     def rows(self) -> list[tuple[str, ...]]:
         """The components table as shown (tests)."""
-        return [tuple(self.table.item(r, c).text() for c in range(len(HEADERS)))
+        return [tuple(cell_text(self.table, r, c) for c in range(len(HEADERS)))
                 for r in range(self.table.rowCount())]

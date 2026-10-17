@@ -12,6 +12,7 @@ import os
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ class Builder:
         self.items = rest[:target] + chosen + rest[target:]
         return list(range(target, target + len(chosen)))
 
-    def sort(self, key: Callable[[Item], object], reverse: bool = False) -> None:
+    def sort(self, key: Callable[[Item], Any], reverse: bool = False) -> None:
         """A header click: the playlist's order itself changes (it is what gets exported). Stable."""
         self.items.sort(key=key, reverse=reverse)
 

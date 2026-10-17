@@ -259,7 +259,7 @@ def lookup(track: Track, cache: LyricsCache, client: LrclibClient | None, *, off
         return {"status": MISSING_TAGS}
     key = cache_key(track.artist, track.title)
     cached = cache.get(key)
-    if is_fresh(cached, today, client.options if client else None):
+    if cached is not None and is_fresh(cached, today, client.options if client else None):
         return cached
     if offline or client is None:
         return {"status": NOT_LOOKED_UP}

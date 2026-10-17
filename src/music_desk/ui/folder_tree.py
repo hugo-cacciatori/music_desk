@@ -7,6 +7,7 @@ expanded folders and the scroll position stay put while the indexer works.
 import os
 import sqlite3
 from collections.abc import Callable
+from typing import cast
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex, Qt, Signal
 from PySide6.QtGui import QPalette
@@ -42,6 +43,7 @@ class _Node:
         while node.parent is not None:
             parts.append(node.name)
             node = node.parent
+        assert node.root is not None  # set on top-level nodes
         return os.path.join(node.root.path, *reversed(parts))
 
     @property
@@ -306,7 +308,7 @@ class FolderTreeView(EntryDragView):
         self.selectionModel().currentChanged.connect(self._current_changed)
 
     def start_rename(self, entry_id: int) -> None:
-        index = self.model().index_for(entry_id)
+        index = cast(FolderTreeModel, self.model()).index_for(entry_id)
         if index.isValid():
             self.setCurrentIndex(index)
             self.edit(index)
@@ -330,7 +332,7 @@ class FolderTreeView(EntryDragView):
 
     def select_entry(self, entry_ids: list[int]) -> None:
         """Reveal and select a folder, given its ids from the top entry down."""
-        model: FolderTreeModel = self.model()
+        model = cast(FolderTreeModel, self.model())
         index = model.reveal(entry_ids)
         if not index.isValid():
             return
@@ -355,7 +357,7 @@ class FolderTreeView(EntryDragView):
         model = self.model()
         pending = [QPersistentModelIndex(model.index(row, 0, parent)) for row in range(first, last + 1)]
         for persistent in pending:
-            index = QModelIndex(persistent)
+            index = model.index(persistent.row(), persistent.column(), persistent.parent())  # where it is now
             if index.isValid() and os.path.normcase(index.data(PATH_ROLE)) in self._expanded:
                 self.expand(index)
 

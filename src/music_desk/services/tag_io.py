@@ -8,7 +8,7 @@ on). Covers are decoded into QImage here too, so the UI thread never decodes a l
 import logging
 from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QObject, Qt, Signal
@@ -92,7 +92,7 @@ class TagIO(QObject):
         self._submit(lambda: self.loaded.emit(self._read(token, Path(path), name_masks, replacement)))
         return token
 
-    def load_many(self, paths: list[str | Path]) -> int:
+    def load_many(self, paths: Sequence[str | Path]) -> int:
         token = self.next_token()
 
         def run() -> None:
@@ -186,22 +186,22 @@ def read_preview(token: int, path: Path, max_width: int = PREVIEW_WIDTH) -> Prev
         stat = path.stat()
     except OSError as e:
         return PreviewRead(token, str(path), kind, error=f"Can't read {path.name}: {e.strerror or e}")
-    base = dict(token=token, path=str(path), kind=kind, size=stat.st_size, mtime=stat.st_mtime)
+    base = PreviewRead(token, str(path), kind, size=stat.st_size, mtime=stat.st_mtime)
     if kind == "text":
         try:
-            return PreviewRead(**base, text=preview.read_text(path))
+            return replace(base, text=preview.read_text(path))
         except OSError as e:
-            return PreviewRead(**base, error=f"Can't read {path.name}: {e.strerror or e}")
+            return replace(base, error=f"Can't read {path.name}: {e.strerror or e}")
     if stat.st_size > preview.IMAGE_LIMIT:
-        return PreviewRead(**base, error=f"Too large to preview ({stat.st_size / 1024 / 1024:.0f} MB). Open it "
-                                         "instead.")
+        return replace(base, error=f"Too large to preview ({stat.st_size / 1024 / 1024:.0f} MB). Open it "
+                                   "instead.")
     try:
         with open_shared(path) as f:
             data = f.read()
     except OSError as e:
-        return PreviewRead(**base, error=f"Can't read {path.name}: {e.strerror or e}")
+        return replace(base, error=f"Can't read {path.name}: {e.strerror or e}")
     image, pixels, error = decode_preview_image(data, max_width)
-    return PreviewRead(**base, image=image, pixels=pixels, error=error)
+    return replace(base, image=image, pixels=pixels, error=error)
 
 
 def decode_preview_image(data: bytes, max_width: int) -> tuple[QImage | None, tuple[int, int] | None, str | None]:

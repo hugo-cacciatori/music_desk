@@ -51,6 +51,12 @@ class CueTrack:
     index00: int | None = None  # in CD frames
     index01: int | None = None
 
+    @property
+    def start_frames(self) -> int:
+        """INDEX 01, which every parsed track has (the parser refuses a sheet without)."""
+        assert self.index01 is not None
+        return self.index01
+
 
 @dataclass
 class CueSheet:
@@ -280,6 +286,12 @@ class PlannedTrack:
     def length(self) -> int:
         return self.end - self.start
 
+    @property
+    def out_path(self) -> Path:
+        """Where it is written: every ticked track of a plan that can be split has a path."""
+        assert self.path is not None
+        return self.path
+
 
 @dataclass
 class AlbumPlan:
@@ -299,6 +311,12 @@ class AlbumPlan:
     def folder(self) -> Path:
         """Where the tracks are written: the chosen destination, else the .cue's (and the image's) folder."""
         return self.destination or self.cue.parent
+
+    @property
+    def image(self) -> tuple[Path, SourceInfo]:
+        """The source and what was read of it, which a plan that can be split (no refusal) has."""
+        assert self.source is not None and self.info is not None
+        return self.source, self.info
 
     def is_ticked(self, number: int) -> bool:
         return self.ticked is None or number in self.ticked
@@ -402,7 +420,7 @@ def plan_sheet(sheet: CueSheet, cue: str | Path, name_masks: Sequence[str], repl
         return plan
     plan.info = info
 
-    starts = [samples_from_frames(t.index01, info.rate) for t in sheet.tracks]
+    starts = [samples_from_frames(t.start_frames, info.rate) for t in sheet.tracks]
     for i in range(1, len(starts)):
         if starts[i] <= starts[i - 1]:
             plan.refusal = (f"Track {sheet.tracks[i].number} doesn't start after track {sheet.tracks[i - 1].number}: "

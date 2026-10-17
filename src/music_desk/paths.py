@@ -17,7 +17,7 @@ def is_frozen() -> bool:
 def resources_root() -> Path:
     """The bundled `resources/` folder: inside the PyInstaller bundle when frozen, else the project's."""
     if is_frozen():
-        return Path(sys._MEIPASS) / "resources"
+        return Path(sys._MEIPASS) / "resources"  # pyright: ignore[reportAttributeAccessIssue] - set by PyInstaller
     return Path(__file__).resolve().parents[2] / "resources"
 
 

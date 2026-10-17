@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core.replaygain import format_gain, plural
 from music_desk.services.replaygain_job import Finished
+from music_desk.ui.qt_util import cell_text
 
 SUMMARY_COLUMNS = ("Album", "Result", "Album gain", "Leveled to", "Files changed")
 
@@ -226,6 +227,6 @@ class ReplayGainView(QWidget):
             self.openLogRequested.emit(str(self.finished.log_path))
 
     def summary_rows(self) -> list[tuple[str, ...]]:
-        return [tuple(self.summary_table.item(r, c).text() for c in range(len(SUMMARY_COLUMNS)))
+        return [tuple(cell_text(self.summary_table, r, c) for c in range(len(SUMMARY_COLUMNS)))
                 for r in range(self.summary_table.rowCount())]
 

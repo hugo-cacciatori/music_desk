@@ -3,8 +3,10 @@ the toolbar's search field; this page shows the count and the results (folders a
 match highlighted in the Title, Artist and Lyrics cells. The side panel is the detail pane.
 """
 
+from typing import cast
+
 from PySide6.QtCore import QModelIndex, QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QKeySequence, QPainter, QPalette, QShortcut
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QKeySequence, QPainter, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -22,6 +24,7 @@ from music_desk.core.fsops import natural_key
 from music_desk.core.index.search import LIMIT, SearchRow
 from music_desk.ui.entry_drag import EntryDragView
 from music_desk.ui.file_view import COLUMNS, ENTRY_ID_ROLE, Column, FileListModel
+from music_desk.ui.qt_util import shortcut
 
 HIGHLIGHT_ROLE = Qt.ItemDataRole.UserRole + 10  # ((start, end), ...) in the cell's text
 
@@ -292,8 +295,8 @@ class SearchView(QWidget):
         for key, width in (("name", 200), ("title", 160), ("snippet", 260), ("folder", 240)):
             header.resizeSection(SEARCH_COLUMN_INDEX[key], width)
         self.view.sortByColumn(SEARCH_COLUMN_INDEX["folder"], Qt.SortOrder.AscendingOrder)
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self.view, activated=self.closeRequested.emit,
-                  context=Qt.ShortcutContext.WidgetShortcut)
+        shortcut(QKeySequence(Qt.Key.Key_Escape), self.view, self.closeRequested.emit,
+                 Qt.ShortcutContext.WidgetShortcut)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -346,7 +349,7 @@ class SearchView(QWidget):
 
     def row(self, entry_id: int) -> SearchRow | None:
         row = self.model.row_for(entry_id)
-        return self.model.rows[row] if row is not None else None
+        return cast(SearchRow, self.model.rows[row]) if row is not None else None
 
     # -- selection --
 

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from music_desk.services.jobs import DONE, FAILED, RUNNING, STOPPED, Job, JobList
+from music_desk.ui.qt_util import top_level_text
 
 COLUMNS = ("Job", "Folder", "Status", "Started")
 STATE_TEXT = {RUNNING: "Running", DONE: "Done", STOPPED: "Stopped", FAILED: "Failed"}
@@ -81,7 +82,7 @@ class JobsPanel(QWidget):
 
     def rows(self) -> list[tuple[str, ...]]:
         """The rows as shown, top to bottom (tests)."""
-        return [tuple(self.tree.topLevelItem(i).text(c) for c in range(len(COLUMNS)))
+        return [tuple(top_level_text(self.tree, i, c) for c in range(len(COLUMNS)))
                 for i in range(self.tree.topLevelItemCount())]
 
     def _changed(self, job_id: int) -> None:

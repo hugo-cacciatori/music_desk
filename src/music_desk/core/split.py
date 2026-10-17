@@ -24,7 +24,7 @@ PARTIAL = ".partial"
 
 
 def partial_path(track: PlannedTrack) -> Path:
-    return track.path.with_name(track.name + PARTIAL)
+    return track.out_path.with_name(track.name + PARTIAL)
 
 
 @dataclass
@@ -91,7 +91,7 @@ def cut_album(plan: AlbumPlan, runner, cancel: CancelToken | None = None,
 def prove(plan: AlbumPlan, partials: list[Path], runner, cancel: CancelToken | None = None) -> CutResult:
     """Decode the written tracks: each must have its planned length and its range's MD5; with every track
     written, together they must also have the source's MD5."""
-    info = plan.info
+    source, info = plan.image
     frame_bytes = info.channels * ((info.bits + 7) // 8)
     tracks_digest, source_digest = hashlib.md5(), hashlib.md5()
     lengths, track_md5s, problems = [], [], []
@@ -99,7 +99,7 @@ def prove(plan: AlbumPlan, partials: list[Path], runner, cancel: CancelToken | N
         own, part = hashlib.md5(), hashlib.md5()
         size = _hash(runner.decode(path, cancel), own, tracks_digest)
         end = None if track.end == info.samples else track.end
-        _hash(runner.decode_range(plan.source, track.start, end, cancel), part, source_digest)
+        _hash(runner.decode_range(source, track.start, end, cancel), part, source_digest)
         lengths.append(size // frame_bytes)
         track_md5s.append(own.hexdigest())
         if size % frame_bytes or size // frame_bytes != track.length:
@@ -136,18 +136,18 @@ def finish_album(plan: AlbumPlan, cut: CutResult) -> Finished:
     """Give the proved tracks their names (checked free again) and write their tags and cover. A split is just a
     split (Hugo, 2026-10-17): nothing else is changed, and nothing is deleted. Nothing is ever overwritten: if a
     name was taken since the plan, no track is renamed."""
-    taken = [t.name for t in plan.written if t.path.exists()]
+    taken = [t.name for t in plan.written if t.out_path.exists()]
     if taken:
         _delete(cut.partials)
         return Finished(error="Nothing is ever overwritten, and these names were taken meanwhile: "
                               + ", ".join(taken) + ".")
     finished = Finished()
     for track, partial in zip(plan.written, cut.partials, strict=True):
-        partial.rename(track.path)
-        finished.tracks.append(track.path)
+        partial.rename(track.out_path)
+        finished.tracks.append(track.out_path)
     for track in plan.written:
         try:
-            write_tags(track, plan.info.cover)
+            write_tags(track, plan.image[1].cover)
         except Exception as e:  # noqa: BLE001 - the audio is proved and in place; say which tags are missing
             finished.warnings.append(f"{track.name}: the tags couldn't be written ({type(e).__name__}: {e})")
     return finished
@@ -159,7 +159,7 @@ def write_tags(track: PlannedTrack, cover: bytes | None) -> None:
 
     from music_desk.core.tags import TaggedFile
 
-    tagged = TaggedFile(track.path)
+    tagged = TaggedFile(track.out_path)
     numbers = ("track", "track_total", "disc", "disc_total")
     tagged.set_fields({name: track.fields[name] if name in numbers else str(track.fields[name])
                        for name in track.fields})
@@ -167,7 +167,7 @@ def write_tags(track: PlannedTrack, cover: bytes | None) -> None:
         tagged.set_cover(cover)
     tagged.save()
     if track.isrc:
-        audio = FLAC(str(track.path))
+        audio = FLAC(str(track.out_path))
         audio["ISRC"] = track.isrc
         audio.save()
 

@@ -52,6 +52,7 @@ class DbWriter:
                 return
             self._accepting = False
             self._queue.put(_STOP)
+        assert self._thread is not None  # accepting means started
         self._thread.join(timeout)
 
     def __enter__(self) -> "DbWriter":

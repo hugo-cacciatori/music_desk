@@ -90,6 +90,7 @@ def _add(conn: sqlite3.Connection, path: str, added_at: str) -> AddResult:
     root_id = conn.execute("INSERT INTO roots (path, added_at, online) VALUES (?, ?, 1)", (path, added_at)).lastrowid
     top = conn.execute("INSERT INTO entries (root_id, parent_id, name, is_dir) VALUES (?, NULL, ?, 1)",
                        (root_id, path)).lastrowid
+    assert root_id is not None and top is not None  # an INSERT always sets lastrowid
     children = [root for root in roots if is_inside(root.path, path)]
     for child in children:
         _merge(conn, root_id, top, path, child)

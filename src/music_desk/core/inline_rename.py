@@ -104,7 +104,7 @@ def rename_entry(path: str | Path, new_name: str, locks: PathLocks | None = None
                     result.warnings.append(f"{sidecar.name} couldn't be renamed: {e.strerror or e}")
         return result
     finally:
-        if token is not None:
+        if locks is not None and token is not None:
             locks.release(token)
 
 

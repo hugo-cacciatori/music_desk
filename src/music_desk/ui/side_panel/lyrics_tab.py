@@ -67,7 +67,7 @@ class LyricsTab(QWidget):
         # Why the file can't be written right now (unsaved Metadata edits), or None. Set by the side panel.
         self.can_write: Callable[[str], str | None] = lambda _path: None
         self._save_token: int | None = None
-        self._save_note: tuple[int, str] | None = None  # (entry id, what the last save did)
+        self._save_note: tuple[int | None, str] | None = None  # (entry id, what the last save did)
         self.today: Callable[[], date] = date.today  # replaced in tests
         self.entry_id: int | None = None
         self.info: LyricsInfo | None = None
@@ -179,7 +179,7 @@ class LyricsTab(QWidget):
             self._render(INSTRUMENTAL_STATE, "LRCLIB lists this track as instrumental.")
         elif error and self._service_state not in (OFFLINE, UNREACHABLE):
             self._render(ERROR, f"The lookup failed ({error}). It is tried again later.")
-        elif status == NOT_FOUND and is_fresh(entry, self.today()):
+        elif status == NOT_FOUND and entry is not None and is_fresh(entry, self.today()):
             self._render(NOT_FOUND_STATE, f"LRCLIB has no lyrics for this track (checked {entry['checked']}). "
                                           "It is looked up again after 30 days.")
         else:
@@ -219,10 +219,10 @@ class LyricsTab(QWidget):
         self.retry_button.setVisible(state in (NOT_FOUND_STATE, ERROR, UNREACHABLE_STATE))
         self.note.setVisible(False)
         if found:
-            entry = self.info.entry
+            _info, entry = self._found()
             self.source.setText(f"LRCLIB #{entry.get('lrclib_id')} · checked {entry.get('checked')}")
         if state == FOUND_STATE:
-            entry = self.info.entry
+            _info, entry = self._found()
             synced = bool(entry.get("synced"))
             self.timestamps.setEnabled(synced)
             self.timestamps.setToolTip("" if synced else "LRCLIB has only plain lyrics for this track.")
@@ -233,14 +233,19 @@ class LyricsTab(QWidget):
             self._update_save_button()
 
     def _show_text(self) -> None:
-        if self.state != FOUND_STATE or self.info is None:
+        if self.state != FOUND_STATE or self.info is None or self.info.entry is None:
             return
         entry = self.info.entry
         text = entry.get("synced") if self.timestamps.isChecked() and entry.get("synced") else entry.get("plain")
         self.text.setPlainText(text or "")
 
+    def _found(self) -> tuple[LyricsInfo, dict]:
+        """The track and its LRCLIB entry, in the states that show one (found, instrumental)."""
+        assert self.info is not None and self.info.entry is not None
+        return self.info, self.info.entry
+
     def _show_tag_note(self, entry: dict) -> None:
-        embedded = self.info.track.embedded
+        embedded = self._found()[0].track.embedded
         if not embedded:
             return
         if _same_text(embedded, embed_text(entry)) or _same_text(embedded, entry.get("plain")):
@@ -252,11 +257,12 @@ class LyricsTab(QWidget):
 
     def _update_save_button(self) -> None:
         reason = None
+        info, entry = self._found()
         if self.writer is None:
             reason = "Tags can't be written here."
-        elif not self.info.can_tag:
+        elif not info.can_tag:
             reason = "This file's format has no tags, so lyrics can't be saved into it."
-        elif _same_text(self.info.track.embedded, embed_text(self.info.entry)):
+        elif _same_text(info.track.embedded, embed_text(entry)):
             reason = "The file's Lyrics tag already holds these lyrics."
         elif self._save_token is not None:
             reason = "Saving…"
@@ -296,9 +302,10 @@ class LyricsTab(QWidget):
         if reason:
             self._note_save(reason)
             return
-        if self.info.track.embedded and not self.confirm_replace_lyrics(self.info.name):
+        info, entry = self._found()
+        if info.track.embedded and not self.confirm_replace_lyrics(info.name):
             return
-        self._save_token = self.writer.embed_lyrics([(path, self.info.entry)], only_if_empty=False)
+        self._save_token = self.writer.embed_lyrics([(path, entry)], only_if_empty=False)
         self._note_save("Saving…")
 
     def _note_save(self, text: str) -> None:

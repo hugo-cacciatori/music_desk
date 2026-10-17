@@ -10,10 +10,11 @@ Ctrl+S saves and Esc reverts. Reads go through TagIO and writes through TagWrite
 """
 
 import html
+from collections.abc import Sequence
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QImage, QIntValidator, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QImage, QIntValidator, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
@@ -37,6 +38,7 @@ from music_desk.core.metadata import COVER, COVER_EXTENSIONS, LARGE_COVER, Snaps
 from music_desk.core.tags import Fields
 from music_desk.services.tag_io import ImageRead, Loaded, LoadedMany, TagIO
 from music_desk.services.tag_writer import BatchWritten, TagWriter
+from music_desk.ui.qt_util import shortcut
 
 TEXT_FIELDS = (("title", "Title"), ("artist", "Artist"), ("albumartist", "Album artist"), ("album", "Album"))
 LATER_TEXT_FIELDS = (("year", "Year"), ("genre", "Genre"), ("composer", "Composer"), ("comment", "Comment"))
@@ -142,10 +144,8 @@ class MetadataTab(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.pages)
 
-        QShortcut(QKeySequence.StandardKey.Save, self, activated=self.save,
-                  context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, activated=self.revert,
-                  context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        shortcut(QKeySequence.StandardKey.Save, self, self.save, Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        shortcut(QKeySequence(Qt.Key.Key_Escape), self, self.revert, Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.show_message("Select a file to see its tags.")
 
     # -- building --
@@ -322,7 +322,7 @@ class MetadataTab(QWidget):
         self._set_dirty(False)
         self._load_token = self.io.load(self.path)
 
-    def show_files(self, paths: list[str | Path], skipped: int = 0) -> None:
+    def show_files(self, paths: Sequence[str | Path], skipped: int = 0) -> None:
         """Several audio files; `skipped` other selected items (folders, non-audio files) are left out."""
         self.path, self.snapshot, self.multi = None, None, True
         self.paths = [Path(p) for p in paths]
@@ -338,6 +338,7 @@ class MetadataTab(QWidget):
             return  # the selection moved on
         self._load_token = None
         if result.snapshot is None:
+            assert self.path is not None  # a single file's load
             self.message.setText(f"The tags of {self.path.name} couldn't be read.\n{result.error}")
             return
         self._fill(result.snapshot, result.cover)
@@ -656,7 +657,7 @@ class MetadataTab(QWidget):
         s = self.snapshot
         show = (not self.multi and s is not None and s.lrc_text is not None and s.editable
                 and self.locked_by is None and not self.lyrics.toPlainText().strip())
-        if show:
+        if show and s is not None and s.lrc_name is not None:
             self.import_link.setText(f'<a href="import">Import from {html.escape(s.lrc_name)}</a>')
         self.import_link.setVisible(show)
 

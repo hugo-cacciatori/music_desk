@@ -189,7 +189,7 @@ class SplitRunner(QObject):
                 self.locks.release(lock)
                 self.running = False
             log.info("split of %s into %s: %s", plan.cue, plan.folder, "stopped" if result.cancelled else
-                     f"{len(result.finished.tracks)} tracks" if result.split else result.error or
+                     f"{len(result.finished.tracks)} tracks" if result.split and result.finished else result.error or
                      (result.cut.error if result.cut else "not started"))
             self.finished.emit(result)
 

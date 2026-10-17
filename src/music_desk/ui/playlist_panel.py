@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QAbstractTableModel, QByteArray, QMimeData, QModelIndex, QRect, Qt, Signal
-from PySide6.QtGui import QAction, QKeySequence, QPainter, QPalette, QShortcut
+from PySide6.QtGui import QAction, QKeySequence, QPainter, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -41,6 +41,7 @@ from music_desk.core.playlist_builder import Builder, Item
 from music_desk.core.playlists import PlaylistEntry
 from music_desk.ui.entry_drag import ENTRY_IDS_MIME, entry_ids
 from music_desk.ui.file_view import format_duration
+from music_desk.ui.qt_util import shortcut
 
 PLACEHOLDER = "Drag folders or songs here to build a playlist"
 PLAYLIST_ROWS_MIME = "application/x-musicdesk-playlist-rows"  # a drag of the playlist's own rows
@@ -291,7 +292,7 @@ class PlaylistModel(QAbstractTableModel):
         position = row if row >= 0 else parent.row() if parent.isValid() else len(self.builder.items)
         if data.hasFormat(PLAYLIST_ROWS_MIME):
             try:
-                rows = json.loads(bytes(data.data(PLAYLIST_ROWS_MIME)).decode("ascii"))
+                rows = json.loads(bytes(data.data(PLAYLIST_ROWS_MIME).data()).decode("ascii"))
             except ValueError:
                 return False
             moved = self.move_rows_to([r for r in rows if isinstance(r, int)], position)
@@ -361,7 +362,7 @@ class PlaylistPanel(QWidget):
         for key, action in ((Qt.Modifier.CTRL | Qt.Key.Key_Up, lambda: self.move_selected(-1)),
                             (Qt.Modifier.CTRL | Qt.Key.Key_Down, lambda: self.move_selected(1)),
                             (Qt.Key.Key_Delete, self.remove_selected)):
-            QShortcut(QKeySequence(key), self.view, activated=action, context=Qt.ShortcutContext.WidgetShortcut)
+            shortcut(QKeySequence(key), self.view, action, Qt.ShortcutContext.WidgetShortcut)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         header = self.view.header()
         header.setSectionsMovable(True)
@@ -481,7 +482,7 @@ class PlaylistPanel(QWidget):
             header.resizeSection(COLUMN_INDEX[key], width)
 
     def save_layout(self) -> str:
-        return base64.b64encode(bytes(self.view.header().saveState())).decode("ascii")
+        return base64.b64encode(self.view.header().saveState().data()).decode("ascii")
 
     def restore_layout(self, state: str) -> bool:
         if not state:

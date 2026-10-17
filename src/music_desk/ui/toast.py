@@ -25,7 +25,7 @@ class Toast(QFrame):
         layout.addWidget(self.label, 1)
         layout.addWidget(self.button)
         layout.addWidget(self.close_button)
-        self._action: Callable[[], None] | None = None
+        self._action: Callable[[], object] | None = None
         self.button.clicked.connect(self._run_action)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -33,7 +33,7 @@ class Toast(QFrame):
         parent.installEventFilter(self)
         self.hide()
 
-    def show_message(self, text: str, action_text: str | None = None, action: Callable[[], None] | None = None,
+    def show_message(self, text: str, action_text: str | None = None, action: Callable[[], object] | None = None,
                      timeout_ms: int = TOAST_MS) -> None:
         self.label.setText(text)
         self._action = action
@@ -52,6 +52,7 @@ class Toast(QFrame):
 
     def _place(self) -> None:
         parent = self.parentWidget()
+        assert parent is not None  # a toast always sits on its window
         width = min(560, parent.width() - 32)
         self.setFixedWidth(max(width, 200))
         self.adjustSize()

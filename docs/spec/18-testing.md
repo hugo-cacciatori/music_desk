@@ -64,3 +64,19 @@
     flag over and over for no real gain.
 - Its first run's findings are fixed in the same task. Third-party packages without stubs (mutagen, watchdog,
   send2trash) are allowed as `Any`.
+- **As built (M11 task 1, 0.3.3):** basedpyright 1.40.2 (pyright 1.1.414), `[tool.basedpyright]` in
+  pyproject.toml; `uv run basedpyright` runs it by hand, `tests/test_types.py` with the suite (about 5 s).
+  The first run found 285 errors, none a bug a user could hit. What they were, and how they were fixed:
+  - **Optional values that code reached only when set** (about half): the window's library, the split's sheet,
+    a rename's target, a plan's source. Each got a property that asserts it is set and says why
+    (`MainWindow.open_library`, `SplitController.cue_path`, `PlanItem.new_path`, `PlannedTrack.out_path`,
+    `AlbumPlan.image`, `CueTrack.start_frames`), or a local `assert` / narrowing where it is used once. An
+    assert only fires where the code would already have failed on None.
+  - **Gaps in the PySide6 stubs**: `QShortcut(..., activated=, context=)` (now `qt_util.shortcut`),
+    `QApplication.instance()` (`qt_util.app`), `QByteArray.data()` typed as a memoryview (it is bytes),
+    `QModelIndex(QPersistentModelIndex)`, events and models typed as their base class (`cast`). One
+    `pyright: ignore` each for `sys._MEIPASS` (set by PyInstaller) and mutagen's `ASFByteArrayAttribute`.
+  - **Types that were too narrow**: `list[...]` parameters that only iterate became `Sequence`, callbacks
+    typed `-> None` that are given lambdas returning a Future became `-> object`, and dicts built from
+    keyword arguments (`PreviewRead`) became `dataclasses.replace`.
+  Nothing the app does changed, and the suite passed unchanged.

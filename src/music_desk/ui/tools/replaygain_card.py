@@ -65,7 +65,9 @@ def scope_buttons(owner: QWidget, changed) -> tuple[QButtonGroup, QWidget]:
 
 
 def checked_scope(group: QButtonGroup) -> str:
-    return group.checkedButton().property("scope")
+    button = group.checkedButton()
+    assert button is not None  # the first one is checked when the group is made
+    return button.property("scope")
 
 
 

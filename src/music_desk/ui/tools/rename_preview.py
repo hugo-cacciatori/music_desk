@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core import rename
 from music_desk.core.rename import PlanItem, RenamePlan, RenameReport, Status
+from music_desk.ui.qt_util import cell_text
 
 ALL = "All files"
 COLUMNS = ("Folder", "Name", "New name", "Status", "Details")
@@ -243,17 +244,17 @@ class RenamePreview(QWidget):
     def _apply_filter(self, *_args) -> None:
         wanted = self.filter.currentData()
         for row in range(self.table.rowCount()):
-            status = self.table.item(row, 3).text()
+            status = cell_text(self.table, row, 3)
             self.table.setRowHidden(row, wanted not in (None, ALL) and status != wanted)
 
     def visible_rows(self) -> list[tuple[str, ...]]:
-        return [tuple(self.table.item(r, c).text() for c in range(len(COLUMNS)))
+        return [tuple(cell_text(self.table, r, c) for c in range(len(COLUMNS)))
                 for r in range(self.table.rowCount()) if not self.table.isRowHidden(r)]
 
     @staticmethod
     def _extras_text(plan: RenamePlan) -> str:
         junk = [i.source.relative_to(plan.folder).as_posix() for i in plan.items if i.status is Status.JUNK]
-        sidecars = [f"{i.sidecar.source.name} → {i.sidecar.target.name}" for i in plan.items
+        sidecars = [f"{i.sidecar.source.name} → {i.sidecar.new_path.name}" for i in plan.items
                     if i.status is Status.RENAME and i.sidecar is not None and i.sidecar.status is Status.RENAME]
         sections = []
         if junk:

@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 from PySide6.QtCore import (
     QAbstractTableModel,
@@ -22,7 +23,7 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QAction, QKeySequence, QPalette, QShortcut
+from PySide6.QtGui import QAction, QKeySequence, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -38,6 +39,7 @@ from music_desk.core.fsops import natural_key
 from music_desk.core.index import queries
 from music_desk.core.index.queries import FileRow
 from music_desk.ui.entry_drag import EntryDragView
+from music_desk.ui.qt_util import shortcut
 
 ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
 IS_DIR_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -61,10 +63,11 @@ def format_size(size: int | None) -> str:
         return ""
     if size < 1024:
         return f"{size} B"
+    value = float(size)
     for unit in ("KB", "MB", "GB"):
-        size /= 1024
-        if size < 1024 or unit == "GB":
-            return f"{size:,.1f} {unit}" if size < 100 else f"{size:,.0f} {unit}"
+        value /= 1024
+        if value < 1024 or unit == "GB":
+            return f"{value:,.1f} {unit}" if value < 100 else f"{value:,.0f} {unit}"
     return ""
 
 
@@ -80,8 +83,8 @@ def _number_key(value):
 class Column:
     key: str
     title: str
-    text: Callable[[FileRow], str]
-    sort_key: Callable[[FileRow], object]
+    text: Callable[[Any], str]  # of a FileRow, or a SearchRow in the search's columns
+    sort_key: Callable[[Any], Any]
     numeric: bool = False
     hidden_by_default: bool = False
 
@@ -103,8 +106,8 @@ COLUMNS: tuple[Column, ...] = (
     Column("modified", "Modified",
            lambda r: datetime.fromtimestamp(r.mtime).strftime("%Y-%m-%d %H:%M") if r.mtime else "",
            lambda r: _number_key(r.mtime), hidden_by_default=True),
-    Column("rg", "RG", lambda r: RG_MARKS.get(r.rg, ""), lambda r: _text_key(r.rg)),
-    Column("lyrics", "♪", lambda r: LYRICS_MARKS.get(r.lyrics_tag, ""), lambda r: _text_key(r.lyrics_tag)),
+    Column("rg", "RG", lambda r: RG_MARKS.get(r.rg or "", ""), lambda r: _text_key(r.rg)),
+    Column("lyrics", "♪", lambda r: LYRICS_MARKS.get(r.lyrics_tag or "", ""), lambda r: _text_key(r.lyrics_tag)),
     Column("lrclib", "LRCLIB", lambda r: r.lrclib or "", lambda r: _text_key(r.lrclib)),
 )
 COLUMN_INDEX = {column.key: i for i, column in enumerate(COLUMNS)}
@@ -250,7 +253,7 @@ class FileSortProxy(QSortFilterProxyModel):
         self.setDynamicSortFilter(True)
 
     def lessThan(self, left: QModelIndex, right: QModelIndex) -> bool:
-        model: FileListModel = self.sourceModel()
+        model = cast(FileListModel, self.sourceModel())
         a, b = model.rows[left.row()], model.rows[right.row()]
         if a.is_dir != b.is_dir:
             ascending = self.sortOrder() == Qt.SortOrder.AscendingOrder
@@ -315,8 +318,7 @@ class FileView(QWidget):
         self.view.setEditTriggers(QAbstractItemView.EditTrigger.SelectedClicked)
         self.view.setItemDelegateForColumn(0, RenameDelegate(self.view))
         self.model.renameRequested.connect(self.renameRequested)
-        QShortcut(QKeySequence(Qt.Key.Key_F2), self.view, activated=self._rename_current,
-                  context=Qt.ShortcutContext.WidgetShortcut)
+        shortcut(QKeySequence(Qt.Key.Key_F2), self.view, self._rename_current, Qt.ShortcutContext.WidgetShortcut)
         self.view.activated.connect(self._activated)
         self.view.selectionModel().selectionChanged.connect(
             lambda *_: self.selectionChanged.emit(self.selected_ids()))
@@ -332,8 +334,8 @@ class FileView(QWidget):
         layout.addWidget(self.filter)
         layout.addWidget(self.view)
 
-        QShortcut(QKeySequence.StandardKey.Find, self, activated=self.show_filter)
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self.filter, activated=self.close_filter)
+        shortcut(QKeySequence.StandardKey.Find, self, self.show_filter)
+        shortcut(QKeySequence(Qt.Key.Key_Escape), self.filter, self.close_filter)
 
     # -- folder --
 
@@ -425,7 +427,7 @@ class FileView(QWidget):
         self.view.sortByColumn(0, Qt.SortOrder.AscendingOrder)
 
     def save_layout(self) -> str:
-        return base64.b64encode(bytes(self.view.header().saveState())).decode("ascii")
+        return base64.b64encode(self.view.header().saveState().data()).decode("ascii")
 
     def restore_layout(self, state: str) -> bool:
         if not state:

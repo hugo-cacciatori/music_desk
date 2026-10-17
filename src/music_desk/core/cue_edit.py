@@ -389,6 +389,7 @@ def parse_document(data: bytes, encoding: str | None = None, path: Path | None =
             codec, label, fell_back = "cp1252", "Windows-1252", True
     elif codec is None:
         codec, label = encoding, dict(ENCODINGS).get(encoding, encoding)
+    assert codec is not None and label is not None  # Auto picked one, or the chosen encoding is used
     text = data[len(bom):].decode(codec, errors="surrogateescape")
     lines, position = [], 0
     for match in _NEWLINE.finditer(text):
@@ -503,7 +504,8 @@ def validate(doc: CueDocument, info: SourceInfo | None = None) -> list[Problem]:
             problems.append(Problem(view.row, "gap", f"Track {n}'s gap (INDEX 00) must come before its start."))
         starts.append(start)
     for i in range(1, len(starts)):
-        if starts[i] is not None and starts[i - 1] is not None and starts[i] <= starts[i - 1]:
+        start, previous = starts[i], starts[i - 1]
+        if start is not None and previous is not None and start <= previous:
             problems.append(Problem(i, "start", f"Track {i + 1} must start after track {i}."))
     if info is not None:
         for i, start in enumerate(starts):

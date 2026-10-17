@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from music_desk.core.cancel import CancelToken
 from music_desk.core.formats import AUDIO_EXTENSIONS
@@ -125,7 +126,7 @@ def list_folder(path: str) -> list[_Child]:
 
 def read_file(path: Path, size: int | None, mtime: float | None) -> tuple[dict, str | None]:
     """A `tracks` row for an audio file, and the lyrics text for the search index. Never raises."""
-    row = dict.fromkeys(TRACK_COLUMNS)
+    row: dict[str, Any] = dict.fromkeys(TRACK_COLUMNS)
     row.update(format=path.suffix.lstrip(".").upper(), read_size=size, read_mtime=mtime,
                has_lyrics_tag=0, has_cover=0)
     try:
@@ -406,6 +407,7 @@ class Scanner:
                 self._flush(ctx, batch)
                 batch.clear()
             queue.popleft()
+            assert ref.id is not None  # the flush gave it its id
             ctx.paths[ref.id] = path
             for child_ref, child_path in self._reconcile(ctx, ref, path, batch):
                 queue.append((child_ref, child_path))

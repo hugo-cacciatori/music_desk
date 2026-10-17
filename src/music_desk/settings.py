@@ -62,7 +62,11 @@ class Settings:
             if f.name == "path" or f.name not in data:
                 continue
             value = data[f.name]
-            default = f.default if f.default is not MISSING else f.default_factory()
+            if f.default is not MISSING:
+                default = f.default
+            else:
+                assert f.default_factory is not MISSING  # every setting has a default
+                default = f.default_factory()
             if isinstance(value, type(default)) and not (isinstance(value, bool) and not isinstance(default, bool)):
                 setattr(settings, f.name, value)
             else:
@@ -73,7 +77,9 @@ class Settings:
     def _migrate_name_masks(self, data: dict) -> None:
         """Before 0.2.7 the masks and the replacement were Rename card options: an older file keeps the user's
         ones. A list holding anything but text falls back to the defaults."""
-        old = data.get("rename_options") if isinstance(data.get("rename_options"), dict) else {}
+        old = data.get("rename_options")
+        if not isinstance(old, dict):
+            old = {}
         if "name_masks" not in data and isinstance(old.get("masks"), list):
             self.name_masks = old["masks"]
         if "name_replacement" not in data and isinstance(old.get("replacement"), str):

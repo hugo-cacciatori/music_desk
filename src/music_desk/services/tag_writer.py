@@ -122,7 +122,7 @@ class TagWriter(QObject):
             self.lyricsEmbedded.emit(LyricsEmbedded(token, [(str(p), None, "The app is closing.") for p, _e in items]))
         return token
 
-    def remove_replaygain(self, paths: list[str | Path], options: ReplayGainOptions) -> int:
+    def remove_replaygain(self, paths: Sequence[str | Path], options: ReplayGainOptions) -> int:
         """Queue the removal of the files' ReplayGain tags (core.replaygain.remove_replaygain: the REPLAYGAIN_*
         values and the LUFS comment lines). A file under a job's lock is refused; the others go on. One
         `replaygainRemoved` reports them all."""
@@ -202,7 +202,8 @@ class TagWriter(QObject):
         name = os.path.basename(path)
         try:
             with self.locks.lock([path], SAVE_OWNER):
-                snapshot = metadata.write_fields(path, changes, *(name_masks or ()))
+                snapshot = (metadata.write_fields(path, changes, *name_masks) if name_masks
+                            else metadata.write_fields(path, changes))
         except LockedError as e:
             return None, f"{name} is in use by {e.owner}. Try again when it has finished."
         except Exception as e:  # noqa: BLE001 - shown to the user; the fields stay dirty

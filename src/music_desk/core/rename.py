@@ -99,6 +99,12 @@ class PlanItem:
     size: int = 0
     mtime_ns: int = 0
 
+    @property
+    def new_path(self) -> Path:
+        """The target, which every RENAME and NAME_TAKEN item has."""
+        assert self.target is not None
+        return self.target
+
 
 @dataclass
 class RenamePlan:
@@ -369,7 +375,7 @@ def unchanged_since_plan(item: PlanItem) -> bool:
 
 
 def target_free(item: PlanItem) -> bool:
-    return not item.target.exists() or fsops.is_same_file(item.source, item.target)
+    return not item.new_path.exists() or fsops.is_same_file(item.source, item.new_path)
 
 
 def apply_plan(plan: RenamePlan, recycle: Callable[[Path], None] = fsops.send_to_recycle_bin,
@@ -390,7 +396,7 @@ def apply_plan(plan: RenamePlan, recycle: Callable[[Path], None] = fsops.send_to
             case Status.MISSING_TAGS:
                 report.missing_tags.append(f"{name} (missing: {item.detail})")
             case Status.NAME_TAKEN:
-                report.name_taken.append(f"{name} -> {item.target.name}")
+                report.name_taken.append(f"{name} -> {item.new_path.name}")
             case Status.UNREADABLE:
                 report.errors.append(f"{name}: {item.detail}")
             case Status.KEPT:
@@ -425,7 +431,7 @@ def preview_report(plan: RenamePlan) -> RenameReport:
             case Status.MISSING_TAGS:
                 report.missing_tags.append(f"{name} (missing: {item.detail})")
             case Status.NAME_TAKEN:
-                report.name_taken.append(f"{name} -> {item.target.name}")
+                report.name_taken.append(f"{name} -> {item.new_path.name}")
             case Status.UNREADABLE:
                 report.errors.append(f"{name}: {item.detail}")
             case Status.KEPT:
@@ -433,11 +439,11 @@ def preview_report(plan: RenamePlan) -> RenameReport:
             case Status.JUNK:
                 report.junk.append(name)
             case Status.RENAME:
-                report.renamed.append(item.target.name)
+                report.renamed.append(item.new_path.name)
                 if item.fallback_missing is not None:
-                    report.fallback.append(f"{item.target.name} (missing: {item.fallback_missing})")
+                    report.fallback.append(f"{item.new_path.name} (missing: {item.fallback_missing})")
                 if item.sidecar is not None and item.sidecar.status is Status.RENAME:
-                    report.sidecars_renamed.append(f"{item.sidecar.source.name} -> {item.sidecar.target.name}")
+                    report.sidecars_renamed.append(f"{item.sidecar.source.name} -> {item.sidecar.new_path.name}")
     return report
 
 
@@ -472,7 +478,7 @@ def summary_sections(report: RenameReport, dry_run: bool) -> list[tuple[str, lis
 
 
 def _apply_rename(item: PlanItem, report: RenameReport) -> None:
-    name, new_name = item.source.name, item.target.name
+    name, new_name = item.source.name, item.new_path.name
     if not unchanged_since_plan(item):
         report.skipped.append(f"{name}: changed since the preview, not renamed")
         return
@@ -480,11 +486,11 @@ def _apply_rename(item: PlanItem, report: RenameReport) -> None:
         report.name_taken.append(f"{name} -> {new_name}")
         return
     try:
-        item.source.rename(item.target)
+        item.source.rename(item.new_path)
     except OSError as e:
         report.errors.append(f"{name}: could not be renamed to {new_name} ({e})")
         return
-    report.steps.append((item.source, item.target))
+    report.steps.append((item.source, item.new_path))
     report.renamed.append(new_name)
     if item.fallback_missing is not None:
         report.fallback.append(f"{new_name} (missing: {item.fallback_missing})")
@@ -494,15 +500,15 @@ def _apply_rename(item: PlanItem, report: RenameReport) -> None:
         return
     if not unchanged_since_plan(sidecar) or not target_free(sidecar):
         report.warnings.append(f"{sidecar.source.name} was not renamed: it changed or "
-                               f"{sidecar.target.name} exists now")
+                               f"{sidecar.new_path.name} exists now")
         return
     try:
-        sidecar.source.rename(sidecar.target)
+        sidecar.source.rename(sidecar.new_path)
     except OSError as e:
         report.warnings.append(f"{sidecar.source.name} could not be renamed ({e})")
         return
-    report.steps.append((sidecar.source, sidecar.target))
-    report.sidecars_renamed.append(f"{sidecar.source.name} -> {sidecar.target.name}")
+    report.steps.append((sidecar.source, sidecar.new_path))
+    report.sidecars_renamed.append(f"{sidecar.source.name} -> {sidecar.new_path.name}")
 
 
 # ---------------------------------------------------------------------------

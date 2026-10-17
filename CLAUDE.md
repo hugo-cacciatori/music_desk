@@ -16,12 +16,13 @@ automatically, so keep it short (under about 15 KB): how things were built belon
 - `README.md`: the user-facing description.
 
 ## Resume here
-- **State (2026-10-17, session 14):** 0.3.2 is on `main`, not released: the status bar no longer shows the
-  rsgain version (a failed check is still explained on the ReplayGain and Tidy cards; About has the version).
-  M10 is complete.
+- **State (2026-10-17, session 14):** 0.3.3 is on `main`, not released: M11 task 1 is done (basedpyright,
+  basic mode, on `src/`; `tests/test_types.py` runs it; 285 first-run findings fixed, none user-visible). All
+  1116 tests passed, slow ones included. `test_remove_asks_first` failed once in a fast run, then passed: a
+  likely scan/remove race (inferred, not measured).
 - **Optional, for later (Hugo):** in the installed app, on a copy of an EAC rip (image, cue, log), save a second
   version of the cue with other split points and split from it. A release when he asks.
-- **Next step:** M11: ask Hugo the questions its decisions need, then build it; then M12 the same way. Give Hugo full manual steps for checks (memory:
+- **Next step:** M11 task 2 (controllers); then M12 the same way. Give Hugo full manual steps for checks (memory:
   manual-check-instructions).
 
 ## Work plan
@@ -31,7 +32,7 @@ of it (see Session protocol 5).
 
 **M11 Maintenance** (Hugo, 2026-10-16; read SPEC §16 "Controllers" and §18 "Static types"). Clear its open
 decisions with Hugo first (Session protocol 1), then start. The split's controller already exists (0.2.14). Neither changes what the app does.
-- [ ] 1. Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), findings fixed.
+- [x] 1. Static types: pyright in the dev tools and in the test run (`tests/test_types.py`), findings fixed.
 - [ ] 2. Split `ui/main_window.py` (2,043 lines at 0.2.10) into one controller per feature: tools (Rename,
       ReplayGain, Tidy), split, delete, search. Behaviour and tests unchanged.
 
@@ -120,8 +121,8 @@ The full log is `docs/DECISIONS.md`. These apply to all work:
   this reason; preferences live where they are used (SPEC §12).
 - **Stack:** Python 3.13, PySide6-Essentials 6.12.0 (no Addons: no WebEngine, no PDF), mutagen for every tag
   read and write, SQLite (WAL, FTS5 trigram), watchdog, natsort (Explorer order), send2trash, urllib. uv with
-  hatchling and a `src/` layout; pytest, pytest-qt, ruff; PyInstaller one-folder plus Inno Setup. tinytag
-  2.0.0 is test-only (parity). The stacks considered and rejected are in HISTORY.md ("Stack").
+  hatchling and a `src/` layout; pytest, pytest-qt, ruff, basedpyright; PyInstaller one-folder plus Inno
+  Setup. tinytag 2.0.0 is test-only (parity). The stacks considered and rejected are in HISTORY.md ("Stack").
 - **Cue split** (Hugo, 2026-10-16): the `.cue` is the only source of truth. The app stores no split state (no
   remembered options or edits); edits are kept only by saving them into a `.cue`. SPEC §22.
 - **Licence:** GPL-3.0-or-later. Every bundled third-party component is listed in `music_desk/licenses.py`, with
@@ -176,6 +177,7 @@ From the project root:
     uv run python -m music_desk
     uv run pytest                 # add -m "not slow" to skip rsgain integration tests
     uv run ruff check .
+    uv run basedpyright           # the type check (also run by the suite, tests/test_types.py)
     uv run pyinstaller --noconfirm packaging/music_desk.spec    # -> dist/MusicDesk/MusicDesk.exe
     uv run python packaging/build_installer.py                  # both builds -> dist/installer/MusicDesk-Setup-<v>.exe
     uv run python packaging/make_icon.py                        # redraw resources/icons/ after changing the icon

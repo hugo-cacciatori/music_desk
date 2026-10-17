@@ -26,7 +26,7 @@ def entry_ids(mime: QMimeData) -> list[int]:
     if not mime.hasFormat(ENTRY_IDS_MIME):
         return []
     try:
-        data = json.loads(bytes(mime.data(ENTRY_IDS_MIME)).decode("ascii"))
+        data = json.loads(bytes(mime.data(ENTRY_IDS_MIME).data()).decode("ascii"))
     except ValueError:
         return []
     if not isinstance(data, list):

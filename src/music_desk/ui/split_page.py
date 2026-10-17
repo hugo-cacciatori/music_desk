@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core.cue import ENCODINGS, FRAMES_PER_SECOND, AlbumPlan
 from music_desk.core.cue_edit import CueDocument, Problem, format_time
+from music_desk.ui.qt_util import cell_text
 
 # The table's columns: (key, header). Keys are cue_edit.TRACK_FIELDS' where the cell is editable.
 COLUMNS = (("tick", ""), ("number", "#"), ("start", "Start"), ("gap", "Gap"), ("length", "Length"),
@@ -312,8 +313,8 @@ class SplitPage(QWidget):
         self._table_stale = False
         views = doc.tracks()
         planned = {t.row: t for t in plan.tracks} if plan is not None else {}
-        rows: list[tuple[int | None, int]] = ([(None, 0)] if hidden else []) + [
-            (v.row, v.number if v.number is not None else v.row + 1) for v in views]
+        rows: list[tuple[int | None, int]] = [(None, 0)] if hidden else []
+        rows += [(v.row, v.number if v.number is not None else v.row + 1) for v in views]
         rate = plan.info.rate if plan is not None and plan.info is not None else 0
         marks: dict[tuple[int | None, str], list[str]] = {}
         for problem in problems:
@@ -413,7 +414,7 @@ class SplitPage(QWidget):
     def _selected_rows(self) -> list[int]:
         """The selected rows' sheet rows (a hidden track has none)."""
         rows = sorted({index.row() for index in self.table.selectionModel().selectedRows()})
-        return [self.rows[r][0] for r in rows if r < len(self.rows) and self.rows[r][0] is not None]
+        return [row for r in rows if r < len(self.rows) and (row := self.rows[r][0]) is not None]
 
     def _select_rows(self, sheet_rows: list[int]) -> None:
         selection = self.table.selectionModel()
@@ -447,10 +448,12 @@ class SplitPage(QWidget):
     # -- for tests --
 
     def cell(self, row: int, key: str) -> QTableWidgetItem:
-        return self.table.item(row, COLUMN[key])
+        item = self.table.item(row, COLUMN[key])
+        assert item is not None  # every cell of a shown track has an item
+        return item
 
     def column_texts(self, key: str) -> list[str]:
-        return [self.table.item(r, COLUMN[key]).text() for r in range(self.table.rowCount())]
+        return [cell_text(self.table, r, COLUMN[key]) for r in range(self.table.rowCount())]
 
 
 def _set_text(edit: QLineEdit, text: str) -> None:

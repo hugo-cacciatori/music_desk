@@ -24,6 +24,7 @@ dev = [
     "ruff",
     "pyinstaller",
     "tinytag==2.0.0",
+    "basedpyright>=1.40.2",
 ]
 
 [build-system]
@@ -47,3 +48,11 @@ pythonpath = ["tests/core"]  # shared helpers such as lrclib_fake, for tests in 
 norecursedirs = ["reference", "fixtures", ".*", "build", "dist"]
 qt_api = "pyside6"
 markers = ["slow: runs the real rsgain or flac (deselect with -m \"not slow\")"]
+
+[tool.basedpyright]
+# M11 task 1 (SPEC §18): basic mode, the app's code only. Untyped third-party packages count as Any.
+include = ["src"]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"

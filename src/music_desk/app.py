@@ -64,13 +64,15 @@ def folder_argument(arguments: list[str]) -> str | None:
 
 class Starter(QObject):
     """What this process shows: the main window, or only a right-click entry's window until a normal start asks
-    for the main window (SPEC §31). `open_library` opens the index (replaced in tests)."""
+    for the main window (SPEC §31). `open_library` opens the index; tests replace it and leave out `check_tools`
+    (the rsgain and flac self-check)."""
 
     def __init__(self, settings: Settings, open_library: Callable[[], LibraryService | None],
-                 parent: QObject | None = None) -> None:
+                 parent: QObject | None = None, check_tools: bool = True) -> None:
         super().__init__(parent)
         self.settings = settings
         self.open_library = open_library
+        self.check_tools = check_tools
         self.window: MainWindow | None = None
         self.settings_entry: SettingsEntry | None = None
 
@@ -79,6 +81,8 @@ class Starter(QObject):
         if self.window is None:
             cards = self.settings_entry.cards if self.settings_entry is not None else None
             self.window = MainWindow(self.open_library(), self.settings, cards)
+            if not self.check_tools:
+                return self.window
             check = ToolCheck()
             check.signals.rsgain.connect(self.window.show_rsgain_version)
             check.signals.flac.connect(self.window.show_flac_version)

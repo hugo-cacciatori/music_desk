@@ -1,0 +1,448 @@
+// MusicDeskMenu.dll: the MusicDesk submenu in File Explorer's classic right-click menu (SPEC §31).
+//
+// A classic in-process IContextMenu handler, as 7-Zip's. It stays small: it looks only at what was right-clicked
+// (empty space, folders, files: their kinds, never their contents), builds the submenu, and on a click starts
+// MusicDesk.exe (beside this DLL) once, with the entry and every path. Every action stays in the Python app.
+// The paths go through a list file in %LOCALAPPDATA%\MusicDesk\menu\ (one per line, UTF-8), so a large selection
+// isn't cut by the command line's length limit; MusicDesk reads and deletes it.
+//
+// Built by packaging/build_menu.py; registered by the installer (SPEC §31). Two exports beside COM's,
+// MusicDeskMenu_Entries and MusicDeskMenu_Command, run the same code for tests/test_menu_handler.py.
+
+#include <windows.h>
+#include <shlobj.h>
+#include <shlwapi.h>
+#include <shellapi.h>
+#include <strsafe.h>
+
+#include <new>
+#include <string>
+#include <vector>
+
+// {366C8DAE-145F-40D0-B273-8AFE153DD3F5}: never change it, the installer registers it.
+static const CLSID CLSID_MusicDeskMenu = {0x366c8dae, 0x145f, 0x40d0, {0xb2, 0x73, 0x8a, 0xfe, 0x15, 0x3d, 0xd3, 0xf5}};
+
+static HINSTANCE g_module = nullptr;
+static LONG g_objects = 0;
+static LONG g_locks = 0;
+
+// -- what was clicked, and which entries it gets --
+
+struct Selection {
+    bool background = false;  // empty space: paths holds the open folder
+    std::vector<std::wstring> paths;
+    int folders = 0;
+    int files = 0;
+};
+
+static void count_kinds(Selection& selection) {
+    selection.folders = selection.files = 0;
+    for (const std::wstring& path : selection.paths) {
+        DWORD attributes = GetFileAttributesW(path.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY))
+            ++selection.folders;
+        else
+            ++selection.files;
+    }
+}
+
+struct Entry {
+    const wchar_t* verb;  // also what MusicDesk is asked: "--" + the verb's part after "musicdesk."
+    const wchar_t* label;
+    const wchar_t* help;
+};
+
+static const Entry OPEN = {L"musicdesk.open", L"Open in MusicDesk", L"Opens this folder in MusicDesk"};
+static const Entry SETTINGS = {L"musicdesk.settings", L"Settings", L"Opens MusicDesk's Options window"};
+
+// The submenu's entries, in order (SPEC §31): Open in MusicDesk on one folder or empty space; Settings always.
+static std::vector<const Entry*> entries_for(const Selection& selection) {
+    std::vector<const Entry*> entries;
+    if (selection.background || (selection.folders == 1 && selection.files == 0))
+        entries.push_back(&OPEN);
+    entries.push_back(&SETTINGS);
+    return entries;
+}
+
+// -- starting MusicDesk --
+
+static std::wstring module_folder() {
+    wchar_t path[MAX_PATH * 4];
+    DWORD length = GetModuleFileNameW(g_module, path, ARRAYSIZE(path));
+    if (length == 0 || length >= ARRAYSIZE(path))
+        return L"";
+    PathRemoveFileSpecW(path);
+    return path;
+}
+
+static std::wstring quoted(const std::wstring& argument) {
+    // Paths can't hold a double quote; a trailing backslash would escape the closing one ("D:\").
+    std::wstring text = L"\"" + argument;
+    if (!argument.empty() && argument.back() == L'\\')
+        text += L'\\';
+    return text + L"\"";
+}
+
+static std::wstring local_app_data() {
+    // As music_desk.paths.app_data_dir: the LOCALAPPDATA variable first.
+    wchar_t buffer[MAX_PATH * 4];
+    DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, ARRAYSIZE(buffer));
+    if (length > 0 && length < ARRAYSIZE(buffer))
+        return buffer;
+    PWSTR known = nullptr;
+    std::wstring result;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &known)))
+        result = known;
+    CoTaskMemFree(known);
+    return result;
+}
+
+// Writes the paths to a new list file; returns its path, or "" when it can't be written.
+static std::wstring write_list(const std::vector<std::wstring>& paths) {
+    std::wstring base = local_app_data();
+    if (base.empty())
+        return L"";
+    std::wstring folder = base + L"\\MusicDesk\\menu";
+    int made = SHCreateDirectoryExW(nullptr, folder.c_str(), nullptr);  // with any missing parent, as the app's
+    if (made != ERROR_SUCCESS && made != ERROR_ALREADY_EXISTS && made != ERROR_FILE_EXISTS)
+        return L"";
+    GUID guid;
+    wchar_t name[64];
+    if (FAILED(CoCreateGuid(&guid)) || StringFromGUID2(guid, name, ARRAYSIZE(name)) == 0)
+        return L"";
+    std::wstring file = folder + L"\\" + std::wstring(name + 1, wcslen(name) - 2) + L".txt";  // no braces
+
+    std::wstring text;
+    for (const std::wstring& path : paths)
+        text += path + L"\n";
+    int size = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr,
+                                   nullptr);
+    std::string utf8(size, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), utf8.data(), size, nullptr,
+                        nullptr);
+    HANDLE handle = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle == INVALID_HANDLE_VALUE)
+        return L"";
+    DWORD written = 0;
+    BOOL ok = WriteFile(handle, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
+    CloseHandle(handle);
+    if (!ok || written != utf8.size()) {
+        DeleteFileW(file.c_str());
+        return L"";
+    }
+    return file;
+}
+
+// The command line an entry starts, writing its list file; "" when it can't. `exe`: MusicDesk.exe's path.
+static std::wstring command_for(const Entry& entry, const Selection& selection, const std::wstring& exe) {
+    if (&entry == &OPEN)  // as the `musicdesk` keyword (SPEC §29): the folder as the one argument
+        return selection.paths.empty() ? L"" : quoted(exe) + L" " + quoted(selection.paths[0]);
+    std::wstring list = write_list(selection.paths);
+    if (list.empty())
+        return L"";
+    std::wstring option = std::wstring(L"--") + (entry.verb + wcslen(L"musicdesk."));
+    return quoted(exe) + L" " + option + L" --list " + quoted(list);
+}
+
+static bool start(std::wstring command, const std::wstring& folder) {
+    STARTUPINFOW startup = {sizeof(startup)};
+    PROCESS_INFORMATION process = {};
+    if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, 0, nullptr,
+                        folder.empty() ? nullptr : folder.c_str(), &startup, &process))
+        return false;
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return true;
+}
+
+// -- the COM object --
+
+class MusicDeskMenu : public IShellExtInit, public IContextMenu {
+public:
+    MusicDeskMenu() { InterlockedIncrement(&g_objects); }
+
+    // IUnknown
+    IFACEMETHODIMP QueryInterface(REFIID riid, void** object) override {
+        static const QITAB table[] = {
+            QITABENT(MusicDeskMenu, IShellExtInit),
+            QITABENT(MusicDeskMenu, IContextMenu),
+            {nullptr, 0},
+        };
+        return QISearch(this, table, riid, object);
+    }
+    IFACEMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement(&references_); }
+    IFACEMETHODIMP_(ULONG) Release() override {
+        LONG count = InterlockedDecrement(&references_);
+        if (count == 0)
+            delete this;
+        return count;
+    }
+
+    // IShellExtInit: a selection comes as CF_HDROP; empty space as the folder's pidl alone.
+    IFACEMETHODIMP Initialize(PCIDLIST_ABSOLUTE folder, IDataObject* data, HKEY) override {
+        selection_ = Selection();
+        if (data != nullptr) {
+            FORMATETC format = {CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
+            STGMEDIUM medium;
+            if (FAILED(data->GetData(&format, &medium)))
+                return E_INVALIDARG;  // nothing on disk (This PC, a library…): no submenu
+            HDROP drop = static_cast<HDROP>(GlobalLock(medium.hGlobal));
+            if (drop != nullptr) {
+                UINT count = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
+                for (UINT i = 0; i < count; ++i) {
+                    UINT length = DragQueryFileW(drop, i, nullptr, 0);
+                    std::wstring path(length, L'\0');
+                    DragQueryFileW(drop, i, path.data(), length + 1);
+                    selection_.paths.push_back(path);
+                }
+                GlobalUnlock(medium.hGlobal);
+            }
+            ReleaseStgMedium(&medium);
+        } else if (folder != nullptr) {
+            wchar_t path[MAX_PATH * 4];
+            if (!SHGetPathFromIDListEx(folder, path, ARRAYSIZE(path), GPFIDL_DEFAULT))
+                return E_INVALIDARG;
+            selection_.background = true;
+            selection_.paths.push_back(path);
+        }
+        if (selection_.paths.empty())
+            return E_INVALIDARG;
+        if (!selection_.background)
+            count_kinds(selection_);
+        return S_OK;
+    }
+
+    // IContextMenu
+    IFACEMETHODIMP QueryContextMenu(HMENU menu, UINT index, UINT first, UINT last, UINT flags) override {
+        if (flags & CMF_DEFAULTONLY)
+            return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
+        entries_ = entries_for(selection_);
+        if (entries_.empty() || first + entries_.size() > last)
+            return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
+        HMENU submenu = CreatePopupMenu();
+        for (size_t i = 0; i < entries_.size(); ++i) {
+            if (entries_[i] == &SETTINGS && i > 0)
+                AppendMenuW(submenu, MF_SEPARATOR, 0, nullptr);  // Settings apart from the actions
+            AppendMenuW(submenu, MF_STRING, first + i, entries_[i]->label);
+        }
+        MENUITEMINFOW item = {sizeof(item)};
+        item.fMask = MIIM_SUBMENU | MIIM_STRING | MIIM_ID;
+        item.wID = first + static_cast<UINT>(entries_.size());
+        item.hSubMenu = submenu;
+        item.dwTypeData = const_cast<LPWSTR>(L"MusicDesk");
+        if (!InsertMenuItemW(menu, index, TRUE, &item)) {
+            DestroyMenu(submenu);
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        return MAKE_HRESULT(SEVERITY_SUCCESS, 0, entries_.size() + 1);
+    }
+
+    IFACEMETHODIMP InvokeCommand(CMINVOKECOMMANDINFO* info) override {
+        const Entry* entry = find(info);
+        if (entry == nullptr)
+            return E_FAIL;
+        std::wstring folder = module_folder();
+        std::wstring command = command_for(*entry, selection_, folder + L"\\MusicDesk.exe");
+        if (command.empty() || !start(command, folder)) {
+            MessageBoxW(info->hwnd, L"MusicDesk couldn't be started. Reinstalling it may help.", L"MusicDesk",
+                        MB_OK | MB_ICONWARNING);
+            return E_FAIL;
+        }
+        return S_OK;
+    }
+
+    IFACEMETHODIMP GetCommandString(UINT_PTR id, UINT type, UINT*, LPSTR name, UINT size) override {
+        if (id >= entries_.size())
+            return E_INVALIDARG;
+        const Entry* entry = entries_[id];
+        switch (type) {
+        case GCS_VERBW:
+            return StringCchCopyW(reinterpret_cast<LPWSTR>(name), size, entry->verb);
+        case GCS_HELPTEXTW:
+            return StringCchCopyW(reinterpret_cast<LPWSTR>(name), size, entry->help);
+        default:
+            return E_NOTIMPL;
+        }
+    }
+
+    const Selection& selection() const { return selection_; }  // for the tests' exports
+
+private:
+    ~MusicDeskMenu() { InterlockedDecrement(&g_objects); }
+
+    // The entry a click names: an offset, or a verb (ANSI or, with CMIC_MASK_UNICODE, wide).
+    const Entry* find(CMINVOKECOMMANDINFO* info) const {
+        if (IS_INTRESOURCE(info->lpVerb)) {
+            UINT_PTR id = reinterpret_cast<UINT_PTR>(info->lpVerb);
+            return id < entries_.size() ? entries_[id] : nullptr;
+        }
+        std::wstring verb;
+        if (info->cbSize >= sizeof(CMINVOKECOMMANDINFOEX) && (info->fMask & CMIC_MASK_UNICODE)) {
+            const wchar_t* wide = reinterpret_cast<CMINVOKECOMMANDINFOEX*>(info)->lpVerbW;
+            if (wide != nullptr)
+                verb = wide;
+        }
+        if (verb.empty()) {
+            int length = MultiByteToWideChar(CP_ACP, 0, info->lpVerb, -1, nullptr, 0);
+            if (length > 0) {
+                verb.resize(length - 1);
+                MultiByteToWideChar(CP_ACP, 0, info->lpVerb, -1, verb.data(), length);
+            }
+        }
+        for (const Entry* entry : entries_)
+            if (verb == entry->verb)
+                return entry;
+        return nullptr;
+    }
+
+    LONG references_ = 1;
+    Selection selection_;
+    std::vector<const Entry*> entries_;
+};
+
+class ClassFactory : public IClassFactory {
+public:
+    IFACEMETHODIMP QueryInterface(REFIID riid, void** object) override {
+        static const QITAB table[] = {QITABENT(ClassFactory, IClassFactory), {nullptr, 0}};
+        return QISearch(this, table, riid, object);
+    }
+    IFACEMETHODIMP_(ULONG) AddRef() override { return 2; }  // a static object
+    IFACEMETHODIMP_(ULONG) Release() override { return 1; }
+
+    IFACEMETHODIMP CreateInstance(IUnknown* outer, REFIID riid, void** object) override {
+        *object = nullptr;
+        if (outer != nullptr)
+            return CLASS_E_NOAGGREGATION;
+        MusicDeskMenu* menu = new (std::nothrow) MusicDeskMenu();
+        if (menu == nullptr)
+            return E_OUTOFMEMORY;
+        HRESULT result = menu->QueryInterface(riid, object);
+        menu->Release();
+        return result;
+    }
+    IFACEMETHODIMP LockServer(BOOL lock) override {
+        if (lock)
+            InterlockedIncrement(&g_locks);
+        else
+            InterlockedDecrement(&g_locks);
+        return S_OK;
+    }
+};
+
+static ClassFactory g_factory;
+
+BOOL APIENTRY DllMain(HINSTANCE module, DWORD reason, LPVOID) {
+    if (reason == DLL_PROCESS_ATTACH) {
+        g_module = module;
+        DisableThreadLibraryCalls(module);
+    }
+    return TRUE;
+}
+
+STDAPI DllGetClassObject(REFCLSID clsid, REFIID riid, void** object) {
+    *object = nullptr;
+    if (!IsEqualCLSID(clsid, CLSID_MusicDeskMenu))
+        return CLASS_E_CLASSNOTAVAILABLE;
+    return g_factory.QueryInterface(riid, object);
+}
+
+STDAPI DllCanUnloadNow() {
+    return g_objects == 0 && g_locks == 0 ? S_OK : S_FALSE;
+}
+
+// -- the tests' exports: the real COM object, driven without Explorer --
+
+// Makes the object as Explorer does and initializes it with `paths` (count of them; background: one folder, the
+// open one). Returns null when Initialize refuses.
+static IContextMenu* make_menu(const wchar_t* const* paths, int count, BOOL background) {
+    IShellExtInit* init = nullptr;
+    if (FAILED(g_factory.CreateInstance(nullptr, IID_PPV_ARGS(&init))))
+        return nullptr;
+    HRESULT result = E_INVALIDARG;
+    if (background && count == 1) {
+        PIDLIST_ABSOLUTE folder = nullptr;
+        if (SUCCEEDED(SHParseDisplayName(paths[0], nullptr, &folder, 0, nullptr))) {
+            result = init->Initialize(folder, nullptr, nullptr);
+            CoTaskMemFree(folder);
+        }
+    } else if (!background && count > 0) {
+        std::vector<PIDLIST_ABSOLUTE> items;
+        for (int i = 0; i < count; ++i) {
+            PIDLIST_ABSOLUTE item = nullptr;
+            if (SUCCEEDED(SHParseDisplayName(paths[i], nullptr, &item, 0, nullptr)))
+                items.push_back(item);
+        }
+        IShellItemArray* array = nullptr;
+        IDataObject* data = nullptr;
+        if (static_cast<int>(items.size()) == count &&
+            SUCCEEDED(SHCreateShellItemArrayFromIDLists(static_cast<UINT>(items.size()),
+                                                        const_cast<PCIDLIST_ABSOLUTE_ARRAY>(items.data()), &array)) &&
+            SUCCEEDED(array->BindToHandler(nullptr, BHID_DataObject, IID_PPV_ARGS(&data)))) {
+            result = init->Initialize(nullptr, data, nullptr);
+        }
+        if (data != nullptr)
+            data->Release();
+        if (array != nullptr)
+            array->Release();
+        for (PIDLIST_ABSOLUTE item : items)
+            CoTaskMemFree(item);
+    }
+    IContextMenu* menu = nullptr;
+    if (SUCCEEDED(result))
+        init->QueryInterface(IID_PPV_ARGS(&menu));
+    init->Release();
+    return menu;
+}
+
+// The submenu Explorer would show, written to `out` as "MusicDesk:" then each entry's verb, one per line; ""
+// when there is none. Returns the HRESULT of the first step that failed, else S_OK.
+extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Entries(const wchar_t* const* paths, int count,
+                                                                        BOOL background, wchar_t* out, int size) {
+    out[0] = L'\0';
+    IContextMenu* menu = make_menu(paths, count, background);
+    if (menu == nullptr)
+        return E_INVALIDARG;
+    HMENU host = CreatePopupMenu();
+    HRESULT result = menu->QueryContextMenu(host, 0, 100, 0x7FFF, CMF_NORMAL);
+    std::wstring text;
+    if (SUCCEEDED(result) && GetMenuItemCount(host) == 1) {
+        wchar_t label[64];
+        GetMenuStringW(host, 0, label, ARRAYSIZE(label), MF_BYPOSITION);
+        text = std::wstring(label) + L":";
+        HMENU submenu = GetSubMenu(host, 0);
+        for (int i = 0; i < GetMenuItemCount(submenu); ++i) {
+            UINT id = GetMenuItemID(submenu, i);
+            if (id == static_cast<UINT>(-1) || id == 0)
+                continue;  // the separator
+            wchar_t verb[64];
+            if (SUCCEEDED(menu->GetCommandString(id - 100, GCS_VERBW, nullptr, reinterpret_cast<LPSTR>(verb),
+                                                 ARRAYSIZE(verb))))
+                text += std::wstring(L"\n") + verb;
+        }
+    }
+    DestroyMenu(host);
+    menu->Release();
+    return SUCCEEDED(result) ? StringCchCopyW(out, size, text.c_str()) : result;
+}
+
+// The command line a click on `verb` would start (with `exe` as MusicDesk.exe), written to `out`; its list file is
+// written as for real, nothing is started.
+extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Command(const wchar_t* const* paths, int count,
+                                                                        BOOL background, const wchar_t* verb,
+                                                                        const wchar_t* exe, wchar_t* out, int size) {
+    out[0] = L'\0';
+    IContextMenu* menu = make_menu(paths, count, background);
+    if (menu == nullptr)
+        return E_INVALIDARG;
+    HMENU host = CreatePopupMenu();
+    menu->QueryContextMenu(host, 0, 100, 0x7FFF, CMF_NORMAL);
+    DestroyMenu(host);
+    const Selection& selection = static_cast<MusicDeskMenu*>(menu)->selection();
+    const Entry* entry = nullptr;
+    for (const Entry* candidate : entries_for(selection))
+        if (wcscmp(candidate->verb, verb) == 0)
+            entry = candidate;
+    std::wstring command = entry != nullptr ? command_for(*entry, selection, exe) : L"";
+    menu->Release();
+    return command.empty() ? E_FAIL : StringCchCopyW(out, size, command.c_str());
+}

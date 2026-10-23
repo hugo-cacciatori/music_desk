@@ -116,7 +116,8 @@ AREAS: dict[str, Area] = {
         ("ui/test_open_here.py", "ui/test_right_click_settings.py")),
     "right_click": Area(
         ("context_menu/request.py", "context_menu/settings_entry.py"),
-        ("ui/test_right_click_settings.py",)),
+        ("ui/test_right_click_settings.py", "test_menu_handler.py"),
+        ("native/context_menu/", "packaging/build_menu.py")),
     "hover_texts": Area(("ui/hover.py",), ("ui/test_hover_texts.py",)),
     "scroll_wheel": Area(("ui/no_wheel.py",), ("ui/test_no_wheel.py",)),
     "stall_watch": Area(("ui/stall_watch.py",), ("ui/test_stall_watch.py",)),

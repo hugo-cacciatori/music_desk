@@ -72,7 +72,7 @@ def test_a_later_start_hands_its_entry_over(qtbot):
 # -- the Options window --
 
 def open_settings(qtbot, service, paths):
-    starter = Starter(Settings(), lambda: service)
+    starter = Starter(Settings(), lambda: service, check_tools=False)
     starter.run_entry(SETTINGS, [str(p) for p in paths])
     return starter
 
@@ -109,7 +109,7 @@ def test_a_normal_start_meanwhile_opens_the_main_window_on_the_same_cards(qtbot,
 
 
 def test_settings_with_the_main_window_open_shows_its_own(qtbot, service, library_dir):
-    starter = Starter(Settings(), lambda: service)
+    starter = Starter(Settings(), lambda: service, check_tools=False)
     starter.open_folder(None)
     window = starter.window
     qtbot.addWidget(window)

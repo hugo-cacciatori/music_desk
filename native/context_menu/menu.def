@@ -1,0 +1,4 @@
+LIBRARY MusicDeskMenu
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

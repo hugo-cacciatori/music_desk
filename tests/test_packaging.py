@@ -63,3 +63,11 @@ def test_flac_is_bundled():
     spec = (ROOT / "packaging" / "music_desk.spec").read_text(encoding="utf-8")
     assert '"resources/flac"' in spec
     assert paths.flac_path().is_file() and (paths.flac_path().parent / "libFLAC.dll").is_file()
+
+
+def test_the_installer_build_includes_the_menu_handler():
+    """build_installer.py builds MusicDeskMenu.dll into dist/MusicDesk after PyInstaller, so the installer's
+    [Files] glob takes it (SPEC §31)."""
+    script = (ROOT / "packaging" / "build_installer.py").read_text(encoding="utf-8")
+    steps = ['"-m", "PyInstaller"', 'build_menu.build(ROOT / "dist" / "MusicDesk")', "[str(find_iscc())"]
+    assert [script.index(step) for step in steps] == sorted(script.index(step) for step in steps)

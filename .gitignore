@@ -1,0 +1,16 @@
+.venv/
+build/
+dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.claude/settings.local.json
+
+# AI-agent files and project docs: private, never public (owner, 2026-10-23)
+AGENTS.md
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.git-docs/
+docs/

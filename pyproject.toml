@@ -1,0 +1,58 @@
+[project]
+name = "music-desk"
+version = "0.8.11"
+description = "Windows desktop app for browsing a music library, editing tags, tidying albums and finding lyrics."
+requires-python = ">=3.13,<3.14"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+dependencies = [
+    # Essentials only: the app needs QtCore/QtGui/QtWidgets, and the Addons wheel (WebEngine etc.) bloats the build.
+    "PySide6-Essentials==6.12.0",
+    "mutagen",
+    "watchdog",
+    "natsort",
+    "send2trash",
+]
+
+[project.gui-scripts]
+music-desk = "music_desk.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-qt",
+    "ruff",
+    "pyinstaller",
+    "tinytag==2.0.0",
+    "basedpyright>=1.40.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/music_desk"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+extend-exclude = ["tests/reference", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests/core"]  # shared helpers such as lrclib_fake, for tests in any folder
+norecursedirs = ["reference", "fixtures", ".*", "build", "dist"]
+qt_api = "pyside6"
+markers = ["slow: runs the real rsgain or flac (deselect with -m \"not slow\")"]
+
+[tool.basedpyright]
+# M11 task 1 (SPEC §18): basic mode, the app's code only. Untyped third-party packages count as Any.
+include = ["src"]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"

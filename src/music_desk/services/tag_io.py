@@ -14,6 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QObject, Qt, Signal
 from PySide6.QtGui import QImage, QImageIOHandler, QImageReader
 
+from music_desk.context_menu.request import first_track
 from music_desk.core import masks, metadata, preview
 from music_desk.core.fsops import open_shared
 from music_desk.core.metadata import Snapshot
@@ -127,15 +128,33 @@ class TagIO(QObject):
         """The fields rename masks use, of one file (the File names card's live example)."""
         token = self.next_token()
 
+        self._submit(lambda: self._emit_rename_fields(token, Path(path)))
+        return token
+
+    def read_first_track_fields(self, paths: Sequence[str]) -> int:
+        """The rename fields of the clicked items' first track (SPEC §31), found off the UI thread; None (and no
+        extension) when they hold no track."""
+        token = self.next_token()
+
         def run() -> None:
             try:
-                fields = TaggedFile(path, shared=True).rename_fields()
-            except Exception:  # noqa: BLE001 - no example then
-                fields = None
-            self.renameFields.emit(token, fields, Path(path).suffix)
+                path = first_track(paths)
+            except OSError:
+                path = None
+            if path is None:
+                self.renameFields.emit(token, None, "")
+            else:
+                self._emit_rename_fields(token, path)
 
         self._submit(run)
         return token
+
+    def _emit_rename_fields(self, token: int, path: Path) -> None:
+        try:
+            fields = TaggedFile(path, shared=True).rename_fields()
+        except Exception:  # noqa: BLE001 - no example then
+            fields = None
+        self.renameFields.emit(token, fields, path.suffix)
 
     def read_image(self, path: str | Path) -> int:
         token = self.next_token()

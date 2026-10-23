@@ -167,13 +167,21 @@ class ToolCards(QObject):
         for card in (self.rename_card, self.replaygain_card):
             card.run_button.hide()  # the toolbar starts the tools (SPEC §30)
             card.set_selection(False)  # the dialogs show every option; a selection is the run's business
+        self.options_window: OptionsWindow | None = None
         if window is not None:
+            self.adopt(window)
+
+    def adopt(self, window: QWidget) -> None:
+        """The main window takes these cards (made without one for the right-click Settings entry, SPEC §31), so
+        the process keeps one copy of the settings."""
+        self.window = window
+        self.setParent(window)
+        if self.options_window is None:
             # Until the Options window takes them, the cards are hidden windows of the main window, so they go
             # with it. Parentless, every closed window left its cards behind, and Python destroying hundreds of
             # them after the QApplication crashed the test run at exit (SPEC §18, 2026-10-23).
             for which in PAGE_TITLES:
                 self.card(which).setParent(window, Qt.WindowType.Window)
-        self.options_window: OptionsWindow | None = None
 
     def card(self, which: str) -> Card:
         return {NAMES: self.names_card, RENAME: self.rename_card, REPLAYGAIN: self.replaygain_card,

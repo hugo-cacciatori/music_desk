@@ -113,7 +113,10 @@ AREAS: dict[str, Area] = {
         ("core/test_tool_options.py", "test_settings.py", "ui/test_toolbar.py")),
     "open_here": Area(
         ("app.py", "here.py", "instance.py", "foreground.py", "logging_setup.py"),
-        ("ui/test_open_here.py",)),
+        ("ui/test_open_here.py", "ui/test_right_click_settings.py")),
+    "right_click": Area(
+        ("context_menu/request.py", "context_menu/settings_entry.py"),
+        ("ui/test_right_click_settings.py",)),
     "hover_texts": Area(("ui/hover.py",), ("ui/test_hover_texts.py",)),
     "scroll_wheel": Area(("ui/no_wheel.py",), ("ui/test_no_wheel.py",)),
     "stall_watch": Area(("ui/stall_watch.py",), ("ui/test_stall_watch.py",)),
@@ -126,8 +129,8 @@ AREAS: dict[str, Area] = {
 # Sources every desktop test goes through (the window and what all of it uses): a change runs the whole layer.
 WHOLE_DESKTOP = ("ui/main_window.py", "ui/qt_util.py", "ui/toast.py", "ui/controllers/__init__.py")
 # Package markers and the entry point: nothing to test on their own.
-NO_TESTS = ("__main__.py", "core/__init__.py", "core/index/__init__.py", "services/__init__.py", "ui/__init__.py",
-            "ui/side_panel/__init__.py", "ui/tools/__init__.py")
+NO_TESTS = ("__main__.py", "context_menu/__init__.py", "core/__init__.py", "core/index/__init__.py",
+            "services/__init__.py", "ui/__init__.py", "ui/side_panel/__init__.py", "ui/tools/__init__.py")
 
 # The layer's guards: rules every change of that layer must keep (Ground rules 4 and 7, SPEC §24), and the type
 # check, which catches a caller left behind by a changed signature in either layer.

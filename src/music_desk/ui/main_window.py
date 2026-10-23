@@ -69,7 +69,7 @@ from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
 from music_desk.ui.toolbar_icons import tool_icon
-from music_desk.ui.tools.tool_cards import CLEANUP, RENAME, REPLAYGAIN, TIDY
+from music_desk.ui.tools.tool_cards import CLEANUP, RENAME, REPLAYGAIN, TIDY, ToolCards
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +105,9 @@ class MainWindow(QMainWindow):
     renameFailed = Signal(str)
     playlistExported = Signal(str, int)  # the saved file, its track count (emitted from the shell thread)
 
-    def __init__(self, library: LibraryService | None = None, settings: Settings | None = None) -> None:
+    def __init__(self, library: LibraryService | None = None, settings: Settings | None = None,
+                 cards: ToolCards | None = None) -> None:
+        """`cards`: the Options window's cards, when the right-click Settings entry made them first (SPEC §31)."""
         super().__init__()
         self.library = library
         self.settings = settings or Settings()
@@ -169,7 +171,7 @@ class MainWindow(QMainWindow):
             "file type, or the file isn't reachable.", path, False))
         locks = library.locks if library is not None else PathLocks()
         # Each feature's flow lives in its controller (SPEC §16), which owns its pages; the window lays them out.
-        self.tools = ToolsController(self, locks, self)  # Rename, ReplayGain, Tidy (SPEC §10, §30)
+        self.tools = ToolsController(self, locks, self, cards)  # Rename, ReplayGain, Tidy (SPEC §10, §30)
         self.tools.cards.hideFoldersChanged.connect(self.set_hide_folders_without_music)  # the Browser page
         self.rename_preview, self.rg_view = self.tools.pages
         self.split = SplitController(self, locks, self)  # the cue split (SPEC §22)

@@ -42,11 +42,14 @@ TOOL_NAMES = {RENAME: "Rename", REPLAYGAIN: "ReplayGain", TIDY: "Tidy", CLEANUP:
 
 
 class ToolsController(QObject):
-    def __init__(self, window, locks, parent: QObject | None = None) -> None:
+    def __init__(self, window, locks, parent: QObject | None = None, cards: ToolCards | None = None) -> None:
         super().__init__(parent)
         self.window = window
         self.locks = locks
-        self.cards = ToolCards(window.settings, window)  # the options, in dialogs (SPEC §30)
+        # The options, in dialogs (SPEC §30); `cards`: those the right-click Settings entry already made (§31).
+        self.cards = cards or ToolCards(window.settings, window)
+        if cards is not None:
+            cards.adopt(window)
         window.tag_io.renameFields.connect(self._tool_example)
         window.tag_writer.replaygainRemoved.connect(self._replaygain_removed)
         self._example_token: int | None = None
@@ -200,6 +203,13 @@ class ToolsController(QObject):
         self.cards.set_example(None, "")
         self._example_token = self.window.tag_io.read_rename_fields(first) if first else None
         self.cards.open_options(which)
+
+    def open_options_on(self, paths: list[str]) -> None:
+        """The right-click Settings entry, with MusicDesk open (SPEC §31): the Options window as it was, its File
+        names example from the clicked items' first track; the main window stays where it is."""
+        self.cards.set_example(None, "")
+        self._example_token = self.window.tag_io.read_first_track_fields(paths)
+        self.cards.open_options()
 
     def cancel_planning(self) -> None:
         """Leaving the rename preview while it plans: the plan isn't needed any more."""

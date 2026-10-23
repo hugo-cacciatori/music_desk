@@ -2,7 +2,7 @@
 (SPEC §23).
 
 A fake runner stands in for flac in most tests: its "audio" is a byte string, one byte per sample, at a "rate" of
-1000 samples a second, so one millisecond is one sample. The `slow` tests run the real bundled flac on copies of
+1000 samples a second, so one millisecond is one sample. Some tests run the real bundled flac on copies of
 the split fixtures.
 """
 
@@ -374,7 +374,7 @@ def test_a_wav_or_aiffs_fields_replaygain_and_cover_are_copied(fixture_copy, fix
     assert "STALE" not in FLAC(str(copy_target)).tags
 
 
-# -- the real flac (slow) --
+# -- the real flac (about 0.3 s each, SPEC §18) --
 
 @pytest.fixture
 def runner():
@@ -388,7 +388,6 @@ def real_plan(path, start, end, subfolder="lite"):
     return trim.plan_trim(path, trim.read_source(path), start, end, subfolder)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize(("start", "end", "samples"), [
     ("0:00.000", "0:03.000", 3 * 44_100),  # the hidden part
     ("0:03.000", "0:12.000", 9 * 44_100),  # the songs
@@ -420,7 +419,6 @@ def test_real_trims_are_proved_and_leave_the_original(fixture_copy, runner, star
                                                                "Fixture Artist - Split Album.flac", "lite"]
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("shift_end", [False, True])
 def test_a_real_trim_one_sample_off_fails(fixture_copy, runner, shift_end):
     class Shifted(FlacRunner):
@@ -438,7 +436,6 @@ def test_a_real_trim_one_sample_off_fails(fixture_copy, runner, shift_end):
     assert source.read_bytes() == original
 
 
-@pytest.mark.slow
 def test_a_real_trim_of_a_wav_gives_a_proved_flac(fixture_copy, runner):
     source = fixture_copy("split/wav_image/image.wav")
     original = source.read_bytes()
@@ -450,7 +447,6 @@ def test_a_real_trim_of_a_wav_gives_a_proved_flac(fixture_copy, runner):
     assert source.read_bytes() == original
 
 
-@pytest.mark.slow
 def test_stopping_the_real_flac(fixture_copy, runner):
     token = CancelToken()
     token.cancel()

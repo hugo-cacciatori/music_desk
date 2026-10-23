@@ -9,6 +9,65 @@ FIXTURES = Path(__file__).parent / "fixtures" / "generated"
 REFERENCE = Path(__file__).parent / "reference"
 
 
+# -- test selection by feature (tests/areas.py, SPEC §18 "Test selection") --
+
+def pytest_addoption(parser):
+    group = parser.getgroup("selection", "test selection by feature (tests/areas.py, SPEC §18)")
+    group.addoption("--changed", action="store_true",
+                    help="run the tests the files changed since HEAD (or --since) need, layer by layer")
+    group.addoption("--since", default="HEAD", metavar="BASE", help="with --changed: compare with this commit")
+    group.addoption("--with-callers", action="store_true",
+                    help="with --changed: a backend change that alters what it gives its callers also runs its "
+                         "areas' desktop tests")
+    group.addoption("--area", action="append", default=[], metavar="NAME",
+                    help="run every test of a feature area (repeatable); see tests/areas.py")
+
+
+def pytest_configure(config):
+    import areas
+
+    config.selected_tests = None  # None: no selection, collect as usual
+    config.selection_header = []
+    names = config.getoption("area")
+    if names:
+        unknown = [n for n in names if n not in areas.AREAS]
+        if unknown:
+            raise pytest.UsageError(f"unknown area {', '.join(unknown)}; areas: {', '.join(areas.AREAS)}")
+        config.selected_tests = areas.area_tests(names)
+        config.selection_header = [f"areas: {', '.join(names)} ({len(config.selected_tests)} test files)"]
+    elif config.getoption("changed"):
+        changed = areas.changed_files(config.getoption("since"))
+        selection = areas.select(changed, with_callers=config.getoption("with_callers"))
+        header = [f"changed since {config.getoption('since')}: {', '.join(changed) or 'nothing'}"]
+        if selection.everything:
+            header += ["the whole suite, because:"] + [f"  {reason}" for reason in selection.everything]
+        else:
+            config.selected_tests = set(selection.tests)
+            header += [f"{len(selection.tests)} test files:"]
+            header += [f"  {test}: {'; '.join(why)}" for test, why in sorted(selection.tests.items())]
+        config.selection_header = header
+
+
+def pytest_report_header(config):
+    return config.selection_header
+
+
+def pytest_ignore_collect(collection_path, config):
+    selected = config.selected_tests
+    if selected is None or not collection_path.is_file() or not collection_path.name.startswith("test_"):
+        return None
+    try:
+        rel = collection_path.relative_to(Path(__file__).parent).as_posix()
+    except ValueError:
+        return None
+    return rel not in selected or None
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if session.config.selected_tests == set() and exitstatus == pytest.ExitCode.NO_TESTS_COLLECTED:
+        session.exitstatus = pytest.ExitCode.OK  # the change needs no test: nothing ran, nothing failed
+
+
 @pytest.fixture(scope="session")
 def reference_music_tools():
     """The frozen music_tools.py, imported as a module (it has no side effects at import)."""

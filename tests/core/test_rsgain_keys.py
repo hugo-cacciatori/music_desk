@@ -12,8 +12,6 @@ from music_desk.core.formats import format_for, open_audio
 from music_desk.core.rsgain import strip_ansi
 from music_desk.paths import rsgain_path
 
-pytestmark = pytest.mark.slow
-
 # Fixture -> (gain key, peak key), as mutagen exposes them. Vorbis comment keys match ignoring case.
 EXPECTED_KEYS = {
     "tone.flac": ("REPLAYGAIN_TRACK_GAIN", "REPLAYGAIN_TRACK_PEAK"),

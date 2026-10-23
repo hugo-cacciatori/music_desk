@@ -55,15 +55,9 @@ def save_image(path, width, height, fmt=None, transformation=None):
     assert writer.write(image), writer.errorString()
 
 
-@pytest.mark.parametrize(("name", "encoding", "snippet"), [
-    ("eac.log", "UTF-16 LE", "Fixture Artist / Café Album"),
-    ("bom.txt", "UTF-8 (BOM)", "déjà vu"),
-    ("utf8.cue", "UTF-8", 'TITLE "Café Album"'),
-    ("cp1252.txt", "Windows-1252", "Café à la crème — Noël"),
-    ("release.nfo", "CP437 (DOS)", "╔═"),
-    ("utf16.lrc", "UTF-16 LE", "Première ligne"),
-])
-def test_text_types(qtbot, panel, fixtures_dir, name, encoding, snippet):
+def test_a_text_and_its_encoding(qtbot, panel, fixtures_dir):
+    """One encoding shows the page's wiring; tests/core/test_preview.py reads every encoding (SPEC §18)."""
+    name, encoding, snippet = "eac.log", "UTF-16 LE", "Fixture Artist / Café Album"
     page = show(qtbot, panel, fixtures_dir / "preview" / name)
     assert panel.stack.currentWidget() is page and page.pages.currentWidget() is page.text
     assert snippet in page.text.toPlainText()

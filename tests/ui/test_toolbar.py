@@ -362,3 +362,23 @@ def test_every_page_restores_its_defaults_and_restore_all_asks(qtbot, window):
     assert not window.settings.hide_folders_without_music and not window.settings.save_cue_beside
     assert window.settings.rename_options == rename.options_to_json(rename.DEFAULT_OPTIONS)
     dialog.close()
+
+
+def test_the_cards_go_with_the_window(qtbot, service):
+    """A closed window takes its option cards with it (before 2026-10-23 they stayed behind, and the hundreds a
+    test run left crashed Python at exit, SPEC §18), and they stay hidden until Options… shows them."""
+    import shiboken6
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
+
+    from music_desk.ui.main_window import MainWindow
+    from music_desk.ui.tools.tool_cards import PAGE_TITLES
+
+    window = MainWindow(service)
+    window.show()
+    cards = [window.tools.cards.card(which) for which in PAGE_TITLES]  # Options… never opened
+    assert not any(card.isVisible() for card in cards)
+    window.close()
+    window.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert not any(shiboken6.isValid(card) for card in cards)

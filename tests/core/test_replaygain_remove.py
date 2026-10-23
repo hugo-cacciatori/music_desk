@@ -88,7 +88,6 @@ def test_a_custom_comment_template(tmp_path, fixtures_dir):
     assert TaggedFile(path).fields().comment is None
 
 
-@pytest.mark.slow
 def test_what_a_real_run_wrote_is_removed(fixture_copy):
     """The bundled rsgain and the ReplayGain step write the tags (any key case rsgain uses); removal clears them."""
     from music_desk import paths

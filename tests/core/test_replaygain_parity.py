@@ -18,8 +18,6 @@ from music_desk.core.formats import open_audio
 from music_desk.core.replaygain import process_album, process_discography
 from music_desk.paths import rsgain_path
 
-pytestmark = pytest.mark.slow
-
 ARTIST = "replaygain/Fixture Artist"
 
 

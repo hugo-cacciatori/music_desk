@@ -1,6 +1,6 @@
 """core/split.py and core/flac.py: cutting, the proof, and cleaning up only this run's .partial files (SPEC §22).
 
-A fake runner stands in for flac in most tests: its "audio" is a byte string, one byte per sample. The `slow`
+A fake runner stands in for flac in most tests: its "audio" is a byte string, one byte per sample. Some
 tests run the real bundled flac on copies of the split fixtures.
 """
 
@@ -148,7 +148,7 @@ def test_flac_version_when_it_cant_run(tmp_path):
     assert flac_version(tmp_path / "missing.exe") is None
 
 
-# -- the real flac (slow) --
+# -- the real flac (about 0.3 s each, SPEC §18) --
 
 @pytest.fixture
 def runner():
@@ -162,12 +162,10 @@ def real_plan(fixtures_dir, tmp_path, name, runner):
     return cue.plan_album(sheet, DEFAULT_MASKS, "-", is_silent=split.is_silent(runner))
 
 
-@pytest.mark.slow
 def test_the_bundled_flac_runs():
     assert flac_version(paths.flac_path()) == "flac 1.5.0"
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize(("name", "lengths"), [
     ("hidden_track", [3 * 44100, 3 * 44100 + 37 * 588, 3 * 44100 - 37 * 588, 3 * 44100]),
     ("silent_pregap", [6 * 44100, 3 * 44100]),  # the silent 3 s joined track 1
@@ -181,7 +179,6 @@ def test_real_cuts_are_proved(fixtures_dir, tmp_path, runner, name, lengths):
     assert all(p.exists() for p in result.partials)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("name", ["hidden_track", "wav_image"])
 def test_a_real_cut_one_sample_off_fails(fixtures_dir, tmp_path, runner, name):
     class Shifted(FlacRunner):
@@ -196,7 +193,6 @@ def test_a_real_cut_one_sample_off_fails(fixtures_dir, tmp_path, runner, name):
     assert names(plan.cue.parent) == before
 
 
-@pytest.mark.slow
 def test_stopping_the_real_flac(fixtures_dir, tmp_path, runner):
     token = CancelToken()
     token.cancel()
@@ -208,7 +204,6 @@ def test_stopping_the_real_flac(fixtures_dir, tmp_path, runner):
 
 # -- finishing an album --
 
-@pytest.mark.slow
 def test_finish_names_and_tags_and_touches_nothing_else(fixtures_dir, tmp_path, runner):
     plan = real_plan(fixtures_dir, tmp_path, "hidden_track", runner)
     cut = split.cut_album(plan, runner)
@@ -343,7 +338,6 @@ def test_finishing_some_tracks_writes_only_those(album):
     assert names(album) == sorted(ORIGINALS + ["01 One.flac", "03 Three.flac"])
 
 
-@pytest.mark.slow
 def test_extracting_only_track_3_with_the_real_flac(fixtures_dir, tmp_path, runner):
     plan = real_plan(fixtures_dir, tmp_path, "hidden_track", runner)
     plan = cue.plan_sheet(plan.sheet, plan.cue, DEFAULT_MASKS, "-", ticked={3}, is_silent=split.is_silent(runner))
@@ -354,7 +348,6 @@ def test_extracting_only_track_3_with_the_real_flac(fixtures_dir, tmp_path, runn
     assert result.track_md5s == [expected]
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("shift_end", [False, True])
 def test_extracting_track_2_one_sample_off_fails_with_the_real_flac(fixtures_dir, tmp_path, runner, shift_end):
     """Moving only its start changes its length; moving both keeps the length, and the MD5 catches it."""
@@ -372,7 +365,6 @@ def test_extracting_track_2_one_sample_off_fails_with_the_real_flac(fixtures_dir
     assert names(plan.cue.parent) == before
 
 
-@pytest.mark.slow
 def test_tracks_get_nothing_else_of_the_images_tags(fixtures_dir, tmp_path, runner):
     """flac carries a FLAC image's tags and pictures into each cut; a track keeps only the sheet's fields, its ISRC
     and the front cover (SPEC §22): the image's ReplayGain, lyrics, comment and cue sheet described the whole file."""

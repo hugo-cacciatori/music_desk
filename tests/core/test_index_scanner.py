@@ -345,6 +345,7 @@ def make_tree(base, folders: int, files_per_folder: int, audio_source=None):
             shutil.copy2(audio_source, folder / "01 track.flac")
 
 
+@pytest.mark.perf
 def test_ten_thousand_entries(writer, read, tmp_path, fixtures_dir):
     lib = tmp_path / "big"
     make_tree(lib, 500, 19, fixtures_dir / "formats" / "tone.flac")  # 500 folders, 10,000 files, 500 tracks
@@ -360,7 +361,7 @@ def test_ten_thousand_entries(writer, read, tmp_path, fixtures_dir):
     assert first < 60 and again < 30
 
 
-@pytest.mark.slow
+@pytest.mark.perf
 def test_hundred_thousand_entries(writer, tmp_path):
     lib = tmp_path / "huge"
     make_tree(lib, 5000, 20)

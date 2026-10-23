@@ -1,6 +1,6 @@
 """core/waveform.py: the Trim page's waveform peaks (SPEC §23).
 
-The reducer is fed known PCM (little-endian, signed, interleaved, as flac writes it). The `slow` test reads a
+The reducer is fed known PCM (little-endian, signed, interleaved, as flac writes it). One test reads a
 fixture through the real bundled flac.
 """
 
@@ -111,7 +111,6 @@ def test_fit_reduces_and_stretches():
     assert waveform.fit(peaks, 0) == [] and waveform.fit(Peaks([], []), 10) == []
 
 
-@pytest.mark.slow
 def test_a_real_silent_stretch_is_a_flat_line(fixture_copy):
     """3 s of silence, then 6 s of a quarter-amplitude chirp, read by the bundled flac."""
     source = fixture_copy("split/silent_pregap/image.flac")

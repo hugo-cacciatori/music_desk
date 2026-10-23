@@ -159,7 +159,6 @@ def test_quitting_with_a_running_job_asks(qtbot, window, service, library_dir, s
     assert not window.isVisible()
 
 
-@pytest.mark.slow
 def test_m5_done_when_the_windows_replaygain_log_matches_the_script(qtbot, window, service, library_dir,
                                                                      reference_music_tools, monkeypatch, tmp_path):
     """M5's "Done when": the app's replaygain.log, from a job run through the window with the real rsgain, matches

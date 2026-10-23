@@ -1,6 +1,6 @@
 """The ReplayGain tool in the window: Run (no preview), the job, Stop, locks, the report, and the index
-(SPEC §10 B; Tidy is in test_tidy_tool.py). A fake scanner tags files as rsgain would; the last test runs the
-real rsgain (slow)."""
+(SPEC §10 B; Tidy is in test_tidy_tool.py). A fake scanner tags files as rsgain would; three tests run the
+real rsgain."""
 
 import shutil
 
@@ -153,7 +153,6 @@ def test_unsaved_edits_are_asked_before_the_run(qtbot, window, service, library_
     metadata.revert()
 
 
-@pytest.mark.slow
 def test_the_real_rsgain_through_the_window(qtbot, window, service, library_dir):
     """The bundled rsgain, end to end (fixtures copied; about a second per album)."""
     album = library_dir / "Fixture Artist" / "Album B"
@@ -162,7 +161,6 @@ def test_the_real_rsgain_through_the_window(qtbot, window, service, library_dir)
     assert rg(album / "01 Loud.flac", ALBUM_GAIN) is not None
 
 
-@pytest.mark.slow
 def test_the_real_rsgain_while_the_library_is_scanned(qtbot, window, service, library_dir, monkeypatch):
     """Hugo's report (2026-10-15): ReplayGain never completed while the library was still being indexed."""
     import threading
@@ -191,7 +189,6 @@ def test_the_real_rsgain_while_the_library_is_scanned(qtbot, window, service, li
     assert [log.result() for log in finished.album_logs] == ["OK"], window.rg_view.text.toPlainText()
 
 
-@pytest.mark.slow
 def test_the_real_rsgain_while_tags_are_read(qtbot, window, service, library_dir, fixtures_dir, monkeypatch):
     """The same, in the scan's second phase: hundreds of audio files having their tags read meanwhile."""
     import time

@@ -17,8 +17,9 @@ from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 
-FORMATS = ["tone.flac", "tone.ogg", "tone.oga", "tone.opus", "tone.mp3", "tone.mp2", "tone.wav", "tone.aiff",
-           "tone_aac.m4a", "tone_alac.m4a", "tone.m4b", "tone.wv", "tone.tta", "tone.wma"]
+# The tab's code is the same for every format: two tag families prove its wiring, and
+# tests/core/test_metadata.py checks the write on every format (SPEC §18, 2026-10-23).
+FORMATS = ["tone.flac", "tone.mp3"]
 
 
 def raw_keys(path) -> set[str]:

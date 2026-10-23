@@ -1,5 +1,5 @@
 """A scripted stand-in for core.rsgain.scan: it writes known track values through TaggedFile, as rsgain would,
-so ReplayGain tests are fast and exact. The real rsgain runs in the parity and slow tests."""
+so ReplayGain tests are fast and exact. The real rsgain runs in the parity and real-tool tests (SPEC §18)."""
 
 from pathlib import Path
 

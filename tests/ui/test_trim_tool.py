@@ -177,12 +177,11 @@ def test_keys_nudge_the_times(qtbot, window, album):
     assert page.trim_button.isEnabled()
 
 
+# One case per field the page marks; tests/core/test_trim.py checks every refusal and its message (SPEC §18).
 @pytest.mark.parametrize(("field", "text", "reason"), [
     ("start", "0:0x", "Type the start as m:ss.mmm, for example 0:02.350."),
     ("end", "0:13.000", "The end is past the track's length (0:12.000)."),
-    ("end", "0:00.500", "The start must be before the end."),
     ("subfolder", "a:b", 'A folder name can\'t contain any of \\ / : * ? " < > |.'),
-    ("subfolder", "CON", "CON is a name Windows reserves."),
 ])
 def test_bad_values_are_marked_and_disable_trim(qtbot, window, album, field, text, reason):
     page = open_page(qtbot, window, album / HIDDEN)

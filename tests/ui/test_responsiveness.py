@@ -51,7 +51,7 @@ def make_library(base, folders: int, files_per_folder: int, flac) -> None:
         shutil.copy2(flac, folder / "02 track.flac")
 
 
-@pytest.mark.slow
+@pytest.mark.perf
 def test_browsing_a_10k_tree_while_it_is_indexed(qtbot, tmp_path, fixtures_dir):
     lib = tmp_path / "copied library"
     make_library(lib, 500, 18, fixtures_dir / "formats" / "tone.flac")  # 500 folders, 10,000 files, 1,000 tracks

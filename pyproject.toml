@@ -25,6 +25,7 @@ dev = [
     "pyinstaller",
     "tinytag==2.0.0",
     "basedpyright>=1.40.2",
+    "pytest-xdist>=3.8.0",
 ]
 
 [build-system]
@@ -47,8 +48,9 @@ testpaths = ["tests"]
 pythonpath = ["tests/core"]  # shared helpers such as lrclib_fake, for tests in any folder
 norecursedirs = ["reference", "fixtures", ".*", "build", "dist"]
 qt_api = "pyside6"
-# SPEC §18: the performance measurements run only when asked for (`-m perf`); a later -m replaces this one.
-addopts = ["-m", "not perf"]
+# SPEC §18: the performance measurements run only when asked for (`-m perf`; a later -m replaces this one), and
+# workers follow the size of the run (tests/conftest.py, pytest_xdist_auto_num_workers; -n 0 runs in one process).
+addopts = ["-m", "not perf", "-n", "auto"]
 markers = ["perf: a performance measurement on a large synthetic tree (run with -m perf; SPEC §18)"]
 
 [tool.basedpyright]

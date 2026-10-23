@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import shutil
 import tempfile
 import time
@@ -6,6 +7,10 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+
+# No window on Hugo's screen during a run (Hugo, 2026-10-23): Qt draws off screen. Before any QApplication exists;
+# QT_QPA_PLATFORM=windows in the environment brings the real windows back, to watch a test.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 FIXTURES = Path(__file__).parent / "fixtures" / "generated"
 REFERENCE = Path(__file__).parent / "reference"
@@ -32,40 +37,64 @@ def pytest_addoption(parser):
                     help="run every test of a feature area (repeatable); see tests/areas.py")
 
 
-def pytest_configure(config):
+def _plan(config):
+    """What this run tests: (selected test files or None for everything, header lines, label, file count). Worked
+    out once, early enough for the worker count below."""
+    plan = getattr(config, "_test_plan", None)
+    if plan is not None:
+        return plan
     import areas
 
-    config.selected_tests = None  # None: no selection, collect as usual
-    config.selection_header = []
     names = config.getoption("area")
     explicit = config.option.file_or_dir or config.option.markexpr != "not perf"  # paths, or a -m of one's own
+    everything = len(areas.all_test_files())
+    selected, header = None, []
     if config.getoption("all"):
-        config.run_label = "the whole suite (--all)"
+        label, count = "the whole suite (--all)", everything
     elif names:
         unknown = [n for n in names if n not in areas.AREAS]
         if unknown:
             raise pytest.UsageError(f"unknown area {', '.join(unknown)}; areas: {', '.join(areas.AREAS)}")
-        config.selected_tests = areas.area_tests(names)
-        config.run_label = f"--area {' '.join(names)}"
-        config.selection_header = [f"areas: {', '.join(names)} ({len(config.selected_tests)} test files)"]
+        selected = areas.area_tests(names)
+        label, count = f"--area {' '.join(names)}", len(selected)
+        header = [f"areas: {', '.join(names)} ({len(selected)} test files)"]
     elif config.getoption("changed") or not explicit:
         # Hugo, 2026-10-23: a bare `pytest` runs what the changes need; the whole suite takes --all.
         changed = areas.changed_files(config.getoption("since"))
         selection = areas.select(changed, with_callers=config.getoption("with_callers"))
         header = [f"changed since {config.getoption('since')}: {', '.join(changed) or 'nothing'}"]
         if selection.everything:
-            config.run_label = "--changed: the whole suite"
+            label, count = "--changed: the whole suite", everything
             header += ["the whole suite, because:"] + [f"  {reason}" for reason in selection.everything]
         else:
-            config.selected_tests = set(selection.tests)
-            config.run_label = f"--changed: {len(selection.tests)} test files"
-            header += [f"{len(selection.tests)} test files:"]
+            selected = set(selection.tests)
+            label, count = f"--changed: {len(selected)} test files", len(selected)
+            header += [f"{len(selected)} test files:"]
             header += [f"  {test}: {'; '.join(why)}" for test, why in sorted(selection.tests.items())]
-            if not selection.tests:
+            if not selected:
                 header += ["nothing to test (--all runs the whole suite)"]
-        config.selection_header = header
     else:
-        config.run_label = " ".join(config.option.file_or_dir) or f"-m {config.option.markexpr}"
+        label = " ".join(config.option.file_or_dir) or f"-m {config.option.markexpr}"
+        count = 0
+        for arg in config.option.file_or_dir:
+            path = Path(arg.split("::")[0])
+            count += len(list(path.rglob("test_*.py"))) if path.is_dir() else 1
+    plan = config._test_plan = (selected, header, label, count)
+    return plan
+
+
+def pytest_xdist_auto_num_workers(config):
+    """`-n auto` (the default, pyproject.toml): workers by the size of the run (measured 2026-10-23 on this PC's
+    32 threads: the whole suite takes 156 s alone, 32 s on 8 workers, 27 s on 16). A few files run in this
+    process, since each worker spends about 3 s starting; the performance measurements always run alone."""
+    if config.option.markexpr not in ("not perf", ""):
+        return 0
+    count = _plan(config)[3]
+    return 0 if count <= 3 else min(12, max(2, count // 4))
+
+
+def pytest_configure(config):
+    config.selected_tests, config.selection_header, config.run_label, _count = _plan(config)
 
 
 def pytest_report_header(config):

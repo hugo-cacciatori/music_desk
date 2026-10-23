@@ -209,5 +209,9 @@ def test_a_long_path_never_pushes_the_toolbar_into_its_overflow(qtbot, window, s
     qtbot.waitUntil(lambda: window.address_bar.hidden_segments() > 0, timeout=3000)
     assert window.search_field.isVisible() and window.search_field.width() >= 150
     assert window.address_bar.buttons[-2].isVisible()  # the open folder itself always shows
-    window.resize(2400, 600)
+    # Wide enough for the whole path, whatever the fonts and the temp folder's length (the root's label is its
+    # full path): the address bar and the search field share what the row gains.
+    bar = window.address_bar
+    needed = sum(button.sizeHint().width() for button in bar.buttons) + 8
+    window.resize(window.width() + 2 * (needed - bar.width()) + 200, 600)
     qtbot.waitUntil(lambda: window.address_bar.hidden_segments() == 0, timeout=3000)

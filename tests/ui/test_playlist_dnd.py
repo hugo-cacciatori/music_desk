@@ -101,7 +101,11 @@ def test_search_results_drag_their_tracks(qtbot, window):
     results = window.search_view
     results.view.selectAll()
     ids = results.view.drag_ids()
-    assert len(ids) == 3 and ids == results.selected_ids()
+    # Failed once in a whole run (2026-10-23) with no rows and no warning logged, and never in 80 runs alone: say
+    # what was on screen, so the next failure names its cause.
+    assert len(ids) == 3 and ids == results.selected_ids(), (
+        f"{results.model.rowCount()} rows, count {results.count_label.text()!r}, note {results.note.text()!r}, "
+        f"request {window.search._request!r}, shown {window.search.shown} of {window.search._token}")
     drop(window, ids)
     assert len(names(window)) == 3
 

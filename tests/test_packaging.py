@@ -65,6 +65,34 @@ def test_flac_is_bundled():
     assert paths.flac_path().is_file() and (paths.flac_path().parent / "libFLAC.dll").is_file()
 
 
+def test_the_installer_registers_the_menu_handler():
+    """The right-click menu (SPEC §31): the handler's COM class at its versioned file, its three places (files,
+    folders, empty space) and the approved list, all removed by the uninstaller; older handlers Explorer still has
+    loaded are moved out of the app's folder, at install and uninstall."""
+    iss = (ROOT / "packaging" / "installer.iss").read_text(encoding="utf-8")
+    cpp = (ROOT / "native" / "context_menu" / "menu.cpp").read_text(encoding="utf-8")
+    [clsid] = re.findall(r"// \{([0-9A-F-]{36})\}: never change it", cpp)
+    assert f'#define MenuClsid "{{{{{clsid}}}"' in iss
+    assert '#define MenuDll "MusicDeskMenu-" + AppVersion + ".dll"' in iss
+    assert r'Excludes: "MusicDeskMenu.dll"' in iss
+    assert (r'Source: "..\dist\MusicDesk\MusicDeskMenu.dll"; DestDir: "{app}"; DestName: "{#MenuDll}"; '
+            "Flags: ignoreversion onlyifdoesntexist") in iss
+    classes = r'Root: HKA; Subkey: "Software\Classes'
+    assert (classes + r'\CLSID\{#MenuClsid}"; ValueType: string; ValueName: ""; ValueData: "MusicDesk menu"; '
+            "Flags: uninsdeletekey") in iss
+    assert (classes + r'\CLSID\{#MenuClsid}\InprocServer32"; ValueType: string; ValueName: ""; '
+            r'ValueData: "{app}\{#MenuDll}"') in iss
+    assert 'ValueName: "ThreadingModel"; ValueData: "Apartment"' in iss
+    for where in ("*", "Directory", r"Directory\Background"):
+        assert (classes + rf'\{where}\shellex\ContextMenuHandlers\MusicDesk"; ValueType: string; ValueName: ""; '
+                'ValueData: "{#MenuClsid}"; Flags: uninsdeletekey') in iss
+    assert (r'Subkey: "Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"; ValueType: string; '
+            'ValueName: "{#MenuClsid}"; ValueData: "MusicDesk menu"; Flags: uninsdeletevalue') in iss
+    assert "ChangesAssociations=yes" in iss
+    assert "RemoveMenuHandlers('{#MenuDll}');" in iss and "RemoveMenuHandlers('');" in iss
+    assert not re.search(r"Flags:[^\n]*restartreplace", iss)  # it does nothing on a per-user install
+
+
 def test_the_installer_build_includes_the_menu_handler():
     """build_installer.py builds MusicDeskMenu.dll into dist/MusicDesk after PyInstaller, so the installer's
     [Files] glob takes it (SPEC §31)."""

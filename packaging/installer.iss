@@ -5,6 +5,11 @@
 ; (no admin, in %LOCALAPPDATA%\Programs). The Start menu gets a MusicDesk folder with the app and "Uninstall
 ; MusicDesk". The uninstaller keeps the app's own data (%LOCALAPPDATA%\MusicDesk:
 ; the library index, settings, logs) unless the user asks to delete it. Music folders are never touched.
+;
+; The right-click menu's handler (SPEC §31) is installed under a name of its own per version, so an update never
+; replaces the DLL File Explorer has loaded (Inno's restartreplace does nothing on a per-user install): the registry
+; points at the new file, and the next right-click loads it. Older copies Explorer still holds are moved to the
+; Temp folder, at install and at uninstall, so the app's folder can go.
 
 #ifndef AppVersion
   #error AppVersion must be defined (run packaging/build_installer.py)
@@ -12,6 +17,9 @@
 
 #define AppName "MusicDesk"
 #define AppExe "MusicDesk.exe"
+#define MenuDll "MusicDeskMenu-" + AppVersion + ".dll"
+; The handler's CLSID, as in native\context_menu\menu.cpp ("{{" is one brace for Inno): never change it.
+#define MenuClsid "{{366C8DAE-145F-40D0-B273-8AFE153DD3F5}"
 
 [Setup]
 ; The AppId identifies the app for upgrades and the uninstaller: never change it.
@@ -39,6 +47,8 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
+; Tells Explorer its menus changed (SHChangeNotify) at the end of install and uninstall.
+ChangesAssociations=yes
 RestartApplications=no
 
 [Languages]
@@ -48,7 +58,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\dist\MusicDesk\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\MusicDesk\*"; DestDir: "{app}"; Excludes: "MusicDeskMenu.dll"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Only if missing: this version, already installed, may be loaded by Explorer (and it is the same file).
+Source: "..\dist\MusicDesk\MusicDeskMenu.dll"; DestDir: "{app}"; DestName: "{#MenuDll}"; Flags: ignoreversion onlyifdoesntexist
 
 [InstallDelete]
 ; 0.1.0-0.2.x put a loose shortcut at the top of the Start menu's Programs; it moved into the MusicDesk folder.
@@ -65,11 +77,47 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 ; The `musicdesk` keyword in File Explorer's address bar (SPEC §29): App Paths finds MusicDeskHere.exe, which opens
 ; MusicDesk on the folder shown. HKA: all users on an admin install, this user on a per-user one.
 Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\musicdesk.exe"; ValueType: string; ValueName: ""; ValueData: "{app}\MusicDeskHere.exe"; Flags: uninsdeletekey
+; The MusicDesk submenu in File Explorer's right-click menu (SPEC §31): the handler's COM class, where it shows
+; (files, folders, a folder's empty space), and the approved list some policies require. HKA, as above.
+Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}"; ValueType: string; ValueName: ""; ValueData: "MusicDesk menu"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}\InprocServer32"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MenuDll}"
+Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}\InprocServer32"; ValueType: string; ValueName: "ThreadingModel"; ValueData: "Apartment"
+Root: HKA; Subkey: "Software\Classes\*\shellex\ContextMenuHandlers\MusicDesk"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\MusicDesk"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\MusicDesk"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"; ValueType: string; ValueName: "{#MenuClsid}"; ValueData: "MusicDesk menu"; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+// The menu handlers in the app's folder other than `Keep`: deleted, or, when Explorer has one loaded (it can't be
+// deleted then, but it can be renamed), moved to the Temp folder, which Windows cleans.
+procedure RemoveMenuHandlers(Keep: String);
+var
+  App, Name: String;
+  Found: TFindRec;
+begin
+  App := ExpandConstant('{app}');
+  if FindFirst(App + '\MusicDeskMenu-*.dll', Found) then
+  try
+    repeat
+      Name := Found.Name;
+      if (CompareText(Name, Keep) <> 0) and not DeleteFile(App + '\' + Name) then
+        RenameFile(App + '\' + Name, AddBackslash(GetTempDir) + 'MusicDesk-' +
+                   GetDateTimeString('yyyymmddhhnnss', #0, #0) + '-' + Name);
+    until not FindNext(Found);
+  finally
+    FindClose(Found);
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    RemoveMenuHandlers('{#MenuDll}');
+end;
+
 // After the files are removed: offer to delete the app's own data too. The answer defaults to No, and a silent
 // uninstall keeps it, so an uninstall (or an upgrade through one) never loses the index or the settings.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -78,6 +126,8 @@ var
 begin
   if CurUninstallStep = usPostUninstall then
   begin
+    RemoveMenuHandlers('');  // one Explorer still has loaded, which the uninstaller couldn't delete
+    RemoveDir(ExpandConstant('{app}'));
     DataDir := ExpandConstant('{localappdata}\{#AppName}');
     if DirExists(DataDir) and not UninstallSilent then
       if MsgBox('Also delete MusicDesk''s own data in ' + DataDir + '?' + #13#10#13#10 +

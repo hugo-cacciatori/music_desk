@@ -7,7 +7,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from music_desk import __version__
-from music_desk.context_menu.request import SETTINGS, parse_arguments
+from music_desk.context_menu.request import REPLAYGAIN_ENTRIES, SETTINGS, parse_arguments
 from music_desk.context_menu.settings_entry import SettingsEntry
 from music_desk.core.flac import flac_version
 from music_desk.core.rsgain import rsgain_version
@@ -96,6 +96,10 @@ class Starter(QObject):
 
     def run_entry(self, entry: str, paths: list[str]) -> None:
         """A right-click entry (SPEC §31): in the main window if it is open, else in a window of its own."""
+        if entry in REPLAYGAIN_ENTRIES:
+            # Until the ReplayGain page has a window of its own (slice 2 task 3), the main window runs it.
+            self.main_window().tools.run_entry(entry, paths)
+            return
         if entry != SETTINGS:
             log.warning("ignored an unknown right-click entry %r", entry)
             return

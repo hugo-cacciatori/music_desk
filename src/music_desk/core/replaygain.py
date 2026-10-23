@@ -470,7 +470,8 @@ def process_album(folder: str | Path, options: ReplayGainOptions = DEFAULT_OPTIO
     run_log = RunLog(folder, files, options, exe, reporter, now)
     try:
         for name in unsupported:
-            run_log.warn(f"{name}: skipped, format not supported by rsgain")
+            if name.casefold() not in skip:  # an excluded file isn't a track of this run at all
+                run_log.warn(f"{name}: skipped, format not supported by rsgain")
         for name in waiting:
             run_log.warn(f"{name}: skipped, image waiting to be split")
         if not scan_album(folder, files, run_log, scanner, exe, cancel):

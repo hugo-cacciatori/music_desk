@@ -72,7 +72,7 @@ AREAS: dict[str, Area] = {
         ("core/replaygain.py", "core/rsgain.py", "services/replaygain_job.py", "ui/tools/replaygain_card.py",
          "ui/tools/rg_report.py", "ui/tools/rg_recap.py", "ui/controllers/tools.py"),
         ("core/test_replaygain.py", "core/test_replaygain_parity.py", "core/test_replaygain_remove.py",
-         "core/test_replaygain_loose.py",
+         "core/test_replaygain_loose.py", "ui/test_right_click_replaygain.py",
          "core/test_rsgain.py", "core/test_rsgain_keys.py", "core/test_rsgain_scan.py",
          "ui/test_replaygain_tool.py", "ui/test_replaygain_remove_ui.py", "ui/test_jobs_panel.py"),
         ("resources/rsgain/",)),
@@ -117,7 +117,7 @@ AREAS: dict[str, Area] = {
         ("ui/test_open_here.py", "ui/test_right_click_settings.py")),
     "right_click": Area(
         ("context_menu/request.py", "context_menu/settings_entry.py"),
-        ("ui/test_right_click_settings.py", "test_menu_handler.py"),
+        ("ui/test_right_click_settings.py", "ui/test_right_click_replaygain.py", "test_menu_handler.py"),
         ("native/context_menu/", "packaging/build_menu.py")),
     "hover_texts": Area(("ui/hover.py",), ("ui/test_hover_texts.py",)),
     "scroll_wheel": Area(("ui/no_wheel.py",), ("ui/test_no_wheel.py",)),

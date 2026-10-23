@@ -58,6 +58,13 @@ def short_result(finished: Finished) -> str:
         return finished.error
     if finished.nothing:
         return "nothing to do, no audio file rsgain can scan"
+    if finished.loose is not None:
+        results = [run_log.result() for run_log in finished.loose.logs]
+        problems = sum(1 for r in results if r != "OK")
+        text = f"{plural(len(results), 'track')} each on its own"
+        if finished.cancelled:
+            return f"{text}, {plural(len(finished.loose.not_run), 'track')} not processed"
+        return f"{text}, {problems} need{'s' if problems == 1 else ''} checking" if problems else f"{text}, OK"
     if finished.cancelled:
         return "nothing was leveled; see the report"
     results = [run_log.result() for run_log in finished.album_logs]
@@ -82,6 +89,7 @@ class ReplayGainView(QWidget):
         super().__init__(parent)
         self.state = "idle"  # running, result, error
         self._album = ""
+        self._unit = "Album"
         self._album_started = 0.0
         self._clock = QTimer(self, interval=1000)  # the elapsed time while an album is scanned
         self._clock.timeout.connect(self._tick)
@@ -144,7 +152,10 @@ class ReplayGainView(QWidget):
 
     # -- states --
 
-    def show_running(self, folder: Path | None = None, title: str | None = None, discography: bool = False) -> None:
+    def show_running(self, folder: Path | None = None, title: str | None = None, discography: bool = False,
+                     unit: str = "Album") -> None:
+        """`unit`: what the progress counts, "Album" or (tracks each on their own) "Track"."""
+        self._unit = unit
         if folder is not None:
             self.folder = folder
         what = title or f"ReplayGain · {'Discography' if discography else 'This album'}"
@@ -167,7 +178,7 @@ class ReplayGainView(QWidget):
         self.busy.setRange(0, total)
         self.busy.setValue(done)
         if label and label != "done":
-            self._album = f"Album {min(done + 1, total)} of {total}: {label}"
+            self._album = f"{self._unit} {min(done + 1, total)} of {total}: {label}"
             self._album_started = time.monotonic()
             self._tick()
 
@@ -191,6 +202,9 @@ class ReplayGainView(QWidget):
         if finished.nothing:
             self._show("result", "Nothing was done: no audio file rsgain can scan here.")
             return
+        if finished.loose is not None:
+            self._show_loose(finished)
+            return
         results = [run_log.result() for run_log in finished.album_logs]
         if finished.result is not None:
             fill(self.summary_table, [
@@ -212,6 +226,22 @@ class ReplayGainView(QWidget):
             message += f" Every album was leveled to {format_gain(finished.result.target)}."
         self._show("result", message)
 
+    def _show_loose(self, finished: Finished) -> None:
+        """Tracks each on its own (SPEC §31): their report is only here, no log file has it."""
+        loose = finished.loose
+        assert loose is not None
+        self.text.setPlainText(loose.text())
+        problems = sum(1 for run_log in loose.logs if run_log.result() != "OK")
+        if finished.cancelled:
+            message = f"Stopped: {plural(len(loose.not_run), 'track')} after that point were not processed."
+        elif problems:
+            message = f"Done, but {plural(problems, 'track')} need{'s' if problems == 1 else ''} checking: see below."
+        else:
+            message = f"Done: {plural(len(loose.logs), 'track')} OK, each on its own."
+        if loose.skipped:
+            message += f" {plural(len(loose.skipped), 'file')} left out."
+        self._show("result", message)
+
     def show_error(self, text: str) -> None:
         self._show("error", text)
 
@@ -223,13 +253,14 @@ class ReplayGainView(QWidget):
         self.summary_table.setVisible(has_summary)
         self.text.setVisible(state in ("running", "result"))
         self.stop_button.setVisible(state == "running")
-        self.open_log_button.setVisible(state == "result" and self.finished is not None and not self.finished.nothing)
+        self.open_log_button.setVisible(state == "result" and self.finished is not None and not self.finished.nothing
+                                        and self.finished.log_path is not None)
         self.reveal_button.setVisible(state in ("result", "error"))
         self.done_button.setVisible(state != "running")
         self.done_button.setText("Done" if state == "result" else "Close")
 
     def _open_log(self) -> None:
-        if self.finished is not None:
+        if self.finished is not None and self.finished.log_path is not None:
             self.openLogRequested.emit(str(self.finished.log_path))
 
     def summary_rows(self) -> list[tuple[str, ...]]:

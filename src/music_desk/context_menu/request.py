@@ -17,7 +17,15 @@ from music_desk.core.fsops import natural_key
 log = logging.getLogger(__name__)
 
 SETTINGS = "settings"
-ENTRIES = (SETTINGS,)  # the entries built so far; the option is "--" + the entry
+# ReplayGain (SPEC §31): a folder (or the open one) as an album or as a discography; several folders, each as an
+# album; selected tracks as an album; tracks each on its own (one track: "this track").
+REPLAYGAIN_ALBUM = "replaygain-album"
+REPLAYGAIN_DISCOGRAPHY = "replaygain-discography"
+REPLAYGAIN_ALBUMS = "replaygain-albums"
+REPLAYGAIN_TRACKS = "replaygain-tracks"
+REPLAYGAIN_LOOSE = "replaygain-loose"
+REPLAYGAIN_ENTRIES = (REPLAYGAIN_ALBUM, REPLAYGAIN_DISCOGRAPHY, REPLAYGAIN_ALBUMS, REPLAYGAIN_TRACKS, REPLAYGAIN_LOOSE)
+ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES)  # the entries built so far; the option is "--" + the entry
 LIST_OPTION = "--list"
 
 

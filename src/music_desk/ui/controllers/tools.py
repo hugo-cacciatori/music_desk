@@ -16,14 +16,25 @@ from pathlib import Path
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QMessageBox
 
+from music_desk.context_menu import request as menu
 from music_desk.core import rename
 from music_desk.core.formats import AUDIO_EXTENSIONS
 from music_desk.core.index import queries
 from music_desk.core.index.store import path_of
 from music_desk.core.path_locks import LockedError
+from music_desk.core.replaygain import plural
 from music_desk.services import jobs as jobs_module
 from music_desk.services.rename_job import Applied, Planned, RenameRunner
-from music_desk.services.replaygain_job import Finished, Recapped, ReplayGainRunner
+from music_desk.services.replaygain_job import (
+    ALBUM,
+    ALBUMS,
+    DISCOGRAPHY,
+    LOOSE,
+    TRACKS,
+    Finished,
+    Recapped,
+    ReplayGainRunner,
+)
 from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.tools.rename_preview import RenamePreview
 from music_desk.ui.tools.rg_recap import RecapDialog
@@ -39,6 +50,22 @@ from music_desk.ui.tools.tool_cards import (
 )
 
 TOOL_NAMES = {RENAME: "Rename", REPLAYGAIN: "ReplayGain", TIDY: "Tidy", CLEANUP: "Clean up"}
+
+# The right-click menu's ReplayGain entries (SPEC §31) and the job each runs.
+ENTRY_KINDS = {menu.REPLAYGAIN_ALBUM: ALBUM, menu.REPLAYGAIN_DISCOGRAPHY: DISCOGRAPHY,
+               menu.REPLAYGAIN_ALBUMS: ALBUMS, menu.REPLAYGAIN_TRACKS: TRACKS, menu.REPLAYGAIN_LOOSE: LOOSE}
+
+
+def entry_title(kind: str, targets: list[Path]) -> str:
+    """The job page's heading for a right-click run, as its menu entry reads."""
+    count = len(targets)
+    if kind == ALBUMS and count > 1:
+        return f"ReplayGain · {count} folders, each as an album"
+    if kind == TRACKS:
+        return f"ReplayGain · {plural(count, 'track')} as an album"
+    if kind == LOOSE:
+        return "ReplayGain · this track" if count == 1 else f"ReplayGain · each of {count} tracks on its own"
+    return f"ReplayGain · {'Discography' if kind == DISCOGRAPHY else 'This album'}"
 
 
 class ToolsController(QObject):
@@ -349,6 +376,43 @@ class ToolsController(QObject):
         window.center.setCurrentWidget(self.rg_view)
         return True
 
+    def run_entry(self, entry: str, paths: list[str]) -> bool:
+        """A right-click ReplayGain entry (SPEC §31), with MusicDesk open: its run starts at once (no recap, as the
+        tool), as this app's ReplayGain job, with the current options. The window comes to the front on the job's
+        page. False when it didn't start (the status bar or a toast says why)."""
+        window = self.window
+        window.bring_to_front()
+        kind = ENTRY_KINDS[entry]
+        targets = [Path(path) for path in paths]
+        problems = self.cards.problems(REPLAYGAIN)
+        if not targets or problems:
+            window.statusBar().showMessage(f"ReplayGain: {problems[0] if problems else 'nothing was clicked'}",
+                                           STATUS_MS)
+            return False
+        if self.rg_job is not None:
+            job = window.jobs.get(self.rg_job)
+            assert job is not None  # a running job stays in the list
+            window.toast.show_message(f"{job.kind} is still running in {job.folder}. Start the other run when it "
+                                      "has finished.")
+            window.show_job(self.rg_job)
+            return False
+        folders = sorted({p.parent for p in targets}) if kind in (TRACKS, LOOSE) else targets
+        if any(window._unsaved_edits_under(folder) for folder in folders):
+            return False
+        options = self.cards.replaygain_card.options()
+        try:
+            self._rg_token = self.rg_runner.start(kind, targets, options)
+        except LockedError as e:
+            window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            return False
+        self._rg_request = None  # the card's Run doesn't repeat a right-click run
+        window._pause_indexing(True)
+        self.rg_job = window._start_job(jobs_module.REPLAYGAIN, folders[0])
+        self.rg_view.show_running(folders[0], entry_title(kind, targets), kind == DISCOGRAPHY,
+                                  "Track" if kind == LOOSE else "Album")
+        window.center.setCurrentWidget(self.rg_view)
+        return True
+
     def _rg_progress(self, done: int, total: int, label: str) -> None:
         if self.rg_job is not None and label != "done":
             self.window.jobs.update(self.rg_job, status=label, progress=(done, total))
@@ -359,7 +423,8 @@ class ToolsController(QObject):
         window = self.window
         window._pause_indexing(False)
         if window._library_open():
-            window.refresh_after_tool(finished.folder)  # new tags and replaygain.log files
+            for folder in finished.folders:
+                window.refresh_after_tool(folder)  # new tags and replaygain.log files
         self.rg_view.show_result(finished)
         if self.rg_job is not None:
             window.jobs.report(self.rg_job, "replaygain", finished)

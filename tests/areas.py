@@ -72,6 +72,7 @@ AREAS: dict[str, Area] = {
         ("core/replaygain.py", "core/rsgain.py", "services/replaygain_job.py", "ui/tools/replaygain_card.py",
          "ui/tools/rg_report.py", "ui/tools/rg_recap.py", "ui/controllers/tools.py"),
         ("core/test_replaygain.py", "core/test_replaygain_parity.py", "core/test_replaygain_remove.py",
+         "core/test_replaygain_loose.py",
          "core/test_rsgain.py", "core/test_rsgain_keys.py", "core/test_rsgain_scan.py",
          "ui/test_replaygain_tool.py", "ui/test_replaygain_remove_ui.py", "ui/test_jobs_panel.py"),
         ("resources/rsgain/",)),

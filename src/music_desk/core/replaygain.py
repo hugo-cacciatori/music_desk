@@ -118,7 +118,8 @@ class RunLog:
     """Collects what happens during an album run and appends it to the album's log file as one block."""
 
     def __init__(self, folder: Path, files: list[str], options: ReplayGainOptions, exe: Path,
-                 reporter: Reporter | None = None, now: Clock = datetime.now) -> None:
+                 reporter: Reporter | None = None, now: Clock = datetime.now, loose: bool = False) -> None:
+        self.loose = loose  # a track on its own (SPEC §31): its own album, no subfolders, no log file
         self.now = now
         self.start = now()
         self.start_clock = time.monotonic()
@@ -194,17 +195,21 @@ class RunLog:
 
         if self.scan_ok:
             lines += ["", *self._track_table(), ""]
-            if self.album:
+            if self.loose:
+                lines.append(f"Album: the track's own values, gain {self.album[0]} dB, peak {self.album[1]}"
+                             if self.album else "Album: not computed")
+            elif self.album:
                 lines.append(f"Album: gain {self.album[0]} dB (lowest track gain), "
                              f"peak {self.album[1]} (highest track peak)")
             else:
                 lines.append("Album: not computed")
-            lines.append("Subfolders:")
-            if self.subfolders is None:
-                lines.append("  not processed")
-            else:
-                lines += [f"  {line}" for line in self.subfolders] or [
-                    "  none matching " + ", ".join(self.options.subfolder_keywords)]
+            if not self.loose:
+                lines.append("Subfolders:")
+                if self.subfolders is None:
+                    lines.append("  not processed")
+                else:
+                    lines += [f"  {line}" for line in self.subfolders] or [
+                        "  none matching " + ", ".join(self.options.subfolder_keywords)]
 
         lines += ["", "Warnings / errors:"]
         if not self.issues:
@@ -479,6 +484,86 @@ def process_album(folder: str | Path, options: ReplayGainOptions = DEFAULT_OPTIO
     finally:
         run_log.write()
         reporter.info(f"Report written to {options.log_file}: {run_log.result()}")
+    return run_log
+
+
+# ---------------------------------------------------------------------------
+# Loose tracks (the right-click menu only, SPEC §31)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class LooseResult:
+    """A run on loose tracks: each one's RunLog, in order, and the paths left out with why."""
+
+    options: ReplayGainOptions
+    logs: list[RunLog] = field(default_factory=list)
+    skipped: list[tuple[Path, str]] = field(default_factory=list)
+    not_run: list[Path] = field(default_factory=list)  # after a cancel
+
+    def result(self) -> str:
+        results = {run_log.result() for run_log in self.logs}
+        if self.not_run:
+            return "CANCELLED"
+        if not self.logs:
+            return "NOTHING TO DO"
+        return "OK" if results == {"OK"} else "DONE WITH ERRORS"
+
+    def text(self) -> str:
+        """The report the job's window shows: one block per track, then what was left out. Never written to a
+        file: an album's replaygain.log keeps its last report."""
+        lines = [f"ReplayGain, each track on its own (target {self.options.target_text} LUFS): "
+                 f"{plural(len(self.logs), 'track')} processed", ""]
+        text = "\n".join(lines) + "\n" + "".join(run_log.text() for run_log in self.logs)
+        tail = [f"  {path}: {reason}" for path, reason in self.skipped]
+        tail += [f"  {path}: not processed, cancelled" for path in self.not_run]
+        if tail:
+            text += "\nLeft out:\n" + "\n".join(tail) + "\n"
+        return text + f"\nResult: {self.result()}\n"
+
+
+def process_loose_tracks(tracks: Iterable[str | Path], options: ReplayGainOptions = DEFAULT_OPTIONS,
+                         scanner: Scanner = rsgain.scan, exe: Path | None = None, cancel: CancelToken | None = None,
+                         reporter: Reporter | None = None, now: Clock = datetime.now) -> LooseResult:
+    """ReplayGain on tracks that belong to no album (SPEC §31): each one alone, in turn, is its own album. rsgain
+    measures it at the target, the clipping fix lowers its track gain if needed, its album gain and peak become its
+    own and the LUFS comment is written. Nothing is copied into subfolders and no log file is written.
+
+    Files rsgain can't scan (by extension) and missing ones are skipped. A cancel stops after the current track
+    (rsgain on one file is short), as the discography stops between albums.
+    """
+    exe = exe or paths.rsgain_path()
+    reporter = reporter or NullReporter()
+    result = LooseResult(options)
+    todo: list[Path] = []
+    for track in map(Path, tracks):
+        if track.suffix.lower() not in REPLAYGAIN_EXTENSIONS:
+            result.skipped.append((track, "skipped, format not supported by rsgain"))
+        elif not track.is_file():
+            result.skipped.append((track, "skipped, not found"))
+        else:
+            todo.append(track)
+    for index, track in enumerate(todo):
+        if cancel is not None and cancel.cancelled:
+            result.not_run = todo[index:]
+            break
+        reporter.progress(index, len(todo), track.name)
+        result.logs.append(_process_loose_track(track, options, scanner, exe, reporter, now))
+    reporter.progress(len(todo), len(todo), "done")
+    return result
+
+
+def _process_loose_track(track: Path, options: ReplayGainOptions, scanner: Scanner, exe: Path,
+                         reporter: Reporter, now: Clock) -> RunLog:
+    folder, files = track.parent, [track.name]
+    run_log = RunLog(folder, files, options, exe, reporter, now, loose=True)
+    try:
+        if scan_album(folder, files, run_log, scanner, exe, None):
+            adjust_gain_to_prevent_clipping(folder, files, run_log)
+            update_album_gain_metadata(folder, files, run_log)
+    except Exception:  # noqa: BLE001 - recorded as CRASHED in the track's report
+        log.exception("ReplayGain crashed on %s", track)
+        run_log.crash()
+    reporter.info(f"{track.name}: {run_log.result()}")
     return run_log
 
 

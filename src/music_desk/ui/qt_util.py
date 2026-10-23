@@ -3,8 +3,8 @@
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import QApplication, QTableWidget, QTreeWidget, QWidget
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
+from PySide6.QtWidgets import QApplication, QStyle, QTableWidget, QTreeWidget, QWidget
 
 
 def shortcut(key: QKeySequence | QKeySequence.StandardKey, parent: QWidget, slot: Callable[[], object],
@@ -22,6 +22,18 @@ def app() -> QApplication:
     instance = QApplication.instance()
     assert isinstance(instance, QApplication)
     return instance
+
+
+_standard_icons: dict[QStyle.StandardPixmap, QIcon] = {}
+
+
+def standard_icon(pixmap: QStyle.StandardPixmap) -> QIcon:
+    """The style's standard icon, read once per run: on Windows each read asks the shell (a few ms), and a main
+    window took 0.1 s of its 0.2 s to build re-reading the same few (measured 2026-10-23, SPEC §18)."""
+    icon = _standard_icons.get(pixmap)
+    if icon is None:
+        icon = _standard_icons[pixmap] = app().style().standardIcon(pixmap)
+    return icon
 
 
 def cell_text(table: QTableWidget, row: int, column: int) -> str:

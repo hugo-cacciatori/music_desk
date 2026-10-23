@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QAbstractItemView, QApplication, QStyle, QWidget
 from music_desk.core.index import queries
 from music_desk.core.index.roots import Root
 from music_desk.ui.entry_drag import EntryDragView
+from music_desk.ui.qt_util import standard_icon
 
 ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
 PATH_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -63,9 +64,8 @@ class FolderTreeModel(QAbstractItemModel):
         self._tops: list[_Node] = []
         self._nodes: dict[int, _Node] = {}
         self.only_music = False
-        style = QApplication.style()
-        self._folder_icon = style.standardIcon(QStyle.StandardPixmap.SP_DirIcon)
-        self._drive_icon = style.standardIcon(QStyle.StandardPixmap.SP_DriveHDIcon)
+        self._folder_icon = standard_icon(QStyle.StandardPixmap.SP_DirIcon)
+        self._drive_icon = standard_icon(QStyle.StandardPixmap.SP_DriveHDIcon)
 
     # -- Qt model API --
 

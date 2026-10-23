@@ -64,7 +64,7 @@ from music_desk.ui.hover import with_status_tips
 from music_desk.ui.jobs_panel import JobsPanel
 from music_desk.ui.no_wheel import install_no_wheel
 from music_desk.ui.playlist_panel import PlaylistPanel
-from music_desk.ui.qt_util import app, shortcut
+from music_desk.ui.qt_util import app, shortcut, standard_icon
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
@@ -448,22 +448,21 @@ class MainWindow(QMainWindow):
     # -- history and navigation --
 
     def _build_navigation(self, conn) -> None:
-        style = self.style()
-        self.back_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_ArrowBack), "Back", self)
+        self.back_action = QAction(standard_icon(QStyle.StandardPixmap.SP_ArrowBack), "Back", self)
         # Explicit keys: Qt's standard Back also binds Backspace, which goes up here (SPEC §5), and a key bound
         # twice is ambiguous and fires nothing.
         self.back_action.setShortcut(QKeySequence("Alt+Left"))
         self.back_action.triggered.connect(self.go_back)
         self.back_action.setToolTip("Go back to the folder you were in before (Alt+Left)")
-        self.forward_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_ArrowForward), "Forward", self)
+        self.forward_action = QAction(standard_icon(QStyle.StandardPixmap.SP_ArrowForward), "Forward", self)
         self.forward_action.setShortcut(QKeySequence("Alt+Right"))
         self.forward_action.triggered.connect(self.go_forward)
         self.forward_action.setToolTip("Go forward again to the folder you went back from (Alt+Right)")
-        self.up_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_ArrowUp), "Up", self)
+        self.up_action = QAction(standard_icon(QStyle.StandardPixmap.SP_ArrowUp), "Up", self)
         self.up_action.setShortcut(QKeySequence("Alt+Up"))
         self.up_action.triggered.connect(self.go_up)
         self.up_action.setToolTip("Open the folder that contains this one (Alt+Up)")
-        self.refresh_action = QAction(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload), "Rescan folder",
+        self.refresh_action = QAction(standard_icon(QStyle.StandardPixmap.SP_BrowserReload), "Rescan folder",
                                       self)
         self.refresh_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Refresh))
         self.refresh_action.triggered.connect(self.rescan_folder)

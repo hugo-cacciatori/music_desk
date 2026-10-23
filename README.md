@@ -105,7 +105,7 @@ installer. Python 3.13 is fetched by uv if needed.
 ```bash
 uv sync
 uv run python -m music_desk                    # run from source
-uv run pytest                                  # the tests (--changed or --area <name> for part of them)
+uv run pytest                                  # the tests the changes need (--all: every test)
 uv run ruff check .
 uv run python packaging/build_installer.py     # dist/MusicDesk/ and dist/installer/MusicDesk-Setup-<version>.exe
 ```

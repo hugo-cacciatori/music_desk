@@ -39,7 +39,7 @@ from music_desk.core.tags import Fields
 from music_desk.services.tag_io import ImageRead, Loaded, LoadedMany, TagIO
 from music_desk.services.tag_writer import BatchWritten, TagWriter
 from music_desk.ui.hover import exempt
-from music_desk.ui.qt_util import shortcut
+from music_desk.ui.qt_util import shortcut, standard_icon
 
 TEXT_FIELDS = (("title", "Title"), ("artist", "Artist"), ("albumartist", "Album artist"), ("album", "Album"))
 LATER_TEXT_FIELDS = (("year", "Year"), ("genre", "Genre"), ("composer", "Composer"), ("comment", "Comment"))
@@ -284,7 +284,7 @@ class MetadataTab(QWidget):
         edit.textEdited.connect(lambda _text, k=key: self._edited(k))
         self.edits[key] = edit
         if key in SHARED_FIELDS:
-            action = edit.addAction(self.style().standardIcon(QStyle.StandardPixmap.SP_LineEditClearButton),
+            action = edit.addAction(standard_icon(QStyle.StandardPixmap.SP_LineEditClearButton),
                                     QLineEdit.ActionPosition.TrailingPosition)
             action.setToolTip("Clear this field on all the selected files")
             action.triggered.connect(lambda _checked=False, k=key: self.clear_on_all(k))

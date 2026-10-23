@@ -40,7 +40,7 @@ from music_desk.core.index import queries
 from music_desk.core.index.queries import FileRow
 from music_desk.ui.entry_drag import EntryDragView
 from music_desk.ui.hover import exempt, with_status_tips
-from music_desk.ui.qt_util import shortcut
+from music_desk.ui.qt_util import shortcut, standard_icon
 
 ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
 IS_DIR_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -127,11 +127,10 @@ class FileListModel(QAbstractTableModel):
         self.folder_id: int | None = None
         self.rows: list[FileRow] = []
         self.keys: list[tuple] = []  # precomputed sort keys, per row and column
-        style = QApplication.style()
         self._icons = {
-            "dir": style.standardIcon(QStyle.StandardPixmap.SP_DirIcon),
-            "audio": style.standardIcon(QStyle.StandardPixmap.SP_MediaVolume),
-            "file": style.standardIcon(QStyle.StandardPixmap.SP_FileIcon),
+            "dir": standard_icon(QStyle.StandardPixmap.SP_DirIcon),
+            "audio": standard_icon(QStyle.StandardPixmap.SP_MediaVolume),
+            "file": standard_icon(QStyle.StandardPixmap.SP_FileIcon),
         }
         self._dim = QApplication.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text)
 

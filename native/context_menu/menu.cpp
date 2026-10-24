@@ -362,41 +362,6 @@ static bool start(std::wstring command, const std::wstring& folder) {
     return true;
 }
 
-// -- an opt-in call log, to see what Explorer asks (SPEC §31) --
-
-// One line per call to %LOCALAPPDATA%\MusicDesk\logs\menu.log, only while %LOCALAPPDATA%\MusicDesk\menu-debug.txt
-// exists (Hugo creates it to diagnose, then deletes it): what Explorer asked, which menu, what the handler did.
-static void debug_log(const void* object, const std::wstring& line) {
-    std::wstring base = local_app_data();
-    if (base.empty() || GetFileAttributesW((base + L"\\MusicDesk\\menu-debug.txt").c_str()) == INVALID_FILE_ATTRIBUTES)
-        return;
-    std::wstring folder = base + L"\\MusicDesk\\logs";
-    SHCreateDirectoryExW(nullptr, folder.c_str(), nullptr);
-    SYSTEMTIME now;
-    GetLocalTime(&now);
-    wchar_t head[96];
-    StringCchPrintfW(head, ARRAYSIZE(head), L"%02d:%02d:%02d.%03d pid %lu tid %lu obj %p  ", now.wHour, now.wMinute,
-                     now.wSecond, now.wMilliseconds, GetCurrentProcessId(), GetCurrentThreadId(), object);
-    std::wstring text = head + line + L"\r\n";
-    int size = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    std::string utf8(size, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), utf8.data(), size, nullptr, nullptr);
-    HANDLE handle = CreateFileW((folder + L"\\menu.log").c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (handle == INVALID_HANDLE_VALUE)
-        return;
-    DWORD written = 0;
-    WriteFile(handle, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
-    CloseHandle(handle);
-}
-
-static std::wstring pidl_path(PCIDLIST_ABSOLUTE pidl) {
-    wchar_t path[MAX_PATH * 4];
-    if (pidl == nullptr)
-        return L"(none)";
-    return SHGetPathFromIDListEx(pidl, path, ARRAYSIZE(path), GPFIDL_DEFAULT) ? path : L"(not a path)";
-}
-
 // -- where the submenu goes in Explorer's menu --
 
 // An item's text without its "&" accelerator marks ("7-&Zip" reads "7-Zip").
@@ -477,11 +442,6 @@ public:
             selection_.background = true;
             selection_.paths.push_back(path);
         }
-        std::wstring listed;
-        for (const std::wstring& path : selection_.paths)
-            listed += L" [" + path + L"]";
-        debug_log(this, L"Initialize folder=" + pidl_path(folder) + L" data=" + (data ? L"yes" : L"no") +
-                  L" background=" + (selection_.background ? L"yes" : L"no") + L" paths:" + listed);
         if (selection_.paths.empty())
             return E_INVALIDARG;
         if (!selection_.background)
@@ -491,21 +451,12 @@ public:
 
     // IContextMenu
     IFACEMETHODIMP QueryContextMenu(HMENU menu, UINT index, UINT first, UINT last, UINT flags) override {
-        std::wstring items;
-        for (int i = 0; i < GetMenuItemCount(menu); ++i)
-            items += L" [" + item_text(menu, i) + L"]";
-        wchar_t call[160];
-        StringCchPrintfW(call, ARRAYSIZE(call), L"QueryContextMenu menu=%p index=%u first=%u last=%u flags=0x%x items=%d:",
-                         menu, index, first, last, flags, GetMenuItemCount(menu));
-        debug_log(this, call + items);
         if (flags & CMF_DEFAULTONLY)
             return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
         entries_ = entries_for(selection_);
         if (entries_.empty() || first + entries_.size() > last)
             return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
         int position = place_in(menu, index);
-        debug_log(this, L"  -> " + (position < 0 ? std::wstring(L"skipped: the menu has a MusicDesk submenu")
-                                               : L"inserted at " + std::to_wstring(position)));
         if (position < 0) {
             entries_.clear();  // the submenu already there is the one Explorer shows
             return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);

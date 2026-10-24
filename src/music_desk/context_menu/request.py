@@ -29,8 +29,9 @@ RENAME = "rename"  # any mix of folders and files: one preview (SPEC §31)
 REMOVE_REPLAYGAIN = "remove-replaygain"  # selected tracks only: the question, then a report window
 TIDY = "tidy"  # folders (or the open one): one plan
 CLEANUP = "cleanup"  # folders (or the open one): one Redundant files window
+SPLIT = "split"  # one .cue: its Split page
 # The entries built so far; the option is "--" + the entry.
-ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES, RENAME, REMOVE_REPLAYGAIN, TIDY, CLEANUP)
+ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES, RENAME, REMOVE_REPLAYGAIN, TIDY, CLEANUP, SPLIT)
 LIST_OPTION = "--list"
 
 

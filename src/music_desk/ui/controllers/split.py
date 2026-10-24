@@ -31,6 +31,7 @@ from music_desk.core.path_locks import LockedError
 from music_desk.services import jobs as jobs_module
 from music_desk.services.split_job import Loaded, Planned, SplitFinished, SplitRunner
 from music_desk.ui import track_lengths
+from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.split_page import SplitPage
 
 log = logging.getLogger(__name__)
@@ -163,6 +164,18 @@ class SplitController(QObject):
             return
         self._start(path, new=False)
         self._load_token = self.runner.load(path)
+
+    def open_entry(self, paths: list[str]) -> bool:
+        """The right-click "Split this cue sheet…" (SPEC §31), with MusicDesk open: the window comes to the front on
+        the sheet's Split page, as "Split into tracks…" on its preview. False when it didn't open (the status bar says
+        why: not one .cue)."""
+        window = self.window
+        window.bring_to_front()
+        if len(paths) != 1 or Path(paths[0]).suffix.lower() != ".cue":
+            window.statusBar().showMessage("Split: choose one cue sheet (.cue).", STATUS_MS)
+            return False
+        self.open(paths[0])
+        return True
 
     def split_now(self, path: str | Path) -> None:
         """The preview's Split (SPEC §22): the sheet opens on the Split page and splits with the defaults as soon as

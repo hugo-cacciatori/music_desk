@@ -17,6 +17,7 @@ from music_desk.context_menu.request import (
     RENAME,
     REPLAYGAIN_ENTRIES,
     SETTINGS,
+    SPLIT,
     TIDY,
     parse_arguments,
 )
@@ -132,6 +133,10 @@ class Starter(QObject):
         """A right-click entry (SPEC §31): in the main window if it is open, else in a window of its own."""
         if entry in REPLAYGAIN_ENTRIES:
             self.run_replaygain(entry, paths)
+            return
+        if entry == SPLIT:
+            # Until the Split page has a window of its own (slice 5 task 3), the main window shows it.
+            self.main_window().tools.run_entry(entry, paths)
             return
         if entry in ALONE:
             if self.window is not None:

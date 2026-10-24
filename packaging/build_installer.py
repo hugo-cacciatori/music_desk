@@ -1,13 +1,18 @@
 """Builds the release: the PyInstaller folder (dist/MusicDesk), the right-click menu's handler DLL into it
-(packaging/build_menu.py, SPEC §31), then the Inno Setup installer (dist/installer/MusicDesk-Setup-<version>.exe).
+(packaging/build_menu.py, SPEC §31), then the Inno Setup installer and its checksum: the local release
+dist/v<version>/ (MusicDesk-Setup-<version>.exe, SHA256SUMS.txt). Older dist/v* folders and the intermediate
+build output (build/, dist/MusicDesk) are deleted afterwards; only the newest local release is kept.
 Run from the project root:  uv run python packaging/build_installer.py
 
 Inno Setup 6 must be installed (its ISCC.exe compiler is looked up in Program Files, or set ISCC to its path), and
 Visual Studio Build Tools with "Desktop development with C++" for the DLL.
-Pass --skip-pyinstaller to reuse an existing dist/MusicDesk (the DLL is built again).
+Pass --skip-pyinstaller to reuse an existing dist/MusicDesk (the DLL is built again), and --keep-build to keep
+build/ and dist/MusicDesk for such a rerun.
 """
 
+import hashlib
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -41,7 +46,17 @@ def main(argv: list[str]) -> int:
     build_menu.build(ROOT / "dist" / "MusicDesk")  # PyInstaller's --noconfirm emptied the folder
     subprocess.run([str(find_iscc()), f"/DAppVersion={__version__}", str(ROOT / "packaging" / "installer.iss")],
                    cwd=ROOT, check=True)
-    print(f"Built {ROOT / 'dist' / 'installer' / f'MusicDesk-Setup-{__version__}.exe'}")
+    release = ROOT / "dist" / f"v{__version__}"
+    installer = release / f"MusicDesk-Setup-{__version__}.exe"
+    digest = hashlib.sha256(installer.read_bytes()).hexdigest()
+    (release / "SHA256SUMS.txt").write_text(f"{digest}  {installer.name}\n", encoding="utf-8", newline="\n")
+    for old in (ROOT / "dist").iterdir():
+        if old.is_dir() and old != release and (old.name.startswith("v") or old.name == "installer"):
+            shutil.rmtree(old)
+    if "--keep-build" not in argv:
+        shutil.rmtree(ROOT / "build", ignore_errors=True)
+        shutil.rmtree(ROOT / "dist" / "MusicDesk", ignore_errors=True)
+    print(f"Built {installer} and {release / 'SHA256SUMS.txt'}")
     return 0
 
 

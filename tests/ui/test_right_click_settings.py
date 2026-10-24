@@ -66,6 +66,7 @@ def test_a_later_start_hands_its_entry_over(qtbot):
     process = subprocess.Popen([sys.executable, "-c", code])
     qtbot.waitUntil(lambda: entries == [("settings", ["D:/a", "D:/b"])], timeout=15000)
     assert process.wait(10) == 0 and folders == []
+    qtbot.waitUntil(lambda: not server.connections, timeout=5000)  # destroyed mid-teardown, a socket aborted
     server.close()
 
 

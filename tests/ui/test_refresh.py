@@ -11,7 +11,7 @@ from music_desk.core.index.scanner import Scanner
 
 
 @pytest.fixture
-def slow_root_scan(service, monkeypatch, library_dir):
+def slow_root_scan(qtbot, service, monkeypatch, library_dir):
     """Holds a root rescan running: every folder's reconcile waits on a gate, so the scan can't finish until the
     test releases it. Serving a folder the user asks for doesn't wait (it reconciles one folder on request)."""
     gate = threading.Event()
@@ -35,6 +35,13 @@ def slow_root_scan(service, monkeypatch, library_dir):
     monkeypatch.setattr(Scanner, "_serve_folder", serve)
     for n in range(80):  # scanned before Artist's subfolders (breadth first, "Aaa" sorts first): seconds of work
         (library_dir / "Aaa Many" / f"Folder {n}").mkdir(parents=True)
+    # The library's watcher sees them too: its rescan has to be over before the root scan starts, or it may be the
+    # indexer's current job instead (measured 2026-10-24 under the whole suite's load).
+    known = "SELECT 1 FROM entries WHERE name = 'Folder 79'"
+    qtbot.waitUntil(lambda: service.conn.execute(known).fetchone() is not None
+                    and service.indexer._current is None, timeout=20000)
+    qtbot.wait(300)  # a second, late flush of the same burst
+    qtbot.waitUntil(lambda: service.indexer._current is None, timeout=20000)
     service.indexer._thread._slow = True
     root = service.roots()[0].id
     service.indexer.scan_root(root)

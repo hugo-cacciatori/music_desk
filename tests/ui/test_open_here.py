@@ -82,6 +82,7 @@ def test_a_later_start_hands_its_folder_over(qtbot):
         process = start_later(name, folder)
         qtbot.waitUntil(lambda expected=expected: received == expected, timeout=15000)
         assert process.wait(10) == 0
+    qtbot.waitUntil(lambda: not server.connections, timeout=5000)  # destroyed mid-teardown, a socket aborted
     server.close()
 
 

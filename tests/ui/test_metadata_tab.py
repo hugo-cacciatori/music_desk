@@ -257,7 +257,8 @@ def test_window_follows_the_selection_and_saves(qtbot, window, service):
 
 @pytest.mark.parametrize("answer", ["cancel", "discard", "save"])
 def test_leaving_with_unsaved_edits(qtbot, window, service, library_dir, monkeypatch, answer):
-    window.open_folder(entry(service, "Artist", "Album"))
+    with qtbot.waitSignal(service.indexer.idle, timeout=20000):  # its revalidation on open, before any selection
+        window.open_folder(entry(service, "Artist", "Album"))
     tab = select_file(qtbot, window, "Track 2.flac")
     monkeypatch.setattr(tab, "ask_leave", lambda: answer)
     tab.edits["title"].setText("Edited")

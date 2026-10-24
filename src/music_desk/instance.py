@@ -68,6 +68,13 @@ class InstanceServer(QObject):
     def close(self) -> None:
         self.server.close()
 
+    @property
+    def connections(self) -> int:
+        """Later starts' sockets not yet freed (each frees itself once it has disconnected). Measured 2026-10-24:
+        destroying the server while one is still being torn down aborted the process (17 test runs in 300 under 12
+        workers), so a server that is destroyed (only the tests' are) waits for none to be left."""
+        return len(self.server.findChildren(QLocalSocket))
+
     def _connected(self) -> None:
         while self.server.hasPendingConnections():
             socket = self.server.nextPendingConnection()

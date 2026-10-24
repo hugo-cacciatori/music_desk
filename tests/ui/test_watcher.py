@@ -50,15 +50,19 @@ def test_coalesce_drops_folders_under_a_recursive_scan():
     assert _coalesce(batch) == [(r"C:\M", False), (r"C:\M\A", True), (r"C:\M\AB", False)]
 
 
-def test_changes_are_debounced_per_folder(qtbot, watcher, recorder, tmp_path):
+def test_changes_are_debounced_per_folder(qtbot, recorder, tmp_path):
+    # Its own, longer debounce: at FAST's 0.1 s, a pause between two of the 40 writes on a busy machine (the whole
+    # suite on 12 workers) split the burst into 3 flushes (measured 2026-10-24). The burst itself is the point here.
+    watcher = Watcher(recorder, debounce=0.5, max_delay=5.0)
     root = tmp_path / "root"
     (root / "Album").mkdir(parents=True)
     watcher.sync({1: str(root)})
     assert watcher.watched == {1: str(root)}
     for n in range(40):
         (root / "Album" / f"{n:02d}.txt").write_text("x")
-    qtbot.waitUntil(lambda: key(root / "Album") in recorder.folders(), timeout=5000)
-    time.sleep(0.4)
+    qtbot.waitUntil(lambda: key(root / "Album") in recorder.folders(), timeout=10000)
+    time.sleep(1.0)
+    watcher.stop()
     album_calls = [c for c in recorder.calls if key(c[0]) == key(root / "Album")]
     assert len(album_calls) <= 2  # 40 files, one flush (two at most if the burst straddled a flush)
 

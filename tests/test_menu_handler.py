@@ -253,3 +253,18 @@ def test_an_entry_the_selection_doesnt_have_starts_nothing(dll, items):
     array, count = paths_array([album, other])
     assert dll.MusicDeskMenu_Command(array, count, False, "musicdesk.open", EXE, out, len(out)) != 0
     assert out.value == ""
+
+
+def test_the_call_log_is_written_only_on_request(dll, items, appdata):
+    """The opt-in log (SPEC §31): what Explorer asked and what the handler did, while menu-debug.txt exists."""
+    album, _other = items
+    log = appdata / "MusicDesk" / "logs" / "menu.log"
+    entries(dll, [album])
+    assert not log.exists()
+    (appdata / "MusicDesk").mkdir(parents=True, exist_ok=True)
+    (appdata / "MusicDesk" / "menu-debug.txt").write_text("", encoding="utf-8")
+    placed(dll, [album], ["Open", "7-Zip", "Send to"])
+    lines = log.read_text(encoding="utf-8").splitlines()
+    assert f"Initialize folder=(none) data=yes background=no paths: [{album}]" in lines[0]
+    assert "QueryContextMenu" in lines[1] and "flags=0x0 items=3: [Open] [7-Zip] [Send to]" in lines[1]
+    assert lines[2].endswith("-> inserted at 2")

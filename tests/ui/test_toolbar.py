@@ -233,13 +233,21 @@ def test_tidy_comes_first_and_in_evidence(window):
     assert f"background: {accent}" in tidy.styleSheet() and not rename.styleSheet()  # the others as they are
 
 
-def test_two_rows_address_and_search_then_the_tools(window):
-    top, tools = window.navigation_bar, window.tools_bar
-    assert top.widgetForAction(top.actions()[-1]) is window.search_field  # the search ends the top row
-    assert window.address_bar in [top.widgetForAction(a) for a in top.actions()]
+def test_three_rows_search_address_then_the_tools(window):
+    search, top, tools = window.search_bar, window.navigation_bar, window.tools_bar
+    # The search first, on its own row: its toggle and its field, centred, the field taking most of it (SPEC §33).
+    assert [search.widgetForAction(a) for a in search.actions()] == [window.search_row]
+    layout = window.search_row.layout()
+    assert [layout.itemAt(i).widget() for i in range(layout.count())] == [
+        None, window.search.modes, window.search_field, None]
+    assert window.toolBarArea(search) == window.toolBarArea(top) and window.toolBarBreak(top)
+    assert search.geometry().top() < top.geometry().top() < tools.geometry().top()
+    assert window.search_field.height() > window.address_bar.height() // 2
+    assert window.search_field.font().pointSizeF() > window.font().pointSizeF()
+    assert top.widgetForAction(top.actions()[-1]) is window.address_bar  # the address bar ends its row, alone
     assert not any(isinstance(top.widgetForAction(a), QToolButton) and top.widgetForAction(a).text() in
                    ("Tools", "Playlist builder", "Advanced search") for a in top.actions())
-    assert window.toolBarBreak(tools) and window.search_field.maximumWidth() > 10000  # no cap: it shares the row
+    assert window.toolBarBreak(tools)
     assert bar_texts(tools) == ["Tidy", "Rename", "ReplayGain", "Clean up", "|", "Playlist", "Advanced search"]
     assert tools.toolButtonStyle().name == "ToolButtonTextBesideIcon"
     for tool in (RENAME, REPLAYGAIN, TIDY, CLEANUP):  # plain buttons: no dropdown (Hugo, 2026-10-22)

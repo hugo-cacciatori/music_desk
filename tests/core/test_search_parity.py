@@ -4,7 +4,9 @@ The page script's rule, re-implemented: `[title, artist, album, plain].join('\\n
 with `q = box.value.trim().toLowerCase()`. The songs are the frozen script's own scan of the fixture library, and
 their lyrics follow its tags-first rule; LRCLIB texts are scripted. The app's free text, narrowed to the same
 fields, must select the same tracks, apart from the accent difference (SPEC §17). Songs with a lyrics tag aren't
-compared: the page searched those lyrics, and the app no longer searches the lyrics tag (M12, SPEC §26).
+compared: the page searched those lyrics, and the app no longer searches the lyrics tag (M12, SPEC §26). Since
+SPEC §33 the app splits the page's one box in two, File search (title, artist, album…) and Lyrics search; the rule
+compared here is their union, on the page's fields.
 """
 
 import importlib.util

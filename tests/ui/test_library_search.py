@@ -1,5 +1,6 @@
-"""Library search in the window (SPEC §6): Ctrl+K, the debounced query, the count, filters, folder rows,
-highlights and snippets, going to a result, Esc, the side panel as the detail pane, and Play results."""
+"""Library search in the window (SPEC §6): Ctrl+K, the debounced query, the File / Lyrics toggle, the count,
+filters, folder rows, highlights and snippets, going to a result, Esc, the side panel as the detail pane, and Play
+results."""
 
 import threading
 
@@ -10,6 +11,10 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractButton, QCheckBox
 
 from music_desk.core.index.lyrics_index import record_lyrics
+from music_desk.core.index.search import FILES, LYRICS
+from music_desk.settings import Settings
+from music_desk.ui.main_window import MainWindow
+from music_desk.ui.search_view import SEARCH_COLUMN_INDEX
 from music_desk.ui.side_panel.lyrics_tab import FOUND_STATE
 
 ALBUM = "Fixture Artist - Fixture Album"
@@ -85,14 +90,47 @@ def test_typing_runs_after_a_pause_and_counts(qtbot, window):
 
 def test_substring_and_lyrics_snippet(qtbot, window, service, lyrics):
     search(qtbot, window, "arknes")
+    assert names(window) == []  # File search: not the lyrics
+    window.search.set_mode(LYRICS)
+    search(qtbot, window)
     first = entry(service, "Other", ALBUM, "01 First.flac")
     assert set(names(window)) == {"01 First.flac", "clash.flac"}
     assert window.search_view.column_texts("snippet")[0] == "Hello darkness, my old friend"
     assert window.search_view.highlights(first, "snippet") == ((7, 13),)
+    window.search.set_mode(FILES)
     search(qtbot, window, "TONE")
-    assert window.search_view.column_texts("snippet") == [""] * 4  # the title matches: no snippet
+    assert window.search_view.column_texts("snippet") == [""] * 4  # File search: no snippet
     tone = entry(service, "Artist", "Album", "Track 2.flac")
     assert window.search_view.highlights(tone, "title") == ((0, 4), (5, 9))
+
+
+def test_the_toggle_runs_the_query_again_and_is_kept(qtbot, window, lyrics):
+    header = window.search_view.view.header()
+    assert window.search.mode == FILES and window.search.mode_buttons[FILES].isChecked()
+    assert header.isSectionHidden(SEARCH_COLUMN_INDEX["snippet"])  # the Lyrics column: Lyrics search only
+    search(qtbot, window, "first")
+    assert len(names(window)) == 3
+    before = window.search.shown
+    window.search.mode_buttons[LYRICS].click()
+    assert window.settings.search_mode == LYRICS and window.search_field.hasFocus()
+    qtbot.waitUntil(lambda: window.search.shown not in (None, before), timeout=10000)
+    assert names(window) == [], shown(window)  # no lyrics say "first"
+    assert not header.isSectionHidden(SEARCH_COLUMN_INDEX["snippet"])
+    assert "Search lyrics" in window.search_field.placeholderText()
+    search(qtbot, window, "tear us")
+    assert names(window) == ["track6.FLAC"], shown(window)
+
+
+def test_the_last_mode_and_the_focus_at_startup(qtbot, service):
+    window = MainWindow(service, Settings(search_mode=LYRICS))
+    qtbot.addWidget(window)
+    window.show()
+    assert window.search.mode == LYRICS and window.search.mode_buttons[LYRICS].isChecked()
+    window.activateWindow()
+    qtbot.waitUntil(lambda: window.search_field.hasFocus())  # the app opens on its search
+    other = MainWindow(service, Settings(search_mode="something else"))
+    qtbot.addWidget(other)
+    assert other.search.mode == FILES
 
 
 def test_cap_and_total(qtbot, window):
@@ -177,6 +215,7 @@ def test_enter_goes_to_the_file_and_esc_returns(qtbot, window, service):
 
 
 def test_enter_runs_the_search_again_from_anywhere(qtbot, window, service):
+    window.search.set_mode(LYRICS)
     search(qtbot, window, "blue monday")
     assert names(window) == []
     window.search.close()
@@ -200,6 +239,7 @@ def test_enter_runs_the_search_again_from_anywhere(qtbot, window, service):
 
 
 def test_selecting_a_result_shows_its_lyrics(qtbot, window, service, lyrics):
+    window.search.set_mode(LYRICS)
     search(qtbot, window, "tear us")
     sixth = entry(service, "Other", ALBUM, "track6.FLAC")
     window.search_view.select_ids([sixth])
@@ -241,6 +281,7 @@ def test_play_results_in_view_order(qtbot, window, service, tmp_path):
 
 
 def test_results_follow_new_lyrics(qtbot, window, service):
+    window.search.set_mode(LYRICS)
     search(qtbot, window, "blue monday")
     assert names(window) == []
     put_lyrics(service, "Second", "How does it feel... blue monday")
@@ -257,7 +298,6 @@ def test_result_menu(qtbot, window, service):
 
 
 def test_sorting_and_live_updates_keep_the_selection(qtbot, window, service):
-    from music_desk.ui.search_view import SEARCH_COLUMN_INDEX
 
     search(qtbot, window, "fixture artist")
     view = window.search_view

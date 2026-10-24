@@ -12,7 +12,15 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from music_desk.core.index.search import LIMIT, SearchQuery, SearchRow, parse_query, result_rows, text_search
+from music_desk.core.index.search import (
+    FILES,
+    LIMIT,
+    SearchQuery,
+    SearchRow,
+    parse_query,
+    result_rows,
+    text_search,
+)
 from music_desk.core.index.store import connect_read
 
 log = logging.getLogger(__name__)
@@ -47,21 +55,23 @@ class SearchService(QObject):
     def token(self) -> int:
         return self._token
 
-    def search(self, text: str, *, error_keys: set[str] | frozenset[str] = frozenset(), limit: int = LIMIT) -> int:
+    def search(self, text: str, *, mode: str = FILES, error_keys: set[str] | frozenset[str] = frozenset(),
+               limit: int = LIMIT) -> int:
+        """`mode`: File or Lyrics search (SPEC §6)."""
         with self._lock:
             self._token += 1
             token = self._token
             if self._conn is not None:
                 self._conn.interrupt()  # the running query is stale now
         if not self._closed:
-            self._pool.submit(self._run, token, text, frozenset(error_keys), limit)
+            self._pool.submit(self._run, token, text, mode, frozenset(error_keys), limit)
         return token
 
     def cancel(self) -> None:
         """Forget the running query (the search was closed)."""
         self.search("")
 
-    def _run(self, token: int, text: str, error_keys: frozenset[str], limit: int) -> None:
+    def _run(self, token: int, text: str, mode: str, error_keys: frozenset[str], limit: int) -> None:
         if token != self._token or self._closed:
             return
         query = parse_query(text)
@@ -71,8 +81,8 @@ class SearchService(QObject):
             if query.empty:
                 found, rows = None, []
             else:
-                found = text_search(self._conn, query, error_keys=error_keys, limit=limit)
-                rows = result_rows(self._conn, found.ids, query, cancelled=lambda: token != self._token)
+                found = text_search(self._conn, query, error_keys=error_keys, mode=mode, limit=limit)
+                rows = result_rows(self._conn, found.ids, query, cancelled=lambda: token != self._token, mode=mode)
             if token != self._token:
                 return
             keys = self._prepare(rows) if self._prepare else None

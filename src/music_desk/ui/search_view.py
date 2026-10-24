@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from music_desk.core.fsops import natural_key
-from music_desk.core.index.search import LIMIT, SearchRow
+from music_desk.core.index.search import FILES, LIMIT, LYRICS, SearchRow
 from music_desk.ui.entry_drag import EntryDragView
 from music_desk.ui.file_view import COLUMNS, ENTRY_ID_ROLE, Column, FileListModel
 from music_desk.ui.qt_util import shortcut
@@ -52,6 +52,12 @@ SEARCH_COLUMN_INDEX = {column.key: i for i, column in enumerate(SEARCH_COLUMNS)}
 _NO_PARENT = QModelIndex()
 _ROW_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
 _SPANS = {"title": "title_spans", "artist": "artist_spans", "snippet": "snippet_spans"}
+_FILTERS = ("Filters: artist: album: year: genre: ext: lrclib:synced|plain|instrumental|notfound|pending|error|"
+            "notags rg:none|partial|full, and \"quoted text\".")
+PROMPTS = {
+    FILES: "Type to search folder and file names, titles, artists, albums and years.",
+    LYRICS: "Type words of a song to find it in the lyrics found on LRCLIB.",
+}
 
 
 def sort_keys(rows: list[SearchRow]) -> list[tuple]:
@@ -250,6 +256,8 @@ class SearchView(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.model = SearchResultsModel(self)
+        self.mode = FILES
+        self._prompting = False
 
         count_row = QHBoxLayout()
         count_row.setSpacing(4)
@@ -308,17 +316,24 @@ class SearchView(QWidget):
 
     # -- results --
 
+    def set_mode(self, mode: str) -> None:
+        """File or Lyrics search: the Lyrics column (the matching line) shows in Lyrics search only."""
+        self.mode = mode
+        self.view.header().setSectionHidden(SEARCH_COLUMN_INDEX["snippet"], mode == FILES)
+        if self._prompting:
+            self.show_prompt()
+
     def show_prompt(self) -> None:
+        self._prompting = True
         self.model.clear()
         self.count_label.setText("")
         self.play_button.setEnabled(False)
-        self._set_note("Type to search folder and file names, titles, artists, albums and lyrics. Filters: "
-                       "artist: album: year: genre: ext: lrclib:synced|plain|instrumental|"
-                       "notfound|pending|error|notags rg:none|partial|full, and \"quoted text\".")
+        self._set_note(f"{PROMPTS[self.mode]} {_FILTERS}")
 
     def show_results(self, rows: list[SearchRow], total: int, errors: tuple[str, ...] = (),
                      failure: str | None = None, *, keys: list[tuple] | None = None, in_place: bool = False) -> None:
         """`keys` from sort_keys() (computed off the UI thread); `in_place` for the same query run again."""
+        self._prompting = False
         self.model.set_rows(rows, keys, in_place=in_place)
         shown = len(rows)
         text = f"{shown:,} of {total:,} results"

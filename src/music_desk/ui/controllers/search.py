@@ -1,18 +1,22 @@
-"""The library search's controller (SPEC §6, §16): the query field, the results page and the search service.
+"""The library search's controller (SPEC §6, §16): the query field, the File / Lyrics toggle, the results page and
+the search service.
 
-The query is typed in the toolbar's field and runs as you type (debounced); the results stand in for the file
-list until Esc, or until a result is opened. When the index changes while the page is shown, the same query runs
-again and the rows are updated in place, so the selection stays. Enter in the field runs the query afresh from
-anywhere, so results left behind catch up with what the scan indexed meanwhile.
+The query is typed in the big field on top of the window, focused at startup, and runs as you type (debounced);
+the results stand in for the file list until Esc, or until a result is opened. The toggle picks File search
+(names, tags, the date) or Lyrics search (LRCLIB's lyrics); the last one used is kept.
+
+When the index changes while the page is shown, the same query runs again and the rows are updated in place, so the
+selection stays. Enter in the field runs the query afresh from anywhere, so results left behind catch up with what
+the scan indexed meanwhile.
 """
 
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer
-from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QLineEdit, QMenu
+from PySide6.QtGui import QFont, QKeySequence
+from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QMenu, QToolButton, QWidget
 
-from music_desk.core.index.search import LIMIT
+from music_desk.core.index.search import FILES, LIMIT, LYRICS, MODES
 from music_desk.services.library import LibraryService
 from music_desk.services.search_service import SearchResults, SearchService
 from music_desk.ui.controllers import STATUS_MS
@@ -23,6 +27,13 @@ from music_desk.ui.search_view import sort_keys as search_sort_keys
 
 TYPING_MS = 120  # runs as you type, once typing pauses
 REFRESH_MS = 1000  # the index changed: the query runs again
+FIELD_WIDTH = 900  # the field's widest, centred in its row (SPEC §33)
+FONT_SCALE = 1.35  # the field's and the toggle's text, larger than the window's
+MODE_TEXTS = {  # label, hover text, placeholder
+    FILES: ("Files", "File search: folder and file names, titles, artists, albums and years",
+            "Search files: names, titles, artists, albums, years (Ctrl+K)"),
+    LYRICS: ("Lyrics", "Lyrics search: the lyrics found on LRCLIB", "Search lyrics (Ctrl+K)"),
+}
 
 
 class SearchController(QObject):
@@ -51,16 +62,56 @@ class SearchController(QObject):
         self._refresh = QTimer(self, singleShot=True, interval=REFRESH_MS)
         self._refresh.timeout.connect(self.run)
 
-        self.field = QLineEdit()  # the window puts it in its toolbar
-        self.field.setPlaceholderText("Search library (Ctrl+K)")
+        # The toggle and the field, which the window puts in its search row (SPEC §33).
+        self.mode = window.settings.search_mode if window.settings.search_mode in MODES else FILES
+        self.modes = QWidget()
+        modes_layout = QHBoxLayout(self.modes)
+        modes_layout.setContentsMargins(0, 0, 4, 0)
+        modes_layout.setSpacing(0)
+        self.mode_buttons: dict[str, QToolButton] = {}
+        for mode in MODES:
+            label, tip, _placeholder = MODE_TEXTS[mode]
+            button = QToolButton()
+            button.setText(label)
+            button.setCheckable(True)
+            button.setAutoExclusive(True)
+            button.setToolTip(tip)
+            button.setChecked(mode == self.mode)
+            button.setFont(_scaled(button.font()))
+            button.clicked.connect(lambda _=False, mode=mode: self.set_mode(mode))
+            modes_layout.addWidget(button)
+            self.mode_buttons[mode] = button
+        self.field = QLineEdit()
         self.field.setClearButtonEnabled(True)
-        self.field.setToolTip("Search the whole library as you type: names, tags and LRCLIB lyrics, and filters "
-                              "like artist: or year: (Ctrl+K)")
-        self.field.setMinimumWidth(180)
-        # No maximum: it shares the top row with the address bar (SPEC §30).
+        self.field.setFont(_scaled(self.field.font()))
+        self.field.setMinimumWidth(240)
+        self.field.setMaximumWidth(FIELD_WIDTH)
+        self.field.setMinimumHeight(self.field.fontMetrics().height() + 14)
         self.field.textEdited.connect(self._edited)
         self.field.returnPressed.connect(self.enter)
         shortcut(QKeySequence(Qt.Key.Key_Escape), self.field, self.close, Qt.ShortcutContext.WidgetShortcut)
+        self._apply_mode()
+
+    def set_mode(self, mode: str) -> None:
+        """The toggle: File or Lyrics search. The query on screen runs again in the new mode, and the field keeps
+        the focus, so typing goes on."""
+        self.mode_buttons[mode].setChecked(True)
+        if mode != self.mode:
+            self.mode = mode
+            self.window.settings.search_mode = mode
+            self._apply_mode()
+            if self.showing:
+                self._shown_request = None  # other results: rebuilt, not updated in place
+                self.run()
+            elif self.field.text().strip():
+                self.open()
+        self.field.setFocus()
+
+    def _apply_mode(self) -> None:
+        _label, tip, placeholder = MODE_TEXTS[self.mode]
+        self.field.setPlaceholderText(placeholder)
+        self.field.setToolTip(f"{tip}, as you type, and filters like artist: or year: (Ctrl+K)")
+        self.view.set_mode(self.mode)
 
     @property
     def showing(self) -> bool:
@@ -131,7 +182,7 @@ class SearchController(QObject):
             return
         self._request = self.field.text()
         self._token = self.service.search(
-            self.field.text(), error_keys=window.open_library.lyrics.error_keys(), limit=self.limit)
+            self.field.text(), mode=self.mode, error_keys=window.open_library.lyrics.error_keys(), limit=self.limit)
 
     def refresh_later(self) -> None:
         """The index changed: the shown query runs again shortly."""
@@ -205,3 +256,8 @@ class SearchController(QObject):
             menu.addSeparator()
             menu.addAction(f"Filter by {artist}", lambda: self.add_artist_filter(artist))
         return with_status_tips(menu)
+
+
+def _scaled(font: QFont) -> QFont:
+    font.setPointSizeF(font.pointSizeF() * FONT_SCALE)
+    return font

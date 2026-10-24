@@ -42,6 +42,7 @@ class Settings:
     playlist_header: str = ""  # base64 of the panel's QHeaderView.saveState()
     playlist_relative: bool = True  # the export's Relative paths checkbox
     playlist_export_dir: str = ""  # the folder the last export was saved in
+    search_mode: str = "files"  # the search bar's File / Lyrics toggle, as last used (SPEC §6)
 
     path: Path | None = field(default=None, repr=False, compare=False)  # where save() writes; None: not saved
 

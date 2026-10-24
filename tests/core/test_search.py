@@ -1,4 +1,5 @@
-"""core/index/search.py: free text as seek_lyrics' search, names before tags, filters, order and rows (SPEC §6)."""
+"""core/index/search.py: free text as seek_lyrics' search, File and Lyrics search, names before tags, filters,
+order and rows (SPEC §6)."""
 
 import shutil
 import sqlite3
@@ -12,6 +13,7 @@ from music_desk.core.index.roots import add_root
 from music_desk.core.index.scanner import Scanner
 from music_desk.core.index.schema import configure, migrate
 from music_desk.core.index.search import (
+    LYRICS,
     fold,
     fold_text,
     parse_query,
@@ -115,14 +117,31 @@ def test_case_and_accents_are_ignored_both_ways(lib, songs):
     assert find(lib, "Bjôrk") == bjork
 
 
-def test_lrclib_text_matches_and_tag_lyrics_dont(lib, songs):
-    assert find(lib, "travel is") == {"01 Hunter.flac"}  # LRCLIB plain
-    assert find(lib, "accidents") == set()  # only in the file's lyrics tag: not searched (M12, SPEC §26)
+def test_lyrics_search_matches_lrclib_text_only(lib, songs):
+    assert find(lib, "travel is", mode=LYRICS) == {"01 Hunter.flac"}  # LRCLIB plain
+    assert find(lib, "accidents", mode=LYRICS) == set()  # only in the file's lyrics tag: not searched (M12)
+    assert find(lib, "Hunter", mode=LYRICS) == set()  # names and tags are File search's
+    assert find(lib, "glove", mode=LYRICS) == {"Glove.mp3"}  # in its lyrics too
+    assert find(lib, "ve", mode=LYRICS) == {"01 Hunter.flac", "Glove.mp3"}  # short text: LIKE, lyrics only
+    assert find(lib, "artist:cure ove", mode=LYRICS) == set()  # filters still narrow it
+    assert find(lib, "artist:radiohead ove", mode=LYRICS) == {"Glove.mp3"}
+
+
+def test_file_search_matches_names_tags_and_the_date_not_lyrics(lib, songs):
+    assert find(lib, "travel is") == set()  # lyrics are Lyrics search's
+    assert find(lib, "Various") == {"Glove.mp3"}  # the album artist
+    assert find(lib, "Electronic") == set()  # not the genre as free text (Hugo, 2026-10-24)...
+    assert find(lib, "genre:tron") == {"01 Hunter.flac"}  # ...which stays a filter
+    assert find(lib, "1997") == {"01 Hunter.flac"}  # the date, any part of it
+    assert find(lib, "09-2") == {"01 Hunter.flac"}
+    assert find(lib, "01") == {"01 Hunter.flac", "Glove.mp3"}  # a name, and a date: "2001"
+    assert find(lib, "Homogenic 1997") == set()  # still one substring
+    assert find(lib, "Radiohead 2") == set()
 
 
 def test_the_whole_remainder_is_one_substring(lib, songs):
-    assert find(lib, "  like a glove ") == {"Glove.mp3"}
-    assert find(lib, "glove like") == set()  # not a word search: the script took the box as one substring
+    assert find(lib, "  like a glove ", mode=LYRICS) == {"Glove.mp3"}
+    assert find(lib, "glove like", mode=LYRICS) == set()  # not a word search: the script took the box as one
 
 
 def test_one_and_two_characters(lib, songs):
@@ -150,11 +169,11 @@ def test_quoted_phrases_and_with_the_rest(lib, songs):
 
 
 def test_a_key_losing_found_drops_its_text(lib, songs):
-    assert find(lib, "searching") == {"01 Hunter.flac"}
+    assert find(lib, "searching", mode=LYRICS) == {"01 Hunter.flac"}
     lib.lyrics("k1", NOT_FOUND)
-    assert find(lib, "searching") == set()
+    assert find(lib, "searching", mode=LYRICS) == set()
     lib.lyrics("k1", FOUND, plain="searching again")
-    assert find(lib, "searching") == {"01 Hunter.flac"}
+    assert find(lib, "searching", mode=LYRICS) == {"01 Hunter.flac"}
 
 
 def test_folders_and_audio_files_only(lib, songs):
@@ -294,8 +313,8 @@ def test_fold_offsets():
 def test_result_rows(lib, songs):
     album, _other = songs
     query = parse_query("is search")
-    ids = text_search(lib.conn, query).ids
-    [row] = result_rows(lib.conn, ids, query)
+    ids = text_search(lib.conn, query, mode=LYRICS).ids
+    [row] = result_rows(lib.conn, ids, query, mode=LYRICS)
     assert (row.name, row.folder, row.folder_id) == ("01 Hunter.flac", "C:\\Music\\Björk - Homogenic", album)
     assert row.snippet == "If travel is searching"
     assert row.snippet_spans == ((10, 19),)
@@ -307,11 +326,14 @@ def test_result_rows(lib, songs):
     assert all(r.snippet == "" for r in rows)  # the artist matches: no snippet
 
 
-def test_snippet_only_for_lyric_only_parts(lib, songs):
+def test_snippets_in_lyrics_search_only(lib, songs):
     query = parse_query('glove "fits"')
+    [row] = result_rows(lib.conn, text_search(lib.conn, query, mode=LYRICS).ids, query, mode=LYRICS)
+    assert row.title_spans == ()  # the match is in the lyrics: only the snippet is highlighted
+    assert row.snippet == "Fits like a glove" and row.snippet_spans == ((0, 4), (12, 17))
+    query = parse_query("glove")
     [row] = result_rows(lib.conn, text_search(lib.conn, query).ids, query)
-    assert row.title_spans == ((0, 5),)
-    assert row.snippet == "Fits like a glove" and row.snippet_spans == ((0, 4),)
+    assert row.title_spans == ((0, 5),) and row.snippet == ""  # File search: no snippet, though the lyrics match
 
 
 def test_artist_filter_values_are_highlighted(lib, songs):
@@ -349,12 +371,12 @@ def test_a_new_copy_of_a_found_song_is_searchable_at_once(tmp_path, fixtures_dir
                                "WHERE e.name = '01 First.flac'").fetchone()[0]
             writer.submit(lambda conn: record_lyrics(conn, key, {"status": FOUND, "plain": "zebra crossing",
                                                                  "checked": "2026-10-15"})).result()
-            before = text_search(read, parse_query("zebra")).total
+            before = text_search(read, parse_query("zebra"), mode=LYRICS).total
             assert before >= 1
             (lib / "Copy").mkdir()
             shutil.copy2(lib / ALBUM / "01 First.flac", lib / "Copy" / "01 First.flac")
             Scanner(writer).scan_root(root)
-            ids = text_search(read, parse_query("zebra")).ids
+            ids = text_search(read, parse_query("zebra"), mode=LYRICS).ids
             assert len(ids) == before + 1
             assert any(path_of(read, i) == lib / "Copy" / "01 First.flac" for i in ids)
         finally:

@@ -17,11 +17,13 @@ from PySide6.QtGui import (
     QKeySequence,
     QMouseEvent,
     QPalette,
+    QShowEvent,
 )
 from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
     QFileDialog,
+    QHBoxLayout,
     QLabel,
     QMainWindow,
     QMenu,
@@ -313,6 +315,7 @@ class MainWindow(QMainWindow):
             self.file_view.model.lrclib_status = library.lyrics.status_for
             self.refresh_roots()
             self._reopen_last_folder()
+        self._shown_once = False
 
     # -- rsgain --
 
@@ -481,16 +484,32 @@ class MainWindow(QMainWindow):
         self.address_bar.folderRequested.connect(self.open_folder)
         self.address_bar.pathEntered.connect(self.go_to_path)
 
+        # The search first, on a row of its own, big and centred (SPEC §33); the address bar below, alone.
+        search_bar = QToolBar("Search")
+        search_bar.setMovable(False)
+        search_bar.setObjectName("search")
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 2, 0, 2)
+        layout.addStretch(1)
+        layout.addWidget(self.search.modes)
+        layout.addWidget(self.search_field, 6)  # most of the row, up to its widest
+        layout.addStretch(1)
+        search_bar.addWidget(row)
+        self.search_row = row
+        self.search_bar = search_bar
+        self.search_action = QAction("Search library", self, shortcut=QKeySequence("Ctrl+K"))
+        self.search_action.triggered.connect(self.search.open)
+        self.addAction(self.search_action)
+        self.addToolBar(search_bar)
+        self.addToolBarBreak()
+
         toolbar = QToolBar("Navigation")
         toolbar.setMovable(False)
         toolbar.setObjectName("navigation")
         for action in (self.back_action, self.forward_action, self.up_action, self.refresh_action):
             toolbar.addAction(action)
         toolbar.addWidget(self.address_bar)
-        toolbar.addWidget(self.search_field)  # the address bar and the search share the row (SPEC §30)
-        self.search_action = QAction("Search library", self, shortcut=QKeySequence("Ctrl+K"))
-        self.search_action.triggered.connect(self.search.open)
-        self.addAction(self.search_action)
         self.addToolBar(toolbar)
         self.navigation_bar = toolbar
         self.addToolBarBreak()
@@ -1038,6 +1057,12 @@ class MainWindow(QMainWindow):
         if self._library_open() and self.folder_id is not None and self._folder_exists(self.folder_id):
             self.settings.last_folder = str(path_of(self.open_library.conn, self.folder_id))
         self.settings.save()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        if not self._shown_once:
+            self._shown_once = True
+            self.search_field.setFocus()  # the app opens on its search (SPEC §33), ready to type into
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if not self.side_panel.can_leave() or not self.split.can_leave():

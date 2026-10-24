@@ -21,10 +21,14 @@ from music_desk.core.index.queries import LISTING_SELECT, FileRow, listing_field
 from music_desk.core.index.store import consistent_read
 from music_desk.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND, strip_timestamps
 
-# Every column free text searches: the file name, the tags and the LRCLIB plain text. The files' own lyrics tags
-# aren't searched (M12, SPEC §26: no function relies on the lyrics tag).
-FREE_COLUMNS = ("name", "title", "artist", "albumartist", "album", "genre", "lrclib")
-META_COLUMNS = ("name", "title", "artist", "albumartist", "album", "genre")  # a match here shows no snippet
+# The two searches (SPEC §6, §33): File search's free text matches the file and folder names, the tags and the
+# date; Lyrics search's only the LRCLIB plain text. The files' own lyrics tags aren't searched (M12, SPEC §26).
+FILES, LYRICS = "files", "lyrics"
+MODES = (FILES, LYRICS)
+DATE = "date"  # tracks.date, not a column of the search table: matched with LIKE, and only by text with a digit
+FILE_COLUMNS = ("name", "title", "artist", "albumartist", "album", DATE)
+LYRICS_COLUMNS = ("lrclib",)
+MODE_COLUMNS = {FILES: FILE_COLUMNS, LYRICS: LYRICS_COLUMNS}
 TEXT_FIELDS = {"artist": ("artist", "albumartist"), "album": ("album",), "genre": ("genre",)}
 VALUE_FIELDS = {
     "lrclib": ("synced", "plain", "instrumental", "notfound", "pending", "error", "notags"),
@@ -139,10 +143,6 @@ def spans(text: str | None, needles: list[str]) -> tuple[tuple[int, int], ...]:
     return tuple(merged)
 
 
-def _contains(needle: str, text: str | None) -> bool:
-    return bool(text) and needle in fold_text(text)
-
-
 @dataclass(frozen=True)
 class SearchResult:
     ids: list[int]  # the first `limit` matches, in natural folder and name order
@@ -198,13 +198,14 @@ def _value_condition(name: str, value: str, params: list) -> str:
 
 
 def text_search(conn: sqlite3.Connection, query: SearchQuery, *,
-                error_keys: set[str] | frozenset[str] = frozenset(), columns: tuple[str, ...] = FREE_COLUMNS,
-                limit: int = LIMIT) -> SearchResult:
+                error_keys: set[str] | frozenset[str] = frozenset(), mode: str = FILES,
+                columns: tuple[str, ...] | None = None, limit: int = LIMIT) -> SearchResult:
     """The folders and audio files matching a query. Their names are searchable from the folder walk on, their
     tags and lyrics once read: `tracks` is a LEFT JOIN, and a filter on tags limits the results to read files.
-    `error_keys` are the lyrics keys whose last lookup failed this session (`lrclib:error`). `columns` narrows
-    the free text (the parity test)."""
+    `error_keys` are the lyrics keys whose last lookup failed this session (`lrclib:error`). `mode` picks the
+    free text's columns (File or Lyrics search); `columns` narrows them instead (the parity test)."""
     conn.create_function("md_contains", 2, _md_contains, deterministic=True)
+    columns = columns if columns is not None else MODE_COLUMNS[mode]
     # Atoms are (columns, text); a group ORs its atoms; groups are ANDed.
     groups: list[list[tuple[tuple[str, ...], str]]] = [[(columns, part)] for part in query.text]
     for name, cols in TEXT_FIELDS.items():
@@ -212,18 +213,29 @@ def text_search(conn: sqlite3.Connection, query: SearchQuery, *,
             groups.append([(cols, value) for value in query.filters[name]])
     match, where, params = [], [], []
     for group in groups:
-        if all(len(text) >= FTS_MIN for _cols, text in group):
+        # The date can't be in the MATCH: a group that may match it ("1997") ORs a MATCH subquery with a LIKE.
+        dated = [(cols, text) for cols, text in group if DATE in cols and any(c.isdigit() for c in text)]
+        group = [(tuple(c for c in cols if c != DATE), text) for cols, text in group]
+        if not dated and all(len(text) >= FTS_MIN for _cols, text in group):
             match.append("(" + " OR ".join(f"{{{' '.join(cols)}}} : {_phrase(text)}" for cols, text in group) + ")")
             continue
         alternatives = []
         for cols, text in group:
-            if text.isascii():
+            if not cols:
+                continue
+            if len(text) >= FTS_MIN:
+                alternatives.append("search.rowid IN (SELECT rowid FROM search WHERE search MATCH ?)")
+                params.append(f"{{{' '.join(cols)}}} : {_phrase(text)}")
+            elif text.isascii():
                 alternatives += [f"search.{c} LIKE ? ESCAPE '\\'" for c in cols]
                 params += [_like(text)] * len(cols)
             else:
                 alternatives += [f"md_contains(search.{c}, ?)" for c in cols]
                 params += [fold_text(text)] * len(cols)
-        where.append("(" + " OR ".join(alternatives) + ")")
+        for _cols, text in dated:
+            alternatives.append("t.date LIKE ? ESCAPE '\\'")
+            params.append(_like(text))
+        where.append("(" + " OR ".join(alternatives or ["0"]) + ")")
     for name in ("year", "ext", *VALUE_FIELDS):
         values = query.filters.get(name)
         if values:
@@ -315,20 +327,24 @@ def snippet(texts: list[str | None], needles: list[str]) -> str:
 
 
 def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery,
-                cancelled: Callable[[], bool] | None = None) -> list[SearchRow]:
+                cancelled: Callable[[], bool] | None = None, *, mode: str = FILES) -> list[SearchRow]:
     """The shown results in `ids` order, with their folder, highlights and snippet. Ids gone since are dropped.
-    `cancelled` is checked now and then (a newer query): the rows built so far are returned."""
+    `cancelled` is checked now and then (a newer query): the rows built so far are returned. File search
+    highlights the free text in the title and artist; Lyrics search, in the snippet only."""
     if not ids:
         return []
     with consistent_read(conn):
         rows = {r[0]: r for r in conn.execute(
             f"{LISTING_SELECT} WHERE e.id IN (SELECT value FROM json_each(?))", (json.dumps(ids),))}
         extra = {r[0]: r[1:] for r in conn.execute(
-            "SELECT e.id, e.parent_id, s.albumartist, s.name, s.genre, s.lrclib FROM entries e "
+            "SELECT e.id, e.parent_id, s.albumartist, s.lrclib FROM entries e "
             "JOIN search s ON s.rowid = e.id WHERE e.id IN (SELECT value FROM json_each(?))", (json.dumps(ids),))}
         folders = _Folders(conn)
+        lyrics = mode == LYRICS
         free = query.needles()
-        title_needles, artist_needles = query.needles(), query.needles("artist")
+        title_needles = [] if lyrics else free
+        artist_values = [fold_text(v) for v in query.filters.get("artist", ())]
+        artist_needles = [n for n in artist_values if n] if lyrics else query.needles("artist")
         results = []
         for n, entry_id in enumerate(ids):
             if cancelled is not None and n % 200 == 0 and cancelled():
@@ -338,12 +354,10 @@ def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery,
             fields = listing_fields(rows[entry_id])
             if fields["is_dir"]:
                 fields.update(n_tracks=None, mtime=None)  # a folder row: its name and parent, nothing else
-            parent_id, albumartist, name, genre, lrclib = extra[entry_id]
-            meta = (name, fields["title"], fields["artist"], albumartist, fields["album"], genre)
-            lyric_only = [n for n in free if not any(_contains(n, text) for text in meta)]
-            line = snippet([lrclib], lyric_only) if lyric_only else ""
+            parent_id, albumartist, lrclib = extra[entry_id]
+            line = snippet([lrclib], free) if lyrics and free else ""
             results.append(SearchRow(
                 **fields, folder_id=parent_id, folder=folders.path(parent_id), albumartist=albumartist,
                 snippet=line, title_spans=spans(fields["title"], title_needles),
-                artist_spans=spans(fields["artist"], artist_needles), snippet_spans=spans(line, lyric_only)))
+                artist_spans=spans(fields["artist"], artist_needles), snippet_spans=spans(line, free)))
     return results

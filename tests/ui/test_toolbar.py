@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QToolBar, QToolButton
 
 from music_desk.core import cleanup, rename, replaygain
@@ -221,6 +222,17 @@ def bar_texts(bar: QToolBar) -> list[str]:
     return texts
 
 
+def test_tidy_comes_first_and_in_evidence(window):
+    """SPEC §33 (Hugo, 2026-10-24): Tidy first, larger than the others, filled with Windows' accent colour."""
+    tools = window.tools_bar
+    tidy = tools.widgetForAction(window.tool_actions[TIDY])
+    rename = tools.widgetForAction(window.tool_actions[RENAME])
+    assert tools.widgetForAction(tools.actions()[0]) is tidy and tidy.objectName() == "tidyButton"
+    assert tidy.iconSize().width() > rename.iconSize().width() and tidy.font().bold()
+    accent = window.palette().color(QPalette.ColorRole.Accent).name()
+    assert f"background: {accent}" in tidy.styleSheet() and not rename.styleSheet()  # the others as they are
+
+
 def test_two_rows_address_and_search_then_the_tools(window):
     top, tools = window.navigation_bar, window.tools_bar
     assert top.widgetForAction(top.actions()[-1]) is window.search_field  # the search ends the top row
@@ -228,7 +240,7 @@ def test_two_rows_address_and_search_then_the_tools(window):
     assert not any(isinstance(top.widgetForAction(a), QToolButton) and top.widgetForAction(a).text() in
                    ("Tools", "Playlist builder", "Advanced search") for a in top.actions())
     assert window.toolBarBreak(tools) and window.search_field.maximumWidth() > 10000  # no cap: it shares the row
-    assert bar_texts(tools) == ["Rename", "ReplayGain", "Tidy", "Clean up", "|", "Playlist", "Advanced search"]
+    assert bar_texts(tools) == ["Tidy", "Rename", "ReplayGain", "Clean up", "|", "Playlist", "Advanced search"]
     assert tools.toolButtonStyle().name == "ToolButtonTextBesideIcon"
     for tool in (RENAME, REPLAYGAIN, TIDY, CLEANUP):  # plain buttons: no dropdown (Hugo, 2026-10-22)
         action = window.tool_actions[tool]

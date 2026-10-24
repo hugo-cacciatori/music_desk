@@ -4,13 +4,23 @@ the menu is a manual check (the installer registers the handler)."""
 
 import ctypes
 import importlib.util
+import json
 import os
+import re
 from ctypes import wintypes
 from pathlib import Path
 
 import pytest
 
-from music_desk.context_menu.request import SETTINGS, StartRequest, parse_arguments
+from music_desk.context_menu.request import (
+    REPLAYGAIN_DISCOGRAPHY,
+    REPLAYGAIN_LOOSE,
+    REPLAYGAIN_TRACKS,
+    SETTINGS,
+    StartRequest,
+    parse_arguments,
+)
+from music_desk.core.formats import FORMATS
 
 # packaging/ is a folder of scripts, not a package (and `packaging` is a library's name): load the build script.
 _spec = importlib.util.spec_from_file_location("build_menu", Path(__file__).parents[1] / "packaging" / "build_menu.py")
@@ -19,8 +29,8 @@ build_menu = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(build_menu)
 
 EXE = r"C:\Program Files\MusicDesk\MusicDesk.exe"
-OPEN_AND_SETTINGS = "MusicDesk:\nmusicdesk.open\nmusicdesk.settings"
-SETTINGS_ONLY = "MusicDesk:\nmusicdesk.settings"
+SETTINGS_ONLY = ["settings"]
+ONE_FOLDER = ["open", "replaygain-album", "replaygain-discography", "settings"]
 
 
 @pytest.fixture(scope="module")
@@ -42,12 +52,24 @@ def paths_array(paths):
     return (wintypes.LPCWSTR * len(paths))(*[str(p) for p in paths]), len(paths)
 
 
-def entries(dll, paths, background=False) -> str:
-    out = ctypes.create_unicode_buffer(1024)
+def submenu(dll, paths, background=False) -> list[tuple[str, str]]:
+    """The submenu's (verb, label) pairs, in order."""
+    out = ctypes.create_unicode_buffer(4096)
     array, count = paths_array(paths)
     result = dll.MusicDeskMenu_Entries(array, count, background, out, len(out))
     assert result == 0, hex(result & 0xFFFFFFFF)
-    return out.value
+    title, *lines = out.value.split("\n")
+    assert title == "MusicDesk:"
+    return [tuple(line.split("\t")) for line in lines]
+
+
+def entries(dll, paths, background=False) -> list[str]:
+    """The submenu's verbs, without "musicdesk."."""
+    return [verb.removeprefix("musicdesk.") for verb, _label in submenu(dll, paths, background)]
+
+
+def labels(dll, paths, background=False) -> list[str]:
+    return [label for _verb, label in submenu(dll, paths, background)]
 
 
 def command(dll, paths, verb, background=False) -> list[str]:
@@ -72,19 +94,70 @@ def items(tmp_path):
     other = tmp_path / "Other"
     for folder in (album, other):
         folder.mkdir()
-    (album / "01.flac").write_bytes(b"")
-    (album / "notes.txt").write_bytes(b"")
+    for name in ("01.flac", "02.MP3", "03.aac", "notes.txt"):
+        (album / name).write_bytes(b"")
+    (other / "01.opus").write_bytes(b"")
     return album, other
 
 
-def test_the_entries_by_what_was_clicked(dll, items):
+@pytest.fixture
+def appdata(tmp_path, monkeypatch):
+    """%LOCALAPPDATA%: the list files go there, and the labels' target comes from its settings.json."""
+    folder = tmp_path / "appdata"
+    monkeypatch.setenv("LOCALAPPDATA", str(folder))
+    return folder
+
+
+def test_the_entries_by_what_was_clicked(dll, items, appdata):
     album, other = items
-    assert entries(dll, [album], background=True) == OPEN_AND_SETTINGS  # empty space: the open folder
-    assert entries(dll, [album]) == OPEN_AND_SETTINGS
-    assert entries(dll, [album, other]) == SETTINGS_ONLY
-    assert entries(dll, [album / "01.flac"]) == SETTINGS_ONLY
-    assert entries(dll, [album / "notes.txt"]) == SETTINGS_ONLY  # files without audio: Settings
-    assert entries(dll, [album, album / "01.flac"]) == SETTINGS_ONLY
+    assert entries(dll, [album], background=True) == ONE_FOLDER  # empty space: the open folder
+    assert entries(dll, [album]) == ONE_FOLDER
+    assert entries(dll, [album, other]) == ["replaygain-albums", "settings"]
+    assert entries(dll, [album / "01.flac"]) == ["replaygain-loose", "settings"]
+    assert entries(dll, [album / "01.flac", album / "02.MP3", album / "notes.txt"]) == [
+        "replaygain-tracks", "replaygain-loose", "settings"]
+    assert entries(dll, [album / "01.flac", other / "01.opus"]) == ["replaygain-loose", "settings"]  # two folders
+    assert entries(dll, [album / "03.aac", album / "notes.txt"]) == SETTINGS_ONLY  # nothing rsgain scans
+    assert entries(dll, [album, album / "01.flac"]) == SETTINGS_ONLY  # folders and files together
+
+
+def test_the_labels_carry_the_target(dll, items, appdata):
+    album, other = items
+    assert labels(dll, [album]) == ["Open in MusicDesk", "ReplayGain as an album (−15 LUFS)",
+                                    "ReplayGain as a discography (−15 LUFS)", "Settings"]  # the default
+    (appdata / "MusicDesk").mkdir(parents=True)
+    settings = appdata / "MusicDesk" / "settings.json"
+    settings.write_text(json.dumps({"name_masks": {"x": "{target}"}, "replaygain_options": {
+        "comment": "LUFS Target : {target}", "subfolder_keywords": ["lite"], "target": -18.5}}, indent=2),
+        encoding="utf-8")
+    assert labels(dll, [album, other])[0] == "ReplayGain: 2 folders, each as an album (−18.5 LUFS)"
+    assert labels(dll, [album / "01.flac"])[0] == "ReplayGain this track (−18.5 LUFS)"
+    assert labels(dll, [album / "01.flac", album / "02.MP3", album / "notes.txt"])[:2] == [
+        "ReplayGain: these 2 tracks as an album (−18.5 LUFS)",
+        "ReplayGain: each of these 2 tracks on its own (−18.5 LUFS)"]
+    settings.write_text(json.dumps({"replaygain_options": {"target": "loud"}}), encoding="utf-8")
+    assert labels(dll, [album / "01.flac"])[0] == "ReplayGain this track (−15 LUFS)"  # as the app: the default
+
+
+def test_the_extensions_are_those_rsgain_scans():
+    """The handler's list stays in step with core/formats.py."""
+    source = (Path(__file__).parents[1] / "native" / "context_menu" / "menu.cpp").read_text(encoding="utf-8")
+    block = source.split("REPLAYGAIN_EXTENSIONS[] = {", 1)[1].split("};", 1)[0]
+    assert re.findall(r'L"(\.[a-z0-9]+)"', block) == [e for f in FORMATS if f.replaygain for e in f.extensions]
+
+
+def test_replaygain_entries_hand_their_paths_over(dll, items, appdata):
+    album, _other = items
+    clicked = [album / "01.flac", album / "02.MP3", album / "notes.txt"]
+    for verb, entry in (("musicdesk.replaygain-tracks", REPLAYGAIN_TRACKS),
+                        ("musicdesk.replaygain-loose", REPLAYGAIN_LOOSE)):
+        exe, *arguments = command(dll, clicked, verb)
+        assert exe == EXE and arguments[:2] == [f"--{entry}", "--list"]
+        request = parse_arguments(arguments, appdata / "MusicDesk" / "menu")
+        assert request == StartRequest(entry, tuple(os.fspath(p) for p in clicked))  # the app skips notes.txt
+    exe, *arguments = command(dll, [album], "musicdesk.replaygain-discography", background=True)
+    request = parse_arguments(arguments, appdata / "MusicDesk" / "menu")
+    assert request == StartRequest(REPLAYGAIN_DISCOGRAPHY, (os.fspath(album),))
 
 
 def test_open_starts_musicdesk_on_the_folder(dll, items):
@@ -95,8 +168,7 @@ def test_open_starts_musicdesk_on_the_folder(dll, items):
     assert command(dll, [root], "musicdesk.open", background=True) == [EXE, str(root)]
 
 
-def test_settings_hands_every_path_over_in_a_list_file(dll, items, tmp_path, monkeypatch):
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+def test_settings_hands_every_path_over_in_a_list_file(dll, items, tmp_path, appdata):
     album, other = items
     clicked = [album, other, album / "01.flac"]
     exe, *arguments = command(dll, clicked, "musicdesk.settings")

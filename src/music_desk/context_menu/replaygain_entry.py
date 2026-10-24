@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QVBoxLayout, QW
 from music_desk.core import fsops
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services.replaygain_job import DISCOGRAPHY, LOOSE, TRACKS, Finished, ReplayGainRunner
-from music_desk.ui.controllers.tools import ENTRY_KINDS, entry_title
+from music_desk.ui.controllers.tools import ENTRY_KINDS, entry_problem, entry_title
 from music_desk.ui.tools.rg_report import ReplayGainView
 from music_desk.ui.tools.tool_cards import REPLAYGAIN, ToolCards
 
@@ -72,11 +72,14 @@ class ReplayGainWindow(QWidget):
         folder = targets[0].parent if targets and kind in (TRACKS, LOOSE) else targets[0] if targets else None
         self.view.folder = folder  # Open in File Explorer, also after a refusal
         self.view.heading.setText(f"<b>{entry_title(kind, targets)}</b>" + (f" · {folder}" if folder else ""))
+        problem = entry_problem(kind, targets)
+        if problem:
+            self.view.show_error(f"ReplayGain didn't start: {problem}.")
+            return False
         problems = self.cards.problems(REPLAYGAIN)
-        if not targets or problems:
-            reason = problems[0] if problems else "nothing was clicked"
-            self.view.show_error(f"ReplayGain didn't start: {reason}. The options are in the right-click menu's "
-                                 "MusicDesk > Settings.")
+        if problems:
+            self.view.show_error(f"ReplayGain didn't start: {problems[0]}. The options are in the right-click "
+                                 "menu's MusicDesk > Settings.")
             return False
         try:
             self.runner.start(kind, targets, self.cards.replaygain_card.options())

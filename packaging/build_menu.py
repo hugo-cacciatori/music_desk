@@ -38,7 +38,9 @@ def build(output: Path) -> Path:
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as work:
         compile_line = subprocess.list2cmdline([
-            "cl", "/nologo", "/O2", "/W4", "/WX", "/EHsc", "/MT", "/std:c++17", "/DUNICODE", "/D_UNICODE", "/LD",
+            # /utf-8: the source's labels hold a minus sign (U+2212), and its comments other non-ASCII characters
+            "cl", "/nologo", "/utf-8", "/O2", "/W4", "/WX", "/EHsc", "/MT", "/std:c++17", "/DUNICODE", "/D_UNICODE",
+            "/LD",
             str(SOURCE / "menu.cpp"), f"/Fo{work}\\", "/link", f"/DEF:{SOURCE / 'menu.def'}",
             f"/OUT:{output / DLL_NAME}", f"/IMPLIB:{Path(work) / 'MusicDeskMenu.lib'}",
             "shell32.lib", "shlwapi.lib", "ole32.lib", "user32.lib", "uuid.lib"])

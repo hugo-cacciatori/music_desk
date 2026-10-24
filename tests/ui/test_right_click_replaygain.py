@@ -118,6 +118,13 @@ def test_a_folder_in_use_is_refused(qtbot, window, service, artist, fake):
     assert fake.calls == []
 
 
+def test_tracks_of_several_folders_arent_one_album(qtbot, window, artist, fake):
+    tracks = [artist / "Album A" / "01 Tone.flac", artist / "Album B" / "01 Loud.flac"]
+    assert not window.tools.run_entry(menu.REPLAYGAIN_TRACKS, [str(p) for p in tracks])
+    assert "several folders" in window.statusBar().currentMessage()
+    assert fake.calls == []
+
+
 def test_the_starter_hands_an_entry_to_the_open_window(qtbot, service, artist, monkeypatch):
     starter = Starter(Settings(), lambda: service, check_tools=False)
     starter.open_folder(None)

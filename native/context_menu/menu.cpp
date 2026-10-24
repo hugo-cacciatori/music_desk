@@ -28,40 +28,190 @@ static LONG g_locks = 0;
 
 // -- what was clicked, and which entries it gets --
 
+// The extensions rsgain scans (core/formats.py, the formats with replaygain=True); tests/test_menu_handler.py
+// checks they stay in step. The handler judges audio by extension only (SPEC §31).
+static const wchar_t* const REPLAYGAIN_EXTENSIONS[] = {
+    L".flac", L".ogg", L".oga", L".opus", L".spx", L".mp3", L".mp2", L".wav", L".aif", L".aiff", L".aifc",
+    L".m4a", L".mp4", L".wv", L".mpc", L".tak", L".wma",
+};
+
+static bool is_replaygain_audio(const std::wstring& path) {
+    const wchar_t* extension = PathFindExtensionW(path.c_str());
+    for (const wchar_t* candidate : REPLAYGAIN_EXTENSIONS)
+        if (_wcsicmp(extension, candidate) == 0)
+            return true;
+    return false;
+}
+
 struct Selection {
     bool background = false;  // empty space: paths holds the open folder
     std::vector<std::wstring> paths;
     int folders = 0;
     int files = 0;
+    int audio = 0;  // files rsgain scans
+    bool one_folder = true;  // every file is in the same folder (a search's results may not be)
 };
 
 static void count_kinds(Selection& selection) {
-    selection.folders = selection.files = 0;
+    selection.folders = selection.files = selection.audio = 0;
+    selection.one_folder = true;
+    std::wstring parent;
     for (const std::wstring& path : selection.paths) {
         DWORD attributes = GetFileAttributesW(path.c_str());
-        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY))
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
             ++selection.folders;
-        else
-            ++selection.files;
+            continue;
+        }
+        ++selection.files;
+        if (is_replaygain_audio(path))
+            ++selection.audio;
+        std::wstring folder = path.substr(0, path.find_last_of(L'\\'));
+        if (parent.empty())
+            parent = folder;
+        else if (_wcsicmp(parent.c_str(), folder.c_str()) != 0)
+            selection.one_folder = false;
     }
 }
 
 struct Entry {
     const wchar_t* verb;  // also what MusicDesk is asked: "--" + the verb's part after "musicdesk."
-    const wchar_t* label;
     const wchar_t* help;
 };
 
-static const Entry OPEN = {L"musicdesk.open", L"Open in MusicDesk", L"Opens this folder in MusicDesk"};
-static const Entry SETTINGS = {L"musicdesk.settings", L"Settings", L"Opens MusicDesk's Options window"};
+static const Entry OPEN = {L"musicdesk.open", L"Opens this folder in MusicDesk"};
+static const Entry RG_ALBUM = {L"musicdesk.replaygain-album",
+                               L"Runs ReplayGain on this folder as one album, with the target set in MusicDesk"};
+static const Entry RG_DISCOGRAPHY = {L"musicdesk.replaygain-discography",
+                                     L"Runs ReplayGain on each album in this folder, then levels them together"};
+static const Entry RG_ALBUMS = {L"musicdesk.replaygain-albums",
+                                L"Runs ReplayGain on each folder as its own album, one after another"};
+static const Entry RG_TRACKS = {L"musicdesk.replaygain-tracks",
+                                L"Runs ReplayGain on the selected tracks as one album; the folder's other tracks "
+                                L"are left as they are"};
+static const Entry RG_LOOSE = {L"musicdesk.replaygain-loose",
+                               L"Runs ReplayGain on each selected track alone, as its own album, with no log"};
+static const Entry SETTINGS = {L"musicdesk.settings", L"Opens MusicDesk's Options window"};
 
-// The submenu's entries, in order (SPEC §31): Open in MusicDesk on one folder or empty space; Settings always.
+// The submenu's entries, in order (SPEC §31): Open in MusicDesk on one folder or empty space; the ReplayGain entries
+// on folders only or on files with tracks rsgain scans (no folder); Settings always.
 static std::vector<const Entry*> entries_for(const Selection& selection) {
     std::vector<const Entry*> entries;
-    if (selection.background || (selection.folders == 1 && selection.files == 0))
+    if (selection.background || (selection.folders == 1 && selection.files == 0)) {
         entries.push_back(&OPEN);
+        entries.push_back(&RG_ALBUM);
+        entries.push_back(&RG_DISCOGRAPHY);
+    } else if (selection.folders > 1 && selection.files == 0) {
+        entries.push_back(&RG_ALBUMS);
+    } else if (selection.folders == 0 && selection.audio == 1) {
+        entries.push_back(&RG_LOOSE);  // "this track"
+    } else if (selection.folders == 0 && selection.audio > 1) {
+        if (selection.one_folder)  // an album is one folder's tracks
+            entries.push_back(&RG_TRACKS);
+        entries.push_back(&RG_LOOSE);
+    }
     entries.push_back(&SETTINGS);
     return entries;
+}
+
+// -- the ReplayGain target, for the labels: read from settings.json when the menu opens --
+
+static bool is_space(char c) {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+// The JSON number at `text[at]`, or false (true, a string…: the app then takes its default, as here).
+static bool read_number(const std::string& text, size_t at, double& value) {
+    while (at < text.size() && is_space(text[at]))
+        ++at;
+    if (at >= text.size() || !(text[at] == '-' || (text[at] >= '0' && text[at] <= '9')))
+        return false;
+    char* end = nullptr;
+    value = strtod(text.c_str() + at, &end);
+    return end != text.c_str() + at;
+}
+
+// replaygain_options.target in settings.json's text, or false when it isn't there as a number. A small scan of
+// the JSON: strings may hold braces (the comment's "{target}") and escaped quotes.
+static bool find_target(const std::string& text, double& target) {
+    size_t at = text.find("\"replaygain_options\"");
+    if (at == std::string::npos)
+        return false;
+    at = text.find('{', at);
+    if (at == std::string::npos)
+        return false;
+    int depth = 0;
+    for (size_t i = at; i < text.size(); ++i) {
+        char c = text[i];
+        if (c == '{' || c == '[') {
+            ++depth;
+        } else if (c == '}' || c == ']') {
+            if (--depth == 0)
+                return false;
+        } else if (c == '"') {
+            size_t start = i + 1;
+            for (++i; i < text.size() && text[i] != '"'; ++i)
+                if (text[i] == '\\')
+                    ++i;
+            if (depth != 1 || text.compare(start, i - start, "target") != 0)
+                continue;
+            size_t colon = i + 1;
+            while (colon < text.size() && is_space(text[colon]))
+                ++colon;
+            if (colon < text.size() && text[colon] == ':')
+                return read_number(text, colon + 1, target);
+        }
+    }
+    return false;
+}
+
+static std::wstring local_app_data();
+
+// The target as the labels show it, "−15 LUFS"; the app's default (-15) when settings.json doesn't say.
+static std::wstring target_text() {
+    double target = -15.0;
+    std::wstring base = local_app_data();
+    if (!base.empty()) {
+        std::wstring file = base + L"\\MusicDesk\\settings.json";
+        HANDLE handle = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                    nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handle != INVALID_HANDLE_VALUE) {
+            LARGE_INTEGER size;
+            if (GetFileSizeEx(handle, &size) && size.QuadPart < 4 * 1024 * 1024) {
+                std::string text(static_cast<size_t>(size.QuadPart), '\0');
+                DWORD read = 0;
+                if (ReadFile(handle, text.data(), static_cast<DWORD>(text.size()), &read, nullptr)) {
+                    text.resize(read);
+                    double value = 0;
+                    if (find_target(text, value))
+                        target = value;
+                }
+            }
+            CloseHandle(handle);
+        }
+    }
+    wchar_t number[32];
+    StringCchPrintfW(number, ARRAYSIZE(number), L"%g", target < 0 ? -target : target);  // as the app's "{:g}"
+    return std::wstring(target < 0 ? L"−" : L"") + number + L" LUFS";
+}
+
+// An entry's label (SPEC §31, Hugo 2026-10-24), with the target so it shows where the run goes.
+static std::wstring label_for(const Entry& entry, const Selection& selection, const std::wstring& target) {
+    std::wstring suffix = L" (" + target + L")";
+    if (&entry == &OPEN)
+        return L"Open in MusicDesk";
+    if (&entry == &SETTINGS)
+        return L"Settings";
+    if (&entry == &RG_ALBUM)
+        return L"ReplayGain as an album" + suffix;
+    if (&entry == &RG_DISCOGRAPHY)
+        return L"ReplayGain as a discography" + suffix;
+    if (&entry == &RG_ALBUMS)
+        return L"ReplayGain: " + std::to_wstring(selection.folders) + L" folders, each as an album" + suffix;
+    if (&entry == &RG_TRACKS)
+        return L"ReplayGain: these " + std::to_wstring(selection.audio) + L" tracks as an album" + suffix;
+    if (selection.audio == 1)
+        return L"ReplayGain this track" + suffix;
+    return L"ReplayGain: each of these " + std::to_wstring(selection.audio) + L" tracks on its own" + suffix;
 }
 
 // -- starting MusicDesk --
@@ -219,11 +369,12 @@ public:
         entries_ = entries_for(selection_);
         if (entries_.empty() || first + entries_.size() > last)
             return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
+        std::wstring target = target_text();
         HMENU submenu = CreatePopupMenu();
         for (size_t i = 0; i < entries_.size(); ++i) {
             if (entries_[i] == &SETTINGS && i > 0)
                 AppendMenuW(submenu, MF_SEPARATOR, 0, nullptr);  // Settings apart from the actions
-            AppendMenuW(submenu, MF_STRING, first + i, entries_[i]->label);
+            AppendMenuW(submenu, MF_STRING, first + i, label_for(*entries_[i], selection_, target).c_str());
         }
         MENUITEMINFOW item = {sizeof(item)};
         item.fMask = MIIM_SUBMENU | MIIM_STRING | MIIM_ID;
@@ -394,8 +545,8 @@ static IContextMenu* make_menu(const wchar_t* const* paths, int count, BOOL back
     return menu;
 }
 
-// The submenu Explorer would show, written to `out` as "MusicDesk:" then each entry's verb, one per line; ""
-// when there is none. Returns the HRESULT of the first step that failed, else S_OK.
+// The submenu Explorer would show, written to `out` as "MusicDesk:" then each entry's verb, a tab and its label,
+// one per line; "" when there is none. Returns the HRESULT of the first step that failed, else S_OK.
 extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Entries(const wchar_t* const* paths, int count,
                                                                         BOOL background, wchar_t* out, int size) {
     out[0] = L'\0';
@@ -415,9 +566,11 @@ extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Entries(const w
             if (id == static_cast<UINT>(-1) || id == 0)
                 continue;  // the separator
             wchar_t verb[64];
+            wchar_t entry_label[256];
             if (SUCCEEDED(menu->GetCommandString(id - 100, GCS_VERBW, nullptr, reinterpret_cast<LPSTR>(verb),
-                                                 ARRAYSIZE(verb))))
-                text += std::wstring(L"\n") + verb;
+                                                 ARRAYSIZE(verb))) &&
+                GetMenuStringW(submenu, i, entry_label, ARRAYSIZE(entry_label), MF_BYPOSITION) > 0)
+                text += std::wstring(L"\n") + verb + L"\t" + entry_label;
         }
     }
     DestroyMenu(host);

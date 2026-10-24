@@ -68,6 +68,16 @@ def entry_title(kind: str, targets: list[Path]) -> str:
     return f"ReplayGain · {'Discography' if kind == DISCOGRAPHY else 'This album'}"
 
 
+def entry_problem(kind: str, targets: list[Path]) -> str | None:
+    """Why a right-click run can't start whatever the options: nothing clicked, or (as an album) tracks of several
+    folders, which the menu doesn't offer but a run from the command line could ask for."""
+    if not targets:
+        return "nothing was clicked"
+    if kind == TRACKS and len({path.parent for path in targets}) > 1:
+        return "the tracks are in several folders, and an album is one folder's tracks"
+    return None
+
+
 class ToolsController(QObject):
     def __init__(self, window, locks, parent: QObject | None = None, cards: ToolCards | None = None) -> None:
         super().__init__(parent)
@@ -384,10 +394,9 @@ class ToolsController(QObject):
         window.bring_to_front()
         kind = ENTRY_KINDS[entry]
         targets = [Path(path) for path in paths]
-        problems = self.cards.problems(REPLAYGAIN)
-        if not targets or problems:
-            window.statusBar().showMessage(f"ReplayGain: {problems[0] if problems else 'nothing was clicked'}",
-                                           STATUS_MS)
+        problem = entry_problem(kind, targets) or next(iter(self.cards.problems(REPLAYGAIN)), None)
+        if problem:
+            window.statusBar().showMessage(f"ReplayGain: {problem}", STATUS_MS)
             return False
         if self.rg_job is not None:
             job = window.jobs.get(self.rg_job)

@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 
 from music_desk import __version__
 from music_desk.context_menu.cleanup_entry import CleanupEntry
@@ -24,6 +24,7 @@ from music_desk.context_menu.request import (
 )
 from music_desk.context_menu.settings_entry import SettingsEntry
 from music_desk.context_menu.tidy_entry import TidyWindow
+from music_desk.context_menu.tool_host import SplitWindow, TrimWindow
 from music_desk.core.flac import flac_version
 from music_desk.core.path_locks import PathLocks
 from music_desk.core.rsgain import rsgain_version
@@ -80,9 +81,10 @@ def folder_argument(arguments: list[str]) -> str | None:
     return parse_arguments(arguments).folder
 
 
-EntryWindow = ReplayGainWindow | RenameWindow | RemoveEntry | TidyWindow | CleanupEntry
+EntryWindow = ReplayGainWindow | RenameWindow | RemoveEntry | TidyWindow | CleanupEntry | SplitWindow | TrimWindow
 # The entries that run alone with MusicDesk closed, and what runs them (ReplayGain has its own rules: run_replaygain).
-ALONE = {RENAME: RenameWindow, REMOVE_REPLAYGAIN: RemoveEntry, TIDY: TidyWindow, CLEANUP: CleanupEntry}
+ALONE = {RENAME: RenameWindow, REMOVE_REPLAYGAIN: RemoveEntry, TIDY: TidyWindow, CLEANUP: CleanupEntry,
+         SPLIT: SplitWindow, TRIM: TrimWindow}
 
 
 class Starter(QObject):
@@ -108,7 +110,22 @@ class Starter(QObject):
             return self.window.tools.cards
         if self._cards is None:
             self._cards = ToolCards(self.settings)
+            qt_util.app().aboutToQuit.connect(self.release)
         return self._cards
+
+    def release(self) -> None:
+        """Before Qt shuts down (and after a test): close the entries' own windows, and free the cards made
+        without a main window, which nothing else frees (`ToolCards.dispose`). A main window owns them once it took
+        them."""
+        for alone in list(self.entry_windows):
+            alone.shutdown()
+            if isinstance(alone, QWidget):
+                alone.hide()
+                alone.deleteLater()
+        self.entry_windows.clear()
+        if self._cards is not None and self.window is None:
+            self._cards.dispose()
+        self._cards = None
 
     def main_window(self) -> MainWindow:
         """The main window, made on first use, on the entries' cards and folder locks if they came first."""
@@ -135,16 +152,12 @@ class Starter(QObject):
         if entry in REPLAYGAIN_ENTRIES:
             self.run_replaygain(entry, paths)
             return
-        if entry in (SPLIT, TRIM):
-            # Until the Split and Trim pages have windows of their own (slice 5 task 3), the main window shows them.
-            self.main_window().tools.run_entry(entry, paths)
-            return
         if entry in ALONE:
             if self.window is not None:
                 self.window.tools.run_entry(entry, paths)
                 return
             # The Rename preview alone; Remove's question and report; the Tidy page then Redundant files; Clean
-            # up's Redundant files (SPEC §31).
+            # up's Redundant files; the Split page; the Trim page (SPEC §31).
             alone = ALONE[entry](self.cards(), self.locks)
             self._own(alone)
             alone.start(paths)

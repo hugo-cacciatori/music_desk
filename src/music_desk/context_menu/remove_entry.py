@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
+from shiboken6 import isValid
 
 from music_desk.context_menu.remove_report import RemoveReport, ask_remove, split_tracks
 from music_desk.core import fsops
@@ -49,6 +50,7 @@ class RemoveEntry(QObject):
         self.report = RemoveReport(folders[0] if folders else "")
         self.report.revealRequested.connect(lambda path: self._shell.submit(self._reveal, path))
         self.report.closed.connect(self.closed)
+        self.report.closed.connect(self.report.deleteLater)  # parentless: freed while Qt runs
         if not tracks:
             self.report.message.setText("Nothing was done: no track ReplayGain works on was clicked.")
             self.report.bring_to_front()
@@ -80,3 +82,6 @@ class RemoveEntry(QObject):
     def shutdown(self) -> None:
         self.tag_writer.close()  # the removal finishes first
         self._shell.shutdown(wait=False)
+        if self.report is not None and isValid(self.report):  # not yet freed by its own close
+            self.report.hide()
+            self.report.deleteLater()

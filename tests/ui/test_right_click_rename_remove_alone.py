@@ -5,6 +5,7 @@ the last entry window closes. Files are copies."""
 import shutil
 
 import pytest
+from PySide6.QtCore import QCoreApplication, QEvent
 
 from music_desk.app import Starter
 from music_desk.context_menu import request as menu
@@ -45,8 +46,8 @@ def quits(monkeypatch):
 def starter(qtbot, service):
     starter = Starter(Settings(), lambda: service, check_tools=False)
     yield starter
-    for alone in list(starter.entry_windows):
-        alone.shutdown()
+    starter.release()  # the entries' windows and the cards made without a main window, freed while Qt runs
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
 
 
 class Answers(list):

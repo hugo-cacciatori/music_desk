@@ -183,6 +183,16 @@ class ToolCards(QObject):
             for which in PAGE_TITLES:
                 self.card(which).setParent(window, Qt.WindowType.Window)
 
+    def dispose(self) -> None:
+        """Free the cards and the Options window while Qt still runs. Made without a main window (the right-click
+        entries, SPEC §31), they have no parent to go with: destroyed by Python after the QApplication, such windows
+        crashed the process at exit (SPEC §18, 2026-10-23)."""
+        for which in PAGE_TITLES:
+            self.card(which).deleteLater()
+        if self.options_window is not None:
+            self.options_window.deleteLater()
+        self.deleteLater()
+
     def card(self, which: str) -> Card:
         return {NAMES: self.names_card, RENAME: self.rename_card, REPLAYGAIN: self.replaygain_card,
                 CLEANUP: self.cleanup_card, SPLIT: self.split_card, TRIM: self.trim_card,

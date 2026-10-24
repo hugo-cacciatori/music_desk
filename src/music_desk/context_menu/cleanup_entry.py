@@ -6,6 +6,7 @@ that window closes.
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
+from shiboken6 import isValid
 
 from music_desk.context_menu.notice import NoticeWindow
 from music_desk.context_menu.tidy_entry import reveal
@@ -62,6 +63,7 @@ class CleanupEntry(QObject):
         self.offer.finished.connect(lambda report: self.finished.emit(report.folders))
         self.offer.revealRequested.connect(reveal)
         self.offer.closed.connect(self.closed)
+        self.offer.closed.connect(self.offer.deleteLater)  # parentless: freed while Qt runs
         self.offer.show()
         self.offer.raise_()
         self.offer.activateWindow()
@@ -69,10 +71,12 @@ class CleanupEntry(QObject):
     def _say(self, text: str) -> None:
         self.notice = NoticeWindow("Clean up", text)
         self.notice.closed.connect(self.closed)
+        self.notice.closed.connect(self.notice.deleteLater)
         self.notice.bring_to_front()
 
     def shutdown(self) -> None:
         for window in (self.offer, self.notice):
-            if window is not None:
-                window.close()
+            if window is not None and isValid(window):  # not yet freed by its own close
+                window.hide()
+                window.deleteLater()
         self.finder.close()

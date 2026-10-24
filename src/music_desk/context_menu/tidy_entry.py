@@ -12,6 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox, QVBoxLayout, QWidget
+from shiboken6 import isValid
 
 from music_desk.core import cleanup, fsops
 from music_desk.core.path_locks import LockedError, PathLocks
@@ -157,8 +158,9 @@ class TidyWindow(QWidget):
 
     def shutdown(self) -> None:
         self.runner.close()
-        if self.offer is not None:
-            self.offer.close()
+        if self.offer is not None and isValid(self.offer):  # not yet freed by its own close
+            self.offer.hide()
+            self.offer.deleteLater()
 
 
 def reveal(path: str, is_dir: bool) -> None:

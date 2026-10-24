@@ -6,6 +6,7 @@ import shutil
 import threading
 
 import pytest
+from PySide6.QtCore import QCoreApplication, QEvent
 from rsgain_fake import VALUES, FakeScanner
 
 from music_desk.app import Starter
@@ -58,8 +59,8 @@ def fake(monkeypatch):
 def starter(qtbot, service):
     starter = Starter(Settings(), lambda: service, check_tools=False)
     yield starter
-    for alone in list(starter.entry_windows):
-        alone.shutdown()
+    starter.release()  # the entries' windows and the cards made without a main window, freed while Qt runs
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
 
 
 # -- Tidy --

@@ -7,6 +7,7 @@ import threading
 from functools import partial
 
 import pytest
+from PySide6.QtCore import QCoreApplication, QEvent
 from rsgain_fake import FakeScanner
 
 from music_desk.app import Starter
@@ -56,8 +57,8 @@ def quits(monkeypatch):
 def starter(qtbot, service):
     starter = Starter(Settings(), lambda: service, check_tools=False)
     yield starter
-    for window in list(starter.replaygain_windows):
-        window.shutdown()
+    starter.release()  # the entries' windows and the cards made without a main window, freed while Qt runs
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
 
 
 def start(qtbot, starter, entry, paths):

@@ -7,6 +7,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from music_desk import __version__
+from music_desk.context_menu.cleanup_entry import CleanupEntry
 from music_desk.context_menu.remove_entry import RemoveEntry
 from music_desk.context_menu.rename_entry import RenameWindow
 from music_desk.context_menu.replaygain_entry import ReplayGainWindow
@@ -20,6 +21,7 @@ from music_desk.context_menu.request import (
     parse_arguments,
 )
 from music_desk.context_menu.settings_entry import SettingsEntry
+from music_desk.context_menu.tidy_entry import TidyWindow
 from music_desk.core.flac import flac_version
 from music_desk.core.path_locks import PathLocks
 from music_desk.core.rsgain import rsgain_version
@@ -76,6 +78,11 @@ def folder_argument(arguments: list[str]) -> str | None:
     return parse_arguments(arguments).folder
 
 
+EntryWindow = ReplayGainWindow | RenameWindow | RemoveEntry | TidyWindow | CleanupEntry
+# The entries that run alone with MusicDesk closed, and what runs them (ReplayGain has its own rules: run_replaygain).
+ALONE = {RENAME: RenameWindow, REMOVE_REPLAYGAIN: RemoveEntry, TIDY: TidyWindow, CLEANUP: CleanupEntry}
+
+
 class Starter(QObject):
     """What this process shows: the main window, or only right-click entries' windows until a normal start asks
     for the main window (SPEC §31). `open_library` opens the index; tests replace it and leave out `check_tools`
@@ -89,7 +96,7 @@ class Starter(QObject):
         self.check_tools = check_tools
         self.window: MainWindow | None = None
         self.settings_entry: SettingsEntry | None = None
-        self.entry_windows: list[ReplayGainWindow | RenameWindow | RemoveEntry] = []  # entries' own windows
+        self.entry_windows: list[EntryWindow] = []  # the entries' own windows, while there is no main window
         self._cards: ToolCards | None = None  # the entries' Options cards, until the main window takes them
         self.locks = PathLocks()  # the entries' folder locks; the main window's library shares them
 
@@ -126,17 +133,13 @@ class Starter(QObject):
         if entry in REPLAYGAIN_ENTRIES:
             self.run_replaygain(entry, paths)
             return
-        if entry in (TIDY, CLEANUP):
-            # Until they have windows of their own (slice 4 task 3), the main window shows them.
-            self.main_window().tools.run_entry(entry, paths)
-            return
-        if entry in (RENAME, REMOVE_REPLAYGAIN):
+        if entry in ALONE:
             if self.window is not None:
                 self.window.tools.run_entry(entry, paths)
                 return
-            # The Rename preview alone; Remove's question and report alone (SPEC §31).
-            alone = RenameWindow(self.cards(), self.locks) if entry == RENAME else \
-                RemoveEntry(self.cards(), self.locks)
+            # The Rename preview alone; Remove's question and report; the Tidy page then Redundant files; Clean
+            # up's Redundant files (SPEC §31).
+            alone = ALONE[entry](self.cards(), self.locks)
             self._own(alone)
             alone.start(paths)
             return
@@ -157,7 +160,7 @@ class Starter(QObject):
     def replaygain_windows(self) -> list[ReplayGainWindow]:
         return [w for w in self.entry_windows if isinstance(w, ReplayGainWindow)]
 
-    def _own(self, alone: ReplayGainWindow | RenameWindow | RemoveEntry) -> None:
+    def _own(self, alone: EntryWindow) -> None:
         """An entry's own window: kept until it closes; the process ends with the last one (no main window)."""
         self.entry_windows.append(alone)
         alone.closed.connect(lambda: self._window_closed(alone))
@@ -185,7 +188,7 @@ class Starter(QObject):
             for folder in finished.folders if isinstance(finished, Finished) else finished:
                 self.window.refresh_after_tool(folder)
 
-    def _window_closed(self, alone: ReplayGainWindow | RenameWindow | RemoveEntry) -> None:
+    def _window_closed(self, alone: EntryWindow) -> None:
         if alone in self.entry_windows:
             self.entry_windows.remove(alone)
         alone.deleteLater()

@@ -35,6 +35,7 @@ INDEX_ROLE = Qt.ItemDataRole.UserRole
 class RecycleWindow(QWidget):
     revealRequested = Signal(str, bool)  # a path to show in File Explorer, and whether it is a folder
     finished = Signal(object)  # RecycleReport, after Delete selected
+    closed = Signal()  # the window was closed (a right-click entry alone ends with it, SPEC §31)
 
     def __init__(self, parent: QWidget | None, folder: Path, items: list[Item], *, locks: PathLocks, owner: str,
                  intro: str, recycle: Callable[[Path], None] = fsops.send_to_recycle_bin,
@@ -201,3 +202,4 @@ class RecycleWindow(QWidget):
             return
         self.runner.close()
         super().closeEvent(event)
+        self.closed.emit()

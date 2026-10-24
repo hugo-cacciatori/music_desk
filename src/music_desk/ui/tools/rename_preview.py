@@ -155,9 +155,12 @@ class RenamePreview(QWidget):
 
     # -- states --
 
-    def show_planning(self, folder: Path, selection: int = 0) -> None:
+    def show_planning(self, folder: Path, selection: int = 0, what: str | None = None) -> None:
+        """`what`: the heading's target, when it isn't one folder or a selection in it (the right-click menu)."""
         self.plan, self.report = None, None
-        what = f"{selection} selected file{'s' if selection != 1 else ''} in {folder}" if selection else str(folder)
+        if what is None:
+            what = f"{selection} selected file{'s' if selection != 1 else ''} in {folder}" if selection else \
+                str(folder)
         title = "Rename: check the changes"
         self.heading.setText(f"<b>{title}</b> · {what}")
         self.apply_button.setText("Apply renames")
@@ -222,8 +225,9 @@ class RenamePreview(QWidget):
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(rows))
         for row, item in enumerate(rows):
-            folder = item.source.parent.relative_to(plan.folder).as_posix() if item.source.parent != plan.folder \
-                else ""
+            folder = "" if item.source.parent == plan.folder else \
+                item.source.parent.relative_to(plan.folder).as_posix() if item.source.parent.is_relative_to(
+                    plan.folder) and plan.folder != Path() else str(item.source.parent)
             values = (folder, item.source.name, item.target.name if item.target else "", row_status(item),
                       row_detail(item))
             for column, value in enumerate(values):

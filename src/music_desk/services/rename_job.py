@@ -55,16 +55,24 @@ class RenameRunner(QObject):
 
     def plan(self, folder: str | Path, options: RenameOptions, selection: list[Path] | None = None) -> int:
         """Start a preview. A selection renames only those files and their sidecars: no subfolders."""
+        if selection:
+            options = dataclasses.replace(options, recursive=False)
+        return self._plan(folder, lambda cancel: rename.plan_renames(folder, options, selection=selection,
+                                                                     cancel=cancel))
+
+    def plan_paths(self, paths: list[Path], options: RenameOptions) -> int:
+        """Start a preview of folders and files together (the right-click menu, SPEC §31)."""
+        return self._plan(paths[0] if paths else "", lambda cancel: rename.plan_paths(paths, options, cancel))
+
+    def _plan(self, folder: str | Path, make) -> int:
         self._cancel.cancel()  # a newer preview replaces an older one still reading tags
         self._token += 1
         token, cancel = self._token, CancelToken()
         self._cancel = cancel
-        if selection:
-            options = dataclasses.replace(options, recursive=False)
 
         def run() -> None:
             try:
-                plan = rename.plan_renames(folder, options, selection=selection, cancel=cancel)
+                plan = make(cancel)
             except rename.PlanCancelled:
                 self.planned.emit(Planned(token, None, cancelled=True))
                 return
@@ -79,7 +87,7 @@ class RenameRunner(QObject):
 
     def apply(self, plan: RenamePlan) -> int:
         """Run a previewed plan under a lock on its folder tree. Raises LockedError at once if a job holds it."""
-        lock = self.locks.acquire([plan.folder], OWNER)
+        lock = self.locks.acquire(plan.trees, OWNER)
         self._token += 1
         token, cancel = self._token, CancelToken()
         self._cancel = cancel

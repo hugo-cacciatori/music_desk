@@ -7,7 +7,7 @@ import shutil
 import pytest
 
 from music_desk.core.cancel import CancelToken
-from music_desk.core.rename import RenameOptions, Status, apply_plan, plan_renames, sanitize, validate
+from music_desk.core.rename import RenameOptions, Status, apply_plan, plan_paths, plan_renames, sanitize, validate
 
 ALBUM = "album/Fixture Artist - Fixture Album"
 
@@ -190,3 +190,19 @@ def test_cancel_stops_between_items(fixture_copy):
     report = apply_plan(plan_renames(folder), cancel=token)
     assert report.cancelled and report.renamed == []
     assert (folder / "track2.flac").exists()
+
+
+def test_plan_paths_mixes_folders_and_files(fixture_copy):
+    """The right-click Rename (SPEC §31): folders as the tool on a folder, files as a selection, one plan."""
+    album = fixture_copy(ALBUM)
+    lrc = fixture_copy("cleanup") / "lrc"
+    notes = lrc / "notes.txt"
+    notes.write_text("x", encoding="utf-8")
+    plan = plan_paths([album, lrc / "no_lyrics.flac", notes], RenameOptions())
+    assert plan.folder == album.parent and plan.trees == [album, lrc]
+    found = statuses(plan)
+    assert found[f"{album.name}/track2.flac"] == (Status.RENAME, "02 Second.flac")
+    assert found[f"{album.name}/lite/01 First.flac"] == (Status.UNCHANGED, None)  # subfolders, as the card says
+    assert {name for name in found if name.startswith("cleanup/")} == {"cleanup/lrc/no_lyrics.flac"}  # only it
+    plan = plan_paths([album], RenameOptions(recursive=False))
+    assert not any("/" in name.removeprefix(f"{album.name}/") for name in statuses(plan))

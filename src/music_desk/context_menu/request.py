@@ -25,7 +25,8 @@ REPLAYGAIN_ALBUMS = "replaygain-albums"
 REPLAYGAIN_TRACKS = "replaygain-tracks"
 REPLAYGAIN_LOOSE = "replaygain-loose"
 REPLAYGAIN_ENTRIES = (REPLAYGAIN_ALBUM, REPLAYGAIN_DISCOGRAPHY, REPLAYGAIN_ALBUMS, REPLAYGAIN_TRACKS, REPLAYGAIN_LOOSE)
-ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES)  # the entries built so far; the option is "--" + the entry
+RENAME = "rename"  # any mix of folders and files: one preview (SPEC §31)
+ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES, RENAME)  # the entries built so far; the option is "--" + the entry
 LIST_OPTION = "--list"
 
 

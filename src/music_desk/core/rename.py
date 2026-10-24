@@ -6,6 +6,8 @@ the renames on a virtual copy of each folder, so "name taken" comes out exactly 
 (core/cleanup.py, SPEC §32): renaming never deletes anything.
 """
 
+import dataclasses
+import os
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -93,10 +95,16 @@ class PlanItem:
 
 @dataclass
 class RenamePlan:
-    folder: Path
+    folder: Path  # the folder shown; a plan of several places (plan_paths): the deepest folder holding them all
     options: RenameOptions
     items: list[PlanItem] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    roots: list[Path] = field(default_factory=list)  # plan_paths: the folders it works in (their trees)
+
+    @property
+    def trees(self) -> list[Path]:
+        """The folder trees a run of this plan changes, so locks."""
+        return self.roots or [self.folder]
 
     def with_status(self, status: Status) -> list[PlanItem]:
         return [item for item in self.items if item.status is status]
@@ -202,6 +210,32 @@ def plan_renames(folder: str | Path, options: RenameOptions = DEFAULT_OPTIONS,
     plan = RenamePlan(Path(folder), options)
     selected = {Path(p).resolve() for p in selection} if selection is not None else None
     _plan_folder(Path(folder), options, selected, plan, cancel)
+    return plan
+
+
+def plan_paths(paths: Iterable[str | Path], options: RenameOptions = DEFAULT_OPTIONS,
+               cancel: CancelToken | None = None) -> RenamePlan:
+    """The dry run for the right-click menu's Rename (SPEC §31): any mix of folders and files in one plan. Each
+    folder as the tool on a folder (its subfolders as `options.recursive` says); the files as a selection, folder by
+    folder (only them and their sidecars); files that aren't audio are left out. A cancel raises PlanCancelled."""
+    folders: list[Path] = []
+    files: dict[Path, list[Path]] = {}
+    for path in map(Path, paths):
+        if path.is_dir():
+            folders.append(path)
+        elif path.suffix.lower() in options.audio_extensions and path.is_file():
+            files.setdefault(path.parent, []).append(path)
+    roots = list(dict.fromkeys([*folders, *files]))
+    try:
+        common = Path(os.path.commonpath(roots)) if roots else Path()
+    except ValueError:  # on several drives: the table shows full folders
+        common = Path()
+    plan = RenamePlan(common, options, roots=roots)
+    for folder in folders:
+        _plan_folder(folder, options, None, plan, cancel)
+    single = dataclasses.replace(options, recursive=False)
+    for folder, chosen in files.items():
+        _plan_folder(folder, single, {p.resolve() for p in chosen}, plan, cancel)
     return plan
 
 

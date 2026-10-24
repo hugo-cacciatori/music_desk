@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from music_desk import __version__
 from music_desk.context_menu.replaygain_entry import ReplayGainWindow
-from music_desk.context_menu.request import REPLAYGAIN_ENTRIES, SETTINGS, parse_arguments
+from music_desk.context_menu.request import RENAME, REPLAYGAIN_ENTRIES, SETTINGS, parse_arguments
 from music_desk.context_menu.settings_entry import SettingsEntry
 from music_desk.core.flac import flac_version
 from music_desk.core.path_locks import PathLocks
@@ -114,6 +114,10 @@ class Starter(QObject):
         """A right-click entry (SPEC §31): in the main window if it is open, else in a window of its own."""
         if entry in REPLAYGAIN_ENTRIES:
             self.run_replaygain(entry, paths)
+            return
+        if entry == RENAME:
+            # Until the Rename preview has a window of its own (slice 3 task 3), the main window shows it.
+            self.main_window().tools.run_entry(entry, paths)
             return
         if entry != SETTINGS:
             log.warning("ignored an unknown right-click entry %r", entry)

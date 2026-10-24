@@ -68,6 +68,15 @@ def entry_title(kind: str, targets: list[Path]) -> str:
     return f"ReplayGain · {'Discography' if kind == DISCOGRAPHY else 'This album'}"
 
 
+def rename_target_text(targets: list[Path]) -> str:
+    """The rename preview's heading for a right-click Rename: what was clicked."""
+    if len(targets) == 1:
+        return str(targets[0])
+    folders = sum(1 for path in targets if path.is_dir())
+    parts = [plural(count, noun) for count, noun in ((folders, "folder"), (len(targets) - folders, "file")) if count]
+    return f"{' and '.join(parts)} in {targets[0].parent}"
+
+
 def entry_problem(kind: str, targets: list[Path]) -> str | None:
     """Why a right-click run can't start whatever the options: nothing clicked, or (as an album) tracks of several
     folders, which the menu doesn't offer but a run from the command line could ask for."""
@@ -101,7 +110,6 @@ class ToolsController(QObject):
         self.rename_runner.planned.connect(self._rename_planned)
         self.rename_runner.applied.connect(self._rename_applied)
         self._rename_token: int | None = None
-        self._rename_request: ToolRequest | None = None
         self.rename_job: int | None = None  # the job id of the running rename (or Tidy's rename step)
 
         self.rg_view = ReplayGainView()
@@ -389,7 +397,10 @@ class ToolsController(QObject):
     def run_entry(self, entry: str, paths: list[str]) -> bool:
         """A right-click ReplayGain entry (SPEC §31), with MusicDesk open: its run starts at once (no recap, as the
         tool), as this app's ReplayGain job, with the current options. The window comes to the front on the job's
-        page. False when it didn't start (the status bar or a toast says why)."""
+        page. Rename: its preview (`rename_entry`). False when it didn't start (the status bar or a toast says
+        why)."""
+        if entry == menu.RENAME:
+            return self.rename_entry(paths)
         window = self.window
         window.bring_to_front()
         kind = ENTRY_KINDS[entry]
@@ -456,7 +467,6 @@ class ToolsController(QObject):
 
     def preview_rename(self, request: ToolRequest) -> None:
         scope = request.scope
-        self._rename_request = request
         assert request.rename_options is not None  # set for every Rename request
         self.rename_preview.show_planning(scope.folder, len(scope.files))
         self.window.center.setCurrentWidget(self.rename_preview)
@@ -476,7 +486,7 @@ class ToolsController(QObject):
         plan = self.rename_preview.plan
         if plan is None or not window._library_open():
             return
-        if window._unsaved_edits_under(plan.folder):  # unsaved tag edits on a file about to be renamed
+        if any(window._unsaved_edits_under(tree) for tree in plan.trees):  # unsaved edits on a file to be renamed
             return
         # Junk listed in the preview goes to the Recycle Bin without a question (Hugo, 2026-10-17): the option is
         # ticked on the Rename card, and the preview names every file.
@@ -509,8 +519,9 @@ class ToolsController(QObject):
                 by_folder.setdefault(Path(step[0]).parent, []).append(step)
             for steps in by_folder.values():
                 window.open_library.indexer.apply_renames(steps)  # in place: ids, tags and selection kept
-            if self._rename_request is not None:  # then the whole scope: recycled junk, sidecars, anything else
-                window.refresh_after_tool(self._rename_request.scope.folder)
+            plan = self.rename_preview.plan
+            for tree in plan.trees if plan is not None else []:  # then the whole scope: sidecars, anything else
+                window.refresh_after_tool(tree)
         self.rename_preview.show_report(report)
         count = len(report.renamed)
         window.statusBar().showMessage(f"Renamed {count} file{'s' if count != 1 else ''}.", STATUS_MS)
@@ -518,6 +529,31 @@ class ToolsController(QObject):
         if job is not None:
             window.jobs.finish(job, jobs_module.STOPPED if report.cancelled else jobs_module.DONE, summary)
             self.rename_job = None
+
+    def rename_entry(self, paths: list[str]) -> bool:
+        """The right-click Rename (SPEC §31), with MusicDesk open: one preview of every clicked folder (as the tool
+        on a folder) and file (as a selection), in the main window, brought to the front. Apply then runs it as the
+        app's Rename job. False when the preview didn't start (the status bar or a toast says why)."""
+        window = self.window
+        window.bring_to_front()
+        targets = [Path(path) for path in paths]
+        problems = self.cards.problems(RENAME)
+        if not targets or problems:
+            why = "nothing was clicked" if not targets else "fix the File names or Rename options first: " \
+                "File > Options…"
+            window.statusBar().showMessage(f"Rename: {why}", STATUS_MS)
+            return False
+        if self.rename_job is not None:
+            job = window.jobs.get(self.rename_job)
+            assert job is not None  # a running job stays in the list
+            window.toast.show_message(f"{job.kind} is still running in {job.folder}. Start the other run when it "
+                                      "has finished.")
+            window.show_job(self.rename_job)
+            return False
+        self.rename_preview.show_planning(targets[0], what=rename_target_text(targets))
+        window.center.setCurrentWidget(self.rename_preview)
+        self._rename_token = self.rename_runner.plan_paths(targets, self.cards.rename_options())
+        return True
 
     # -- removing ReplayGain (SPEC §10 B) --
 

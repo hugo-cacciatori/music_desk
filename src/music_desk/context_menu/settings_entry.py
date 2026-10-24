@@ -7,14 +7,13 @@ Its File names example is the clicked items' first track, read off the UI thread
 from PySide6.QtCore import QObject
 
 from music_desk.services.tag_io import TagIO
-from music_desk.settings import Settings
 from music_desk.ui.tools.tool_cards import OptionsWindow, ToolCards
 
 
 class SettingsEntry(QObject):
-    def __init__(self, settings: Settings, parent: QObject | None = None) -> None:
+    def __init__(self, cards: ToolCards, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self.cards = ToolCards(settings)
+        self.cards = cards
         self.tag_io = TagIO(self)
         self.tag_io.renameFields.connect(self._example)
         self._token: int | None = None

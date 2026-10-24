@@ -7,9 +7,11 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from music_desk import __version__
+from music_desk.context_menu.replaygain_entry import ReplayGainWindow
 from music_desk.context_menu.request import REPLAYGAIN_ENTRIES, SETTINGS, parse_arguments
 from music_desk.context_menu.settings_entry import SettingsEntry
 from music_desk.core.flac import flac_version
+from music_desk.core.path_locks import PathLocks
 from music_desk.core.rsgain import rsgain_version
 from music_desk.instance import InstanceServer, hand_over
 from music_desk.logging_setup import setup_logging
@@ -19,6 +21,7 @@ from music_desk.settings import Settings
 from music_desk.ui import qt_util
 from music_desk.ui.main_window import APP_TITLE, MainWindow
 from music_desk.ui.stall_watch import StallWatch
+from music_desk.ui.tools.tool_cards import ToolCards
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +66,7 @@ def folder_argument(arguments: list[str]) -> str | None:
 
 
 class Starter(QObject):
-    """What this process shows: the main window, or only a right-click entry's window until a normal start asks
+    """What this process shows: the main window, or only right-click entries' windows until a normal start asks
     for the main window (SPEC §31). `open_library` opens the index; tests replace it and leave out `check_tools`
     (the rsgain and flac self-check)."""
 
@@ -75,12 +78,25 @@ class Starter(QObject):
         self.check_tools = check_tools
         self.window: MainWindow | None = None
         self.settings_entry: SettingsEntry | None = None
+        self.replaygain_windows: list[ReplayGainWindow] = []
+        self._cards: ToolCards | None = None  # the entries' Options cards, until the main window takes them
+        self.locks = PathLocks()  # the entries' folder locks; the main window's library shares them
+
+    def cards(self) -> ToolCards:
+        """One copy of the settings in memory for the whole process: the main window's cards once it exists."""
+        if self.window is not None:
+            return self.window.tools.cards
+        if self._cards is None:
+            self._cards = ToolCards(self.settings)
+        return self._cards
 
     def main_window(self) -> MainWindow:
-        """The main window, made on first use, on the Settings entry's cards if it came first."""
+        """The main window, made on first use, on the entries' cards and folder locks if they came first."""
         if self.window is None:
-            cards = self.settings_entry.cards if self.settings_entry is not None else None
-            self.window = MainWindow(self.open_library(), self.settings, cards)
+            library = self.open_library()
+            if library is not None:
+                library.locks = self.locks  # a right-click ReplayGain run may hold some already
+            self.window = MainWindow(library, self.settings, self._cards)
             if not self.check_tools:
                 return self.window
             check = ToolCheck()
@@ -97,8 +113,7 @@ class Starter(QObject):
     def run_entry(self, entry: str, paths: list[str]) -> None:
         """A right-click entry (SPEC §31): in the main window if it is open, else in a window of its own."""
         if entry in REPLAYGAIN_ENTRIES:
-            # Until the ReplayGain page has a window of its own (slice 2 task 3), the main window runs it.
-            self.main_window().tools.run_entry(entry, paths)
+            self.run_replaygain(entry, paths)
             return
         if entry != SETTINGS:
             log.warning("ignored an unknown right-click entry %r", entry)
@@ -109,13 +124,44 @@ class Starter(QObject):
         if self.settings_entry is not None:
             self.settings_entry.open(paths)
             return
-        self.settings_entry = SettingsEntry(self.settings, self)
+        self.settings_entry = SettingsEntry(self.cards(), self)
         qt_util.app().aboutToQuit.connect(self.settings_entry.close)
-        self.settings_entry.open(paths).finished.connect(self._settings_closed)
+        self.settings_entry.open(paths).finished.connect(self._entry_closed)
 
-    def _settings_closed(self) -> None:
-        """Without a main window, closing the Options window ends the process (SPEC §31)."""
-        if self.window is None:
+    def run_replaygain(self, entry: str, paths: list[str]) -> None:
+        """A ReplayGain entry: refused while one of the entries' runs is going (one rsgain at a time), else a job of
+        the main window, else the ReplayGain page alone in a new window (SPEC §31)."""
+        running = next((w for w in self.replaygain_windows if w.running), None)
+        if running is not None:
+            running.refuse()
+            return
+        if self.window is not None:
+            self.window.tools.run_entry(entry, paths)
+            return
+        window = ReplayGainWindow(self.cards(), self.locks)
+        self.replaygain_windows.append(window)
+        window.closed.connect(lambda: self._replaygain_closed(window))
+        window.finished.connect(self._replaygain_finished)
+        qt_util.app().aboutToQuit.connect(window.shutdown)
+        window.start(entry, paths)
+
+    def _replaygain_finished(self, finished) -> None:
+        """A main window opened meanwhile: its index catches up on the run's folders."""
+        if self.window is not None and self.window._library_open():
+            for folder in finished.folders:
+                self.window.refresh_after_tool(folder)
+
+    def _replaygain_closed(self, window: ReplayGainWindow) -> None:
+        self.replaygain_windows.remove(window)
+        window.deleteLater()
+        self._entry_closed()
+
+    def _entry_closed(self) -> None:
+        """Without a main window, closing the last entry's window ends the process (SPEC §31)."""
+        if self.window is not None or self.replaygain_windows:
+            return
+        options = self._cards.options_window if self._cards is not None else None
+        if options is None or not options.isVisible():
             QApplication.quit()
 
 

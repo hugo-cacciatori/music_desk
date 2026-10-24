@@ -1,5 +1,5 @@
-"""The right-click Split and Trim with MusicDesk not open (SPEC §31): the app's Split page or Trim page alone, in a
-window of its own, driven by the app's own controller.
+"""Pages of the app alone in a window of their own (SPEC §31), driven by the app's own controller: the cue editor
+("Edit this cue sheet…", MusicDesk open or closed) and the Trim page ("Trim this track…", MusicDesk closed).
 
 `ToolHost` is the part of the main window those controllers use, and nothing else: the page area, the status bar,
 the toast, a job list, the Options window's settings, the shell, and Preview in player. There is no index here:
@@ -130,12 +130,14 @@ class ToolHost(QMainWindow):
         self._shell.shutdown(wait=False)
 
 
-class SplitWindow(ToolHost):
-    """"Split this cue sheet…" alone: the sheet's Split page, with Split, Edit… and Preview in player."""
+class CueEditorWindow(ToolHost):
+    """"Edit this cue sheet…" (SPEC §31): the app's cue editor alone, which edits and saves the sheet (no Split:
+    splitting is "Split this cue sheet…"'s recap), with Preview in player; no Back, closing leaves."""
 
     def __init__(self, cards: ToolCards, locks: PathLocks) -> None:
-        super().__init__(cards, locks, "Split")
+        super().__init__(cards, locks, "Edit cue sheet")
         self.controller = SplitController(self, locks, self)
+        self.controller.page.set_standalone()
         self.center.addWidget(self.controller.page)
 
     def start(self, paths: list[str]) -> bool:
@@ -143,7 +145,7 @@ class SplitWindow(ToolHost):
         controller = self.controller
         assert isinstance(controller, SplitController)
         if len(paths) != 1 or Path(paths[0]).suffix.lower() != ".cue":
-            controller.page.show_error("Split didn't start: choose one cue sheet (.cue).")
+            controller.page.show_error("Nothing to edit: choose one cue sheet (.cue).")
             return False
         controller.open(paths[0])
         return True

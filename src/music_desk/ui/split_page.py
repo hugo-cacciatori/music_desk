@@ -90,6 +90,7 @@ class SplitPage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.state = "empty"  # loading, editing, running, result, error
+        self.standalone = False  # "Edit this cue sheet…" in a window of its own (SPEC §31): no way back to a list
         self.rows: list[tuple[int | None, int]] = []  # per table row: (sheet row or None for a hidden track, number)
         self._refreshing = False
         self._table_stale = False  # a refresh came while a cell was being edited
@@ -307,6 +308,7 @@ class SplitPage(QWidget):
         for button in (self.save_button, self.save_as_button, self.preview_button):
             button.setVisible(editing)
         self.split_button.hide()  # the page edits only (M20): Split is on the cue sheet's preview
+        self.back_button.setVisible(not self.standalone)  # alone, closing the window leaves
         self.split_note.hide()
         self.save_note.setVisible(editing and self.new and bool(self.save_note.text()))
         self.stop_button.setVisible(state == "running")
@@ -355,12 +357,23 @@ class SplitPage(QWidget):
     def show_destination(self, text: str) -> None:
         _set_text(self.destination, text)
 
+    def set_standalone(self) -> None:
+        """In a window of its own (the right-click "Edit this cue sheet…", SPEC §31): no Back, Done closes the window,
+        and the settings are named where they are from there: MusicDesk > Settings in the right-click menu."""
+        self.standalone = True
+        self.done_button.setText("Close")
+        self.done_button.setToolTip("Close this window")
+        self.save_note.setToolTip("Set in the right-click menu's MusicDesk > Settings, Split: new sheets are saved "
+                                  "beside their audio file without the Save dialog")
+        self._show(self.state, self.message.text())
+
     def set_new(self, new: bool, audio_name: str = "", save_beside: bool = False) -> None:
         """A new sheet (New cue sheet…): the encoding is UTF-8 until saved, and with the Options window's Split box
         on, Save says it saves beside the audio file."""
         self.new = new
         self.encoding.setEnabled(not new)
-        beside = f"Saves beside {audio_name} (File > Options…, Split)" if new and save_beside else ""
+        where = "MusicDesk > Settings, Split" if self.standalone else "File > Options…, Split"
+        beside = f"Saves beside {audio_name} ({where})" if new and save_beside else ""
         self.save_button.setToolTip(beside or (NEW_SAVE_TIP if new else SAVE_TIP))
         self.save_note.setText(beside)
         self.save_note.setVisible(bool(beside) and self.state in ("editing", "running"))

@@ -1,6 +1,7 @@
 """Windows alone (`ToolHost`, SPEC §31), driven by the app's controllers, with the real bundled flac on copied
-fixtures: the track's Trim page ("Trim this track…" with MusicDesk closed), and the cue editor (to become "Edit this
-cue sheet…"). No main window; the process ends when the window closes. The Split entry: test_right_click_split.py."""
+fixtures: the track's Trim page ("Trim this track…" with MusicDesk closed), and the cue editor ("Edit this cue
+sheet…", MusicDesk open or closed). The process ends when the last window closes without a main window. The Split
+entry: test_right_click_split.py."""
 
 import shutil
 
@@ -9,7 +10,7 @@ from PySide6.QtCore import QCoreApplication, QEvent
 
 from music_desk.app import Starter
 from music_desk.context_menu import request as menu
-from music_desk.context_menu.tool_host import SplitWindow, TrimWindow
+from music_desk.context_menu.tool_host import CueEditorWindow, TrimWindow
 from music_desk.settings import Settings
 
 
@@ -51,17 +52,40 @@ def alone(qtbot, starter, entry, paths, kind):
     return window
 
 
-# -- The cue editor alone (SplitWindow): "Edit this cue sheet…" (task 3); the Split entry is a recap now --
+# -- "Edit this cue sheet…": the cue editor alone, MusicDesk open or closed --
 
-def editor(starter, paths) -> SplitWindow:
-    window = SplitWindow(starter.cards(), starter.locks)
-    starter._own(window)
-    window.start([str(p) for p in paths])
+def editor(qtbot, starter, paths) -> CueEditorWindow:
+    starter.run_entry(menu.EDIT_CUE, [str(p) for p in paths])
+    window = starter.entry_windows[-1]
+    assert isinstance(window, CueEditorWindow)
     return window
 
 
-def test_the_editor_alone_asks_about_unsaved_edits_before_closing(qtbot, starter, albums, quits):
-    window = editor(starter, [albums / "wav_image" / "image.cue"])
+def on_screen(page) -> list[str]:
+    return [b.text() for b in (page.back_button, page.save_button, page.save_as_button, page.preview_button,
+                                page.split_button, page.stop_button, page.done_button) if b.isVisible()]
+
+
+def test_the_editor_alone_edits_and_saves(qtbot, starter, albums, quits):
+    cue = albums / "wav_image" / "image.cue"
+    window = editor(qtbot, starter, [cue])
+    split = window.controller
+    split.recycle = lambda _path: None  # the old version would go to the Recycle Bin: a recorder here
+    split.check_recycle = lambda _path: None
+    assert starter.window is None and window.windowTitle() == "MusicDesk · Edit cue sheet"
+    qtbot.waitUntil(lambda: split.page.state == "editing" and not split._planning, timeout=20000)
+    # An editor: Save, Save as and Preview in player; no Split (the Split entry does that), no Back to a list.
+    assert on_screen(split.page) == ["Save", "Save as…", "Preview in player"]
+    split.page.cell(0, "title").setText("Edited Title")
+    qtbot.waitUntil(lambda: split.doc.modified and split.page.save_button.isEnabled(), timeout=5000)
+    split.page.save_button.click()
+    qtbot.waitUntil(lambda: "Edited Title" in cue.read_text(encoding="utf-8", errors="replace"), timeout=10000)
+    window.close()
+    assert starter.entry_windows == [] and quits == [True]
+
+
+def test_the_editor_asks_about_unsaved_edits_before_closing(qtbot, starter, albums, quits):
+    window = editor(qtbot, starter, [albums / "wav_image" / "image.cue"])
     split = window.controller
     qtbot.waitUntil(lambda: split.page.state == "editing" and not split._planning, timeout=20000)
     split.page.cell(0, "title").setText("Edited")  # an unsaved edit, typed in the table
@@ -75,9 +99,20 @@ def test_the_editor_alone_asks_about_unsaved_edits_before_closing(qtbot, starter
     assert quits == [True]
 
 
-def test_the_editor_alone_refuses_anything_but_one_cue(qtbot, starter, albums, quits):
-    window = editor(starter, [albums / "tone.wav"])
-    assert window.controller.page.state == "error"
+def test_the_editor_refuses_anything_but_one_cue(qtbot, starter, albums, quits):
+    page = editor(qtbot, starter, [albums / "tone.wav"]).controller.page
+    assert page.state == "error" and on_screen(page) == ["Close"]  # Done reads Close here
+
+
+def test_with_musicdesk_open_the_editor_is_its_own_window(qtbot, starter, service, albums, quits):
+    starter.open_folder(None)
+    main = starter.window
+    qtbot.addWidget(main)
+    page = main.center.currentWidget()
+    window = editor(qtbot, starter, [albums / "wav_image" / "image.cue"])
+    assert window.isVisible() and main.center.currentWidget() is page  # the main window stays where it was
+    qtbot.waitUntil(lambda: window.controller.page.state == "editing", timeout=20000)
+    window.close()
 
 
 # -- Trim --

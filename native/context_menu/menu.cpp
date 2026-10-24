@@ -114,7 +114,8 @@ static const Entry TIDY = {L"musicdesk.tidy",
 static const Entry CLEANUP = {L"musicdesk.cleanup",
                               L"Lists the redundant files here; you choose what goes to the Recycle Bin"};
 static const Entry SPLIT = {L"musicdesk.split",
-                            L"Opens the cue sheet's Split page; nothing is split until you click Split"};
+                            L"Shows what splitting this cue sheet writes; nothing is split until you click Split"};
+static const Entry EDIT_CUE = {L"musicdesk.edit-cue", L"Opens this cue sheet in MusicDesk's cue sheet editor"};
 static const Entry TRIM = {L"musicdesk.trim",
                            L"Opens the track's Trim page; the trimmed copy is made only when you click Trim"};
 static const Entry SETTINGS = {L"musicdesk.settings", L"Opens MusicDesk's Options window"};
@@ -122,7 +123,8 @@ static const Entry SETTINGS = {L"musicdesk.settings", L"Opens MusicDesk's Option
 // The submenu's entries, in order (SPEC §31): Open in MusicDesk on one folder or empty space; the ReplayGain entries
 // on folders only or on files with tracks rsgain scans (no folder); Rename on any selection with a folder or a
 // music file (empty space too); Remove ReplayGain tags when every item is a track rsgain scans; Tidy and Clean up
-// on folders only (empty space too); Split on one .cue; Trim on one FLAC, WAV or AIFF file; Settings always.
+// on folders only (empty space too); Split and Edit on one .cue; Trim on one FLAC, WAV or AIFF file; Settings
+// always.
 static std::vector<const Entry*> entries_for(const Selection& selection) {
     std::vector<const Entry*> entries;
     if (selection.background || (selection.folders == 1 && selection.files == 0)) {
@@ -148,8 +150,10 @@ static std::vector<const Entry*> entries_for(const Selection& selection) {
     }
     if (!selection.background && selection.folders == 0 && selection.files == 1) {
         const std::wstring& path = selection.paths[0];
-        if (_wcsicmp(PathFindExtensionW(path.c_str()), L".cue") == 0)
+        if (_wcsicmp(PathFindExtensionW(path.c_str()), L".cue") == 0) {
             entries.push_back(&SPLIT);
+            entries.push_back(&EDIT_CUE);
+        }
         if (has_extension(path, TRIM_EXTENSIONS))
             entries.push_back(&TRIM);
     }
@@ -251,6 +255,8 @@ static std::wstring label_for(const Entry& entry, const Selection& selection, co
         return L"Remove ReplayGain tags\u2026";
     if (&entry == &SPLIT)
         return L"Split this cue sheet\u2026";
+    if (&entry == &EDIT_CUE)
+        return L"Edit this cue sheet\u2026";
     if (&entry == &TRIM)
         return L"Trim this track\u2026";
     if (&entry == &TIDY || &entry == &CLEANUP) {  // with what they act on (Hugo, 2026-10-24)

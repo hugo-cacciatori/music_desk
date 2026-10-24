@@ -14,6 +14,7 @@ import pytest
 
 from music_desk.context_menu.request import (
     CLEANUP,
+    EDIT_CUE,
     REMOVE_REPLAYGAIN,
     RENAME,
     REPLAYGAIN_DISCOGRAPHY,
@@ -124,7 +125,7 @@ def test_the_entries_by_what_was_clicked(dll, items, appdata):
     assert entries(dll, [album / "01.flac"]) == ["replaygain-loose", "rename", "remove-replaygain", "trim",
                                                  "settings"]
     assert entries(dll, [album / "02.MP3"]) == ["replaygain-loose", "rename", "remove-replaygain", "settings"]
-    assert entries(dll, [album / "image.CUE"]) == ["split", "settings"]  # a sheet alone
+    assert entries(dll, [album / "image.CUE"]) == ["split", "edit-cue", "settings"]  # a sheet alone
     assert entries(dll, [album / "image.CUE", album / "01.flac"]) == [  # with a track: neither Split nor Trim
         "replaygain-loose", "rename", "settings"]
     assert entries(dll, [album / "01.flac", album / "02.MP3", album / "notes.txt"]) == [
@@ -144,7 +145,7 @@ def test_the_labels_carry_the_target(dll, items, appdata):
     assert labels(dll, [album], background=True)[-3:-1] == ["Tidy this folder…", "Clean up this folder…"]
     assert labels(dll, [album, other])[2:4] == ["Tidy 2 folders…", "Clean up 2 folders…"]
     assert labels(dll, [album / "01.flac"])[-3:-1] == ["Remove ReplayGain tags…", "Trim this track…"]
-    assert labels(dll, [album / "image.CUE"]) == ["Split this cue sheet…", "Settings"]
+    assert labels(dll, [album / "image.CUE"]) == ["Split this cue sheet…", "Edit this cue sheet…", "Settings"]
     (appdata / "MusicDesk").mkdir(parents=True)
     settings = appdata / "MusicDesk" / "settings.json"
     settings.write_text(json.dumps({"name_masks": {"x": "{target}"}, "replaygain_options": {
@@ -177,6 +178,7 @@ def test_the_other_entries_hand_their_paths_over(dll, items, appdata):
                                  ("musicdesk.tidy", TIDY, [album, other]),
                                  ("musicdesk.cleanup", CLEANUP, [album, other]),
                                  ("musicdesk.split", SPLIT, [album / "image.CUE"]),
+                                 ("musicdesk.edit-cue", EDIT_CUE, [album / "image.CUE"]),
                                  ("musicdesk.trim", TRIM, [album / "01.flac"])):
         exe, *arguments = command(dll, clicked, verb)
         assert exe == EXE and arguments[:2] == [f"--{entry}", "--list"]

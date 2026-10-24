@@ -13,6 +13,7 @@ from music_desk.context_menu.rename_entry import RenameWindow
 from music_desk.context_menu.replaygain_entry import ReplayGainWindow
 from music_desk.context_menu.request import (
     CLEANUP,
+    EDIT_CUE,
     REMOVE_REPLAYGAIN,
     RENAME,
     REPLAYGAIN_ENTRIES,
@@ -25,7 +26,7 @@ from music_desk.context_menu.request import (
 from music_desk.context_menu.settings_entry import SettingsEntry
 from music_desk.context_menu.split_recap import SplitRecapWindow
 from music_desk.context_menu.tidy_entry import TidyWindow
-from music_desk.context_menu.tool_host import TrimWindow
+from music_desk.context_menu.tool_host import CueEditorWindow, TrimWindow
 from music_desk.core.flac import flac_version
 from music_desk.core.path_locks import PathLocks
 from music_desk.core.rsgain import rsgain_version
@@ -83,7 +84,7 @@ def folder_argument(arguments: list[str]) -> str | None:
 
 
 EntryWindow = (ReplayGainWindow | RenameWindow | RemoveEntry | TidyWindow | CleanupEntry | TrimWindow
-               | SplitRecapWindow)
+               | SplitRecapWindow | CueEditorWindow)
 # The entries that run alone with MusicDesk closed, and what runs them (ReplayGain has its own rules: run_replaygain).
 ALONE = {RENAME: RenameWindow, REMOVE_REPLAYGAIN: RemoveEntry, TIDY: TidyWindow, CLEANUP: CleanupEntry,
          TRIM: TrimWindow}
@@ -160,6 +161,12 @@ class Starter(QObject):
             recap = SplitRecapWindow(self.cards(), self.locks, self.window)
             self._own(recap)
             recap.start(paths)
+            return
+        if entry == EDIT_CUE:
+            # The cue editor alone, with MusicDesk open or closed, as Split's recap (SPEC §31).
+            editor = CueEditorWindow(self.cards(), self.locks)
+            self._own(editor)
+            editor.start(paths)
             return
         if entry in ALONE:
             if self.window is not None:

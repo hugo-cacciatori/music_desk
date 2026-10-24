@@ -17,6 +17,7 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QMessageBox
 
 from music_desk.context_menu import request as menu
+from music_desk.context_menu.remove_report import RemoveReport, split_tracks
 from music_desk.core import rename
 from music_desk.core.formats import AUDIO_EXTENSIONS
 from music_desk.core.index import queries
@@ -100,6 +101,7 @@ class ToolsController(QObject):
         window.tag_writer.replaygainRemoved.connect(self._replaygain_removed)
         self._example_token: int | None = None
         self._rg_remove_token: int | None = None
+        self._remove_reports: dict[int, tuple[RemoveReport, list[str]]] = {}  # right-click removals running
 
         self.rename_preview = RenamePreview()
         self.rename_preview.backRequested.connect(window.close_tools)
@@ -401,6 +403,8 @@ class ToolsController(QObject):
         why)."""
         if entry == menu.RENAME:
             return self.rename_entry(paths)
+        if entry == menu.REMOVE_REPLAYGAIN:
+            return self.remove_entry(paths)
         window = self.window
         window.bring_to_front()
         kind = ENTRY_KINDS[entry]
@@ -584,6 +588,34 @@ class ToolsController(QObject):
         window.statusBar().showMessage(f"Removing the ReplayGain tags of {count} file{'s' if count != 1 else ''}…",
                                        STATUS_MS)
 
+    def remove_entry(self, paths: list[str]) -> bool:
+        """The right-click Remove ReplayGain tags (SPEC §31), with MusicDesk open: the clicked tracks only, after
+        the app's question; the removal runs on the TagWriter (its locks, the index following each file), and a
+        report window says what was done and stays until it is closed. False when nothing started."""
+        window = self.window
+        window.bring_to_front()
+        tracks, left_out = split_tracks(paths)
+        if not tracks:
+            window.statusBar().showMessage("Remove ReplayGain tags: no track ReplayGain works on was clicked.",
+                                           STATUS_MS)
+            return False
+        if any(window._unsaved_edits_under(Path(path)) for path in tracks):
+            return False
+        folders = sorted({str(Path(path).parent) for path in tracks})
+        options = self.cards.replaygain_card.options()
+        if not self.ask_remove_replaygain(len(tracks), folders[0] if len(folders) == 1 else "several folders",
+                                          options.comment):
+            return False
+        token = window.tag_writer.remove_replaygain(tracks, options)
+        report = RemoveReport(folders[0], window)
+        report.revealRequested.connect(lambda path: window._in_shell(
+            lambda: window.show_in_explorer(path, True), f"File Explorer couldn't show {path}.", "", True))
+        self._remove_reports[token] = (report, left_out)
+        report.closed.connect(lambda: self._remove_reports.pop(token, None))
+        report.closed.connect(report.deleteLater)
+        report.bring_to_front()
+        return True
+
     def ask_remove_replaygain(self, count: int, where: str, comment: str) -> bool:
         """Confirm the removal (replaced in tests)."""
         noun = f"{count} track{'s' if count != 1 else ''}"
@@ -599,6 +631,10 @@ class ToolsController(QObject):
         return box.clickedButton() is remove
 
     def _replaygain_removed(self, result) -> None:
+        if result.token in self._remove_reports:  # a right-click removal: its report window
+            report, left_out = self._remove_reports.pop(result.token)
+            report.show_result(result, left_out)
+            return
         if result.token != self._rg_remove_token:
             return
         window = self.window

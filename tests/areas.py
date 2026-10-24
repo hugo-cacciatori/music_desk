@@ -117,10 +117,11 @@ AREAS: dict[str, Area] = {
         ("app.py", "here.py", "instance.py", "foreground.py", "logging_setup.py"),
         ("ui/test_open_here.py", "ui/test_right_click_settings.py", "ui/test_right_click_replaygain_alone.py")),
     "right_click": Area(
-        ("context_menu/request.py", "context_menu/settings_entry.py", "context_menu/replaygain_entry.py"),
+        ("context_menu/request.py", "context_menu/settings_entry.py", "context_menu/replaygain_entry.py",
+         "context_menu/remove_report.py"),
         ("ui/test_right_click_settings.py", "ui/test_right_click_replaygain.py",
          "ui/test_right_click_replaygain_alone.py", "ui/test_right_click_rename.py",
-         "test_menu_handler.py"),
+         "ui/test_right_click_remove.py", "test_menu_handler.py"),
         ("native/context_menu/", "packaging/build_menu.py")),
     "hover_texts": Area(("ui/hover.py",), ("ui/test_hover_texts.py",)),
     "scroll_wheel": Area(("ui/no_wheel.py",), ("ui/test_no_wheel.py",)),

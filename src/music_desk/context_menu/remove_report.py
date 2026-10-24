@@ -1,0 +1,91 @@
+"""The right-click Remove ReplayGain tags' report (SPEC §31): a small window that stays until it is closed, the same
+whether MusicDesk was open or not. It says how many tracks were cleared, how many had no ReplayGain tags, and each
+file that couldn't be changed, with why.
+"""
+
+import os
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
+
+from music_desk.core.formats import format_for
+from music_desk.core.replaygain import plural
+from music_desk.services.tag_writer import ReplayGainRemoved
+
+TITLE = "MusicDesk · Remove ReplayGain tags"
+
+
+def split_tracks(paths: list[str]) -> tuple[list[str], list[str]]:
+    """The clicked tracks ReplayGain works on (an extension rsgain scans, as the menu judges them), and the rest,
+    left out. The menu shows the entry only when there is no rest; a start from the command line may have one."""
+    tracks, left_out = [], []
+    for path in paths:
+        info = format_for(path)
+        (tracks if info is not None and info.replaygain else left_out).append(path)
+    return tracks, left_out
+
+
+def report_lines(result: ReplayGainRemoved, left_out: list[str]) -> tuple[str, list[str]]:
+    """The window's message, and its list: the files not changed (with why), then the files left out."""
+    done = len(result.removed)
+    parts = [f"Removed the ReplayGain tags of {plural(done, 'track')}." if done else
+             "No ReplayGain tags were removed."]
+    if result.unchanged:
+        parts.append(f"{plural(result.unchanged, 'track')} had none.")
+    if result.failed:
+        parts.append(f"{plural(len(result.failed), 'file')} couldn't be changed: see below.")
+    lines = [message for _path, message in result.failed]
+    if left_out:
+        parts.append(f"{plural(len(left_out), 'file')} left out: not a track ReplayGain works on.")
+        lines += [f"{os.path.basename(path)}: left out" for path in left_out]
+    return " ".join(parts), lines
+
+
+class RemoveReport(QWidget):
+    revealRequested = Signal(str)  # the tracks' folder
+    closed = Signal()
+
+    def __init__(self, folder: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent, Qt.WindowType.Window)
+        self.setWindowTitle(TITLE)
+        self.resize(640, 320)
+        self.folder = folder
+        self.heading = QLabel(f"<b>Remove ReplayGain tags</b> · {folder}")
+        self.heading.setWordWrap(True)
+        self.message = QLabel("Removing the ReplayGain tags…")
+        self.message.setWordWrap(True)
+        self.details = QPlainTextEdit()
+        self.details.setReadOnly(True)
+        self.details.hide()
+        reveal = QPushButton("Open in File Explorer")
+        reveal.setToolTip("Show the tracks' folder in File Explorer")
+        reveal.clicked.connect(lambda: self.revealRequested.emit(self.folder))
+        self.close_button = QPushButton("Close")
+        self.close_button.setToolTip("Close this report")
+        self.close_button.clicked.connect(self.close)
+        buttons = QHBoxLayout()
+        buttons.addWidget(reveal)
+        buttons.addStretch(1)
+        buttons.addWidget(self.close_button)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.heading)
+        layout.addWidget(self.message)
+        layout.addWidget(self.details, 1)
+        layout.addLayout(buttons)
+
+    def show_result(self, result: ReplayGainRemoved, left_out: list[str]) -> None:
+        message, lines = report_lines(result, left_out)
+        self.message.setText(message)
+        self.details.setPlainText("\n".join(lines))
+        self.details.setVisible(bool(lines))
+        self.bring_to_front()
+
+    def bring_to_front(self) -> None:
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        super().closeEvent(event)
+        self.closed.emit()

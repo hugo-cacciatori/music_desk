@@ -35,9 +35,17 @@ static const wchar_t* const REPLAYGAIN_EXTENSIONS[] = {
     L".m4a", L".mp4", L".wv", L".mpc", L".tak", L".wma",
 };
 
-static bool is_replaygain_audio(const std::wstring& path) {
+// Every audio extension the app knows (core/formats.py, all FORMATS): Rename's music files. Also kept in step.
+static const wchar_t* const AUDIO_EXTENSIONS[] = {
+    L".flac", L".ogg", L".oga", L".opus", L".spx", L".mp3", L".mp2", L".wav", L".aif", L".aiff", L".aifc",
+    L".m4a", L".mp4", L".m4b", L".wv", L".mpc", L".tak", L".ofr", L".ofs", L".tta", L".wma", L".dsf", L".dff",
+    L".aac",
+};
+
+template <size_t N>
+static bool has_extension(const std::wstring& path, const wchar_t* const (&extensions)[N]) {
     const wchar_t* extension = PathFindExtensionW(path.c_str());
-    for (const wchar_t* candidate : REPLAYGAIN_EXTENSIONS)
+    for (const wchar_t* candidate : extensions)
         if (_wcsicmp(extension, candidate) == 0)
             return true;
     return false;
@@ -49,11 +57,12 @@ struct Selection {
     int folders = 0;
     int files = 0;
     int audio = 0;  // files rsgain scans
+    int music = 0;  // audio files of any format the app knows
     bool one_folder = true;  // every file is in the same folder (a search's results may not be)
 };
 
 static void count_kinds(Selection& selection) {
-    selection.folders = selection.files = selection.audio = 0;
+    selection.folders = selection.files = selection.audio = selection.music = 0;
     selection.one_folder = true;
     std::wstring parent;
     for (const std::wstring& path : selection.paths) {
@@ -63,8 +72,10 @@ static void count_kinds(Selection& selection) {
             continue;
         }
         ++selection.files;
-        if (is_replaygain_audio(path))
+        if (has_extension(path, REPLAYGAIN_EXTENSIONS))
             ++selection.audio;
+        if (has_extension(path, AUDIO_EXTENSIONS))
+            ++selection.music;
         std::wstring folder = path.substr(0, path.find_last_of(L'\\'));
         if (parent.empty())
             parent = folder;
@@ -90,10 +101,15 @@ static const Entry RG_TRACKS = {L"musicdesk.replaygain-tracks",
                                 L"are left as they are"};
 static const Entry RG_LOOSE = {L"musicdesk.replaygain-loose",
                                L"Runs ReplayGain on each selected track alone, as its own album, with no log"};
+static const Entry RENAME = {L"musicdesk.rename",
+                             L"Previews renaming the music files from their tags; nothing changes until you apply"};
+static const Entry REMOVE_RG = {L"musicdesk.remove-replaygain",
+                                L"Removes the selected tracks' ReplayGain tags, after a question"};
 static const Entry SETTINGS = {L"musicdesk.settings", L"Opens MusicDesk's Options window"};
 
 // The submenu's entries, in order (SPEC §31): Open in MusicDesk on one folder or empty space; the ReplayGain entries
-// on folders only or on files with tracks rsgain scans (no folder); Settings always.
+// on folders only or on files with tracks rsgain scans (no folder); Rename on any selection with a folder or a
+// music file (empty space too); Remove ReplayGain tags when every item is a track rsgain scans; Settings always.
 static std::vector<const Entry*> entries_for(const Selection& selection) {
     std::vector<const Entry*> entries;
     if (selection.background || (selection.folders == 1 && selection.files == 0)) {
@@ -109,6 +125,10 @@ static std::vector<const Entry*> entries_for(const Selection& selection) {
             entries.push_back(&RG_TRACKS);
         entries.push_back(&RG_LOOSE);
     }
+    if (selection.background || selection.folders > 0 || selection.music > 0)
+        entries.push_back(&RENAME);
+    if (!selection.background && selection.folders == 0 && selection.files > 0 && selection.audio == selection.files)
+        entries.push_back(&REMOVE_RG);
     entries.push_back(&SETTINGS);
     return entries;
 }
@@ -201,6 +221,10 @@ static std::wstring label_for(const Entry& entry, const Selection& selection, co
         return L"Open in MusicDesk";
     if (&entry == &SETTINGS)
         return L"Settings";
+    if (&entry == &RENAME)
+        return L"Rename from tags\u2026";
+    if (&entry == &REMOVE_RG)
+        return L"Remove ReplayGain tags\u2026";
     if (&entry == &RG_ALBUM)
         return L"ReplayGain as an album" + suffix;
     if (&entry == &RG_DISCOGRAPHY)

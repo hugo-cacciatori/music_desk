@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 
 from music_desk.context_menu.request import (
+    REMOVE_REPLAYGAIN,
+    RENAME,
     REPLAYGAIN_DISCOGRAPHY,
     REPLAYGAIN_LOOSE,
     REPLAYGAIN_TRACKS,
@@ -30,7 +32,7 @@ _spec.loader.exec_module(build_menu)
 
 EXE = r"C:\Program Files\MusicDesk\MusicDesk.exe"
 SETTINGS_ONLY = ["settings"]
-ONE_FOLDER = ["open", "replaygain-album", "replaygain-discography", "settings"]
+ONE_FOLDER = ["open", "replaygain-album", "replaygain-discography", "rename", "settings"]
 
 
 @pytest.fixture(scope="module")
@@ -112,19 +114,23 @@ def test_the_entries_by_what_was_clicked(dll, items, appdata):
     album, other = items
     assert entries(dll, [album], background=True) == ONE_FOLDER  # empty space: the open folder
     assert entries(dll, [album]) == ONE_FOLDER
-    assert entries(dll, [album, other]) == ["replaygain-albums", "settings"]
-    assert entries(dll, [album / "01.flac"]) == ["replaygain-loose", "settings"]
+    assert entries(dll, [album, other]) == ["replaygain-albums", "rename", "settings"]
+    assert entries(dll, [album / "01.flac"]) == ["replaygain-loose", "rename", "remove-replaygain", "settings"]
     assert entries(dll, [album / "01.flac", album / "02.MP3", album / "notes.txt"]) == [
-        "replaygain-tracks", "replaygain-loose", "settings"]
-    assert entries(dll, [album / "01.flac", other / "01.opus"]) == ["replaygain-loose", "settings"]  # two folders
-    assert entries(dll, [album / "03.aac", album / "notes.txt"]) == SETTINGS_ONLY  # nothing rsgain scans
-    assert entries(dll, [album, album / "01.flac"]) == SETTINGS_ONLY  # folders and files together
+        "replaygain-tracks", "replaygain-loose", "rename", "settings"]  # Remove: only when every item is a track
+    assert entries(dll, [album / "01.flac", other / "01.opus"]) == [  # two folders: no album
+        "replaygain-loose", "rename", "remove-replaygain", "settings"]
+    assert entries(dll, [album / "03.aac", album / "notes.txt"]) == ["rename", "settings"]  # nothing rsgain scans
+    assert entries(dll, [album, album / "01.flac"]) == ["rename", "settings"]  # folders and files together
+    assert entries(dll, [album / "notes.txt"]) == SETTINGS_ONLY  # no folder, no music file
 
 
 def test_the_labels_carry_the_target(dll, items, appdata):
     album, other = items
     assert labels(dll, [album]) == ["Open in MusicDesk", "ReplayGain as an album (−15 LUFS)",
-                                    "ReplayGain as a discography (−15 LUFS)", "Settings"]  # the default
+                                    "ReplayGain as a discography (−15 LUFS)", "Rename from tags…",
+                                    "Settings"]  # the default
+    assert labels(dll, [album / "01.flac"])[-2] == "Remove ReplayGain tags…"
     (appdata / "MusicDesk").mkdir(parents=True)
     settings = appdata / "MusicDesk" / "settings.json"
     settings.write_text(json.dumps({"name_masks": {"x": "{target}"}, "replaygain_options": {
@@ -139,11 +145,25 @@ def test_the_labels_carry_the_target(dll, items, appdata):
     assert labels(dll, [album / "01.flac"])[0] == "ReplayGain this track (−15 LUFS)"  # as the app: the default
 
 
-def test_the_extensions_are_those_rsgain_scans():
-    """The handler's list stays in step with core/formats.py."""
+def test_the_extensions_are_the_apps():
+    """The handler's lists stay in step with core/formats.py: rsgain's formats, and every audio format."""
     source = (Path(__file__).parents[1] / "native" / "context_menu" / "menu.cpp").read_text(encoding="utf-8")
-    block = source.split("REPLAYGAIN_EXTENSIONS[] = {", 1)[1].split("};", 1)[0]
-    assert re.findall(r'L"(\.[a-z0-9]+)"', block) == [e for f in FORMATS if f.replaygain for e in f.extensions]
+    for name, formats in (("REPLAYGAIN_EXTENSIONS", [f for f in FORMATS if f.replaygain]),
+                          ("AUDIO_EXTENSIONS", FORMATS)):
+        block = source.split(f"{name}[] = {{", 1)[1].split("};", 1)[0]
+        assert re.findall(r'L"(\.[a-z0-9]+)"', block) == [e for f in formats for e in f.extensions], name
+
+
+def test_rename_and_remove_hand_their_paths_over(dll, items, appdata):
+    album, other = items
+    for verb, entry, clicked in (("musicdesk.rename", RENAME, [album, other / "01.opus", album / "notes.txt"]),
+                                 ("musicdesk.remove-replaygain", REMOVE_REPLAYGAIN, [album / "01.flac"])):
+        exe, *arguments = command(dll, clicked, verb)
+        assert exe == EXE and arguments[:2] == [f"--{entry}", "--list"]
+        request = parse_arguments(arguments, appdata / "MusicDesk" / "menu")
+        assert request == StartRequest(entry, tuple(os.fspath(p) for p in clicked))
+    exe, *arguments = command(dll, [album], "musicdesk.rename", background=True)
+    assert parse_arguments(arguments, appdata / "MusicDesk" / "menu") == StartRequest(RENAME, (os.fspath(album),))
 
 
 def test_replaygain_entries_hand_their_paths_over(dll, items, appdata):

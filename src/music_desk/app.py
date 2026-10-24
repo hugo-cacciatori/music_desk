@@ -11,6 +11,7 @@ from music_desk.context_menu.remove_entry import RemoveEntry
 from music_desk.context_menu.rename_entry import RenameWindow
 from music_desk.context_menu.replaygain_entry import ReplayGainWindow
 from music_desk.context_menu.request import (
+    CLEANUP,
     REMOVE_REPLAYGAIN,
     RENAME,
     REPLAYGAIN_ENTRIES,
@@ -125,8 +126,8 @@ class Starter(QObject):
         if entry in REPLAYGAIN_ENTRIES:
             self.run_replaygain(entry, paths)
             return
-        if entry == TIDY:
-            # Until the Tidy page has a window of its own (slice 4 task 3), the main window shows it.
+        if entry in (TIDY, CLEANUP):
+            # Until they have windows of their own (slice 4 task 3), the main window shows them.
             self.main_window().tools.run_entry(entry, paths)
             return
         if entry in (RENAME, REMOVE_REPLAYGAIN):

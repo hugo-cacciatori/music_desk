@@ -406,6 +406,8 @@ class ToolsController(QObject):
             return self.remove_entry(paths)
         if entry == menu.TIDY:
             return self.window.tidy.open_paths(paths)
+        if entry == menu.CLEANUP:
+            return self.window.cleanup.open_paths(paths)
         window = self.window
         window.bring_to_front()
         kind = ENTRY_KINDS[entry]

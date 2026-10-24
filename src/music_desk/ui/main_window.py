@@ -837,7 +837,10 @@ class MainWindow(QMainWindow):
         """The open folder (or a folder above it) may have been renamed: its path and breadcrumb follow."""
         if self.folder_id is None or not self._folder_exists(self.folder_id):
             return
-        path = str(path_of(self.open_library.conn, self.folder_id))
+        try:
+            path = str(path_of(self.open_library.conn, self.folder_id))
+        except KeyError:  # a folder above it went between the two reads (its root removed): the removal closes it
+            return
         if path != self.folder_path:
             self.folder_path = path
             self.address_bar.set_location(queries.folder_crumbs(self.open_library.conn, self.folder_id), path)

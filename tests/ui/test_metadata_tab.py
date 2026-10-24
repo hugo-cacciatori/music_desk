@@ -7,6 +7,7 @@ import threading
 
 import pytest
 from browser_helpers import column, entry
+from lrclib_fake import collect
 from mutagen.id3 import ID3
 from PySide6.QtCore import Qt
 
@@ -257,8 +258,9 @@ def test_window_follows_the_selection_and_saves(qtbot, window, service):
 
 @pytest.mark.parametrize("answer", ["cancel", "discard", "save"])
 def test_leaving_with_unsaved_edits(qtbot, window, service, library_dir, monkeypatch, answer):
-    with qtbot.waitSignal(service.indexer.idle, timeout=20000):  # its revalidation on open, before any selection
-        window.open_folder(entry(service, "Artist", "Album"))
+    idle = collect(service.indexer.idle)  # not waitSignal: a worker thread's signal (tests/ui/conftest.py)
+    window.open_folder(entry(service, "Artist", "Album"))
+    qtbot.waitUntil(lambda: bool(idle), timeout=20000)  # its revalidation on open, before any selection
     tab = select_file(qtbot, window, "Track 2.flac")
     monkeypatch.setattr(tab, "ask_leave", lambda: answer)
     tab.edits["title"].setText("Edited")

@@ -7,13 +7,36 @@ import os
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from music_desk.core.formats import format_for
 from music_desk.core.replaygain import plural
 from music_desk.services.tag_writer import ReplayGainRemoved
 
 TITLE = "MusicDesk · Remove ReplayGain tags"
+
+
+def ask_remove(parent: QWidget | None, count: int, where: str, comment: str) -> bool:
+    """The app's question before removing ReplayGain tags (SPEC §10 B), in the app or alone."""
+    noun = plural(count, "track")
+    box = QMessageBox(QMessageBox.Icon.Question, "Remove ReplayGain tags",
+                      f"Remove the ReplayGain tags from {noun} in {where}?\n\n"
+                      f"This deletes their track and album gain and peak values, and the comment line "
+                      f"\"{comment}\" that ReplayGain writes. Other tags, other comment lines and the audio "
+                      f"itself are not changed, and replaygain.log files stay.", parent=parent)
+    remove = box.addButton("Remove", QMessageBox.ButtonRole.DestructiveRole)
+    box.addButton(QMessageBox.StandardButton.Cancel)
+    box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+    box.exec()
+    return box.clickedButton() is remove
 
 
 def split_tracks(paths: list[str]) -> tuple[list[str], list[str]]:

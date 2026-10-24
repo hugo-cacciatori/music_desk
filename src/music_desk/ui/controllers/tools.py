@@ -14,10 +14,9 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QMessageBox
 
 from music_desk.context_menu import request as menu
-from music_desk.context_menu.remove_report import RemoveReport, split_tracks
+from music_desk.context_menu.remove_report import RemoveReport, ask_remove, split_tracks
 from music_desk.core import rename
 from music_desk.core.formats import AUDIO_EXTENSIONS
 from music_desk.core.index import queries
@@ -618,17 +617,7 @@ class ToolsController(QObject):
 
     def ask_remove_replaygain(self, count: int, where: str, comment: str) -> bool:
         """Confirm the removal (replaced in tests)."""
-        noun = f"{count} track{'s' if count != 1 else ''}"
-        box = QMessageBox(QMessageBox.Icon.Question, "Remove ReplayGain tags",
-                          f"Remove the ReplayGain tags from {noun} in {where}?\n\n"
-                          f"This deletes their track and album gain and peak values, and the comment line "
-                          f"\"{comment}\" that ReplayGain writes. Other tags, other comment lines and the audio "
-                          f"itself are not changed, and replaygain.log files stay.", parent=self.window)
-        remove = box.addButton("Remove", QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton(QMessageBox.StandardButton.Cancel)
-        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
-        box.exec()
-        return box.clickedButton() is remove
+        return ask_remove(self.window, count, where, comment)
 
     def _replaygain_removed(self, result) -> None:
         if result.token in self._remove_reports:  # a right-click removal: its report window

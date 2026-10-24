@@ -7,6 +7,8 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from music_desk import __version__
+from music_desk.context_menu.remove_entry import RemoveEntry
+from music_desk.context_menu.rename_entry import RenameWindow
 from music_desk.context_menu.replaygain_entry import ReplayGainWindow
 from music_desk.context_menu.request import (
     REMOVE_REPLAYGAIN,
@@ -23,6 +25,7 @@ from music_desk.instance import InstanceServer, hand_over
 from music_desk.logging_setup import setup_logging
 from music_desk.paths import app_data_dir, flac_path, icon_path, library_db_path, rsgain_path
 from music_desk.services.library import LibraryService
+from music_desk.services.replaygain_job import Finished
 from music_desk.settings import Settings
 from music_desk.ui import qt_util
 from music_desk.ui.main_window import APP_TITLE, MainWindow
@@ -84,7 +87,7 @@ class Starter(QObject):
         self.check_tools = check_tools
         self.window: MainWindow | None = None
         self.settings_entry: SettingsEntry | None = None
-        self.replaygain_windows: list[ReplayGainWindow] = []
+        self.entry_windows: list[ReplayGainWindow | RenameWindow | RemoveEntry] = []  # entries' own windows
         self._cards: ToolCards | None = None  # the entries' Options cards, until the main window takes them
         self.locks = PathLocks()  # the entries' folder locks; the main window's library shares them
 
@@ -122,8 +125,14 @@ class Starter(QObject):
             self.run_replaygain(entry, paths)
             return
         if entry in (RENAME, REMOVE_REPLAYGAIN):
-            # Until they have windows of their own (slice 3 task 3), the main window shows them.
-            self.main_window().tools.run_entry(entry, paths)
+            if self.window is not None:
+                self.window.tools.run_entry(entry, paths)
+                return
+            # The Rename preview alone; Remove's question and report alone (SPEC §31).
+            alone = RenameWindow(self.cards(), self.locks) if entry == RENAME else \
+                RemoveEntry(self.cards(), self.locks)
+            self._own(alone)
+            alone.start(paths)
             return
         if entry != SETTINGS:
             log.warning("ignored an unknown right-click entry %r", entry)
@@ -138,6 +147,17 @@ class Starter(QObject):
         qt_util.app().aboutToQuit.connect(self.settings_entry.close)
         self.settings_entry.open(paths).finished.connect(self._entry_closed)
 
+    @property
+    def replaygain_windows(self) -> list[ReplayGainWindow]:
+        return [w for w in self.entry_windows if isinstance(w, ReplayGainWindow)]
+
+    def _own(self, alone: ReplayGainWindow | RenameWindow | RemoveEntry) -> None:
+        """An entry's own window: kept until it closes; the process ends with the last one (no main window)."""
+        self.entry_windows.append(alone)
+        alone.closed.connect(lambda: self._window_closed(alone))
+        alone.finished.connect(self._refresh_index)
+        qt_util.app().aboutToQuit.connect(alone.shutdown)
+
     def run_replaygain(self, entry: str, paths: list[str]) -> None:
         """A ReplayGain entry: refused while one of the entries' runs is going (one rsgain at a time), else a job of
         the main window, else the ReplayGain page alone in a new window (SPEC §31)."""
@@ -149,26 +169,25 @@ class Starter(QObject):
             self.window.tools.run_entry(entry, paths)
             return
         window = ReplayGainWindow(self.cards(), self.locks)
-        self.replaygain_windows.append(window)
-        window.closed.connect(lambda: self._replaygain_closed(window))
-        window.finished.connect(self._replaygain_finished)
-        qt_util.app().aboutToQuit.connect(window.shutdown)
+        self._own(window)
         window.start(entry, paths)
 
-    def _replaygain_finished(self, finished) -> None:
-        """A main window opened meanwhile: its index catches up on the run's folders."""
+    def _refresh_index(self, finished) -> None:
+        """A main window opened meanwhile: its index catches up on the folders an entry's run changed (a
+        ReplayGain run's Finished, or a list of folders)."""
         if self.window is not None and self.window._library_open():
-            for folder in finished.folders:
+            for folder in finished.folders if isinstance(finished, Finished) else finished:
                 self.window.refresh_after_tool(folder)
 
-    def _replaygain_closed(self, window: ReplayGainWindow) -> None:
-        self.replaygain_windows.remove(window)
-        window.deleteLater()
+    def _window_closed(self, alone: ReplayGainWindow | RenameWindow | RemoveEntry) -> None:
+        if alone in self.entry_windows:
+            self.entry_windows.remove(alone)
+        alone.deleteLater()
         self._entry_closed()
 
     def _entry_closed(self) -> None:
         """Without a main window, closing the last entry's window ends the process (SPEC §31)."""
-        if self.window is not None or self.replaygain_windows:
+        if self.window is not None or self.entry_windows:
             return
         options = self._cards.options_window if self._cards is not None else None
         if options is None or not options.isVisible():

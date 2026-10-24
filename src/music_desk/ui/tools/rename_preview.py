@@ -75,6 +75,7 @@ class RenamePreview(QWidget):
         self.plan: RenamePlan | None = None
         self.report: RenameReport | None = None
         self.state = "idle"  # planning, preview, applying, result, error
+        self.standalone = False  # in a window of its own (the right-click menu, SPEC §31): Close, not Back
 
         self.back_button = QPushButton("← Back")
         self.back_button.setToolTip(BACK_TIP)
@@ -153,6 +154,14 @@ class RenamePreview(QWidget):
         layout.addLayout(buttons)
         self._show("idle", "")
 
+    def set_standalone(self) -> None:
+        """In a window of its own: Back becomes Close, and Done closes the window."""
+        self.standalone = True
+        self.back_bottom.setText("Close")
+        self.back_bottom.setToolTip("Close this window without renaming anything")
+        self.done_button.setToolTip("Close this window")
+        self._show(self.state, self.message.text())
+
     # -- states --
 
     def show_planning(self, folder: Path, selection: int = 0, what: str | None = None) -> None:
@@ -176,7 +185,7 @@ class RenamePreview(QWidget):
         self.extras.setPlainText(self._extras_text(plan))
         self.extras.setVisible(bool(self.extras.toPlainText()))
         actionable = any(i.status is Status.RENAME for i in plan.items)
-        back = "Back changes nothing."
+        back = "Close changes nothing." if self.standalone else "Back changes nothing."
         if actionable:
             message = f"Nothing has changed yet. Apply renames exactly these files. {back}"
         else:
@@ -213,7 +222,8 @@ class RenamePreview(QWidget):
         self.extras.setVisible(state == "result" or (preview and bool(self.extras.toPlainText())))
         self.apply_button.setVisible(preview)
         self.back_bottom.setVisible(preview)
-        self.back_button.setVisible(state != "applying")  # no way back while files are being renamed
+        # no way back while files are being renamed; alone, Close next to Apply is the way out
+        self.back_button.setVisible(state != "applying" and not self.standalone)
         self.cancel_button.setVisible(state in ("planning", "applying"))
         self.done_button.setVisible(state in ("result", "error"))
         self.done_button.setText("Done" if state == "result" else "Close")

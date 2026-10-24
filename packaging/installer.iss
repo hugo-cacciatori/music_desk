@@ -20,6 +20,8 @@
 #define MenuDll "MusicDeskMenu-" + AppVersion + ".dll"
 ; The handler's CLSID, as in native\context_menu\menu.cpp ("{{" is one brace for Inno): never change it.
 #define MenuClsid "{{366C8DAE-145F-40D0-B273-8AFE153DD3F5}"
+; The handler's ContextMenuHandlers key: it sorts right after 7-Zip's ([Registry] below).
+#define MenuKey "8MusicDesk"
 
 [Setup]
 ; The AppId identifies the app for upgrades and the uninstaller: never change it.
@@ -82,9 +84,15 @@ Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\musicdes
 Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}"; ValueType: string; ValueName: ""; ValueData: "MusicDesk menu"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}\InprocServer32"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MenuDll}"
 Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}\InprocServer32"; ValueType: string; ValueName: "ThreadingModel"; ValueData: "Apartment"
-Root: HKA; Subkey: "Software\Classes\*\shellex\ContextMenuHandlers\MusicDesk"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\MusicDesk"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\MusicDesk"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
+; Explorer calls the handlers in the order of their key names (inferred, SPEC §31): "8MusicDesk" sorts right after
+; 7-Zip's "7-Zip", so the submenu shows just below 7-Zip's (Hugo, 2026-10-24). The name shows nowhere else.
+; 0.8.17 registered "MusicDesk": its keys are deleted, or the submenu would show twice.
+Root: HKA; Subkey: "Software\Classes\*\shellex\ContextMenuHandlers\MusicDesk"; ValueType: none; Flags: deletekey
+Root: HKA; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\MusicDesk"; ValueType: none; Flags: deletekey
+Root: HKA; Subkey: "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\MusicDesk"; ValueType: none; Flags: deletekey
+Root: HKA; Subkey: "Software\Classes\*\shellex\ContextMenuHandlers\{#MenuKey}"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\{#MenuKey}"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\{#MenuKey}"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"; ValueType: string; ValueName: "{#MenuClsid}"; ValueData: "MusicDesk menu"; Flags: uninsdeletevalue
 
 [Run]

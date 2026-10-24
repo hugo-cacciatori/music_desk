@@ -83,9 +83,13 @@ def test_the_installer_registers_the_menu_handler():
     assert (classes + r'\CLSID\{#MenuClsid}\InprocServer32"; ValueType: string; ValueName: ""; '
             r'ValueData: "{app}\{#MenuDll}"') in iss
     assert 'ValueName: "ThreadingModel"; ValueData: "Apartment"' in iss
+    assert '#define MenuKey "8MusicDesk"' in iss  # sorts right after 7-Zip's key: the submenu shows below it
     for where in ("*", "Directory", r"Directory\Background"):
-        assert (classes + rf'\{where}\shellex\ContextMenuHandlers\MusicDesk"; ValueType: string; ValueName: ""; '
+        assert (classes + rf'\{where}\shellex\ContextMenuHandlers\{{#MenuKey}}"; ValueType: string; ValueName: ""; '
                 'ValueData: "{#MenuClsid}"; Flags: uninsdeletekey') in iss
+        # 0.8.17's key: deleted at install, or the submenu would show twice
+        assert (classes + rf'\{where}\shellex\ContextMenuHandlers\MusicDesk"; ValueType: none; '
+                'Flags: deletekey') in iss
     assert (r'Subkey: "Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"; ValueType: string; '
             'ValueName: "{#MenuClsid}"; ValueData: "MusicDesk menu"; Flags: uninsdeletevalue') in iss
     assert "ChangesAssociations=yes" in iss

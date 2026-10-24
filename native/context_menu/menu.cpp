@@ -105,11 +105,17 @@ static const Entry RENAME = {L"musicdesk.rename",
                              L"Previews renaming the music files from their tags; nothing changes until you apply"};
 static const Entry REMOVE_RG = {L"musicdesk.remove-replaygain",
                                 L"Removes the selected tracks' ReplayGain tags, after a question"};
+static const Entry TIDY = {L"musicdesk.tidy",
+                           L"Plans Tidy (split, rename, ReplayGain) on every album here; nothing changes until you run "
+                           L"it"};
+static const Entry CLEANUP = {L"musicdesk.cleanup",
+                              L"Lists the redundant files here; you choose what goes to the Recycle Bin"};
 static const Entry SETTINGS = {L"musicdesk.settings", L"Opens MusicDesk's Options window"};
 
 // The submenu's entries, in order (SPEC §31): Open in MusicDesk on one folder or empty space; the ReplayGain entries
 // on folders only or on files with tracks rsgain scans (no folder); Rename on any selection with a folder or a
-// music file (empty space too); Remove ReplayGain tags when every item is a track rsgain scans; Settings always.
+// music file (empty space too); Remove ReplayGain tags when every item is a track rsgain scans; Tidy and Clean up
+// on folders only (empty space too); Settings always.
 static std::vector<const Entry*> entries_for(const Selection& selection) {
     std::vector<const Entry*> entries;
     if (selection.background || (selection.folders == 1 && selection.files == 0)) {
@@ -129,6 +135,10 @@ static std::vector<const Entry*> entries_for(const Selection& selection) {
         entries.push_back(&RENAME);
     if (!selection.background && selection.folders == 0 && selection.files > 0 && selection.audio == selection.files)
         entries.push_back(&REMOVE_RG);
+    if (selection.background || (selection.folders > 0 && selection.files == 0)) {
+        entries.push_back(&TIDY);
+        entries.push_back(&CLEANUP);
+    }
     entries.push_back(&SETTINGS);
     return entries;
 }
@@ -225,6 +235,11 @@ static std::wstring label_for(const Entry& entry, const Selection& selection, co
         return L"Rename from tags\u2026";
     if (&entry == &REMOVE_RG)
         return L"Remove ReplayGain tags\u2026";
+    if (&entry == &TIDY || &entry == &CLEANUP) {  // with what they act on (Hugo, 2026-10-24)
+        std::wstring what = selection.background || selection.folders == 1
+            ? L"this folder" : std::to_wstring(selection.folders) + L" folders";
+        return (&entry == &TIDY ? L"Tidy " : L"Clean up ") + what + L"\u2026";
+    }
     if (&entry == &RG_ALBUM)
         return L"ReplayGain as an album" + suffix;
     if (&entry == &RG_DISCOGRAPHY)

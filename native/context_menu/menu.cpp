@@ -42,6 +42,9 @@ static const wchar_t* const AUDIO_EXTENSIONS[] = {
     L".aac",
 };
 
+// What Trim cuts and the split reads (core/cue.py SUPPORTED, the bundled flac's formats). Also kept in step.
+static const wchar_t* const TRIM_EXTENSIONS[] = {L".flac", L".wav", L".aif", L".aiff"};
+
 template <size_t N>
 static bool has_extension(const std::wstring& path, const wchar_t* const (&extensions)[N]) {
     const wchar_t* extension = PathFindExtensionW(path.c_str());
@@ -110,12 +113,16 @@ static const Entry TIDY = {L"musicdesk.tidy",
                            L"it"};
 static const Entry CLEANUP = {L"musicdesk.cleanup",
                               L"Lists the redundant files here; you choose what goes to the Recycle Bin"};
+static const Entry SPLIT = {L"musicdesk.split",
+                            L"Opens the cue sheet's Split page; nothing is split until you click Split"};
+static const Entry TRIM = {L"musicdesk.trim",
+                           L"Opens the track's Trim page; the trimmed copy is made only when you click Trim"};
 static const Entry SETTINGS = {L"musicdesk.settings", L"Opens MusicDesk's Options window"};
 
 // The submenu's entries, in order (SPEC §31): Open in MusicDesk on one folder or empty space; the ReplayGain entries
 // on folders only or on files with tracks rsgain scans (no folder); Rename on any selection with a folder or a
 // music file (empty space too); Remove ReplayGain tags when every item is a track rsgain scans; Tidy and Clean up
-// on folders only (empty space too); Settings always.
+// on folders only (empty space too); Split on one .cue; Trim on one FLAC, WAV or AIFF file; Settings always.
 static std::vector<const Entry*> entries_for(const Selection& selection) {
     std::vector<const Entry*> entries;
     if (selection.background || (selection.folders == 1 && selection.files == 0)) {
@@ -138,6 +145,13 @@ static std::vector<const Entry*> entries_for(const Selection& selection) {
     if (selection.background || (selection.folders > 0 && selection.files == 0)) {
         entries.push_back(&TIDY);
         entries.push_back(&CLEANUP);
+    }
+    if (!selection.background && selection.folders == 0 && selection.files == 1) {
+        const std::wstring& path = selection.paths[0];
+        if (_wcsicmp(PathFindExtensionW(path.c_str()), L".cue") == 0)
+            entries.push_back(&SPLIT);
+        if (has_extension(path, TRIM_EXTENSIONS))
+            entries.push_back(&TRIM);
     }
     entries.push_back(&SETTINGS);
     return entries;
@@ -235,6 +249,10 @@ static std::wstring label_for(const Entry& entry, const Selection& selection, co
         return L"Rename from tags\u2026";
     if (&entry == &REMOVE_RG)
         return L"Remove ReplayGain tags\u2026";
+    if (&entry == &SPLIT)
+        return L"Split this cue sheet\u2026";
+    if (&entry == &TRIM)
+        return L"Trim this track\u2026";
     if (&entry == &TIDY || &entry == &CLEANUP) {  // with what they act on (Hugo, 2026-10-24)
         std::wstring what = selection.background || selection.folders == 1
             ? L"this folder" : std::to_wstring(selection.folders) + L" folders";

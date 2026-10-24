@@ -362,6 +362,36 @@ static bool start(std::wstring command, const std::wstring& folder) {
     return true;
 }
 
+// -- where the submenu goes in Explorer's menu --
+
+// An item's text without its "&" accelerator marks ("7-&Zip" reads "7-Zip").
+static std::wstring item_text(HMENU menu, int position) {
+    wchar_t text[128];
+    if (GetMenuStringW(menu, position, text, ARRAYSIZE(text), MF_BYPOSITION) <= 0)
+        return L"";
+    std::wstring plain;
+    for (const wchar_t* c = text; *c; ++c)
+        if (*c != L'&')
+            plain += *c;
+    return plain;
+}
+
+// Where the MusicDesk submenu goes (SPEC §31): -1 when the menu already has one (Explorer's navigation pane asked
+// this handler twice for one folder: two submenus, measured by Hugo 2026-10-24); just below 7-Zip's submenu when it
+// is there (Hugo: "just below 7-Zip"), else where Explorer asks.
+static int place_in(HMENU menu, UINT index) {
+    int count = GetMenuItemCount(menu);
+    int below_seven_zip = -1;
+    for (int i = 0; i < count; ++i) {
+        std::wstring text = item_text(menu, i);
+        if (text == L"MusicDesk")
+            return -1;
+        if (text == L"7-Zip")
+            below_seven_zip = i + 1;
+    }
+    return below_seven_zip >= 0 ? below_seven_zip : static_cast<int>(index);
+}
+
 // -- the COM object --
 
 class MusicDeskMenu : public IShellExtInit, public IContextMenu {
@@ -426,6 +456,11 @@ public:
         entries_ = entries_for(selection_);
         if (entries_.empty() || first + entries_.size() > last)
             return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
+        int position = place_in(menu, index);
+        if (position < 0) {
+            entries_.clear();  // the submenu already there is the one Explorer shows
+            return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
+        }
         std::wstring target = target_text();
         HMENU submenu = CreatePopupMenu();
         for (size_t i = 0; i < entries_.size(); ++i) {
@@ -438,7 +473,7 @@ public:
         item.wID = first + static_cast<UINT>(entries_.size());
         item.hSubMenu = submenu;
         item.dwTypeData = const_cast<LPWSTR>(L"MusicDesk");
-        if (!InsertMenuItemW(menu, index, TRUE, &item)) {
+        if (!InsertMenuItemW(menu, static_cast<UINT>(position), TRUE, &item)) {
             DestroyMenu(submenu);
             return HRESULT_FROM_WIN32(GetLastError());
         }
@@ -630,6 +665,38 @@ extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Entries(const w
                 text += std::wstring(L"\n") + verb + L"\t" + entry_label;
         }
     }
+    DestroyMenu(host);
+    menu->Release();
+    return SUCCEEDED(result) ? StringCchCopyW(out, size, text.c_str()) : result;
+}
+
+// Explorer's menu as labels, one per line, after the handler adds to a menu already holding `existing` (labels,
+// one per line; "MusicDesk" as a submenu, as the handler's own). For the placement tests.
+extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Place(const wchar_t* const* paths, int count,
+                                                                      BOOL background, const wchar_t* existing,
+                                                                      wchar_t* out, int size) {
+    out[0] = L'\0';
+    IContextMenu* menu = make_menu(paths, count, background);
+    if (menu == nullptr)
+        return E_INVALIDARG;
+    HMENU host = CreatePopupMenu();
+    std::wstring labels = existing;
+    size_t start = 0;
+    while (start < labels.size()) {
+        size_t end = labels.find(L'\n', start);
+        std::wstring label = labels.substr(start, end == std::wstring::npos ? std::wstring::npos : end - start);
+        if (label == L"MusicDesk")
+            AppendMenuW(host, MF_POPUP, reinterpret_cast<UINT_PTR>(CreatePopupMenu()), label.c_str());
+        else if (!label.empty())
+            AppendMenuW(host, MF_STRING, 1, label.c_str());
+        if (end == std::wstring::npos)
+            break;
+        start = end + 1;
+    }
+    HRESULT result = menu->QueryContextMenu(host, 1, 100, 0x7FFF, CMF_NORMAL);
+    std::wstring text;
+    for (int i = 0; i < GetMenuItemCount(host); ++i)
+        text += (i ? L"\n" : L"") + item_text(host, i);
     DestroyMenu(host);
     menu->Release();
     return SUCCEEDED(result) ? StringCchCopyW(out, size, text.c_str()) : result;

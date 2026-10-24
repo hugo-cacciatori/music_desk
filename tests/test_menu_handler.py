@@ -46,7 +46,8 @@ def dll(tmp_path_factory):
         pytest.skip("no C++ compiler (Visual Studio Build Tools) on this PC")
     library = ctypes.WinDLL(str(build_menu.build(tmp_path_factory.mktemp("menu"))))
     for name, extra in (("MusicDeskMenu_Entries", []),
-                        ("MusicDeskMenu_Command", [wintypes.LPCWSTR, wintypes.LPCWSTR])):
+                        ("MusicDeskMenu_Command", [wintypes.LPCWSTR, wintypes.LPCWSTR]),
+                        ("MusicDeskMenu_Place", [wintypes.LPCWSTR])):
         function = getattr(library, name)
         function.restype = ctypes.c_long
         function.argtypes = [ctypes.POINTER(wintypes.LPCWSTR), ctypes.c_int, wintypes.BOOL, *extra,
@@ -197,6 +198,31 @@ def test_replaygain_entries_hand_their_paths_over(dll, items, appdata):
     exe, *arguments = command(dll, [album], "musicdesk.replaygain-discography", background=True)
     request = parse_arguments(arguments, appdata / "MusicDesk" / "menu")
     assert request == StartRequest(REPLAYGAIN_DISCOGRAPHY, (os.fspath(album),))
+
+
+def placed(dll, paths, existing, background=False) -> list[str]:
+    """Explorer's menu after the handler adds to one already holding `existing` (labels; "MusicDesk": a submenu)."""
+    out = ctypes.create_unicode_buffer(4096)
+    array, count = paths_array(paths)
+    result = dll.MusicDeskMenu_Place(array, count, background, "\n".join(existing), out, len(out))
+    assert result == 0, hex(result & 0xFFFFFFFF)
+    return out.value.split("\n")
+
+
+def test_the_submenu_goes_just_below_7_zip(dll, items, appdata):
+    """Hugo, 2026-10-24: "just below 7-Zip", wherever Explorer asks the handler to insert."""
+    album, _other = items
+    menu = ["Open", "Copy as path", "7-&Zip", "CRC SHA", "Send to"]
+    assert placed(dll, [album], menu) == ["Open", "Copy as path", "7-Zip", "MusicDesk", "CRC SHA", "Send to"]
+    # No 7-Zip (empty space has none): where Explorer asks (here after the first item).
+    assert placed(dll, [album], ["View", "Sort by"], background=True) == ["View", "MusicDesk", "Sort by"]
+
+
+def test_the_submenu_shows_once(dll, items, appdata):
+    """Explorer's navigation pane asked the handler twice for one folder: two submenus (Hugo, 2026-10-24)."""
+    album, _other = items
+    menu = ["Open", "7-Zip", "MusicDesk", "Send to"]
+    assert placed(dll, [album], menu) == menu
 
 
 def test_open_starts_musicdesk_on_the_folder(dll, items):

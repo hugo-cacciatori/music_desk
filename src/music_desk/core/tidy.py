@@ -99,10 +99,16 @@ class AlbumTidy:
 
 @dataclass
 class TidyPlan:
-    root: Path
+    root: Path  # several folders (plan_tidy_paths): the deepest folder holding them all
     albums: list[AlbumTidy] = field(default_factory=list)
     skipped: list[tuple[Path, str]] = field(default_factory=list)  # folders with audio no tool here can handle
     loose: list[cleanup.Item] = field(default_factory=list)  # clutter folders outside any album
+    roots: list[Path] = field(default_factory=list)  # plan_tidy_paths: the folders planned (their trees)
+
+    @property
+    def trees(self) -> list[Path]:
+        """The folder trees a run of this plan works in, so locks."""
+        return self.roots or [self.root]
 
     @property
     def clutter(self) -> list[cleanup.Item]:
@@ -370,6 +376,28 @@ def plan_tidy(root: str | Path, rename_options: rename.RenameOptions, replaygain
     if progress is not None:
         progress(len(found), len(found), "")
     return tidy
+
+
+def plan_tidy_paths(roots: Iterable[str | Path], rename_options: rename.RenameOptions,
+                    replaygain_options: ReplayGainOptions, name_masks: Iterable[str], replacement: str,
+                    **kwargs) -> TidyPlan:
+    """Several folders as one plan (the right-click menu, SPEC §31): each planned as Tidy on it (`plan_tidy`, with
+    the same keyword arguments), their albums, skipped folders and loose clutter together. One folder: its plan."""
+    folders = list(dict.fromkeys(Path(root) for root in roots))
+    masks = list(name_masks)
+    if len(folders) == 1:
+        return plan_tidy(folders[0], rename_options, replaygain_options, masks, replacement, **kwargs)
+    try:
+        common = Path(os.path.commonpath(folders))
+    except ValueError:  # on several drives: the page shows full folders
+        common = Path()
+    merged = TidyPlan(common, roots=folders)
+    for root in folders:
+        part = plan_tidy(root, rename_options, replaygain_options, masks, replacement, **kwargs)
+        merged.albums += part.albums
+        merged.skipped += part.skipped
+        merged.loose += part.loose
+    return merged
 
 
 def _place_clutter(tidy: TidyPlan, items: list[cleanup.Item], options: ReplayGainOptions) -> None:

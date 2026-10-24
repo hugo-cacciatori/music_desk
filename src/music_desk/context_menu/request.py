@@ -27,8 +27,9 @@ REPLAYGAIN_LOOSE = "replaygain-loose"
 REPLAYGAIN_ENTRIES = (REPLAYGAIN_ALBUM, REPLAYGAIN_DISCOGRAPHY, REPLAYGAIN_ALBUMS, REPLAYGAIN_TRACKS, REPLAYGAIN_LOOSE)
 RENAME = "rename"  # any mix of folders and files: one preview (SPEC §31)
 REMOVE_REPLAYGAIN = "remove-replaygain"  # selected tracks only: the question, then a report window
+TIDY = "tidy"  # folders (or the open one): one plan
 # The entries built so far; the option is "--" + the entry.
-ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES, RENAME, REMOVE_REPLAYGAIN)
+ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES, RENAME, REMOVE_REPLAYGAIN, TIDY)
 LIST_OPTION = "--list"
 
 

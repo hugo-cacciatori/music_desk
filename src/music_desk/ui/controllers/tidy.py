@@ -17,7 +17,7 @@ from music_desk.services.tidy_job import TidyFinished, TidyPlanned, TidyRunner, 
 from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.recycle_window import RecycleWindow
 from music_desk.ui.tools.tidy_page import TidyPage
-from music_desk.ui.tools.tool_cards import ToolRequest
+from music_desk.ui.tools.tool_cards import TIDY, ToolRequest, ToolScope
 
 
 def plural(count: int, noun: str) -> str:
@@ -68,6 +68,36 @@ class TidyController(QObject):
         self._plan_token = self.runner.plan(request.scope.folder, request.rename_options,
                                             request.replaygain_options, masks, replacement, lists)
 
+    def open_paths(self, paths: list[str]) -> bool:
+        """The right-click Tidy (SPEC §31), with MusicDesk open: the plan of every clicked folder (each and every
+        folder below it), as one plan on this page, brought to the front; Run then runs it as the app's Tidy job.
+        False when it didn't start (the status bar says why)."""
+        window = self.window
+        window.bring_to_front()
+        roots = [Path(path) for path in paths]
+        cards = window.tools.cards
+        if self.job is not None:
+            window.center.setCurrentWidget(self.page)  # one Tidy at a time: the running one
+            window.toast.show_message("Tidy is still running. Start the other run when it has finished.")
+            return False
+        if not roots or cards.problems(TIDY):
+            why = "nothing was clicked" if not roots else "fix the File names, Rename or ReplayGain options " \
+                "first: File > Options…"
+            window.statusBar().showMessage(f"Tidy: {why}", STATUS_MS)
+            return False
+        rename_options, replaygain_options = cards.rename_options(), cards.replaygain_card.options()
+        self.request = ToolRequest(TIDY, ToolScope(roots[0], -1), rename_options=rename_options,
+                                   replaygain_options=replaygain_options, cleanup_options=cards.cleanup_options())
+        self.plan = None
+        masks, replacement = window._name_masks()
+        self.page.show_planning(roots[0])
+        if len(roots) > 1:
+            self.page.heading.setText(f"<b>Tidy</b> · {plural(len(roots), 'folder')} in {roots[0].parent}")
+        window.center.setCurrentWidget(self.page)
+        self._plan_token = self.runner.plan(roots, rename_options, replaygain_options, masks, replacement,
+                                            cards.cleanup_options().lists)
+        return True
+
     def back(self) -> None:
         """Also while Tidy runs: it goes on, and the jobs panel (or the toolbar's Tidy) shows its page again."""
         if self.page.state == "planning":
@@ -89,7 +119,7 @@ class TidyController(QObject):
         if plan is None or request is None or self.job is not None or not plan.has_work:
             return
         assert request.replaygain_options is not None
-        if window._unsaved_edits_under(plan.root):
+        if any(window._unsaved_edits_under(tree) for tree in plan.trees):
             return
         try:
             self._run_token = self.runner.run(plan, request.replaygain_options)
@@ -111,7 +141,8 @@ class TidyController(QObject):
             return
         window = self.window
         window._pause_indexing(False)
-        window.refresh_after_tool(result.root)  # the new tracks, the names, the tags
+        for tree in self.plan.trees if self.plan is not None else [result.root]:
+            window.refresh_after_tool(tree)  # the new tracks, the names, the tags
         self.page.show_result(report_text(result))
         if self.job is not None:
             window.jobs.report(self.job, "tidy", result)

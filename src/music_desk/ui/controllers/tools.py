@@ -404,6 +404,8 @@ class ToolsController(QObject):
             return self.rename_entry(paths)
         if entry == menu.REMOVE_REPLAYGAIN:
             return self.remove_entry(paths)
+        if entry == menu.TIDY:
+            return self.window.tidy.open_paths(paths)
         window = self.window
         window.bring_to_front()
         kind = ENTRY_KINDS[entry]

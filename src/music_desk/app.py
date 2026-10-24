@@ -15,6 +15,7 @@ from music_desk.context_menu.request import (
     RENAME,
     REPLAYGAIN_ENTRIES,
     SETTINGS,
+    TIDY,
     parse_arguments,
 )
 from music_desk.context_menu.settings_entry import SettingsEntry
@@ -123,6 +124,10 @@ class Starter(QObject):
         """A right-click entry (SPEC §31): in the main window if it is open, else in a window of its own."""
         if entry in REPLAYGAIN_ENTRIES:
             self.run_replaygain(entry, paths)
+            return
+        if entry == TIDY:
+            # Until the Tidy page has a window of its own (slice 4 task 3), the main window shows it.
+            self.main_window().tools.run_entry(entry, paths)
             return
         if entry in (RENAME, REMOVE_REPLAYGAIN):
             if self.window is not None:

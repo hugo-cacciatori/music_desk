@@ -10,7 +10,7 @@ from music_desk.core import rename
 from music_desk.core.masks import DEFAULT_MASKS, DEFAULT_REPLACEMENT
 from music_desk.core.replaygain import ALBUM_GAIN, ALBUM_PEAK, TRACK_GAIN, TRACK_PEAK, ReplayGainOptions
 from music_desk.core.tags import TaggedFile
-from music_desk.core.tidy import Kind, find_albums, plan_tidy, replaygain_needed
+from music_desk.core.tidy import Kind, find_albums, plan_tidy, plan_tidy_paths, replaygain_needed
 
 RG = ReplayGainOptions()
 RENAME = rename.RenameOptions()
@@ -267,3 +267,16 @@ def test_clutter_outside_any_album_is_loose(tmp_path, tone):
     assert [item.path.name for item in plan.loose] == ["Artwork"]
     assert [item.path.name for item in plan.albums[0].clutter] == ["CD2"]  # CD2 holds only an empty folder
     assert plan.summary() == "1 album: 1 with files to offer; 1 folder to offer outside the albums"
+
+
+def test_several_folders_make_one_plan(tmp_path, split_fixtures, fixtures_dir):
+    """The right-click Tidy on several folders (SPEC §31): each planned as Tidy on it, one plan for them all."""
+    eac, other = tmp_path / "Rips" / "EAC", tmp_path / "Rips" / "Album B"
+    shutil.copytree(split_fixtures / "wav_image", eac)
+    shutil.copytree(fixtures_dir / "replaygain" / "Fixture Artist" / "Album B", other)
+    plan = plan_tidy_paths([eac, other], RENAME, RG, DEFAULT_MASKS, DEFAULT_REPLACEMENT)
+    assert plan.root == tmp_path / "Rips" and plan.trees == [eac, other]
+    assert [album.folder for album in plan.albums] == [eac, other]
+    assert album_at(plan, eac).own.kind is Kind.NOT_SPLIT
+    one = plan_tidy_paths([eac], RENAME, RG, DEFAULT_MASKS, DEFAULT_REPLACEMENT)
+    assert one.root == eac and one.roots == [] and one.trees == [eac]  # one folder: Tidy's own plan

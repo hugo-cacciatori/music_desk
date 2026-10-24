@@ -127,8 +127,10 @@ class TidyRunner(QObject):
 
     # -- the plan --
 
-    def plan(self, root: Path, rename_options: rename.RenameOptions, replaygain_options: ReplayGainOptions,
-             masks: Iterable[str], replacement: str, clutter_lists: cleanup.Lists = cleanup.DEFAULT_LISTS) -> int:
+    def plan(self, root: Path | list[Path], rename_options: rename.RenameOptions,
+             replaygain_options: ReplayGainOptions, masks: Iterable[str], replacement: str,
+             clutter_lists: cleanup.Lists = cleanup.DEFAULT_LISTS) -> int:
+        """Plan Tidy on a folder, or on several as one plan (the right-click menu, SPEC §31), on the worker."""
         self._token += 1
         token, cancel = self._token, CancelToken()
         self._cancel = cancel
@@ -138,10 +140,11 @@ class TidyRunner(QObject):
             result = TidyPlanned(token)
             try:
                 silent = split.is_silent(FlacRunner(self.flac), cancel)
-                result.plan = tidy.plan_tidy(root, rename_options, replaygain_options, masks, replacement,
-                                             clutter_lists=clutter_lists, is_silent=silent, cancel=cancel,
-                                             progress=lambda done, total, folder: self.planProgress.emit(
-                                                 done, total, folder))
+                roots = root if isinstance(root, list) else [root]
+                result.plan = tidy.plan_tidy_paths(roots, rename_options, replaygain_options, masks, replacement,
+                                                   clutter_lists=clutter_lists, is_silent=silent, cancel=cancel,
+                                                   progress=lambda done, total, folder: self.planProgress.emit(
+                                                       done, total, folder))
             except TidyCancelled:
                 result.cancelled = True
             except Exception as e:  # noqa: BLE001 - shown on the page
@@ -155,8 +158,8 @@ class TidyRunner(QObject):
     # -- the job --
 
     def run(self, plan: TidyPlan, replaygain_options: ReplayGainOptions) -> int:
-        """Run the plan under a lock on the whole tree. Raises LockedError at once if a job holds any of it."""
-        lock = self.locks.acquire([plan.root], OWNER)
+        """Run the plan under a lock on its whole trees. Raises LockedError at once if a job holds any of them."""
+        lock = self.locks.acquire(plan.trees, OWNER)
         self._token += 1
         token, cancel = self._token, CancelToken()
         self._cancel = cancel

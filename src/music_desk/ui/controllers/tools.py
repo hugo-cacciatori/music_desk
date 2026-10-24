@@ -410,6 +410,8 @@ class ToolsController(QObject):
             return self.window.cleanup.open_paths(paths)
         if entry == menu.SPLIT:
             return self.window.split.open_entry(paths)
+        if entry == menu.TRIM:
+            return self.window.trim.open_entry(paths)
         window = self.window
         window.bring_to_front()
         kind = ENTRY_KINDS[entry]

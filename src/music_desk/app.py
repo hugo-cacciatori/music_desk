@@ -19,6 +19,7 @@ from music_desk.context_menu.request import (
     SETTINGS,
     SPLIT,
     TIDY,
+    TRIM,
     parse_arguments,
 )
 from music_desk.context_menu.settings_entry import SettingsEntry
@@ -134,8 +135,8 @@ class Starter(QObject):
         if entry in REPLAYGAIN_ENTRIES:
             self.run_replaygain(entry, paths)
             return
-        if entry == SPLIT:
-            # Until the Split page has a window of its own (slice 5 task 3), the main window shows it.
+        if entry in (SPLIT, TRIM):
+            # Until the Split and Trim pages have windows of their own (slice 5 task 3), the main window shows them.
             self.main_window().tools.run_entry(entry, paths)
             return
         if entry in ALONE:

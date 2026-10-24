@@ -30,8 +30,9 @@ REMOVE_REPLAYGAIN = "remove-replaygain"  # selected tracks only: the question, t
 TIDY = "tidy"  # folders (or the open one): one plan
 CLEANUP = "cleanup"  # folders (or the open one): one Redundant files window
 SPLIT = "split"  # one .cue: its Split page
+TRIM = "trim"  # one FLAC, WAV or AIFF file: the Trim page
 # The entries built so far; the option is "--" + the entry.
-ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES, RENAME, REMOVE_REPLAYGAIN, TIDY, CLEANUP, SPLIT)
+ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES, RENAME, REMOVE_REPLAYGAIN, TIDY, CLEANUP, SPLIT, TRIM)
 LIST_OPTION = "--list"
 
 

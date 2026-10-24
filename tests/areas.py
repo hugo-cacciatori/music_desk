@@ -124,7 +124,7 @@ AREAS: dict[str, Area] = {
          "ui/test_right_click_replaygain_alone.py", "ui/test_right_click_rename.py",
          "ui/test_right_click_remove.py", "ui/test_right_click_rename_remove_alone.py", "ui/test_right_click_tidy.py",
          "ui/test_right_click_cleanup.py", "ui/test_right_click_tidy_cleanup_alone.py", "ui/test_right_click_split.py",
-         "test_menu_handler.py"),
+         "ui/test_right_click_trim.py", "test_menu_handler.py"),
         ("native/context_menu/", "packaging/build_menu.py")),
     "hover_texts": Area(("ui/hover.py",), ("ui/test_hover_texts.py",)),
     "scroll_wheel": Area(("ui/no_wheel.py",), ("ui/test_no_wheel.py",)),

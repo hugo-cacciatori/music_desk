@@ -120,7 +120,7 @@ AREAS: dict[str, Area] = {
         ("context_menu/request.py", "context_menu/settings_entry.py", "context_menu/replaygain_entry.py",
          "context_menu/remove_report.py", "context_menu/rename_entry.py", "context_menu/remove_entry.py",
          "context_menu/notice.py", "context_menu/tidy_entry.py", "context_menu/cleanup_entry.py",
-         "context_menu/tool_host.py"),
+         "context_menu/tool_host.py", "context_menu/split_recap.py"),
         ("ui/test_right_click_settings.py", "ui/test_right_click_replaygain.py",
          "ui/test_right_click_replaygain_alone.py", "ui/test_right_click_rename.py",
          "ui/test_right_click_remove.py", "ui/test_right_click_rename_remove_alone.py", "ui/test_right_click_tidy.py",

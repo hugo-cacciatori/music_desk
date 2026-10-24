@@ -1,6 +1,6 @@
-"""The right-click Split and Trim with MusicDesk not open (SPEC §31): the sheet's Split page or the track's Trim page
-alone in a window of its own (`ToolHost`), driven by the app's controllers, with the real bundled flac on copied
-fixtures. No main window; the process ends when the window closes."""
+"""Windows alone (`ToolHost`, SPEC §31), driven by the app's controllers, with the real bundled flac on copied
+fixtures: the track's Trim page ("Trim this track…" with MusicDesk closed), and the cue editor (to become "Edit this
+cue sheet…"). No main window; the process ends when the window closes. The Split entry: test_right_click_split.py."""
 
 import shutil
 
@@ -51,25 +51,17 @@ def alone(qtbot, starter, entry, paths, kind):
     return window
 
 
-# -- Split --
+# -- The cue editor alone (SplitWindow): "Edit this cue sheet…" (task 3); the Split entry is a recap now --
 
-def test_split_alone_splits(qtbot, starter, albums, quits):
-    album = albums / "wav_image"
-    window = alone(qtbot, starter, menu.SPLIT, [album / "image.cue"], SplitWindow)
-    split = window.controller
-    assert starter.window is None and window.isVisible() and window.windowTitle() == "MusicDesk · Split"
-    qtbot.waitUntil(lambda: split.page.state == "editing" and not split._planning
-                    and not split._plan_timer.isActive(), timeout=20000)
-    split.page.split_button.click()
-    qtbot.waitUntil(lambda: split.page.state in ("result", "error") and split.job is None, timeout=30000)
-    assert split.page.state == "result" and (album / "01 One.flac").exists()
-    assert quits == []  # the report stays until the window is closed
-    window.close()
-    assert starter.entry_windows == [] and quits == [True]
+def editor(starter, paths) -> SplitWindow:
+    window = SplitWindow(starter.cards(), starter.locks)
+    starter._own(window)
+    window.start([str(p) for p in paths])
+    return window
 
 
-def test_split_alone_unsaved_edits_ask_before_closing(qtbot, starter, albums, quits):
-    window = alone(qtbot, starter, menu.SPLIT, [albums / "wav_image" / "image.cue"], SplitWindow)
+def test_the_editor_alone_asks_about_unsaved_edits_before_closing(qtbot, starter, albums, quits):
+    window = editor(starter, [albums / "wav_image" / "image.cue"])
     split = window.controller
     qtbot.waitUntil(lambda: split.page.state == "editing" and not split._planning, timeout=20000)
     split.page.cell(0, "title").setText("Edited")  # an unsaved edit, typed in the table
@@ -83,8 +75,8 @@ def test_split_alone_unsaved_edits_ask_before_closing(qtbot, starter, albums, qu
     assert quits == [True]
 
 
-def test_split_alone_refuses_anything_but_one_cue(qtbot, starter, albums, quits):
-    window = alone(qtbot, starter, menu.SPLIT, [albums / "tone.wav"], SplitWindow)
+def test_the_editor_alone_refuses_anything_but_one_cue(qtbot, starter, albums, quits):
+    window = editor(starter, [albums / "tone.wav"])
     assert window.controller.page.state == "error"
 
 
@@ -118,5 +110,5 @@ def test_a_main_window_takes_later_entries(qtbot, starter, service, albums, quit
     qtbot.addWidget(main)
     window.close()
     assert quits == []
-    starter.run_entry(menu.SPLIT, [str(albums / "wav_image" / "image.cue")])
-    assert starter.entry_windows == [] and main.center.currentWidget() is main.split.page
+    starter.run_entry(menu.TRIM, [str(albums / "tone.wav")])
+    assert starter.entry_windows == [] and main.center.currentWidget() is main.trim.page

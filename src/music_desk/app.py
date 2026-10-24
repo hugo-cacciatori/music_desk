@@ -23,8 +23,9 @@ from music_desk.context_menu.request import (
     parse_arguments,
 )
 from music_desk.context_menu.settings_entry import SettingsEntry
+from music_desk.context_menu.split_recap import SplitRecapWindow
 from music_desk.context_menu.tidy_entry import TidyWindow
-from music_desk.context_menu.tool_host import SplitWindow, TrimWindow
+from music_desk.context_menu.tool_host import TrimWindow
 from music_desk.core.flac import flac_version
 from music_desk.core.path_locks import PathLocks
 from music_desk.core.rsgain import rsgain_version
@@ -81,10 +82,11 @@ def folder_argument(arguments: list[str]) -> str | None:
     return parse_arguments(arguments).folder
 
 
-EntryWindow = ReplayGainWindow | RenameWindow | RemoveEntry | TidyWindow | CleanupEntry | SplitWindow | TrimWindow
+EntryWindow = (ReplayGainWindow | RenameWindow | RemoveEntry | TidyWindow | CleanupEntry | TrimWindow
+               | SplitRecapWindow)
 # The entries that run alone with MusicDesk closed, and what runs them (ReplayGain has its own rules: run_replaygain).
 ALONE = {RENAME: RenameWindow, REMOVE_REPLAYGAIN: RemoveEntry, TIDY: TidyWindow, CLEANUP: CleanupEntry,
-         SPLIT: SplitWindow, TRIM: TrimWindow}
+         TRIM: TrimWindow}
 
 
 class Starter(QObject):
@@ -152,12 +154,19 @@ class Starter(QObject):
         if entry in REPLAYGAIN_ENTRIES:
             self.run_replaygain(entry, paths)
             return
+        if entry == SPLIT:
+            # A recap, then Split or Cancel (Hugo, 2026-10-24): the same window with MusicDesk open (the split is
+            # then one of its jobs) or closed.
+            recap = SplitRecapWindow(self.cards(), self.locks, self.window)
+            self._own(recap)
+            recap.start(paths)
+            return
         if entry in ALONE:
             if self.window is not None:
                 self.window.tools.run_entry(entry, paths)
                 return
             # The Rename preview alone; Remove's question and report; the Tidy page then Redundant files; Clean
-            # up's Redundant files; the Split page; the Trim page (SPEC §31).
+            # up's Redundant files; the Trim page (SPEC §31).
             alone = ALONE[entry](self.cards(), self.locks)
             self._own(alone)
             alone.start(paths)

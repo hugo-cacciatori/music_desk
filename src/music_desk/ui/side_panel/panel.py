@@ -37,7 +37,6 @@ class SidePanel(QWidget):
         self.tabs = QTabWidget()
         self.metadata = MetadataTab(io, writer)
         self.lyrics = LyricsTab(self._conn, lyrics_service)
-        writer.replaygainRemoved.connect(self._replaygain_removed)
         self.tabs.addTab(self.metadata, "Metadata")
         self.tabs.addTab(self.lyrics, "Lyrics")
         self.metadata.dirtyChanged.connect(
@@ -106,11 +105,12 @@ class SidePanel(QWidget):
         else:
             self.lyrics.show_message("Select a track to see its lyrics from LRCLIB.")
 
-    def _replaygain_removed(self, result) -> None:
-        """ReplayGain removed from the file the Metadata tab shows: its Loudness block follows."""
+    def reload_under(self, folders: list[Path]) -> None:
+        """A task changed files under these folders (a right-click entry's window, SPEC §35): the file the Metadata
+        tab shows reloads if it is there, unless it has unsaved edits (they stay as typed)."""
         path = self.metadata.path
         if path is not None and not self.metadata.dirty and not self.metadata.multi and \
-                any(Path(p) == path for p in result.removed):
+                any(Path(path).is_relative_to(folder) for folder in folders):
             self.metadata.show_file(path)
 
     def can_leave(self) -> bool:

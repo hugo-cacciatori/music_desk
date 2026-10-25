@@ -324,14 +324,17 @@ def test_a_click_on_a_card_shows_its_lyrics(qtbot, window, service, lyrics):
     qtbot.waitUntil(lambda: "Hello darkness" in panel.lyrics.shown_text(), timeout=5000)
     texts = [a.text() for a in window.search.result_menu([first]).actions() if a.text()]
     assert texts[:2] == ["Go to folder", "Open in File Explorer"]  # a card's ways to its folder come first
+    assert texts[2] == "ReplayGain this track (−15 LUFS)"  # then Explorer's entries (SPEC §35)
 
 
 def test_result_menu(qtbot, window, service):
     search(qtbot, window, "sixth")
     sixth = entry(service, "Other", ALBUM, "track6.FLAC")
     texts = [a.text() for a in window.search.result_menu([sixth]).actions() if a.text()]
-    assert texts == ["Go to folder", "Open", "Play selection", "Open in File Explorer", "Copy path",
-                     "Remove ReplayGain tags…", "Delete\tDel", "Filter by Fixture Artist"]
+    # Explorer's entries first (SPEC §35), then the results' own.
+    assert texts == ["ReplayGain this track (−15 LUFS)", "Rename from tags…", "Remove ReplayGain tags…",
+                     "Trim this track…", "Go to folder", "Open", "Play selection", "Open in File Explorer",
+                     "Copy path", "Delete\tDel", "Filter by Fixture Artist"]
 
 
 def test_sorting_and_live_updates_keep_the_selection(qtbot, window, service):

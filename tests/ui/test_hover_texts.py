@@ -90,6 +90,7 @@ def test_the_other_windows_and_dialogs(window, qtbot):
 
 
 def test_menu_entries_show_a_status_bar_tip(window, service):
+    from music_desk.context_menu.entries import HELP
     from music_desk.ui.hover import MENU_TIPS, menu_key
 
     album = entry(service, "Artist", "Album")
@@ -101,11 +102,14 @@ def test_menu_entries_show_a_status_bar_tip(window, service):
     tipped = set()
     for menu in menus:
         for action in menu.actions():
+            if action.statusTip() in HELP.values():  # Explorer's entries carry the handler's help (SPEC §35)
+                tipped.add("entries")
+                continue
             key = menu_key(action.text())
             assert action.statusTip() == MENU_TIPS.get(key, ""), key
             if action.statusTip():
                 tipped.add(key)
-    assert {"Play selection", "Play folder", "Options", "Remove from library", "Reset columns"} <= tipped
+    assert {"Play selection", "Play folder", "Options", "Remove from library", "Reset columns", "entries"} <= tipped
     play = next(a for a in menus[0].actions() if a.text() == "Play selection")
     play.showStatusText(window)  # what hovering it does
     assert window.statusBar().currentMessage() == MENU_TIPS["Play selection"]

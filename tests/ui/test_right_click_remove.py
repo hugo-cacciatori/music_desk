@@ -4,6 +4,7 @@ app's question; a report window of its own says what was done and stays until it
 import shutil
 
 import pytest
+from browser_helpers import entry
 
 from music_desk.context_menu import request as menu
 from music_desk.context_menu.remove_entry import RemoveEntry
@@ -102,3 +103,15 @@ def test_other_files_are_left_out(qtbot, open_app, album, asked):
     assert "1 file left out" in report.message.text() and report.details.toPlainText() == "cover.jpg: left out"
     nothing = remove(qtbot, open_app, [album / "cover.jpg", album])
     assert len(questions) == 1 and nothing.message.text().startswith("Nothing was done")
+
+
+def test_the_metadata_tab_follows(qtbot, open_app, service, album, asked):
+    """The main window's Metadata tab, showing a track whose tags an entry's window changed, reloads it (SPEC §35)."""
+    main = open_app.window
+    main.open_folder(entry(service, "Artist", "Album"))
+    main.file_view.select_ids([entry(service, "Artist", "Album", "01 One.flac")])
+    tab = main.side_panel.metadata
+    qtbot.waitUntil(lambda: tab.snapshot is not None and bool(tab.snapshot.replaygain.get(TRACK_GAIN)),
+                    timeout=10000)
+    remove(qtbot, open_app, [album / "01 One.flac"])
+    qtbot.waitUntil(lambda: tab.snapshot is not None and not tab.snapshot.replaygain.get(TRACK_GAIN), timeout=10000)

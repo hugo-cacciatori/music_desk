@@ -36,6 +36,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from music_desk.context_menu.entries import OPEN, Selection, menu_entries
+from music_desk.context_menu.request import SETTINGS
 from music_desk.core import fsops, inline_rename, playlists
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
@@ -108,6 +110,7 @@ class MainWindow(QMainWindow):
     renameFailed = Signal(str)
     playlistExported = Signal(str, int)  # the saved file, its track count (emitted from the shell thread)
     closed = Signal()  # closed for good: the process goes on while a task's window is open (SPEC §35)
+    entryRequested = Signal(str, list)  # a right-click entry and its paths: app.Starter opens its window (SPEC §35)
 
     def __init__(self, library: LibraryService | None = None, settings: Settings | None = None,
                  cards: ToolCards | None = None) -> None:
@@ -275,9 +278,7 @@ class MainWindow(QMainWindow):
         self.file_view.folderActivated.connect(self.open_folder)
         self.file_view.fileActivated.connect(lambda entry_id: self.open_files([entry_id]))
         self.file_view.menuRequested.connect(lambda ids, pos: self.list_menu(ids).exec(pos))
-        self.sidebar.folder_menu_provider = lambda menu, entry_id: self.add_folder_actions(
-            menu, entry_id, rename=lambda: self.sidebar.tree.start_rename(entry_id),
-            delete=lambda: self._tree_delete(entry_id))
+        self.sidebar.folder_menu_provider = self._tree_menu
         self.file_view.renameRequested.connect(self.rename_entry)
         self.sidebar.renameRequested.connect(self.rename_entry)
         self.renameDone.connect(self._renamed)
@@ -1162,8 +1163,10 @@ class MainWindow(QMainWindow):
             return with_status_tips(menu)
         if not ids:
             if self.folder_id is not None:
+                self.add_entries(menu, [self.folder_id], background=True)
                 self.add_folder_actions(menu, self.folder_id, include_open=False)
             return with_status_tips(menu)
+        self.add_entries(menu, ids)
         if len(ids) == 1 and self.file_view.is_dir(ids[0]):
             self.add_folder_actions(menu, ids[0], rename=lambda: self.file_view.start_rename(ids[0]),
                                     delete=lambda: self.delete.delete_entries(ids, self.file_view.view))
@@ -1178,11 +1181,7 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         if len(ids) == 1:
             menu.addAction("Rename\tF2", lambda: self.file_view.start_rename(ids[0]))
-        any_audio = any(self.file_view.model.rows[r].is_audio for i in ids
-                        if (r := self.file_view.model.row_for(i)) is not None)
-        remove = menu.addAction("Remove ReplayGain tags…", lambda: self.tools.remove_replaygain(ids))
-        remove.setEnabled(any_audio)
-        menu.addSeparator()
+            menu.addSeparator()
         menu.addAction("Delete\tDel", lambda: self.delete.delete_entries(ids, self.file_view.view))
         return with_status_tips(menu)
 
@@ -1199,12 +1198,51 @@ class MainWindow(QMainWindow):
         if rename is not None and queries.parent_folder(self.open_library.conn, entry_id) is not None:
             menu.addAction("Rename\tF2", rename)  # not a library root
         menu.addAction("Rescan", lambda: self.open_library.indexer.request_folder(entry_id))
-        menu.addSeparator()
-        menu.addAction("Remove ReplayGain tags…", lambda: self.tools.remove_replaygain([entry_id]))
-        menu.addAction("Clean up…", lambda: self.tools.start(CLEANUP, entry_id))
         if delete is not None and queries.parent_folder(self.open_library.conn, entry_id) is not None:
             menu.addSeparator()
             menu.addAction("Delete\tDel", delete)  # never a library root (Remove from library is below)
+
+    def add_entries(self, menu: QMenu, ids: list[int], background: bool = False) -> None:
+        """Explorer's right-click entries for these items (SPEC §31, §35: the same rules, labels and windows), as
+        items of this menu itself, one group then a separator: no MusicDesk submenu in the app (Hugo, 2026-10-25).
+        `background`: the open folder, as empty space. Open in MusicDesk and Settings are Explorer's only."""
+        conn = self.open_library.conn
+        paths, folders = [], set()
+        for entry_id in ids:
+            row = conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()
+            if row is None:
+                continue
+            path = str(path_of(conn, entry_id))
+            paths.append(path)
+            if row[0]:
+                folders.add(path)
+        if not paths:
+            return
+        selection = Selection.of(paths, background, is_dir=folders.__contains__)  # the index knows, not the disk
+        added = False
+        for item in menu_entries(selection, self.tools.cards.replaygain_card.options().target):
+            if item.entry in (OPEN, SETTINGS):
+                continue
+            action = menu.addAction(item.label, lambda entry=item.entry: self.entryRequested.emit(entry, paths))
+            action.setStatusTip(item.help)
+            added = True
+        if added:
+            menu.addSeparator()
+
+    def entry_finished(self, folders: list[Path]) -> None:
+        """A right-click entry's run changed files under these folders: the index re-reads them, and the Metadata
+        tab reloads the file it shows if it is there (without unsaved edits)."""
+        for folder in folders:
+            self.refresh_after_tool(folder)
+        self.side_panel.reload_under(folders)
+
+    def _tree_menu(self, menu: QMenu, entry_id: int) -> None:
+        """The folder tree's menu: the entries for its selection if the clicked folder is in it, else for that
+        folder (as Delete), then the folder's own actions."""
+        selected = self.sidebar.tree.selected_ids()
+        self.add_entries(menu, selected if entry_id in selected else [entry_id])
+        self.add_folder_actions(menu, entry_id, rename=lambda: self.sidebar.tree.start_rename(entry_id),
+                                delete=lambda: self._tree_delete(entry_id))
 
     def _tree_delete(self, entry_id: int) -> None:
         """Delete from the tree's menu: its selection if the clicked folder is in it, else that folder."""

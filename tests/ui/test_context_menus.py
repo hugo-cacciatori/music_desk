@@ -11,6 +11,7 @@ from browser_helpers import column, entry
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QAbstractItemView, QApplication
 
+from music_desk.context_menu.rename_entry import RenameWindow
 from music_desk.core import fsops
 from music_desk.ui.entry_drag import ENTRY_IDS_MIME, entry_mime
 
@@ -93,31 +94,40 @@ def test_playlist_queries_read_the_index(service, library_dir):
 
 # -- menus --
 
+TRACK_ENTRIES = ["ReplayGain this track (−15 LUFS)", "Rename from tags…", "Remove ReplayGain tags…",
+                 "Trim this track…"]
+FOLDER_ENTRIES = ["ReplayGain as an album (−15 LUFS)", "ReplayGain as a discography (−15 LUFS)", "Rename from tags…",
+                  "Tidy this folder…", "Clean up this folder…"]
+
+
 def test_file_menu(window, service):
+    """Explorer's entries first, as items of the menu (SPEC §35: no MusicDesk submenu in the app), then the file's
+    own actions."""
     window.open_folder(entry(service, "Artist", "Album"))
     one = window.list_menu([entry(service, "Artist", "Album", "Track 2.flac")])
-    assert texts(one) == ["Open", "Play selection", "Open in File Explorer", "Copy path", "Rename	F2",
-                          "Remove ReplayGain tags…", "Delete	Del"]  # no Tools… (the toolbar starts them, SPEC §30)
+    assert texts(one) == [*TRACK_ENTRIES, "Open", "Play selection", "Open in File Explorer", "Copy path",
+                          "Rename	F2", "Delete	Del"]
+    assert not any(a.menu() for a in one.actions())  # no submenu
     two = window.list_menu([entry(service, "Artist", "Album", "Track 2.flac"),
                             entry(service, "Artist", "Album", "cover.jpg")])
-    assert texts(two)[-3:] == ["Copy paths", "Remove ReplayGain tags…", "Delete	Del"]  # no Rename
+    assert texts(two)[:2] == ["ReplayGain this track (−15 LUFS)", "Rename from tags…"]  # Remove: tracks only
+    assert texts(two)[-2:] == ["Copy paths", "Delete	Del"]  # no Rename
     assert not action(two, "Open").isEnabled() and action(two, "Play selection").isEnabled()
     images = window.list_menu([entry(service, "Artist", "Album", "cover.jpg")])
+    assert texts(images)[0] == "Open"  # no entry for a picture (Settings is Explorer's only)
     assert not action(images, "Play selection").isEnabled()
-    assert not action(images, "Remove ReplayGain tags…").isEnabled()
 
 
 def test_folder_menus(window, service):
     window.open_folder(entry(service, "Artist"))
     folder = window.list_menu([entry(service, "Artist", "Album")])
-    assert texts(folder) == ["Open", "Play folder", "Play folder and subfolders", "Open in File Explorer",
-                             "Copy path", "Rename	F2", "Rescan", "Remove ReplayGain tags…", "Clean up…",
-                             "Delete	Del"]
-    background = window.list_menu([])
-    assert texts(background) == ["Play folder", "Play folder and subfolders", "Open in File Explorer",
-                                 "Copy path", "Rescan", "Remove ReplayGain tags…", "Clean up…"]
+    assert texts(folder) == [*FOLDER_ENTRIES, "Open", "Play folder", "Play folder and subfolders",
+                             "Open in File Explorer", "Copy path", "Rename	F2", "Rescan", "Delete	Del"]
+    background = window.list_menu([])  # the open folder, as Explorer's empty space
+    assert texts(background) == [*FOLDER_ENTRIES, "Play folder", "Play folder and subfolders",
+                                 "Open in File Explorer", "Copy path", "Rescan"]
     tree = window.sidebar.context_menu_for(window.sidebar.tree.currentIndex())
-    assert texts(tree)[:10] == texts(folder) and "Remove from library" not in texts(tree)  # not a root
+    assert texts(tree)[:len(texts(folder))] == texts(folder) and "Remove from library" not in texts(tree)
     for absent in ("Rename", "Cut", "Copy", "Paste", "New folder"):
         assert absent not in texts(folder) + texts(tree)
     assert texts(window.sidebar.context_menu_for(QModelIndex())) == ["Add folder…"]  # the option: File > Options…
@@ -235,3 +245,22 @@ def test_no_drag_out(window, service):
         assert model.mimeData([index]) is None or not model.mimeData([index]).hasUrls()
     ids = window.file_view.view.drag_ids()
     assert ids and entry_mime(ids).formats() == [ENTRY_IDS_MIME]
+
+
+def test_an_entry_opens_its_window_as_from_explorer(qtbot, open_app, service, library_dir):
+    """A click on an entry in the app's menu hands it and its paths to the Starter, which opens the same window as
+    Explorer's entry (SPEC §35)."""
+    main = open_app.window
+    album = entry(service, "Artist", "Album")
+    main.open_folder(album)
+    track = entry(service, "Artist", "Album", "Track 2.flac")
+    menu = main.list_menu([track])
+    with qtbot.waitSignal(main.entryRequested) as blocker:
+        action(menu, "Rename from tags…").trigger()
+    assert blocker.args == ["rename", [str(library_dir / "Artist" / "Album" / "Track 2.flac")]]
+    window = open_app.entry_windows[-1]
+    qtbot.addWidget(window)
+    assert isinstance(window, RenameWindow) and window.parent() is None
+    tidy = action(main.list_menu([]), "Tidy this folder…")
+    assert tidy.statusTip().startswith("Plans Tidy")  # the handler's help text
+

@@ -16,7 +16,6 @@ from pathlib import Path
 from PySide6.QtCore import QObject
 
 from music_desk.context_menu import request as menu
-from music_desk.context_menu.remove_report import ask_remove
 from music_desk.core import rename
 from music_desk.core.formats import AUDIO_EXTENSIONS
 from music_desk.core.index import queries
@@ -97,9 +96,7 @@ class ToolsController(QObject):
         if cards is not None:
             cards.adopt(window)
         window.tag_io.renameFields.connect(self._tool_example)
-        window.tag_writer.replaygainRemoved.connect(self._replaygain_removed)
         self._example_token: int | None = None
-        self._rg_remove_token: int | None = None
 
         self.rename_preview = RenamePreview()
         self.rename_preview.backRequested.connect(window.close_tools)
@@ -227,11 +224,10 @@ class ToolsController(QObject):
             return f"Clean up {name}{below}", True
         return f"Tidy {name} and its subfolders", True
 
-    def start(self, tool: str, folder_id: int | None = None) -> None:
+    def start(self, tool: str) -> None:
         """A toolbar button's click: the rename preview, ReplayGain (at once or after its recap), Tidy's plan, or
-        Clean up's list; `folder_id`: a folder menu's folder instead of the target. A click that can't start says
-        why in the status bar and starts nothing."""
-        scope = self.target(tool) if folder_id is None else self.scope_for([folder_id])
+        Clean up's list. A click that can't start says why in the status bar and starts nothing."""
+        scope = self.target(tool)
         why = self.blocked(tool, scope)
         request = self.cards.request(tool, scope) if why is None and scope is not None else None
         if request is None:
@@ -488,52 +484,3 @@ class ToolsController(QObject):
             window.jobs.finish(job, jobs_module.STOPPED if report.cancelled else jobs_module.DONE, summary)
             self.rename_job = None
 
-    # -- removing ReplayGain (SPEC §10 B) --
-
-    def remove_replaygain(self, ids: list[int]) -> None:
-        """The ReplayGain tags of the tracks among `ids`, folders included with their subfolders: the
-        REPLAYGAIN_* values and the comment lines the ReplayGain step writes. Asks first; runs on the TagWriter."""
-        window = self.window
-        if not window._library_open():
-            return
-        conn = window.open_library.conn
-        track_ids = queries.track_ids_for(conn, ids)
-        rows = queries.track_rows(conn, track_ids)
-        paths = [str(rows[i].path) for i in track_ids if i in rows]
-        if not paths:
-            window.statusBar().showMessage("There are no audio files here.", STATUS_MS)
-            return
-        folders = [i for i in ids if (r := conn.execute("SELECT is_dir FROM entries WHERE id = ?",
-                                                         (i,)).fetchone()) and r[0]]
-        if len(ids) == 1 and folders:
-            where = f"{path_of(conn, folders[0])} and its subfolders"
-        else:
-            where = "the selection"
-        options = self.cards.replaygain_card.options()
-        if not self.ask_remove_replaygain(len(paths), where, options.comment):
-            return
-        self._rg_remove_token = window.tag_writer.remove_replaygain(paths, options)
-        count = len(paths)
-        window.statusBar().showMessage(f"Removing the ReplayGain tags of {count} file{'s' if count != 1 else ''}…",
-                                       STATUS_MS)
-
-    def ask_remove_replaygain(self, count: int, where: str, comment: str) -> bool:
-        """Confirm the removal (replaced in tests)."""
-        return ask_remove(self.window, count, where, comment)
-
-    def _replaygain_removed(self, result) -> None:
-        if result.token != self._rg_remove_token:
-            return
-        window = self.window
-        done = len(result.removed)
-        if done:
-            text = f"Removed the ReplayGain tags of {done} file{'s' if done != 1 else ''}."
-        else:
-            text = "There were no ReplayGain tags to remove."
-        if result.unchanged and done:
-            text += f" {result.unchanged} had none."
-        window.statusBar().showMessage(text, STATUS_MS)
-        if result.failed:
-            first = result.failed[0][1]
-            more = f" (and {len(result.failed) - 1} more)" if len(result.failed) > 1 else ""
-            window.toast.show_message(f"Not changed: {first}{more}")

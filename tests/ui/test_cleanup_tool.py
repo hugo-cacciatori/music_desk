@@ -66,17 +66,6 @@ def test_nothing_found_opens_no_window(qtbot, window, service, library_dir, clea
     assert cleanup.offer is None
 
 
-def test_a_folder_menu_cleans_up_that_folder(qtbot, window, service, library_dir, cleanup):
-    window.open_folder(folder_id(service, library_dir))
-    lrc = folder_id(service, library_dir / "Cleanup" / "lrc")
-    menu = window.list_menu([folder_id(service, library_dir / "Cleanup")])
-    assert "Clean up…" in [action.text() for action in menu.actions()]
-    window.tools.start(CLEANUP, lrc)  # what the entry does, for the clicked folder
-    qtbot.waitUntil(lambda: cleanup.offer is not None and cleanup.offer.isVisible(), timeout=10000)
-    assert {item.path.name for item in cleanup.offer.marked()} == {"no_lyrics.lrc", "with_lyrics.lrc"}
-    cleanup.offer.close()
-
-
 def test_bad_options_start_nothing(qtbot, window, service, library_dir, cleanup):
     window.open_folder(folder_id(service, library_dir / "Cleanup"))
     card = window.tools.cards.cleanup_card

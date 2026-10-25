@@ -25,6 +25,11 @@ to the Recycle Bin.
   Names are found as soon as a folder is listed, before its tags are read. Accents and case are ignored, and
   filters such as `artist:`, `year:`, `ext:`, `lrclib:notfound` or `rg:none` narrow it. The matching lyric line
   is shown in the results.
+- **Right-click in File Explorer**: a **MusicDesk** submenu offers the tools for what you clicked: ReplayGain (an
+  album, a discography, several albums, selected tracks as an album or each on its own), Rename from tags, Remove
+  ReplayGain tags, Tidy, Clean up, Split or Edit a cue sheet, Trim a track, and Settings. Each opens a small window
+  of its own, whether MusicDesk is open or not. MusicDesk's own right-click menus (file list, folder tree, search
+  results) offer the same entries, directly in the menu.
 - **Open a folder from File Explorer**: type `musicdesk` in Explorer's address bar (as you would `cmd`).
   MusicDesk opens, or comes to the front, on that folder, and adds it to the library first if it isn't in it.
 - **Advanced search** (the toolbar's Advanced search button), a window of its own beside the app: lists of albums to go
@@ -44,7 +49,7 @@ to the Recycle Bin.
   - **ReplayGain** for an album or a whole discography, with the bundled [rsgain](https://github.com/complexlogic/rsgain).
     An album's own folder runs at once; anything else (subfolders, a selection, a discography) first lists every
     file and what will happen to it, with OK and Cancel. Images still waiting to be split are left alone. Each run
-    writes a fresh `replaygain.log`; the ReplayGain tags can also be removed from tracks or folders.
+    writes a fresh `replaygain.log`; right-click selected tracks to remove their ReplayGain tags.
   - **Tidy**: a whole folder tree at once, album by album. Albums still in one file with their cue sheet are split
     into tracks, tracks are renamed to the masks, then ReplayGain runs where it's missing or for another target.
     You see the whole plan first and run it with one button; at the end, the Redundant files window lists the

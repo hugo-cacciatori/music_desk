@@ -32,10 +32,6 @@ MENU_TIPS = {
     "Rescan": "Read this folder from the disk again, to show changes made outside MusicDesk",
     "Options": "Every setting of the app, in one window: file names, Rename, ReplayGain, Clean up, Split, Trim, "
                "Browser",
-    "Clean up": "List this folder's junk files (and what the Clean up options add) to send to the Recycle Bin; "
-                "you choose in the list",
-    "Remove ReplayGain tags": "Remove the ReplayGain values and their comment line from these tracks (a folder's "
-                              "subfolders included), after asking",
     "Delete": "Send to the Recycle Bin, at once (restore it from there)",
     "Remove from library": "Stop showing and indexing this folder; its files aren't touched",
     "Go to folder": "Show this result in its folder, selected; a folder result opens",

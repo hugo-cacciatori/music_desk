@@ -143,6 +143,7 @@ class Starter(QObject):
                 library.locks = self.locks  # a right-click ReplayGain run may hold some already
             self.window = MainWindow(library, self.settings, self.cards())
             self.window.closed.connect(self._main_closed)
+            self.window.entryRequested.connect(self.run_entry)  # its menus' entries: the same windows (SPEC §35)
             if not self.check_tools:
                 return self.window
             check = ToolCheck()
@@ -212,11 +213,10 @@ class Starter(QObject):
         window.start(entry, paths)
 
     def _refresh_index(self, finished) -> None:
-        """The main window's index, if one is open, catches up on the folders an entry's run changed (a ReplayGain
-        run's Finished, or a list of folders)."""
+        """The main window, if one is open, catches up on the folders an entry's run changed (a ReplayGain run's
+        Finished, or a list of folders): its index, and its Metadata tab (`MainWindow.entry_finished`)."""
         if self.window is not None and self.window._library_open():
-            for folder in finished.folders if isinstance(finished, Finished) else finished:
-                self.window.refresh_after_tool(folder)
+            self.window.entry_finished(list(finished.folders if isinstance(finished, Finished) else finished))
 
     def _window_closed(self, alone: EntryWindow) -> None:
         if alone in self.entry_windows:

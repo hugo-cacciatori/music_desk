@@ -75,7 +75,7 @@ AREAS: dict[str, Area] = {
         ("core/test_replaygain.py", "core/test_replaygain_parity.py", "core/test_replaygain_remove.py",
          "core/test_replaygain_loose.py", "ui/test_right_click_replaygain.py",
          "core/test_rsgain.py", "core/test_rsgain_keys.py", "core/test_rsgain_scan.py",
-         "ui/test_replaygain_tool.py", "ui/test_replaygain_remove_ui.py", "ui/test_jobs_panel.py"),
+         "ui/test_replaygain_tool.py", "ui/test_jobs_panel.py"),
         ("resources/rsgain/",)),
     "split": Area(
         ("core/cue.py", "core/cue_edit.py", "core/flac.py", "core/split.py", "services/split_job.py",

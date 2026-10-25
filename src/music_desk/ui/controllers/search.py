@@ -246,11 +246,14 @@ class SearchController(QObject):
         if not window._library_open() or not ids:
             return with_status_tips(menu)
         cards = self.view.showing_cards  # a card's menu starts with its two ways to the folder (SPEC §33)
+        if not cards:
+            window.add_entries(menu, ids)  # Explorer's entries first (SPEC §35)
         go = menu.addAction("Go to folder", lambda: self.go_to_result(ids[0]))
         go.setEnabled(len(ids) == 1)
         if cards:
             menu.addAction("Open in File Explorer", lambda: window.reveal(ids[0]))
             menu.addSeparator()
+            window.add_entries(menu, ids)  # then Explorer's entries (SPEC §35)
         open_action = menu.addAction("Open", lambda: window.open_files(ids))
         open_action.setEnabled(len(ids) == 1)
         menu.addAction("Play selection", lambda: window.play_selection(ids))
@@ -258,8 +261,6 @@ class SearchController(QObject):
         if not cards:
             menu.addAction("Open in File Explorer", lambda: window.reveal(ids[0]))
         menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: window.copy_paths(ids))
-        menu.addSeparator()
-        menu.addAction("Remove ReplayGain tags…", lambda: window.remove_replaygain(ids))
         menu.addSeparator()
         menu.addAction("Delete\tDel", lambda: window.delete.delete_entries(ids, self.view.view))
         row = self.view.row(ids[0])

@@ -85,15 +85,18 @@ def folder_argument(arguments: list[str]) -> str | None:
 
 EntryWindow = (ReplayGainWindow | RenameWindow | RemoveEntry | TidyWindow | CleanupEntry | TrimWindow
                | SplitRecapWindow | CueEditorWindow)
-# The entries that run alone with MusicDesk closed, and what runs them (ReplayGain has its own rules: run_replaygain).
+# The entries' own windows, and what runs them (ReplayGain has its own rules: run_replaygain).
 ALONE = {RENAME: RenameWindow, REMOVE_REPLAYGAIN: RemoveEntry, TIDY: TidyWindow, CLEANUP: CleanupEntry,
          TRIM: TrimWindow}
+# Entries that change the clicked files themselves: unsaved Metadata edits on them are asked about first.
+CHANGES_FILES = {RENAME, REMOVE_REPLAYGAIN, TIDY, *REPLAYGAIN_ENTRIES}
 
 
 class Starter(QObject):
-    """What this process shows: the main window, or only right-click entries' windows until a normal start asks
-    for the main window (SPEC §31). `open_library` opens the index; tests replace it and leave out `check_tools`
-    (the rsgain and flac self-check)."""
+    """What this process shows: the main window and the right-click entries' windows (SPEC §31, §35). Every entry
+    opens its own window, whether the main window is open or not, and the process ends with its last window.
+    `open_library` opens the index; tests replace it and leave out `check_tools` (the rsgain and flac
+    self-check)."""
 
     def __init__(self, settings: Settings, open_library: Callable[[], LibraryService | None],
                  parent: QObject | None = None, check_tools: bool = True) -> None:
@@ -103,14 +106,13 @@ class Starter(QObject):
         self.check_tools = check_tools
         self.window: MainWindow | None = None
         self.settings_entry: SettingsEntry | None = None
-        self.entry_windows: list[EntryWindow] = []  # the entries' own windows, while there is no main window
-        self._cards: ToolCards | None = None  # the entries' Options cards, until the main window takes them
+        self.entry_windows: list[EntryWindow] = []  # the entries' own windows, open or running
+        self._cards: ToolCards | None = None  # the process's Options cards: the main window takes them as its own
+        self._closed_windows: list[MainWindow] = []  # closed main windows, kept: they own the cards they took
         self.locks = PathLocks()  # the entries' folder locks; the main window's library shares them
 
     def cards(self) -> ToolCards:
-        """One copy of the settings in memory for the whole process: the main window's cards once it exists."""
-        if self.window is not None:
-            return self.window.tools.cards
+        """One copy of the settings in memory for the whole process, shared by the entries and the main window."""
         if self._cards is None:
             self._cards = ToolCards(self.settings)
             qt_util.app().aboutToQuit.connect(self.release)
@@ -126,8 +128,11 @@ class Starter(QObject):
                 alone.hide()
                 alone.deleteLater()
         self.entry_windows.clear()
-        if self._cards is not None and self.window is None:
+        if self._cards is not None and self.window is None and not self._closed_windows:
             self._cards.dispose()
+        for closed in self._closed_windows:
+            closed.deleteLater()
+        self._closed_windows.clear()
         self._cards = None
 
     def main_window(self) -> MainWindow:
@@ -136,7 +141,8 @@ class Starter(QObject):
             library = self.open_library()
             if library is not None:
                 library.locks = self.locks  # a right-click ReplayGain run may hold some already
-            self.window = MainWindow(library, self.settings, self._cards)
+            self.window = MainWindow(library, self.settings, self.cards())
+            self.window.closed.connect(self._main_closed)
             if not self.check_tools:
                 return self.window
             check = ToolCheck()
@@ -151,14 +157,17 @@ class Starter(QObject):
         self.main_window().open_from_outside(folder)
 
     def run_entry(self, entry: str, paths: list[str]) -> None:
-        """A right-click entry (SPEC §31): in the main window if it is open, else in a window of its own."""
+        """A right-click entry (SPEC §31, §35): a window of its own, alone in front, the main window (if open) left
+        where it is. Its folder locks are the main window's, and the main window's index re-reads what it
+        changed."""
+        if entry in CHANGES_FILES and self.window is not None and not self.window.allow_changes(paths):
+            return  # unsaved Metadata edits on a clicked file, and Cancel
         if entry in REPLAYGAIN_ENTRIES:
             self.run_replaygain(entry, paths)
             return
         if entry == SPLIT:
-            # A recap, then Split or Cancel (Hugo, 2026-10-24): the same window with MusicDesk open (the split is
-            # then one of its jobs) or closed.
-            recap = SplitRecapWindow(self.cards(), self.locks, self.window)
+            # A recap, then Split or Cancel (Hugo, 2026-10-24).
+            recap = SplitRecapWindow(self.cards(), self.locks)
             self._own(recap)
             recap.start(paths)
             return
@@ -169,9 +178,6 @@ class Starter(QObject):
             editor.start(paths)
             return
         if entry in ALONE:
-            if self.window is not None:
-                self.window.tools.run_entry(entry, paths)
-                return
             # The Rename preview alone; Remove's question and report; the Tidy page then Redundant files; Clean
             # up's Redundant files; the Trim page (SPEC §31).
             alone = ALONE[entry](self.cards(), self.locks)
@@ -196,29 +202,26 @@ class Starter(QObject):
         return [w for w in self.entry_windows if isinstance(w, ReplayGainWindow)]
 
     def _own(self, alone: EntryWindow) -> None:
-        """An entry's own window: kept until it closes; the process ends with the last one (no main window)."""
+        """An entry's own window: kept until it closes; the process ends with its last window."""
         self.entry_windows.append(alone)
         alone.closed.connect(lambda: self._window_closed(alone))
         alone.finished.connect(self._refresh_index)
         qt_util.app().aboutToQuit.connect(alone.shutdown)
 
     def run_replaygain(self, entry: str, paths: list[str]) -> None:
-        """A ReplayGain entry: refused while one of the entries' runs is going (one rsgain at a time), else a job of
-        the main window, else the ReplayGain page alone in a new window (SPEC §31)."""
+        """A ReplayGain entry: refused while one of the entries' runs is going (one rsgain at a time), else the
+        ReplayGain page alone in a new window (SPEC §31)."""
         running = next((w for w in self.replaygain_windows if w.running), None)
         if running is not None:
             running.refuse()
-            return
-        if self.window is not None:
-            self.window.tools.run_entry(entry, paths)
             return
         window = ReplayGainWindow(self.cards(), self.locks)
         self._own(window)
         window.start(entry, paths)
 
     def _refresh_index(self, finished) -> None:
-        """A main window opened meanwhile: its index catches up on the folders an entry's run changed (a
-        ReplayGain run's Finished, or a list of folders)."""
+        """The main window's index, if one is open, catches up on the folders an entry's run changed (a ReplayGain
+        run's Finished, or a list of folders)."""
         if self.window is not None and self.window._library_open():
             for folder in finished.folders if isinstance(finished, Finished) else finished:
                 self.window.refresh_after_tool(folder)
@@ -229,8 +232,20 @@ class Starter(QObject):
         alone.deleteLater()
         self._entry_closed()
 
+    def _main_closed(self) -> None:
+        """The main window closed: the entries' windows stay, and their runs go on (SPEC §35). Its library is closed;
+        a later normal start makes a new main window."""
+        window = self.window
+        if window is None:
+            return
+        self.window = None
+        self._closed_windows.append(window)
+        if window.library is not None:
+            window.library.close()
+        self._entry_closed()
+
     def _entry_closed(self) -> None:
-        """Without a main window, closing the last entry's window ends the process (SPEC §31)."""
+        """Without a main window, closing the last entry's window ends the process (SPEC §31, §35)."""
         if self.window is not None or self.entry_windows:
             return
         options = self._cards.options_window if self._cards is not None else None

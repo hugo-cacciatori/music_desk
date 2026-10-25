@@ -1,7 +1,8 @@
 """The right-click "Split this cue sheet…" (SPEC §31, Hugo 2026-10-24): a recap of what the split will do, then
 Split or Cancel only; the split runs in the same window (the real bundled flac, on copied fixtures), then its report.
-The same window with MusicDesk open (the split is then one of its jobs) or closed. 0.9.0 opened the cue editor
-instead, whose Split button is hidden: these tests check the button is on screen, not only clickable in code."""
+The same window with MusicDesk open (beside the main window, whose index re-reads the folder) or closed. 0.9.0
+opened the cue editor instead, whose Split button is hidden: these tests check the button is on screen, not only
+clickable in code."""
 
 import shutil
 
@@ -88,10 +89,12 @@ def test_a_sheet_that_needs_a_look_says_why(qtbot, starter, albums, quits):
     assert "data track" in window.message.text()
 
 
-def test_with_musicdesk_open_the_same_window_and_a_job(qtbot, starter, service, albums, quits):
+def test_with_musicdesk_open_the_same_window(qtbot, starter, service, albums, quits, monkeypatch):
     starter.open_folder(None)
     main = starter.window
     qtbot.addWidget(main)
+    requested = []
+    monkeypatch.setattr(main, "refresh_after_tool", requested.append)
     page = main.center.currentWidget()
     album = albums / "wav_image"
     window = recap(qtbot, starter, album / "image.cue")
@@ -99,8 +102,7 @@ def test_with_musicdesk_open_the_same_window_and_a_job(qtbot, starter, service, 
     window.split_button.click()
     qtbot.waitUntil(lambda: window.state == "result", timeout=30000)
     assert (album / "01 One.flac").exists()
-    [job] = main.jobs.jobs
-    assert job.kind == "Split" and job.state == "done"
+    assert requested == [album] and not service.indexer.paused  # indexing waited during the split, then resumed
     window.close()
 
 

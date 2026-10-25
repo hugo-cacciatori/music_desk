@@ -583,7 +583,6 @@ class SplitController(QObject):
             return
         self._run_token = token
         self.job = self.window._start_job(jobs_module.SPLIT, folder)
-        self.window._pause_indexing(True)  # flac reads the whole image: the drive is the split's meanwhile
         self.page.show_running()
         self._refresh_buttons()
 
@@ -643,7 +642,6 @@ class SplitController(QObject):
     def _finished(self, result: SplitFinished) -> None:
         if result.token != self._run_token:
             return
-        self.window._pause_indexing(False)
         if self.window._library_open():
             self.window.refresh_after_tool(result.folder)  # the new tracks
         self.page.show_result(report_text(result))

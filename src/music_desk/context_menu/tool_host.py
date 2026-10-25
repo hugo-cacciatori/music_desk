@@ -61,9 +61,6 @@ class ToolHost(QMainWindow):
     def refresh_after_tool(self, folder: Path) -> None:
         self.finished.emit([folder])
 
-    def _pause_indexing(self, paused: bool) -> None:
-        """No index here: nothing to pause."""
-
     def _unsaved_edits_under(self, folder: Path) -> bool:
         """No Metadata tab here: no unsaved tag edits."""
         return False

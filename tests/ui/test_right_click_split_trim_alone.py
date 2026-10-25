@@ -138,12 +138,12 @@ def test_trim_alone_refuses_a_folder(qtbot, starter, albums, quits):
     assert window.controller.page.state == "error"
 
 
-def test_a_main_window_takes_later_entries(qtbot, starter, service, albums, quits):
+def test_a_main_window_meanwhile_leaves_entries_their_own_windows(qtbot, starter, service, albums, quits):
     window = alone(qtbot, starter, menu.TRIM, [albums / "tone.wav"], TrimWindow)
     starter.open_folder(None)
     main = starter.window
     qtbot.addWidget(main)
     window.close()
     assert quits == []
-    starter.run_entry(menu.TRIM, [str(albums / "tone.wav")])
-    assert starter.entry_windows == [] and main.center.currentWidget() is main.trim.page
+    alone(qtbot, starter, menu.TRIM, [albums / "tone.wav"], TrimWindow)  # its own window still (SPEC §35)
+    assert main.center.currentWidget() is main.file_view

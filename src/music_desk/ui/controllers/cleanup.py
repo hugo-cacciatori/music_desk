@@ -13,12 +13,11 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from music_desk.context_menu.notice import NoticeWindow
 from music_desk.core import cleanup, fsops
 from music_desk.core.cleanup import CleanupOptions, Item
 from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.recycle_window import RecycleWindow
-from music_desk.ui.tools.tool_cards import CLEANUP, ToolRequest
+from music_desk.ui.tools.tool_cards import ToolRequest
 
 log = logging.getLogger(__name__)
 
@@ -95,9 +94,7 @@ class CleanupController(QObject):
         self.recycle = fsops.send_to_recycle_bin  # the window's Delete selected; replaced in tests (a recorder)
         self.check_recycle = fsops.can_recycle
         self.offer: RecycleWindow | None = None
-        self.notice: NoticeWindow | None = None  # a right-click Clean up that found nothing
         self._token: int | None = None
-        self._from_menu = False
 
     def open(self, request: ToolRequest) -> None:
         window = self.window
@@ -107,44 +104,21 @@ class CleanupController(QObject):
             return
         assert request.cleanup_options is not None  # set for every Clean up request
         folder = request.scope.folder
-        self._from_menu = False
         self._token = self.finder.find(folder, request.cleanup_options)
         window.statusBar().showMessage(f"Looking for files to clean up in {folder.name or folder}…", STATUS_MS)
-
-    def open_paths(self, paths: list[str]) -> bool:
-        """The right-click Clean up (SPEC §31), with MusicDesk open: every clicked folder read as the app's Clean up
-        does, then one Redundant files window for them all; nothing found says so in a small window. False when it
-        didn't start (the status bar says why)."""
-        window = self.window
-        window.bring_to_front()
-        folders = [Path(path) for path in paths]
-        cards = window.tools.cards
-        if self.offer is not None and self.offer.state == "deleting":  # one run at a time: show it
-            self.offer.show()
-            self.offer.raise_()
-            return False
-        if not folders or cards.problems(CLEANUP):
-            why = "nothing was clicked" if not folders else "fix the Clean up options first: File > Options…"
-            window.statusBar().showMessage(f"Clean up: {why}", STATUS_MS)
-            return False
-        self._from_menu = True
-        self._token = self.finder.find(folders, cards.cleanup_options())
-        window.statusBar().showMessage(f"Looking for files to clean up in {where_text(folders)}…", STATUS_MS)
-        return True
 
     def _found(self, found: Found) -> None:
         if found.token != self._token:
             return
         self._token = None
-        from_menu, self._from_menu = self._from_menu, False
         window = self.window
         name = where_text(found.folders) if found.folders else found.folder.name or str(found.folder)
         if found.error is not None:
             text = f"Clean up couldn't read {found.folder}: {found.error}"
-            self._say(text, from_menu)
+            window.statusBar().showMessage(text, STATUS_MS)
             return
         if not any(item.kept is None for item in found.items):
-            self._say(f"Nothing to clean up in {name}.", from_menu)
+            window.statusBar().showMessage(f"Nothing to clean up in {name}.", STATUS_MS)
             return
         window.statusBar().clearMessage()
         if self.offer is not None:
@@ -158,15 +132,6 @@ class CleanupController(QObject):
         self.offer.show()
         self.offer.raise_()
 
-    def _say(self, text: str, from_menu: bool) -> None:
-        """The status bar; from the right-click menu, a small window too (SPEC §31)."""
-        self.window.statusBar().showMessage(text, STATUS_MS)
-        if from_menu:
-            if self.notice is not None:
-                self.notice.close()
-            self.notice = NoticeWindow("Clean up", text, self.window)
-            self.notice.bring_to_front()
-
     def _recycled(self, report) -> None:
         window = self.window
         for folder in report.folders:
@@ -179,6 +144,4 @@ class CleanupController(QObject):
     def shutdown(self) -> None:
         if self.offer is not None:
             self.offer.close()
-        if self.notice is not None:
-            self.notice.close()
         self.finder.close()

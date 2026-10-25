@@ -1,14 +1,13 @@
-"""The right-click "Trim this track…" with MusicDesk open (SPEC §31): the main window comes to the front on the Trim
-page of that track, as Trim… on the Metadata tab; a format Trim can't cut is refused by the page; Trim runs the app's
-trim job (the real bundled flac, on copied fixtures)."""
+"""The right-click "Trim this track…" with MusicDesk open (SPEC §31, §35): the Trim page of that track in a window of
+its own, beside the main window; a format Trim can't cut is refused by the page; Trim runs the app's trim (the real
+bundled flac, on copied fixtures), and the main window's index re-reads the folder."""
 
 import shutil
 
 import pytest
 
-from music_desk.app import Starter
 from music_desk.context_menu import request as menu
-from music_desk.settings import Settings
+from music_desk.context_menu.tool_host import TrimWindow
 
 
 @pytest.fixture
@@ -26,15 +25,25 @@ def album(library_dir):
     return library_dir / "Album"
 
 
+def trim_window(open_app, path) -> TrimWindow:
+    open_app.run_entry(menu.TRIM, [str(path)])
+    window = open_app.entry_windows[-1]
+    assert isinstance(window, TrimWindow)
+    return window  # not given to qtbot: the fixture's release() closes it (test_right_click_split_trim_alone.py)
+
+
 def ready(qtbot, trim):
     qtbot.waitUntil(lambda: trim.page.state in ("editing", "error") and (trim.page.state == "error" or (
         trim.plan is not None and not trim._planning)), timeout=10000)
 
 
-def test_the_tracks_trim_page_then_trim(qtbot, window, album):
-    trim = window.trim
-    assert window.tools.run_entry(menu.TRIM, [str(album / "tone.wav")])
-    assert window.center.currentWidget() is trim.page
+def test_the_tracks_trim_page_then_trim(qtbot, open_app, album, monkeypatch):
+    main = open_app.window
+    requested = []
+    monkeypatch.setattr(main, "refresh_after_tool", requested.append)
+    window = trim_window(open_app, album / "tone.wav")
+    assert window.parent() is None and main.center.currentWidget() is main.file_view  # its own window (SPEC §35)
+    trim = window.controller
     ready(qtbot, trim)
     assert trim.page.state == "editing" and trim.path == album / "tone.wav"
     trim.page.start_edit.setText("0:00.500")  # typed, as a user would: nothing to cut until then
@@ -46,30 +55,13 @@ def test_the_tracks_trim_page_then_trim(qtbot, window, album):
     assert trim.page.state == "result"
     assert (album / "tone.wav").exists()  # the original stays; the copy is in the subfolder
     assert list(album.glob("*/tone.flac"))
-    assert window.jobs.jobs[-1].kind == "Trim"
+    qtbot.waitUntil(lambda: bool(requested))  # the main window's index catches up
 
 
-def test_a_format_trim_cant_cut_is_refused_by_the_page(qtbot, window, album):
-    trim = window.trim
-    assert window.tools.run_entry(menu.TRIM, [str(album / "tone.mp3")])
+def test_a_format_trim_cant_cut_is_refused_by_the_page(qtbot, open_app, album):
+    trim = trim_window(open_app, album / "tone.mp3").controller
     ready(qtbot, trim)
     assert trim.page.state == "error" and "MP3" in trim.page.message.text()
-
-
-def test_anything_but_one_file_is_refused(qtbot, window, album):
-    for paths in ([album], [album / "tone.wav", album / "tone.mp3"], []):
-        assert not window.tools.run_entry(menu.TRIM, [str(p) for p in paths])
-        assert window.statusBar().currentMessage() == "Trim: choose one track (FLAC, WAV or AIFF)."
-    assert window.center.currentWidget() is not window.trim.page
-
-
-def test_the_starter_hands_trim_to_the_open_window(qtbot, service, album):
-    starter = Starter(Settings(), lambda: service, check_tools=False)
-    starter.open_folder(None)
-    window = starter.window
-    qtbot.addWidget(window)
-    starter.run_entry(menu.TRIM, [str(album / "tone.wav")])
-    qtbot.waitUntil(lambda: window.trim.page.state == "editing", timeout=10000)
 
 
 def test_the_entry_parses():

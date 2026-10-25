@@ -174,7 +174,7 @@ def test_clean_up_alone_refuses_options_needing_a_fix(qtbot, starter, library_di
     assert entry.notice is not None and "MusicDesk > Settings" in entry.notice.message.text()
 
 
-def test_a_main_window_takes_later_entries(qtbot, starter, service, library_dir, quits):
+def test_a_main_window_meanwhile_leaves_entries_their_own_windows(qtbot, starter, service, library_dir, quits):
     entry = cleanup_entry(qtbot, starter, [library_dir / "Cleanup" / "lrc"])
     starter.open_folder(None)
     main = starter.window
@@ -183,6 +183,7 @@ def test_a_main_window_takes_later_entries(qtbot, starter, service, library_dir,
     entry.offer.close()
     assert quits == []  # the main window stays, as the app
     starter.run_entry(menu.TIDY, [str(library_dir / "Rips" / "Album B")])
-    assert starter.entry_windows == [] and main.center.currentWidget() is main.tidy.page
-    qtbot.waitUntil(lambda: main.tidy.page.state == "plan", timeout=20000)
-
+    tidy = starter.entry_windows[-1]  # its own window still (SPEC §35)
+    qtbot.addWidget(tidy)
+    assert isinstance(tidy, TidyWindow) and main.center.currentWidget() is main.file_view
+    qtbot.waitUntil(lambda: tidy.page.state == "plan", timeout=20000)

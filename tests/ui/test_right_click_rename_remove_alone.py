@@ -140,13 +140,19 @@ def test_remove_alone_cancelled_ends_at_once(qtbot, starter, artist, quits, answ
     assert has_rg(artist / "Lyrics" / "no_lyrics.flac")
 
 
-def test_a_normal_start_meanwhile_takes_later_entries(qtbot, starter, service, artist, quits):
+def test_a_main_window_meanwhile_leaves_entries_their_own_windows(qtbot, starter, service, artist, quits):
+    """SPEC §35: a normal start meanwhile opens the main window, and later entries still open their own windows.
+    Closing the main window leaves them open; the process ends with its last window."""
     window = rename_window(qtbot, starter, [artist / ALBUM])
     starter.open_folder(None)
     main = starter.window
     qtbot.addWidget(main)
     window.close()
     assert quits == []  # the main window stays, as the app
-    starter.run_entry(menu.RENAME, [str(artist / "Lyrics")])  # now in the main window
-    assert starter.entry_windows == [] and main.center.currentWidget() is main.rename_preview
-    qtbot.waitUntil(lambda: main.rename_preview.state == "preview", timeout=10000)
+    later = rename_window(qtbot, starter, [artist / "Lyrics"])
+    assert later.view.state == "preview" and main.center.currentWidget() is main.file_view
+    main.close()
+    assert starter.window is None and later.isVisible() and quits == []  # the entry's window stays
+    assert service.closed  # the main window's library went with it
+    later.close()
+    assert quits == [True]

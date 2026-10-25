@@ -16,7 +16,6 @@ from music_desk.core.cue import SourceInfo
 from music_desk.core.path_locks import LockedError
 from music_desk.services import jobs as jobs_module
 from music_desk.services.trim_job import Loaded, PeaksRead, Planned, TrimFinished, TrimRunner
-from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.trim_page import TrimPage
 
 log = logging.getLogger(__name__)
@@ -105,18 +104,6 @@ class TrimController(QObject):
         self.page.show_loading(path)
         self._load_token = self.runner.load(path)
         self.window.center.setCurrentWidget(self.page)
-
-    def open_entry(self, paths: list[str]) -> bool:
-        """The right-click "Trim this track…" (SPEC §31), with MusicDesk open: the window comes to the front on the
-        Trim page of that track, as Trim… on the Metadata tab; a format Trim can't cut is refused by the page, as
-        there. False when it didn't open (the status bar says why: not one file)."""
-        window = self.window
-        window.bring_to_front()
-        if len(paths) != 1 or Path(paths[0]).is_dir():
-            window.statusBar().showMessage("Trim: choose one track (FLAC, WAV or AIFF).", STATUS_MS)
-            return False
-        self.open(paths[0])
-        return True
 
     def back(self) -> None:
         """Also while the trim runs: it goes on, and the jobs panel reopens its page (SPEC §23)."""
@@ -216,14 +203,12 @@ class TrimController(QObject):
         self._run_token = token
         self.job = self.window._start_job(jobs_module.TRIM, plan.source.parent)
         self.window.jobs.update(self.job, status=f"Running: {plan.source.stem}")
-        self.window._pause_indexing(True)  # flac reads the whole track: the drive is the trim's meanwhile
         self.page.show_running(plan.source.name)
         self._refresh_buttons()
 
     def _finished(self, result: TrimFinished) -> None:
         if result.token != self._run_token:
             return
-        self.window._pause_indexing(False)
         if self.window._library_open():
             self.window.refresh_after_tool(result.plan.source.parent)  # the subfolder and the copy
         self.page.show_result(report_text(result))

@@ -9,11 +9,13 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from music_desk.core import trim
 from music_desk.core.index import lyrics_import, roots
 from music_desk.core.index.roots import AddResult, Root
 from music_desk.core.index.store import DbWriter, connect_read
 from music_desk.core.lyrics import LrclibClient
 from music_desk.core.path_locks import PathLocks
+from music_desk.services import replaygain_job, split_job, tidy_job
 from music_desk.services.indexer import Indexer
 from music_desk.services.lyrics_service import LyricsService
 from music_desk.services.watcher import Watcher
@@ -21,6 +23,9 @@ from music_desk.services.watcher import Watcher
 log = logging.getLogger(__name__)
 
 ONLINE_CHECK_MS = 30_000  # unplugged drives are noticed, and reconnect, within this delay
+# Tasks that read whole albums (rsgain, flac): background indexing waits while one holds a lock. On a hard disk, the
+# two reading at once made rsgain several times slower (Hugo, 2026-10-15: 66 s for an album that takes seconds alone).
+DRIVE_OWNERS = frozenset({replaygain_job.OWNER, split_job.OWNER, tidy_job.OWNER, trim.OWNER})
 
 
 class LibraryService(QObject):
@@ -28,6 +33,7 @@ class LibraryService(QObject):
     addFinished = Signal(object)  # list[AddResult], one per path of an add_folders call
     failed = Signal(str)  # a plain message for the status bar
     notice = Signal(str)  # an informational message for the status bar
+    indexingPaused = Signal(bool)  # a drive-heavy task started or ended (queued to the UI from the task's thread)
 
     lyrics_offline_default = False  # the UI tests set it, so a library they build never reaches LRCLIB
 
@@ -39,7 +45,9 @@ class LibraryService(QObject):
         self.writer = DbWriter(db_path).start()
         self.conn: sqlite3.Connection = connect_read(db_path)  # the UI thread's read-only connection
         self.indexer = Indexer(self.writer, self)
-        self.locks = PathLocks()  # shared by jobs and the tag writer (SPEC §16)
+        self._locks = PathLocks()
+        self._paused = False
+        self._locks.add_listener(self._follow_locks)
         self.watcher = Watcher(self.indexer.scan_path, self, **(watcher_options or {}))
         offline = self.lyrics_offline_default if lyrics_offline is None else lyrics_offline
         self.lyrics = LyricsService(db_path, self.writer, self, client=lyrics_client, offline=offline,
@@ -59,6 +67,31 @@ class LibraryService(QObject):
         self.refresh_online()  # roots unplugged since the last run show as offline at once
         self._run(self._sync_watches)  # after the online check: same worker, so in order
         self.rescan_all()  # the startup rescan
+
+    @property
+    def locks(self) -> PathLocks:
+        """Shared by every task, wherever it was started, and the tag writer (SPEC §16, §35)."""
+        return self._locks
+
+    @locks.setter
+    def locks(self, locks: PathLocks) -> None:
+        self._locks.remove_listener(self._follow_locks)
+        self._locks = locks
+        locks.add_listener(self._follow_locks)
+        self._follow_locks()
+
+    def _follow_locks(self) -> None:
+        """Called by PathLocks on the thread that took or released a lock: the pause starts before the task reads
+        anything. Folders the user opens are still served meanwhile (Scanner.pause)."""
+        paused = bool(DRIVE_OWNERS & self._locks.owners())
+        if paused == self._paused:
+            return
+        self._paused = paused
+        if paused:
+            self.indexer.pause()
+        else:
+            self.indexer.resume()
+        self.indexingPaused.emit(paused)
 
     def rescan_all(self) -> int:
         """Queue an incremental rescan of every root (at startup); an offline root is skipped
@@ -99,6 +132,7 @@ class LibraryService(QObject):
         if self._closed:
             return
         self._closed = True
+        self._locks.remove_listener(self._follow_locks)  # the locks may outlive this library (app.Starter's)
         self._timer.stop()
         self._fs.shutdown(wait=True)
         self.watcher.stop()

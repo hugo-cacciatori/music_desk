@@ -144,7 +144,6 @@ def test_a_normal_start_meanwhile_shares_locks_and_options(qtbot, starter, servi
     wait_done(qtbot, window)
     window.close()
     assert quits == []  # the main window stays, as the app
-    main.tools.rg_runner.scanner = fake
-    starter.run_entry(menu.REPLAYGAIN_ALBUM, [str(artist / "Album B")])  # now a job of the main window
-    qtbot.waitUntil(lambda: main.rg_view.state == "result" and main.tools.rg_job is None, timeout=20000)
-    assert starter.replaygain_windows == []
+    later = start(qtbot, starter, menu.REPLAYGAIN_ALBUM, [artist / "Album B"])  # its own window still (SPEC §35)
+    assert later is not window and main.center.currentWidget() is main.file_view
+    wait_done(qtbot, later)

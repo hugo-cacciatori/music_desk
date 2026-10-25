@@ -16,7 +16,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject
 
 from music_desk.context_menu import request as menu
-from music_desk.context_menu.remove_report import RemoveReport, ask_remove, split_tracks
+from music_desk.context_menu.remove_report import ask_remove
 from music_desk.core import rename
 from music_desk.core.formats import AUDIO_EXTENSIONS
 from music_desk.core.index import queries
@@ -100,7 +100,6 @@ class ToolsController(QObject):
         window.tag_writer.replaygainRemoved.connect(self._replaygain_removed)
         self._example_token: int | None = None
         self._rg_remove_token: int | None = None
-        self._remove_reports: dict[int, tuple[RemoveReport, list[str]]] = {}  # right-click removals running
 
         self.rename_preview = RenamePreview()
         self.rename_preview.backRequested.connect(window.close_tools)
@@ -389,56 +388,8 @@ class ToolsController(QObject):
             window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
             return False
         self._rg_request = request
-        window._pause_indexing(True)  # rsgain gets the drive to itself; folders you open are still served
         self.rg_job = window._start_job(jobs_module.REPLAYGAIN, folder)
         self.rg_view.show_running(folder, title, request.discography)
-        window.center.setCurrentWidget(self.rg_view)
-        return True
-
-    def run_entry(self, entry: str, paths: list[str]) -> bool:
-        """A right-click ReplayGain entry (SPEC §31), with MusicDesk open: its run starts at once (no recap, as the
-        tool), as this app's ReplayGain job, with the current options. The window comes to the front on the job's
-        page. Rename: its preview (`rename_entry`). False when it didn't start (the status bar or a toast says
-        why)."""
-        if entry == menu.RENAME:
-            return self.rename_entry(paths)
-        if entry == menu.REMOVE_REPLAYGAIN:
-            return self.remove_entry(paths)
-        if entry == menu.TIDY:
-            return self.window.tidy.open_paths(paths)
-        if entry == menu.CLEANUP:
-            return self.window.cleanup.open_paths(paths)
-        if entry == menu.TRIM:
-            return self.window.trim.open_entry(paths)
-        window = self.window
-        window.bring_to_front()
-        kind = ENTRY_KINDS[entry]
-        targets = [Path(path) for path in paths]
-        problem = entry_problem(kind, targets) or next(iter(self.cards.problems(REPLAYGAIN)), None)
-        if problem:
-            window.statusBar().showMessage(f"ReplayGain: {problem}", STATUS_MS)
-            return False
-        if self.rg_job is not None:
-            job = window.jobs.get(self.rg_job)
-            assert job is not None  # a running job stays in the list
-            window.toast.show_message(f"{job.kind} is still running in {job.folder}. Start the other run when it "
-                                      "has finished.")
-            window.show_job(self.rg_job)
-            return False
-        folders = sorted({p.parent for p in targets}) if kind in (TRACKS, LOOSE) else targets
-        if any(window._unsaved_edits_under(folder) for folder in folders):
-            return False
-        options = self.cards.replaygain_card.options()
-        try:
-            self._rg_token = self.rg_runner.start(kind, targets, options)
-        except LockedError as e:
-            window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
-            return False
-        self._rg_request = None  # the card's Run doesn't repeat a right-click run
-        window._pause_indexing(True)
-        self.rg_job = window._start_job(jobs_module.REPLAYGAIN, folders[0])
-        self.rg_view.show_running(folders[0], entry_title(kind, targets), kind == DISCOGRAPHY,
-                                  "Track" if kind == LOOSE else "Album")
         window.center.setCurrentWidget(self.rg_view)
         return True
 
@@ -450,7 +401,6 @@ class ToolsController(QObject):
         if finished.token != self._rg_token:
             return
         window = self.window
-        window._pause_indexing(False)
         if window._library_open():
             for folder in finished.folders:
                 window.refresh_after_tool(folder)  # new tags and replaygain.log files
@@ -539,31 +489,6 @@ class ToolsController(QObject):
             window.jobs.finish(job, jobs_module.STOPPED if report.cancelled else jobs_module.DONE, summary)
             self.rename_job = None
 
-    def rename_entry(self, paths: list[str]) -> bool:
-        """The right-click Rename (SPEC §31), with MusicDesk open: one preview of every clicked folder (as the tool
-        on a folder) and file (as a selection), in the main window, brought to the front. Apply then runs it as the
-        app's Rename job. False when the preview didn't start (the status bar or a toast says why)."""
-        window = self.window
-        window.bring_to_front()
-        targets = [Path(path) for path in paths]
-        problems = self.cards.problems(RENAME)
-        if not targets or problems:
-            why = "nothing was clicked" if not targets else "fix the File names or Rename options first: " \
-                "File > Options…"
-            window.statusBar().showMessage(f"Rename: {why}", STATUS_MS)
-            return False
-        if self.rename_job is not None:
-            job = window.jobs.get(self.rename_job)
-            assert job is not None  # a running job stays in the list
-            window.toast.show_message(f"{job.kind} is still running in {job.folder}. Start the other run when it "
-                                      "has finished.")
-            window.show_job(self.rename_job)
-            return False
-        self.rename_preview.show_planning(targets[0], what=rename_target_text(targets))
-        window.center.setCurrentWidget(self.rename_preview)
-        self._rename_token = self.rename_runner.plan_paths(targets, self.cards.rename_options())
-        return True
-
     # -- removing ReplayGain (SPEC §10 B) --
 
     def remove_replaygain(self, ids: list[int]) -> None:
@@ -593,43 +518,11 @@ class ToolsController(QObject):
         window.statusBar().showMessage(f"Removing the ReplayGain tags of {count} file{'s' if count != 1 else ''}…",
                                        STATUS_MS)
 
-    def remove_entry(self, paths: list[str]) -> bool:
-        """The right-click Remove ReplayGain tags (SPEC §31), with MusicDesk open: the clicked tracks only, after
-        the app's question; the removal runs on the TagWriter (its locks, the index following each file), and a
-        report window says what was done and stays until it is closed. False when nothing started."""
-        window = self.window
-        window.bring_to_front()
-        tracks, left_out = split_tracks(paths)
-        if not tracks:
-            window.statusBar().showMessage("Remove ReplayGain tags: no track ReplayGain works on was clicked.",
-                                           STATUS_MS)
-            return False
-        if any(window._unsaved_edits_under(Path(path)) for path in tracks):
-            return False
-        folders = sorted({str(Path(path).parent) for path in tracks})
-        options = self.cards.replaygain_card.options()
-        if not self.ask_remove_replaygain(len(tracks), folders[0] if len(folders) == 1 else "several folders",
-                                          options.comment):
-            return False
-        token = window.tag_writer.remove_replaygain(tracks, options)
-        report = RemoveReport(folders[0], window)
-        report.revealRequested.connect(lambda path: window._in_shell(
-            lambda: window.show_in_explorer(path, True), f"File Explorer couldn't show {path}.", "", True))
-        self._remove_reports[token] = (report, left_out)
-        report.closed.connect(lambda: self._remove_reports.pop(token, None))
-        report.closed.connect(report.deleteLater)
-        report.bring_to_front()
-        return True
-
     def ask_remove_replaygain(self, count: int, where: str, comment: str) -> bool:
         """Confirm the removal (replaced in tests)."""
         return ask_remove(self.window, count, where, comment)
 
     def _replaygain_removed(self, result) -> None:
-        if result.token in self._remove_reports:  # a right-click removal: its report window
-            report, left_out = self._remove_reports.pop(result.token)
-            report.show_result(result, left_out)
-            return
         if result.token != self._rg_remove_token:
             return
         window = self.window

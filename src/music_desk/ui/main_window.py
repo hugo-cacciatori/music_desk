@@ -77,7 +77,7 @@ from music_desk.ui.tools.tool_cards import CLEANUP, RENAME, REPLAYGAIN, TIDY, To
 log = logging.getLogger(__name__)
 
 APP_TITLE = "MusicDesk"
-PAUSED_NOTE = " (paused while ReplayGain runs)"
+PAUSED_NOTE = " (paused while a task reads albums)"
 WAIT_FOR_INDEX_S = 120  # a folder from outside the app opens once indexed, within this (SPEC §29)
 
 
@@ -107,6 +107,7 @@ class MainWindow(QMainWindow):
     renameDone = Signal(object, bool)  # RenameResult, whether it was an Undo
     renameFailed = Signal(str)
     playlistExported = Signal(str, int)  # the saved file, its track count (emitted from the shell thread)
+    closed = Signal()  # closed for good: the process goes on while a task's window is open (SPEC §35)
 
     def __init__(self, library: LibraryService | None = None, settings: Settings | None = None,
                  cards: ToolCards | None = None) -> None:
@@ -120,7 +121,7 @@ class MainWindow(QMainWindow):
         self.history_forward: list[int] = []
         self.rsgain_version: str | None = None  # from the startup self-check (About)
         self.flac_version: str | None = None  # likewise; the cue split needs it (SPEC §22)
-        self._indexing_paused = False  # while a ReplayGain job runs
+        self._indexing_paused = False  # while a task reads whole albums (the library says so)
         self._waiting_folder: tuple[str, float] | None = None  # (path, deadline): opens once indexed (SPEC §29)
         # Handing files to Windows can stall (a slow drive, a busy shell), so it happens off the UI thread.
         # These three are replaced in tests, which never launch anything.
@@ -303,6 +304,7 @@ class MainWindow(QMainWindow):
             library.addFinished.connect(self.show_add_results)
             library.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
             library.notice.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
+            library.indexingPaused.connect(self._show_indexing_paused)
             library.indexer.progress.connect(self.show_index_progress)
             library.indexer.idle.connect(self.index_label.hide)
             library.indexer.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
@@ -782,16 +784,15 @@ class MainWindow(QMainWindow):
                   if Path(p).is_relative_to(folder)]
         return bool(edited) and not self.side_panel.can_leave()
 
-    def _pause_indexing(self, paused: bool) -> None:
-        """Background indexing waits while a ReplayGain job or a split runs. On a hard disk, the two reading at
-        once made rsgain several times slower (Hugo, 2026-10-15: 66 s for an album that takes seconds alone)."""
-        if not self._library_open() or paused == self._indexing_paused:
-            return
+    def allow_changes(self, paths: list[str]) -> bool:
+        """A task's window is about to change files at these paths (files, or folders and all below): unsaved
+        Metadata edits on one of them ask Save, Discard or Cancel first, as the tools always did. False on Cancel."""
+        return not any(self._unsaved_edits_under(Path(path)) for path in paths)
+
+    def _show_indexing_paused(self, paused: bool) -> None:
+        """The library pauses indexing while a task reads whole albums (`LibraryService.DRIVE_OWNERS`), whichever
+        window started it (SPEC §35); the status line says so."""
         self._indexing_paused = paused
-        if paused:
-            self.open_library.indexer.pause()
-        else:
-            self.open_library.indexer.resume()
         if self.index_label.isVisible():
             text = self.index_label.text().removesuffix(PAUSED_NOTE)
             self.index_label.setText(text + PAUSED_NOTE if paused else text)
@@ -1150,6 +1151,7 @@ class MainWindow(QMainWindow):
         app().removeEventFilter(self)
         self._shell.shutdown(wait=False)
         super().closeEvent(event)
+        self.closed.emit()
 
     # -- context menus (SPEC §5): only what exists so far; Rename, Tidy and ReplayGain come with their milestones
 

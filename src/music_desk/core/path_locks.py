@@ -98,6 +98,11 @@ class PathLocks:
         finally:
             self.release(token)
 
+    def owners(self) -> set[str]:
+        """Who holds a lock now."""
+        with self._mutex:
+            return {owner for owner, _keys, _paths in self._locks.values()}
+
     def held(self) -> list[tuple[str, list[str]]]:
         with self._mutex:
             return [(owner, list(paths)) for owner, _keys, paths in self._locks.values()]

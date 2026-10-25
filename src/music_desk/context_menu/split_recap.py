@@ -5,8 +5,8 @@ until the window is closed.
 
 The defaults are the cue preview's Split's: every track, the sheet's folder, the File names masks, the sheet's
 encoding as read. A sheet that can't be split as it is says why, with Split greyed: "Edit this cue sheet…" in the
-right-click menu fixes it. The same window shows with MusicDesk open (`app_window`: the run is then one of its
-jobs, and its index re-reads the folder) or closed.
+right-click menu fixes it. The same window shows with MusicDesk open (its index then re-reads the folder) or
+closed.
 """
 
 from pathlib import Path
@@ -31,9 +31,8 @@ from PySide6.QtWidgets import (
 from music_desk.core.cue import CueError
 from music_desk.core.cue_edit import CueDocument, validate
 from music_desk.core.path_locks import LockedError, PathLocks
-from music_desk.services import jobs as jobs_module
 from music_desk.services.split_job import Loaded, Planned, SplitFinished, SplitRunner
-from music_desk.ui.controllers.split import plural, report_text, short_result
+from music_desk.ui.controllers.split import plural, report_text
 from music_desk.ui.tools.tool_cards import ToolCards
 
 TITLE = "MusicDesk · Split"
@@ -49,16 +48,14 @@ class SplitRecapWindow(QWidget):
     closed = Signal()
     finished = Signal(object)  # list[Path]: the folder written to; an open main window's index catches up
 
-    def __init__(self, cards: ToolCards, locks: PathLocks, app_window=None, parent: QWidget | None = None) -> None:
+    def __init__(self, cards: ToolCards, locks: PathLocks, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(TITLE)
         self.resize(720, 460)
         self.cards = cards
-        self.app_window = app_window  # MusicDesk's main window when it is open: the split is one of its jobs
         self.state = "loading"  # recap, running, result, error
         self.path: Path | None = None
         self.plan = None
-        self.job: int | None = None
         self.document: CueDocument | None = None
         self.reasons: list[str] = []  # why it can't split as it is; empty: Split is enabled
         self._token: int | None = None
@@ -203,10 +200,6 @@ class SplitRecapWindow(QWidget):
         except LockedError as e:
             self.message.setText(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
             return
-        app = self.app_window
-        if app is not None:
-            self.job = app._start_job(jobs_module.SPLIT, plan.folder)
-            app._pause_indexing(True)  # flac reads the whole image: the drive is the split's meanwhile
         self.message.setText("Splitting…")
         self.busy.setRange(0, max(len(plan.written), 1))
         self.busy.setValue(0)
@@ -217,9 +210,6 @@ class SplitRecapWindow(QWidget):
         self.busy.setValue(done)
         if name != "done":
             self.message.setText(f"Writing track {done + 1} of {total}: {name}")
-        if self.job is not None and self.app_window is not None:
-            self.app_window.jobs.update(self.job, status=f"Running ({done + 1} of {total}): {name}",
-                                        progress=(done, total))
 
     def _finished(self, result: SplitFinished) -> None:
         if result.token != self._run_token:
@@ -227,15 +217,6 @@ class SplitRecapWindow(QWidget):
         text = report_text(result)
         self.message.setText(text.split("\n", 1)[0])
         self.report.setPlainText(text)
-        app = self.app_window
-        if app is not None:
-            app._pause_indexing(False)
-            if self.job is not None:
-                app.jobs.report(self.job, "split", result)
-                state = (jobs_module.FAILED if result.error else jobs_module.STOPPED if result.cancelled
-                         else jobs_module.DONE)
-                app.jobs.finish(self.job, state, short_result(result))
-                self.job = None
         self.finished.emit([result.folder])
         self._show("result")
 

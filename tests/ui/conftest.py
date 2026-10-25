@@ -5,11 +5,12 @@ import shutil
 
 import pytest
 from lrclib_fake import collect
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QWidget
 
+from music_desk.app import Starter
 from music_desk.services.library import LibraryService
 from music_desk.settings import Settings
 from music_desk.ui.main_window import MainWindow
@@ -71,3 +72,16 @@ def window(qtbot, service):
     qtbot.addWidget(window)
     window.show()
     return window
+
+
+@pytest.fixture
+def open_app(qtbot, service):
+    """MusicDesk open (SPEC §35): the Starter with its main window. A right-click entry opens its own window beside
+    it, on the same locks and cards (`entry_helpers.entry_window`)."""
+    starter = Starter(Settings(tree_visible=True), lambda: service, check_tools=False)
+    starter.open_folder(None)
+    qtbot.addWidget(starter.window)
+    yield starter
+    starter.release()  # the entries' windows, freed while Qt runs
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+

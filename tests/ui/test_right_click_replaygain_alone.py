@@ -81,7 +81,7 @@ def test_an_album_runs_in_its_own_window(qtbot, starter, artist, fake, quits):
     album = artist / "Album A"
     window = start(qtbot, starter, menu.REPLAYGAIN_ALBUM, [album])
     assert starter.window is None and window.isVisible()  # no main window
-    assert window.view.state == "running" and not window.view.back_button.isVisible()
+    assert window.view.state == "running" and not hasattr(window.view, "back_button")
     finished = wait_done(qtbot, window)
     assert [log.result() for log in finished.album_logs] == ["OK"] and (album / "replaygain.log").exists()
     assert window.view.message.text().startswith("Done: 1 album OK.")

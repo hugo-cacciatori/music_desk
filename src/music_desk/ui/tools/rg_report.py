@@ -53,7 +53,6 @@ def fill(widget: QTableWidget, rows: list[tuple[str, ...]]) -> None:
 
 
 class ReplayGainView(QWidget):
-    backRequested = Signal()
     cancelRequested = Signal()
     doneRequested = Signal()
     openLogRequested = Signal(str)  # a replaygain.log
@@ -70,13 +69,9 @@ class ReplayGainView(QWidget):
         self.finished: Finished | None = None
         self.folder: Path | None = None
 
-        self.back_button = QPushButton("← Back")
-        self.back_button.setToolTip("Go back to the file list")
-        self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
         header = QHBoxLayout()
-        header.addWidget(self.back_button)
         header.addWidget(self.heading, 1)
 
         self.busy = QProgressBar()
@@ -108,7 +103,7 @@ class ReplayGainView(QWidget):
         self.reveal_button.clicked.connect(lambda: self.folder and self.revealRequested.emit(str(self.folder)))
         self.reveal_button.setToolTip("Show the folder in File Explorer")
         self.done_button = QPushButton("Done")
-        self.done_button.setToolTip("Close this report and go back to the file list")
+        self.done_button.setToolTip("Close this window")
         self.done_button.clicked.connect(self.doneRequested)
         buttons = QHBoxLayout()
         for button in (self.stop_button, self.open_log_button, self.reveal_button):

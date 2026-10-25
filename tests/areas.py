@@ -106,8 +106,8 @@ AREAS: dict[str, Area] = {
     "preview": Area(
         ("core/preview.py", "ui/side_panel/file_preview.py"),
         ("core/test_preview.py", "ui/test_file_preview.py")),
-    "jobs": Area(
-        ("core/cancel.py", "core/path_locks.py", "services/jobs.py", "ui/jobs_panel.py"),
+    "locks": Area(
+        ("core/cancel.py", "core/path_locks.py"),
         ("core/test_path_locks.py", "ui/test_metadata_tab.py", "ui/test_delete.py")),
     "options": Area(
         ("settings.py", "ui/tools/tool_cards.py", "ui/tools/settings_cards.py", "ui/toolbar_icons.py",

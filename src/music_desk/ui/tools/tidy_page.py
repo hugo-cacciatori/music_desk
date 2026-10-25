@@ -72,9 +72,8 @@ class TidyPage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.state = "empty"  # planning, plan, running, result, error
-        self.standalone = False  # in a window of its own (the right-click menu, SPEC §31): Close, not Back
-        self.back_button = QPushButton("← Back")
-        self.back_button.setToolTip("Back to the file list; nothing has been changed")
+        self.back_button = QPushButton("Close")  # before the run: leave without changing anything
+        self.back_button.setToolTip("Close this window; nothing has been changed")
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
@@ -107,7 +106,7 @@ class TidyPage(QWidget):
         self.stop_button.setToolTip("Stop after the current step; a split leaves nothing half-written")
         self.stop_button.clicked.connect(self.stopRequested)
         self.done_button = QPushButton("Done")
-        self.done_button.setToolTip("Close this page and go back to the file list")
+        self.done_button.setToolTip("Close this window")
         self.done_button.clicked.connect(self.doneRequested)
         buttons = QHBoxLayout()
         buttons.addWidget(self.run_button)
@@ -124,13 +123,6 @@ class TidyPage(QWidget):
         layout.addWidget(self.log, 1)
         layout.addLayout(buttons)
         self._show("empty")
-
-    def set_standalone(self) -> None:
-        """In a window of its own: Back becomes Close (hidden while Tidy runs: Stop, then Done), Done closes."""
-        self.standalone = True
-        self.back_button.setText("Close")
-        self.done_button.setToolTip("Close this window")
-        self._show(self.state)
 
     # -- states --
 
@@ -217,13 +209,7 @@ class TidyPage(QWidget):
         self.run_button.setVisible(state == "plan")
         self.stop_button.setVisible(state == "running")
         self.done_button.setVisible(state in ("result", "error"))
-        if self.standalone:
-            self.back_button.setVisible(state in ("empty", "planning", "plan"))
-            self.back_button.setToolTip("Close this window; nothing has been changed")
-            return
-        self.back_button.setToolTip(
-            "Back to the file list; Tidy goes on, and the Jobs panel shows it again" if state == "running"
-            else "Back to the file list; nothing has been changed")
+        self.back_button.setVisible(state in ("empty", "planning", "plan"))  # while it runs: Stop, then Done
 
     # -- the tree --
 

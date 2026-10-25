@@ -41,7 +41,6 @@ class TidyWindow(QWidget):
         self.cards = cards
         self.locks = locks
         self.page = TidyPage()
-        self.page.set_standalone()
         self.page.backRequested.connect(self.close)
         self.page.doneRequested.connect(self.close)
         self.page.runRequested.connect(self.run)

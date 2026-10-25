@@ -51,7 +51,7 @@ def test_the_tracks_trim_page_then_trim(qtbot, open_app, album, monkeypatch):
     ready(qtbot, trim)
     assert trim.page.trim_button.isEnabled()
     trim.page.trim_button.click()
-    qtbot.waitUntil(lambda: trim.page.state in ("result", "error") and trim.job is None, timeout=30000)
+    qtbot.waitUntil(lambda: trim.page.state in ("result", "error") and not trim.running, timeout=30000)
     assert trim.page.state == "result"
     assert (album / "tone.wav").exists()  # the original stays; the copy is in the subfolder
     assert list(album.glob("*/tone.flac"))

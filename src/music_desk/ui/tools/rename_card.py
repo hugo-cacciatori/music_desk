@@ -29,10 +29,6 @@ DESCRIPTION = (
     "Renames every music file in this folder (and its subfolders) from its tags, using the first mask whose fields "
     "are all present. Characters not allowed in file names are replaced. A file is never renamed over another "
     "one; files that fit no mask keep their name. A .lrc file with the same name follows its music file.")
-SELECTION_DESCRIPTION = (
-    "Renames the selected music files from their tags, using the first mask whose fields are all present. "
-    "Characters not allowed in file names are replaced. A file is never renamed over another one; files that fit "
-    "no mask keep their name. A .lrc file with the same name follows its music file.")
 FIX_FIRST = "Fix the file names first."  # what the cards that use the masks say while they are invalid
 MASKS_LINE = "File names: the masks set on the File names page."
 
@@ -121,22 +117,18 @@ class Card(QFrame):
 
 class RenameCard(Card):
     changed = Signal()  # the options changed (valid or not), the shared masks included
-    runRequested = Signal()
 
     def __init__(self, names, parent: QWidget | None = None) -> None:
         """`names` is the File names card (ui.tools.names_card), whose masks a run uses."""
         super().__init__("Rename files from tags", DESCRIPTION, parent)
         self.names = names
         self._loading = False
-        self.selection = False
 
         self.masks_line = QLabel(MASKS_LINE)
         self.masks_line.setWordWrap(True)
         self.recursive = QCheckBox("Include subfolders")
         self.recursive.setToolTip("Rename the music files of every subfolder too, not only this folder's")
         self.recursive.toggled.connect(self._edited)
-        self.selection_note = QLabel()
-        self.selection_note.setWordWrap(True)
         self.audio = QLineEdit()
         self.audio.setToolTip("The extensions renamed as music files, separated by spaces")
         self.audio.textEdited.connect(self._edited)
@@ -149,17 +141,12 @@ class RenameCard(Card):
         form.addRow(self.masks_line)
         form.addRow("", self.recursive)
         self.body.addLayout(form)
-        self.body.addWidget(self.selection_note)
         self.body.addWidget(self.advanced_toggle(advanced))
         self.body.addWidget(advanced)
 
-        self.run_button = self.primary(QPushButton("Run rename…"))  # "…": a preview to check comes first
-        self.run_button.setToolTip("Show the new names first; nothing is renamed until you apply them")
-        self.run_button.clicked.connect(self.runRequested)
         self.reset_button = QPushButton("Restore defaults")
         self.reset_button.setToolTip("Put back this page's default settings")
         self.reset_button.clicked.connect(self.reset)
-        self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)
         self.buttons.addWidget(self.reset_button)
         names.changed.connect(self._edited)
@@ -193,20 +180,9 @@ class RenameCard(Card):
     def valid(self) -> bool:
         return not self.problems_list()
 
-    # -- scope --
-
-    def set_selection(self, selection: bool) -> None:
-        """A file selection: only those files and their sidecars are renamed (SPEC §10)."""
-        self.selection = selection
-        self.description.setText(SELECTION_DESCRIPTION if selection else DESCRIPTION)
-        self.recursive.setEnabled(not selection)
-        self.selection_note.setText("Subfolders don't apply to a selection." if selection else "")
-        self.selection_note.setVisible(selection)
-
     def _edited(self, *_args) -> None:
         if self._loading:
             return
         problems = self.problems_list()
         self.show_problems(problems)
-        self.run_button.setEnabled(not problems)
         self.changed.emit()

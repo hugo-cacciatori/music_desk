@@ -1,4 +1,4 @@
-"""Path locks (SPEC §5 jobs panel, §7, §16): a running job owns its folder tree, and a tag save owns its file.
+"""Path locks (SPEC §7, §16, §35): a running task owns its folder tree, and a tag save owns its file.
 
 - A lock on a folder covers everything below it. Paths compare ignoring case, as Windows does.
 - Two locks can't overlap: a second job on the same tree, or a save of a file a job owns, is refused with the
@@ -6,7 +6,7 @@
 - Listeners are called after every change (from the thread that changed it), so the UI can grey out locked
   files.
 
-Plain Python and thread-safe: jobs, the tag writer and the UI share one instance.
+Plain Python and thread-safe: the tasks, the tag writer and the UI share one instance.
 """
 
 import logging

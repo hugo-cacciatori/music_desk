@@ -65,16 +65,6 @@ def test_hide_folders_without_music_left_the_tree_menu(window):
     assert not any("Hide folders" in action.text() for action in menu.actions())
 
 
-def test_the_jobs_button_is_always_there(qtbot, window):
-    window.show()
-    assert window.jobs_button.isVisible() and window.jobs_button.text() == "Jobs" and not window.jobs.jobs
-    window.jobs_button.click()
-    assert window.jobs_dock.isVisible()
-    window.jobs_button.click()
-    assert not window.jobs_dock.isVisible()
-    assert window.jobs_action.shortcut().toString() == "Ctrl+J" and window.jobs_action in window.actions()
-
-
 def test_a_separate_window_that_blocks_nothing(qtbot, window, service):
     search_window = open_window(window)
     assert search_window.isWindow() and search_window.isVisible() and not search_window.isModal()

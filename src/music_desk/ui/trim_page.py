@@ -232,8 +232,8 @@ class TrimPage(QWidget):
         super().__init__(parent)
         self.state = "empty"  # loading, editing, running, result, error
 
-        self.back_button = QPushButton("← Back")
-        self.back_button.setToolTip("Leave this page without trimming; the times you chose aren't kept")
+        self.back_button = QPushButton("Close")
+        self.back_button.setToolTip("Close this window without trimming; the times you chose aren't kept")
         self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
@@ -305,7 +305,7 @@ class TrimPage(QWidget):
         self.stop_button.setToolTip("Stop the trim; nothing is left half-written")
         self.stop_button.clicked.connect(self.stopRequested)
         self.done_button = QPushButton("Done")
-        self.done_button.setToolTip("Close this page and go back to the file list")
+        self.done_button.setToolTip("Close this window")
         self.done_button.clicked.connect(self.doneRequested)
         self.trim_note = QLabel()
         self.trim_note.setWordWrap(True)
@@ -358,9 +358,7 @@ class TrimPage(QWidget):
         self.trim_note.setVisible(state == "editing")
         self.stop_button.setVisible(state == "running")
         self.done_button.setVisible(state in ("result", "error"))
-        self.back_button.setToolTip(
-            "Back to the file list; the trim goes on, and the Jobs panel shows it again" if state == "running"
-            else "Leave this page without trimming; the times you chose aren't kept")
+        self.back_button.setVisible(state not in ("running", "result"))  # while it runs: Stop; then Done
 
     # -- what the controller shows --
 

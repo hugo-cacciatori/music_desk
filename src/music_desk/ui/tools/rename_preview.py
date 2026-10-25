@@ -62,28 +62,23 @@ def sections_text(sections: list[tuple[str, list[str]]]) -> str:
     return "\n".join(lines).rstrip()
 
 
-BACK_TIP = "Go back to the file list without renaming anything"
+CLOSE_TIP = "Close this window without renaming anything"
 
 class RenamePreview(QWidget):
-    backRequested = Signal()  # back to the file list (cancels a preview still reading)
+    backRequested = Signal()  # Close, next to Apply: the window closes (a preview still reading is cancelled)
     applyRequested = Signal()
     cancelRequested = Signal()  # stop a run in progress
-    doneRequested = Signal()  # back to the file list
+    doneRequested = Signal()  # Done or Close: the window closes
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.plan: RenamePlan | None = None
         self.report: RenameReport | None = None
         self.state = "idle"  # planning, preview, applying, result, error
-        self.standalone = False  # in a window of its own (the right-click menu, SPEC §31): Close, not Back
 
-        self.back_button = QPushButton("← Back")
-        self.back_button.setToolTip(BACK_TIP)
-        self.back_button.clicked.connect(self.backRequested)
         self.heading = QLabel()
         self.heading.setWordWrap(True)
         header = QHBoxLayout()
-        header.addWidget(self.back_button)
         header.addWidget(self.heading, 1)
 
         self.busy = QProgressBar()
@@ -128,14 +123,14 @@ class RenamePreview(QWidget):
         self.apply_button.setToolTip("Rename exactly the files listed, as shown; in Tidy, ReplayGain then runs on "
                                      "the final names")
         self.apply_button.clicked.connect(self.applyRequested)
-        self.back_bottom = QPushButton("← Back")  # next to Apply: return without changing anything
-        self.back_bottom.setToolTip(BACK_TIP)
+        self.back_bottom = QPushButton("Close")  # next to Apply: leave without changing anything
+        self.back_bottom.setToolTip(CLOSE_TIP)
         self.back_bottom.clicked.connect(self.backRequested)
         self.cancel_button = QPushButton("Stop")
         self.cancel_button.setToolTip("Stop between two files; the files renamed so far keep their new names")
         self.cancel_button.clicked.connect(self.cancelRequested)
         self.done_button = QPushButton("Done")
-        self.done_button.setToolTip("Close this page and go back to the file list")
+        self.done_button.setToolTip("Close this window")
         self.done_button.clicked.connect(self.doneRequested)
         buttons = QHBoxLayout()
         buttons.addWidget(self.apply_button)
@@ -153,14 +148,6 @@ class RenamePreview(QWidget):
         layout.addWidget(self.extras)
         layout.addLayout(buttons)
         self._show("idle", "")
-
-    def set_standalone(self) -> None:
-        """In a window of its own: Back becomes Close, and Done closes the window."""
-        self.standalone = True
-        self.back_bottom.setText("Close")
-        self.back_bottom.setToolTip("Close this window without renaming anything")
-        self.done_button.setToolTip("Close this window")
-        self._show(self.state, self.message.text())
 
     # -- states --
 
@@ -185,9 +172,8 @@ class RenamePreview(QWidget):
         self.extras.setPlainText(self._extras_text(plan))
         self.extras.setVisible(bool(self.extras.toPlainText()))
         actionable = any(i.status is Status.RENAME for i in plan.items)
-        back = "Close changes nothing." if self.standalone else "Back changes nothing."
         if actionable:
-            message = f"Nothing has changed yet. Apply renames exactly these files. {back}"
+            message = "Nothing has changed yet. Apply renames exactly these files. Close changes nothing."
         else:
             message = "Nothing to rename: every file already has its name, or can't be renamed."
         self._show("preview", message)
@@ -222,8 +208,6 @@ class RenamePreview(QWidget):
         self.extras.setVisible(state == "result" or (preview and bool(self.extras.toPlainText())))
         self.apply_button.setVisible(preview)
         self.back_bottom.setVisible(preview)
-        # no way back while files are being renamed; alone, Close next to Apply is the way out
-        self.back_button.setVisible(state != "applying" and not self.standalone)
         self.cancel_button.setVisible(state in ("planning", "applying"))
         self.done_button.setVisible(state in ("result", "error"))
         self.done_button.setText("Done" if state == "result" else "Close")

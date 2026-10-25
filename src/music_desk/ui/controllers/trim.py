@@ -1,7 +1,7 @@
-"""The trim's controller (SPEC §23, §16): the Trim page, its plan, Preview in player and the job.
+"""The trim's controller (SPEC §23, §16, §35): the Trim window's page, its plan, Preview in player and the run.
 
-One page, one track: the Metadata tab's Trim… opens it, and Trim on another track replaces it without asking (its
-two times are its only state, as the split's ticks aren't saved either). Each edit is planned again on the runner's
+One window, one track: the Metadata tab's Trim… or the right-click "Trim this track…" opens it (its two times are
+its only state). Each edit is planned again on the runner's
 worker after a short pause; the waveform is read once per track on its own worker. A trim is just a trim: it writes
 one copy into a subfolder, and nothing runs after it.
 """
@@ -14,7 +14,6 @@ from PySide6.QtCore import QObject, QTimer
 from music_desk.core import playlists, trim
 from music_desk.core.cue import SourceInfo
 from music_desk.core.path_locks import LockedError
-from music_desk.services import jobs as jobs_module
 from music_desk.services.trim_job import Loaded, PeaksRead, Planned, TrimFinished, TrimRunner
 from music_desk.ui.trim_page import TrimPage
 
@@ -28,15 +27,6 @@ NO_CUE_PLAYER = ("No app is set to open .cue sheets. To choose one, open Windows
 def format_line(info: SourceInfo) -> str:
     """'FLAC 16-bit/44.1 kHz · 9:47.213'."""
     return f"{info.format} {info.bits}-bit/{info.rate / 1000:g} kHz · {trim.format_time(trim.length_ms(info))}"
-
-
-def short_result(result: TrimFinished) -> str:
-    """One line for the jobs panel (after its state word)."""
-    if result.cancelled:
-        return "nothing left half-done"
-    if result.error:
-        return result.error
-    return f"{result.plan.source.stem} trimmed"
 
 
 def report_text(result: TrimFinished) -> str:
@@ -60,12 +50,11 @@ class TrimController(QObject):
         self.window = window
         self.page = TrimPage()
         self.runner = TrimRunner(locks, self)
-        self.unavailable: str | None = None  # flac's self-check failed
         self.path: Path | None = None
         self.info: SourceInfo | None = None
         self.tags: dict = {}
         self.plan: trim.TrimPlan | None = None
-        self.job: int | None = None
+        self.running = False  # a trim is being written
         self._load_token: int | None = None
         self._plan_token: int | None = None
         self._run_token: int | None = None
@@ -88,25 +77,18 @@ class TrimController(QObject):
 
     # -- opening and leaving --
 
-    @property
-    def showing(self) -> bool:
-        return self.window.center.currentWidget() is self.page
-
     def open(self, path: str | Path) -> None:
-        """Trim… on the Metadata tab: the page on this track, from scratch. While a trim runs, its page instead."""
-        path = Path(path)
-        if self.job is not None:
-            self.window.toast.show_message("A trim is still running. Trim another track when it has finished.")
-            self.window.show_job(self.job)
+        """The page on this track, from scratch (not while a trim is being written)."""
+        if self.running:
             return
+        path = Path(path)
         self.path, self.info, self.tags, self.plan = path, None, {}, None
         self._plan_timer.stop()
         self.page.show_loading(path)
         self._load_token = self.runner.load(path)
-        self.window.center.setCurrentWidget(self.page)
 
     def back(self) -> None:
-        """Also while the trim runs: it goes on, and the jobs panel reopens its page (SPEC §23)."""
+        """Close, before the trim: the window closes, nothing written."""
         self.window.close_tools()
 
     def done(self) -> None:
@@ -160,12 +142,8 @@ class TrimController(QObject):
 
     def _refresh_buttons(self) -> None:
         plan = None if self._planning else self.plan
-        reasons = []
-        if self.unavailable:
-            reasons.append(self.unavailable)
-        if plan is not None:
-            reasons += list(dict.fromkeys(why for _where, why in plan.problems))
-        ready = plan is not None and plan.ok and not reasons and self.job is None
+        reasons = list(dict.fromkeys(why for _where, why in plan.problems)) if plan is not None else []
+        ready = plan is not None and plan.ok and not reasons and not self.running
         self.page.set_buttons(trim_enabled=ready, preview=plan is not None and plan.times_ok,
                               note=" ".join(reasons))
 
@@ -187,11 +165,11 @@ class TrimController(QObject):
         window._in_shell(run, NO_CUE_PLAYER, str(plan.source), False)
         window.statusBar().showMessage(f"Previewing {plan.source.name} in the player…", 8000)
 
-    # -- the job --
+    # -- the run --
 
     def trim(self) -> None:
         plan = self.plan
-        if plan is None or not plan.ok or self._planning or self.job is not None or self.unavailable:
+        if plan is None or not plan.ok or self._planning or self.running:
             return
         if not self.window._library_open() or self.window._unsaved_edits_under(plan.source.parent):
             return
@@ -201,8 +179,7 @@ class TrimController(QObject):
             self.window.toast.show_message(str(e))
             return
         self._run_token = token
-        self.job = self.window._start_job(jobs_module.TRIM, plan.source.parent)
-        self.window.jobs.update(self.job, status=f"Running: {plan.source.stem}")
+        self.running = True
         self.page.show_running(plan.source.name)
         self._refresh_buttons()
 
@@ -212,24 +189,10 @@ class TrimController(QObject):
         if self.window._library_open():
             self.window.refresh_after_tool(result.plan.source.parent)  # the subfolder and the copy
         self.page.show_result(report_text(result))
-        if self.job is not None:
-            self.window.jobs.report(self.job, "trim", result)
-            state = (jobs_module.STOPPED if result.cancelled else jobs_module.FAILED if result.error
-                     else jobs_module.DONE)
-            self.window.jobs.finish(self.job, state, short_result(result))
-            self.job = None
+        self.running = False
         self.plan = None
         if result.trimmed:
             self.window.statusBar().showMessage(f"Trimmed {result.plan.source.name}.", 8000)
-
-    def show_report(self, result: TrimFinished) -> None:
-        """A finished trim's report, from the jobs panel."""
-        self.page.show_result(report_text(result), f"<b>Trim</b> · {result.plan.source}")
-        self.window.center.setCurrentWidget(self.page)
-
-    def set_unavailable(self, reason: str | None) -> None:
-        self.unavailable = reason
-        self._refresh_buttons()
 
     def close(self) -> None:
         self.runner.close()  # a running flac is killed; this run's .partial is deleted

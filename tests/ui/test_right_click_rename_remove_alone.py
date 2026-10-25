@@ -84,7 +84,7 @@ def test_rename_alone_previews_then_applies(qtbot, starter, artist, quits):
     window = rename_window(qtbot, starter, [album, artist / "Lyrics" / "no_lyrics.flac"])
     view = window.view
     assert starter.window is None and window.isVisible()  # no main window
-    assert not view.back_button.isVisible() and view.back_bottom.text() == "Close"
+    assert view.back_bottom.text() == "Close"  # no Back to a list: the page is the window
     assert view.message.text().endswith("Close changes nothing.")
     view.apply_button.click()
     qtbot.waitUntil(lambda: view.state == "result", timeout=10000)

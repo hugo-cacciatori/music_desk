@@ -24,8 +24,6 @@ DESCRIPTION = (
     "gain to the lowest track gain and the album peak to the highest track peak, and writes 'LUFS Target : X' in "
     "the comment. It then copies the album values into the lite/bonus/CD2 subfolders, plus the track values into "
     "'lite' subfolders for files with the same name. Its report replaces replaygain.log in the album folder.")
-SELECTION_NOTE = ("ReplayGain works on album folders. Open the album folder (or the artist folder, for a "
-                  "discography) to use it.")
 
 
 def parse_keywords(text: str) -> tuple[str, ...]:
@@ -39,13 +37,11 @@ def format_keywords(keywords) -> str:
 
 class ReplayGainCard(Card):
     changed = Signal()
-    runRequested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("ReplayGain", DESCRIPTION, parent)
         self._loading = False
         self.unavailable: str | None = None  # why rsgain can't run, if it can't
-        self.selection = False
         self.scope_note = QLabel()
         self.scope_note.setWordWrap(True)
 
@@ -106,14 +102,9 @@ class ReplayGainCard(Card):
         self.body.addWidget(self.advanced_toggle(advanced))
         self.body.addWidget(advanced)
 
-        self.run_button = self.primary(QPushButton("Run ReplayGain"))  # no preview: it starts the job
-        self.run_button.setToolTip("Start at once: measure the tracks, write their ReplayGain tags and the log; "
-                                   "nothing is renamed")
-        self.run_button.clicked.connect(self.runRequested)
         self.reset_button = QPushButton("Restore defaults")
         self.reset_button.setToolTip("Put back this page's default settings")
         self.reset_button.clicked.connect(self.reset)
-        self.buttons.addWidget(self.run_button)
         self.buttons.addStretch(1)
         self.buttons.addWidget(self.reset_button)
         self.set_options(replaygain.DEFAULT_OPTIONS)
@@ -153,22 +144,12 @@ class ReplayGainCard(Card):
         self.unavailable = reason
         self._edited()
 
-    def set_selection(self, selection: bool) -> None:
-        self.selection = selection
-        self._edited()
-
     def _edited(self, *_args) -> None:
         if self._loading:
             return
         problems = self.problems_list()
         self.show_problems(problems)
-        notes = []
-        if self.selection:
-            notes.append(SELECTION_NOTE)
-        if self.unavailable:
-            notes.append(self.unavailable)
-        self.scope_note.setText("\n".join(notes))
-        self.scope_note.setVisible(bool(notes))
-        self.run_button.setEnabled(not problems and not self.unavailable and not self.selection)
+        self.scope_note.setText(self.unavailable or "")
+        self.scope_note.setVisible(bool(self.unavailable))
         self.changed.emit()
 

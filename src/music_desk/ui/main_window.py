@@ -21,7 +21,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
-    QDockWidget,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -47,7 +46,6 @@ from music_desk.core.path_locks import PathLocks
 from music_desk.core.playlist_builder import Builder
 from music_desk.licenses import licenses_dir
 from music_desk.services.album_search_service import AlbumSearchService
-from music_desk.services.jobs import JobList
 from music_desk.services.library import LibraryService
 from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
 from music_desk.services.tag_io import TagIO
@@ -62,7 +60,6 @@ from music_desk.ui.controllers.search import SearchController
 from music_desk.ui.controllers.tools import ToolsController
 from music_desk.ui.file_view import FileView
 from music_desk.ui.hover import with_status_tips
-from music_desk.ui.jobs_panel import JobsPanel
 from music_desk.ui.no_wheel import install_no_wheel
 from music_desk.ui.playlist_panel import PlaylistPanel
 from music_desk.ui.qt_util import app, shortcut, standard_icon
@@ -144,13 +141,6 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.lyrics_label)
         self.statusBar().addPermanentWidget(self.lyrics_button)
         self._lyrics_state = ""
-        self.jobs_button = QToolButton()  # always there: the jobs panel's only toggle (SPEC §10)
-        self.jobs_button.setText("Jobs")
-        self.jobs_button.setAutoRaise(True)
-        self.jobs_button.setToolTip("Show or hide the jobs panel: this session's Rename, ReplayGain, Tidy, Split and "
-                                    "Trim runs (Ctrl+J)")
-        self.jobs_button.clicked.connect(lambda: self.jobs_dock.setVisible(not self.jobs_dock.isVisible()))
-        self.statusBar().addPermanentWidget(self.jobs_button)
 
         conn = lambda: self.open_library.conn if self._library_open() else None  # noqa: E731
         self.sidebar = Sidebar(conn, self.settings.expanded_folders)
@@ -184,20 +174,6 @@ class MainWindow(QMainWindow):
         self.tools = ToolsController(self, self, cards)  # the toolbar's tools, as their entries (SPEC §30, §35)
         self.tools.cards.hideFoldersChanged.connect(self.set_hide_folders_without_music)  # the Browser page
         self.delete = DeleteController(self, self)  # Delete to the Recycle Bin (SPEC §19)
-        # The jobs panel (SPEC §10): this session's runs, in a bottom drawer; they go on while you browse.
-        self.jobs = JobList(self)
-        self.jobs_panel = JobsPanel(self.jobs)
-        self.jobs_panel.openRequested.connect(self.show_job)
-        self.jobs_panel.stopRequested.connect(self.stop_job)
-        self.jobs_dock = QDockWidget("Jobs", self)
-        self.jobs_dock.setObjectName("jobs")
-        self.jobs_dock.setWidget(self.jobs_panel)
-        self.jobs_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea)
-        self.jobs_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.jobs_dock)
-        self.jobs_dock.hide()
-        self.jobs.changed.connect(self._update_jobs_button)
-        self.jobs.removed.connect(self._update_jobs_button)
         # Library search (SPEC §6): the query is typed in the toolbar, the results replace the file list.
         self.search = SearchController(self, library, self)
         self.search_view, self.search_field = self.search.view, self.search.field
@@ -247,9 +223,6 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction("E&xit", self.close)
         # No View or Action menu since M16 (SPEC §5): their entries live where they are used.
-        self.jobs_action = self.jobs_dock.toggleViewAction()  # Ctrl+J; the status bar's Jobs button is the other way
-        self.jobs_action.setShortcut(QKeySequence("Ctrl+J"))
-        self.addAction(self.jobs_action)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About MusicDesk", self.open_about)
         for menu in (file_menu, help_menu):
@@ -783,36 +756,6 @@ class MainWindow(QMainWindow):
             text = self.index_label.text().removesuffix(PAUSED_NOTE)
             self.index_label.setText(text + PAUSED_NOTE if paused else text)
 
-    # -- the jobs panel --
-
-    def _start_job(self, kind: str, folder: Path) -> int:
-        job = self.jobs.add(kind, folder)
-        self.jobs_dock.show()
-        self.jobs_panel.select(job.id)
-        return job.id
-
-    def _update_jobs_button(self, _job_id: int = 0) -> None:
-        running = len(self.jobs.running)
-        self.jobs_button.setText(f"Jobs: {running} running" if running else "Jobs")
-
-    def show_job(self, job_id: int) -> None:
-        """A job's page: live while it runs, its report once it has finished."""
-        job = self.jobs.get(job_id)
-        if job is None:
-            return
-        self.toast.show_message(f"{job.kind} in {job.folder}: {job.status}")
-
-    def stop_job(self, job_id: int) -> None:
-        """Nothing runs as a job of this window any more (SPEC §35); the panel goes with task 7."""
-
-    def confirm_quit_with_jobs(self, names: list[str]) -> bool:
-        answer = QMessageBox.question(
-            self, "A job is running",
-            "Still running:\n" + "\n".join(names) + "\n\nStop it and quit? A stopped rename leaves the files "
-            "after that point as they were; a stopped ReplayGain album is reported as cancelled; a stopped split "
-            "deletes the tracks it was writing and leaves its album as it was; a stopped trim deletes its copy.")
-        return answer == QMessageBox.StandardButton.Yes
-
     def lyrics_updated(self, folder_ids: list[int]) -> None:
         """LRCLIB results: the open folder's LRCLIB column follows, and the search results (their text too)."""
         if not self._library_open():
@@ -1092,10 +1035,6 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if not self.side_panel.can_leave():
-            event.ignore()
-            return
-        running = [f"{job.kind}: {job.folder}" for job in self.jobs.running]
-        if running and not self.confirm_quit_with_jobs(running):
             event.ignore()
             return
         self.tag_writer.close()  # the queued saves finish first

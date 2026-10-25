@@ -39,8 +39,6 @@ class ReplayGainWindow(QWidget):
         self.resize(900, 600)
         self.cards = cards
         self.view = ReplayGainView()
-        self.view.back_button.hide()  # nothing to go back to
-        self.view.done_button.setToolTip("Close this window")
         self.view.doneRequested.connect(self.close)
         self.view.cancelRequested.connect(lambda: self.runner.cancel())
         self.view.openLogRequested.connect(lambda path: self._in_shell(

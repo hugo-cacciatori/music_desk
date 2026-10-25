@@ -71,9 +71,33 @@ def test_the_side_panel_in_each_state(window, service, qtbot):
 
 
 def test_every_page_and_panel(window):
-    """The centre pages (tools, previews, reports, split, trim, search), the playlist builder and the jobs panel
-    are built with the window, shown or not."""
+    """The centre's pages (the file list, the search), the side panel's and the playlist builder are built with the
+    window, shown or not."""
     assert_all_have_hover_texts(window)
+
+
+def test_every_task_window(qtbot):
+    """The right-click entries' windows, which the toolbar and the app's menus open too (SPEC §35)."""
+    from music_desk.context_menu.rename_entry import RenameWindow
+    from music_desk.context_menu.replaygain_entry import ReplayGainWindow
+    from music_desk.context_menu.split_recap import SplitRecapWindow
+    from music_desk.context_menu.tidy_entry import TidyWindow
+    from music_desk.context_menu.tool_host import CueEditorWindow, TrimWindow
+    from music_desk.core.path_locks import PathLocks
+    from music_desk.settings import Settings
+    from music_desk.ui.tools.tool_cards import ToolCards
+
+    cards, locks = ToolCards(Settings()), PathLocks()
+    windows = [kind(cards, locks) for kind in (RenameWindow, ReplayGainWindow, SplitRecapWindow, TidyWindow,
+                                               CueEditorWindow, TrimWindow)]
+    try:
+        for window in windows:
+            assert_all_have_hover_texts(window)
+    finally:
+        for window in windows:
+            window.shutdown()
+            window.deleteLater()
+        cards.dispose()
 
 
 def test_the_other_windows_and_dialogs(window, qtbot):

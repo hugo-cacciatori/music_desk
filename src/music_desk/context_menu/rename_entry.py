@@ -33,7 +33,6 @@ class RenameWindow(QWidget):
         self.resize(900, 600)
         self.cards = cards
         self.view = RenamePreview()
-        self.view.set_standalone()
         self.view.backRequested.connect(self.close)
         self.view.doneRequested.connect(self.close)
         self.view.applyRequested.connect(self.apply)

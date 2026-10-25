@@ -138,9 +138,6 @@ class ToolCards(QObject):
         self.browser_card = BrowserCard()
         self.browser_card.set_value(settings.hide_folders_without_music)
         self.browser_card.changed.connect(self._save_browser)
-        for card in (self.rename_card, self.replaygain_card):
-            card.run_button.hide()  # the toolbar starts the tools (SPEC §30)
-            card.set_selection(False)  # the dialogs show every option; a selection is the run's business
         self.options_window: OptionsWindow | None = None
         if window is not None:
             self.adopt(window)

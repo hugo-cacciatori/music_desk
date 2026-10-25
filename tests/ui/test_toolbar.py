@@ -40,9 +40,9 @@ def test_file_names_card_defaults(cards):
     assert "Split albums and the rename suggestion" in names.description.text()
 
 
-def test_the_cards_show_no_run_button(cards):
-    """The toolbar starts the tools: the cards in the dialogs only hold options."""
-    assert cards.rename_card.run_button.isHidden() and cards.replaygain_card.run_button.isHidden()
+def test_the_cards_have_no_run_button(cards):
+    """The toolbar and the right-click menu start the tools: the cards only hold options."""
+    assert not hasattr(cards.rename_card, "run_button") and not hasattr(cards.replaygain_card, "run_button")
     for card in (cards.names_card, cards.rename_card, cards.replaygain_card):
         assert card.title.font().bold() and card.title.font().pointSizeF() > card.description.font().pointSizeF()
 

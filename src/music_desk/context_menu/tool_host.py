@@ -3,7 +3,7 @@ editor ("Edit this cue sheet…", the cue preview's Edit…, New cue sheet…) a
 Metadata tab's Trim…), MusicDesk open or closed.
 
 `ToolHost` is the part of the main window those controllers use, and nothing else: the page area, the status bar,
-the toast, a job list, the Options window's settings, the shell, and Preview in player. There is no index here:
+the toast, the Options window's settings, the shell, and Preview in player. There is no index here:
 `refresh_after_tool` only tells the Starter (an open main window's index catches up), and indexing never pauses.
 Back, Done and Close close the window; closing during a run asks first, and unsaved cue sheet edits ask as in the
 app.
@@ -21,7 +21,6 @@ from PySide6.QtWidgets import QMainWindow, QMessageBox, QStackedWidget
 
 from music_desk.core import fsops
 from music_desk.core.path_locks import PathLocks
-from music_desk.services.jobs import JobList
 from music_desk.ui.controllers.split import SplitController
 from music_desk.ui.controllers.trim import TrimController
 from music_desk.ui.toast import Toast
@@ -44,7 +43,6 @@ class ToolHost(QMainWindow):
         self.center = QStackedWidget()
         self.setCentralWidget(self.center)
         self.toast = Toast(self)
-        self.jobs = JobList(self)
         self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\MusicDesk\playlists, as the app's
         self.launch = fsops.open_with_default_app
         self.show_in_explorer = fsops.open_in_explorer
@@ -65,14 +63,6 @@ class ToolHost(QMainWindow):
     def _unsaved_edits_under(self, folder: Path) -> bool:
         """No Metadata tab here: no unsaved tag edits."""
         return False
-
-    def _start_job(self, kind: str, folder: Path) -> int:
-        return self.jobs.add(kind, folder).id
-
-    def show_job(self, job_id: int) -> None:
-        """The one page there is."""
-        if self.controller is not None:
-            self.center.setCurrentWidget(self.controller.page)
 
     def close_tools(self) -> None:
         """Back and Done: the page was the whole window."""
@@ -102,7 +92,7 @@ class ToolHost(QMainWindow):
     @property
     def running(self) -> bool:
         """A trim being written (the cue editor runs nothing: it edits and saves)."""
-        return isinstance(self.controller, TrimController) and self.controller.job is not None
+        return isinstance(self.controller, TrimController) and self.controller.running
 
     def confirm_stop(self) -> bool:
         answer = QMessageBox.question(

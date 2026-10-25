@@ -127,7 +127,7 @@ def test_trim_alone_trims(qtbot, starter, albums, quits):
     trim.page.start_edit.textEdited.emit("0:00.500")
     qtbot.waitUntil(lambda: trim.page.trim_button.isEnabled() and not trim._planning, timeout=10000)
     trim.page.trim_button.click()
-    qtbot.waitUntil(lambda: trim.page.state in ("result", "error") and trim.job is None, timeout=30000)
+    qtbot.waitUntil(lambda: trim.page.state in ("result", "error") and not trim.running, timeout=30000)
     assert trim.page.state == "result" and list(albums.glob("*/tone.flac"))
     trim.page.done_button.click()  # Done closes the window
     assert starter.entry_windows == [] and quits == [True]

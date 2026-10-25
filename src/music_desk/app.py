@@ -6,7 +6,7 @@ from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 
-from music_desk import __version__
+from music_desk import __version__, self_test
 from music_desk.context_menu.cleanup_entry import CleanupEntry
 from music_desk.context_menu.remove_entry import RemoveEntry
 from music_desk.context_menu.rename_entry import RenameWindow
@@ -251,6 +251,8 @@ def open_library() -> LibraryService | None:
 
 
 def main() -> int:
+    if self_test.FLAG in sys.argv[1:]:  # the release gate: no log, no other MusicDesk, no window (AGENTS.md rule 9)
+        return self_test.main(sys.argv[1:])
     setup_logging()
     log.info("%s %s starting (Python %s, frozen=%s)", APP_TITLE, __version__, sys.version.split()[0],
              getattr(sys, "frozen", False))

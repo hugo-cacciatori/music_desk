@@ -101,5 +101,6 @@ def test_the_installer_build_includes_the_menu_handler():
     """build_installer.py builds MusicDeskMenu.dll into dist/MusicDesk after PyInstaller, so the installer's
     [Files] glob takes it (SPEC §31)."""
     script = (ROOT / "packaging" / "build_installer.py").read_text(encoding="utf-8")
-    steps = ['"-m", "PyInstaller"', 'build_menu.build(ROOT / "dist" / "MusicDesk")', "[str(find_iscc())"]
+    steps = ['"-m", "PyInstaller"', 'build_menu.build(ROOT / "dist" / "MusicDesk")',
+             'self_test(ROOT / "dist" / "MusicDesk")', "[str(find_iscc())"]  # the gate before Inno Setup (rule 9)
     assert [script.index(step) for step in steps] == sorted(script.index(step) for step in steps)

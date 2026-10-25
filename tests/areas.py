@@ -131,8 +131,8 @@ AREAS: dict[str, Area] = {
     "scroll_wheel": Area(("ui/no_wheel.py",), ("ui/test_no_wheel.py",)),
     "stall_watch": Area(("ui/stall_watch.py",), ("ui/test_stall_watch.py",)),
     "packaging": Area(
-        ("__init__.py", "paths.py", "licenses.py", "ui/about_dialog.py"),
-        ("test_packaging.py", "test_licenses.py", "test_paths.py", "ui/test_about.py"),
+        ("__init__.py", "paths.py", "licenses.py", "self_test.py", "ui/about_dialog.py"),
+        ("test_packaging.py", "test_licenses.py", "test_paths.py", "test_self_test.py", "ui/test_about.py"),
         ("packaging/", "resources/", "LICENSE")),
 }
 

@@ -129,7 +129,9 @@ def test_split_splits_at_once_with_the_defaults(qtbot, window, service, library_
     preview.split_button.click()
     assert window.center.currentWidget() is split.page
     qtbot.waitUntil(lambda: split.page.state in ("result", "error"), timeout=30000)
-    assert split.page.report.toPlainText().startswith("Done: 2 tracks split, all identical to the original.")
+    # Failed once in a whole run (2026-10-25) with no message, and passed alone and in the next whole run: say why.
+    assert split.page.report.toPlainText().startswith("Done: 2 tracks split, all identical to the original."), (
+        f"state {split.page.state!r}: {split.page.report.toPlainText()!r}")
     assert (folder / "01 One.flac").exists() and (folder / "02 Two.flac").exists()
     assert (folder / "image.wav").exists() and (folder / "image.cue").exists()  # a split touches nothing else
 

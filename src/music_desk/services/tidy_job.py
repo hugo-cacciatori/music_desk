@@ -309,12 +309,3 @@ def report_text(result: TidyFinished) -> str:
         lines += ["", f"{plural(len(result.offers), 'item')} to offer for the Recycle Bin: you choose what to keep "
                   "in the Redundant files window that opened."]
     return "\n".join(lines)
-
-
-def short_result(result: TidyFinished) -> str:
-    if result.error:
-        return "failed"
-    if result.cancelled:
-        return f"stopped after {plural(len(result.albums), 'album')}"
-    text = f"{plural(len(result.albums), 'album')} tidied"
-    return text + (f", {result.failed_albums} with a problem" if result.failed_albums else "")

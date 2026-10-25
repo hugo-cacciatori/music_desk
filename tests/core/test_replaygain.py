@@ -15,7 +15,6 @@ from music_desk.core.cancel import CancelToken
 from music_desk.core.replaygain import (
     ALBUM_GAIN,
     ALBUM_PEAK,
-    MEASURED,
     TRACK_GAIN,
     ReplayGainOptions,
     files_summary,
@@ -23,7 +22,6 @@ from music_desk.core.replaygain import (
     level_album,
     process_album,
     process_discography,
-    recap,
 )
 from music_desk.core.rsgain import ScanResult
 from music_desk.core.tags import TaggedFile
@@ -338,37 +336,3 @@ def test_leveling_leaves_images_alone(artist):
     before = rg(image, ALBUM_GAIN)
     level_album(album, -20.0, ReplayGainOptions())
     assert rg(image, ALBUM_GAIN) == before
-
-
-# -- the recap (SPEC §30) --
-
-def test_recap_of_an_album(album_a):
-    add_image(album_a, album_a / "01 Tone.flac")
-    shutil.copy2(album_a / "01 Tone.flac", album_a / "04 Other.tta")  # True Audio: rsgain can't scan it
-    result = recap(album_a, ReplayGainOptions(), discography=False)
-    by_folder = {each.folder.relative_to(album_a).as_posix(): dict(each.rows) for each in result.folders}
-    assert by_folder["."] == {"01 Tone.flac": MEASURED, "02 Spike.flac": MEASURED, "03 Spike.mp3": MEASURED,
-                              "04 Other.tta": "skipped: format not supported by rsgain",
-                              "image.flac": "skipped: image waiting to be split",
-                              "replaygain.log": "written (replaces the last one)"}
-    assert by_folder["lite"] == {"01 Tone.flac": "album and track values copied",
-                                 "02 Spike.flac": "album and track values copied"}
-    assert by_folder["bonus"] == {"01 Tone.flac": "album values copied"}
-    assert by_folder["CD2"] == {"01 Disc Two.flac": "album values copied"}
-    assert result.measured == 3
-    assert not (album_a / "replaygain.log").exists()  # a recap writes nothing
-
-
-def test_recap_of_a_discography(artist):
-    result = recap(artist, ReplayGainOptions(), discography=True)
-    folders = [each.folder for each in result.folders]
-    assert folders[0] == artist and folders[1] == artist / "Album A"
-    assert dict(result.folders[0].rows) == {"replaygain.log": "discography summary written"}
-    assert all(what.endswith("then leveled to the lowest album gain")
-               for each in result.folders[1:] for name, what in each.rows if name != "replaygain.log")
-
-
-def test_recap_of_an_image_alone_measures_nothing(tmp_path, fixtures_dir):
-    add_image(tmp_path, fixtures_dir / "formats" / "tone.flac")
-    result = recap(tmp_path, ReplayGainOptions(), discography=False)
-    assert result.measured == 0 and result.folders[0].rows == [("image.flac", "skipped: image waiting to be split")]

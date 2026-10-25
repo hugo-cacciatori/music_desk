@@ -69,5 +69,5 @@ def test_docs_run_nothing_and_dependencies_everything():
 
 def test_a_helper_runs_the_tests_that_import_it():
     tests = select(["tests/core/rsgain_fake.py"]).tests
-    assert "core/test_replaygain.py" in tests and "ui/test_jobs_panel.py" in tests
+    assert "core/test_replaygain.py" in tests and "ui/test_replaygain_tool.py" in tests
     assert "core/test_cue.py" not in tests

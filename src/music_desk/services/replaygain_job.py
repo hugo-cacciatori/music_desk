@@ -4,7 +4,7 @@ and the job, which runs core.replaygain one album at a time with one rsgain proc
 A job is one of five kinds: the tool's album and discography, and the right-click menu's (SPEC §31) several
 folders each as an album, selected tracks as an album, and tracks each on its own.
 
-The job holds a lock on its folder trees for the whole run (owner "the ReplayGain tool"), taken on the caller's
+The job holds a lock on its folder trees for the whole run (owner "ReplayGain"), taken on the caller's
 thread so a conflict is refused at once. Log lines and progress reach the UI as queued signals, at most 10 times
 a second. Cancel stops the running rsgain and the albums after it; nothing is leveled then (core rules).
 """
@@ -22,7 +22,7 @@ from PySide6.QtCore import QObject, Signal
 from music_desk.core import replaygain, rsgain
 from music_desk.core.cancel import CancelToken
 from music_desk.core.path_locks import PathLocks
-from music_desk.core.replaygain import DiscographyResult, LooseResult, Recap, ReplayGainOptions, RunLog
+from music_desk.core.replaygain import DiscographyResult, LooseResult, ReplayGainOptions, RunLog
 
 log = logging.getLogger(__name__)
 
@@ -67,13 +67,6 @@ class Finished:
         return sorted(set(self.paths)) or [self.folder]
 
 
-@dataclass
-class Recapped:
-    token: int
-    recap: Recap | None = None
-    error: str | None = None  # the folders couldn't be read
-
-
 class _SignalReporter:
     """core.replaygain.Reporter → the runner's signals, with log lines batched."""
 
@@ -115,7 +108,6 @@ class ReplayGainRunner(QObject):
     lines = Signal(object)  # list[str]: log lines, batched
     progress = Signal(int, int, str)  # albums done, albums in all, the album now running
     finished = Signal(object)  # Finished
-    recapped = Signal(object)  # Recapped
 
     def __init__(self, locks: PathLocks, parent: QObject | None = None, *, scanner=rsgain.scan,
                  exe: Path | None = None) -> None:
@@ -128,10 +120,6 @@ class ReplayGainRunner(QObject):
         self._cancel = CancelToken()
         self._closed = False
         self.running = False
-
-    def run(self, folder: str | Path, options: ReplayGainOptions, discography: bool) -> int:
-        """Start the tool's job on one folder. Raises LockedError at once if a job holds it."""
-        return self.start(DISCOGRAPHY if discography else ALBUM, [Path(folder)], options)
 
     def start(self, kind: str, paths: list[Path], options: ReplayGainOptions) -> int:
         """Start a job of `kind` on `paths` (folders; tracks for TRACKS and LOOSE), under a lock on their folder
@@ -202,23 +190,6 @@ class ReplayGainRunner(QObject):
                 finished.cancelled = run_log.scan == "CANCELLED"
         reporter.progress(len(albums), len(albums), "done")
         finished.nothing = not finished.album_logs and not finished.cancelled
-
-    def recap(self, folder: str | Path, options: ReplayGainOptions, discography: bool) -> int:
-        """Read what a run on `folder` would do (SPEC §30), on the worker: the folders may be slow to list."""
-        self._token += 1
-        token, folder = self._token, Path(folder)
-
-        def read() -> None:
-            result = Recapped(token)
-            try:
-                result.recap = replaygain.recap(folder, options, discography)
-            except Exception as e:  # noqa: BLE001 - shown in the status bar
-                log.exception("ReplayGain recap of %s failed", folder)
-                result.error = f"{type(e).__name__}: {e}"
-            self.recapped.emit(result)
-
-        self._submit(read)
-        return token
 
     def cancel(self) -> None:
         """Stop the job: the running rsgain is killed, and the albums after it aren't processed."""

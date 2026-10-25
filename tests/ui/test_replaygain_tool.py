@@ -1,17 +1,22 @@
-"""The ReplayGain tool in the window: Run (no preview), the job, Stop, locks, the report, and the index
-(SPEC §10 B; Tidy is in test_tidy_tool.py). A fake scanner tags files as rsgain would; three tests run the
-real rsgain."""
+"""The toolbar's ReplayGain (SPEC §10 B, §30, §35): its list of the right-click entries for the selection or the
+open folder; each opens the ReplayGain window, which runs at once (no preview, no recap), with its Stop, locks and
+report, and the main window's index follows. A fake scanner tags files as rsgain would; three tests run the real
+rsgain."""
 
 import shutil
+from functools import partial
 
 import pytest
+from PySide6.QtWidgets import QMenu
 from rsgain_fake import FakeScanner
 
+from music_desk.context_menu import replaygain_entry
+from music_desk.core import fsops
 from music_desk.core.index.store import path_of
 from music_desk.core.replaygain import ALBUM_GAIN, TRACK_GAIN
 from music_desk.core.rsgain import ScanResult
 from music_desk.core.tags import TaggedFile
-from music_desk.ui.tools.tool_cards import REPLAYGAIN
+from music_desk.services.replaygain_job import ReplayGainRunner
 
 
 @pytest.fixture
@@ -22,9 +27,9 @@ def library_dir(tmp_path, fixtures_dir):
 
 
 @pytest.fixture
-def fake(window):
+def fake(monkeypatch):
     scanner = FakeScanner()
-    window.tools.rg_runner.scanner = scanner
+    monkeypatch.setattr(replaygain_entry, "ReplayGainRunner", partial(ReplayGainRunner, scanner=scanner))
     return scanner
 
 
@@ -33,35 +38,60 @@ def folder_id(service, path) -> int:
     return next(i for (i,) in conn.execute("SELECT id FROM entries WHERE is_dir = 1") if path_of(conn, i) == path)
 
 
-def open_card(window, service, folder, *, discography=False, tool=REPLAYGAIN, recaps=None):
-    """The toolbar's button on the open folder. Outside the habitual case the recap comes first: OK (`recaps`
-    collects what it showed)."""
-    window.open_folder(folder_id(service, folder))
-    window.file_view.select_ids([])
-    card = window.tools.cards.replaygain_card
-    card.scope_group.buttons()[1 if discography else 0].setChecked(True)
-    window.tools.confirm_replaygain = lambda recap: (recaps.append(recap) if recaps is not None else None) or True
-    window.tools.start(tool)
+def entries(open_app, service, folder, names=()) -> list:
+    """The ReplayGain button's list on `folder` (open), or on the named files selected in it."""
+    main = open_app.window
+    main.open_folder(folder_id(service, folder))
+    ids = {r.name: r.id for r in main.file_view.model.rows}
+    main.file_view.select_ids([ids[name] for name in names])
+    menu = QMenu(main)
+    main.tools.fill_replaygain_menu(menu)
+    return menu.actions()
 
 
-def run(qtbot, window, service, folder, **kwargs):
-    """The toolbar's ReplayGain: the job starts (no preview, maybe a recap first), and its report follows."""
-    open_card(window, service, folder, **kwargs)
-    qtbot.waitUntil(lambda: window.rg_view.state in ("result", "error") and window.tools.rg_job is None,
-                    timeout=20000)
-    return window.rg_view.finished
+def start(qtbot, open_app, service, folder, entry="ReplayGain as an album", names=()):
+    """Choose `entry` in the button's list: its window opens and runs."""
+    action = next(a for a in entries(open_app, service, folder, names) if a.text().startswith(entry))
+    before = list(open_app.entry_windows)
+    action.trigger()
+    [window] = [w for w in open_app.entry_windows if w not in before]
+    qtbot.addWidget(window)
+    return window
+
+
+def run(qtbot, open_app, service, folder, **kwargs):
+    window = start(qtbot, open_app, service, folder, **kwargs)
+    qtbot.waitUntil(lambda: window.view.state in ("result", "error"), timeout=20000)
+    return window
 
 
 def rg(path, key):
     return TaggedFile(path).get_replaygain(key)
 
 
-def test_album_run(qtbot, window, service, library_dir, fake):
+def test_the_button_lists_the_right_click_entries(qtbot, open_app, service, library_dir, fake):
+    """Hugo, 2026-10-25: the button opens the entries the right-click would show, with the target."""
+    artist = library_dir / "Fixture Artist"
+    texts = [a.text() for a in entries(open_app, service, artist)]
+    assert texts == ["ReplayGain as an album (−15 LUFS)", "ReplayGain as a discography (−15 LUFS)"]
+    texts = [a.text() for a in entries(open_app, service, artist / "Album A", ["01 Tone.flac", "03 Spike.mp3"])]
+    assert texts == ["ReplayGain: these 2 tracks as an album (−15 LUFS)",
+                     "ReplayGain: each of these 2 tracks on its own (−15 LUFS)"]
+    [none] = entries(open_app, service, artist / "Album A", ["lite", "01 Tone.flac"])  # folders and files together
+    assert not none.isEnabled() and none.text() == (
+        "ReplayGain: select folders, or tracks it measures, or nothing for the open folder.")
+    button = open_app.window.tools_bar.widgetForAction(open_app.window.tool_actions["replaygain"])
+    assert button.popupMode().name == "InstantPopup" and not open_app.window.tool_actions["replaygain"].isCheckable()
+
+
+def test_album_run(qtbot, open_app, service, library_dir, fake):
     album = library_dir / "Fixture Artist" / "Album A"
     owners = []
     fake.before = lambda folder: owners.append(service.locks.owner(folder))
-    finished = run(qtbot, window, service, album)
-    view = window.rg_view
+    main = open_app.window
+    window = run(qtbot, open_app, service, album)
+    view, finished = window.view, window.view.finished
+    assert window.parent() is None and main.center.currentWidget() is main.file_view  # its own window (SPEC §35)
     assert "ReplayGain · This album" in view.heading.text()
     assert owners == ["ReplayGain"] and service.locks.owner(album) is None  # locked during the run only
     assert [log.result() for log in finished.album_logs] == ["OK"]
@@ -71,20 +101,21 @@ def test_album_run(qtbot, window, service, library_dir, fake):
     assert rg(album / "01 Tone.flac", ALBUM_GAIN) is not None
     assert rg(album / "lite" / "01 Tone.flac", TRACK_GAIN) is not None  # copied into the lite subfolder
 
-    # the index re-reads the changed files: the RG column fills in
+    # the main window's index re-reads the changed files: the RG column fills in
     tone = next(i for (i,) in service.conn.execute("SELECT id FROM entries WHERE name = '01 Tone.flac'")
                 if path_of(service.conn, i) == album / "01 Tone.flac")
     qtbot.waitUntil(lambda: service.conn.execute("SELECT rg_album_gain FROM tracks WHERE entry_id = ?",
                                                  (tone,)).fetchone()[0] is not None, timeout=10000)
     # and the open folder's list shows the new replaygain.log, with nothing to press (Hugo's report, 2026-10-15)
+    qtbot.waitUntil(lambda: "replaygain.log" in main.file_view.visible_names(), timeout=10000)
     view.done_button.click()
-    qtbot.waitUntil(lambda: "replaygain.log" in window.file_view.visible_names(), timeout=10000)
+    assert open_app.entry_windows == []
 
 
-def test_discography(qtbot, window, service, library_dir, fake):
+def test_discography(qtbot, open_app, service, library_dir, fake):
     artist = library_dir / "Fixture Artist"
-    finished = run(qtbot, window, service, artist, discography=True)
-    view = window.rg_view
+    window = run(qtbot, open_app, service, artist, entry="ReplayGain as a discography")
+    view, finished = window.view, window.view.finished
     assert "ReplayGain · Discography" in view.heading.text()
     assert [row[0] for row in view.summary_rows()] == ["Album A", "Album B"]
     assert all(row[1] == "OK" and row[3] != "not leveled" for row in view.summary_rows())
@@ -92,75 +123,71 @@ def test_discography(qtbot, window, service, library_dir, fake):
     assert finished.log_path == artist / "replaygain.log" and finished.log_path.exists()
 
 
-def test_stop_reports_a_cancelled_album(qtbot, window, service, library_dir, fake):
+def test_stop_reports_a_cancelled_album(qtbot, open_app, service, library_dir, fake):
     fake.result = ScanResult(1, "", "", 0.1, cancelled=True)
-    finished = run(qtbot, window, service, library_dir / "Fixture Artist" / "Album B")
-    assert finished.cancelled
-    assert window.rg_view.message.text().startswith("Stopped.")
-    assert "Scan: CANCELLED" in window.rg_view.text.toPlainText()
+    window = run(qtbot, open_app, service, library_dir / "Fixture Artist" / "Album B")
+    assert window.view.finished.cancelled
+    assert window.view.message.text().startswith("Stopped.")
+    assert "Scan: CANCELLED" in window.view.text.toPlainText()
 
 
-def test_a_job_lock_refuses_the_run(qtbot, window, service, library_dir, fake):
+def test_a_busy_folder_refuses_the_run(qtbot, open_app, service, library_dir, fake):
     album = library_dir / "Fixture Artist" / "Album B"
     token = service.locks.acquire([album / "01 Loud.flac"], "Rename")
-    recaps = []
-    open_card(window, service, album, recaps=recaps)
-    assert window.statusBar().currentMessage() == f"ReplayGain: {album.name} is busy: Rename is running on it."
-    assert window.center.currentWidget() is window.file_view and fake.calls == []  # still on the file list
-    assert recaps == []  # a blocked run shows no recap
+    window = run(qtbot, open_app, service, album)
+    assert window.view.message.text() == "ReplayGain didn't start: Album B is busy: Rename is running on it."
+    assert fake.calls == []
     service.locks.release(token)
 
 
-def test_report_buttons_open_the_log_and_the_folder(qtbot, window, service, library_dir, fake):
+def test_report_buttons_open_the_log_and_the_folder(qtbot, open_app, service, library_dir, fake, monkeypatch):
     launched, shown = [], []
-    window.launch = launched.append
-    window.show_in_explorer = lambda path, is_dir: shown.append(path)
+    monkeypatch.setattr(fsops, "open_with_default_app", launched.append)
+    monkeypatch.setattr(fsops, "open_in_explorer", lambda path, is_dir: shown.append(path))
     album = library_dir / "Fixture Artist" / "Album B"
-    run(qtbot, window, service, album)
-    window.rg_view.open_log_button.click()
-    window.rg_view.reveal_button.click()
+    window = run(qtbot, open_app, service, album)
+    window.view.open_log_button.click()
+    window.view.reveal_button.click()
     qtbot.waitUntil(lambda: bool(launched and shown))
     assert launched == [str(album / "replaygain.log")] and shown == [str(album)]
-    window.rg_view.done_button.click()
-    assert not window.showing_tools
 
 
-def test_nothing_to_do(qtbot, window, service, library_dir, fake):
-    """No track here: not the habitual case, and the recap finds nothing to measure, so nothing starts."""
-    scans = library_dir / "Fixture Artist" / "Album B" / "Scans"
-    recaps = []
-    open_card(window, service, scans, recaps=recaps)
-    message = f"ReplayGain: there is nothing to measure in {scans}."
-    qtbot.waitUntil(lambda: window.statusBar().currentMessage() == message, timeout=10000)
-    assert recaps == [] and fake.calls == [] and window.tools.rg_job is None
+def test_nothing_to_do(qtbot, open_app, service, library_dir, fake):
+    """No track here: the run does nothing and says so."""
+    window = run(qtbot, open_app, service, library_dir / "Fixture Artist" / "Album B" / "Scans")
+    assert window.view.message.text() == "Nothing was done: no audio file rsgain can scan here."
+    assert fake.calls == []
 
 
-def test_unsaved_edits_are_asked_before_the_run(qtbot, window, service, library_dir, fake):
+def test_unsaved_edits_are_asked_before_the_run(qtbot, open_app, service, library_dir, fake):
     album = library_dir / "Fixture Artist" / "Album B"
-    window.open_folder(folder_id(service, album))
-    ids = {r.name: r.id for r in window.file_view.model.rows}
-    window.file_view.select_ids([ids["01 Loud.flac"]])
-    metadata = window.side_panel.metadata
+    main = open_app.window
+    main.open_folder(folder_id(service, album))
+    ids = {r.name: r.id for r in main.file_view.model.rows}
+    main.file_view.select_ids([ids["01 Loud.flac"]])
+    metadata = main.side_panel.metadata
     qtbot.waitUntil(lambda: metadata.snapshot is not None, timeout=5000)
     metadata.edits["comment"].setText("mine")
     metadata.edits["comment"].textEdited.emit("mine")
     metadata.ask_leave = lambda: "cancel"
-    window.file_view.select_ids([])
-    open_card(window, service, album)
-    qtbot.waitUntil(lambda: window.tools._recap_token is None, timeout=10000)  # the recap was OKed
-    assert window.center.currentWidget() is window.file_view and fake.calls == []
+    main.file_view.select_ids([])
+    menu = QMenu(main)
+    main.tools.fill_replaygain_menu(menu)
+    menu.actions()[0].trigger()
+    assert open_app.entry_windows == [] and fake.calls == []  # Cancel: no window, nothing run
     metadata.revert()
 
 
-def test_the_real_rsgain_through_the_window(qtbot, window, service, library_dir):
+def test_the_real_rsgain_through_the_window(qtbot, open_app, service, library_dir):
     """The bundled rsgain, end to end (fixtures copied; about a second per album)."""
     album = library_dir / "Fixture Artist" / "Album B"
-    finished = run(qtbot, window, service, album)
-    assert [log.result() for log in finished.album_logs] == ["OK"], window.rg_view.text.toPlainText()
+    window = run(qtbot, open_app, service, album)
+    finished = window.view.finished
+    assert [log.result() for log in finished.album_logs] == ["OK"], window.view.text.toPlainText()
     assert rg(album / "01 Loud.flac", ALBUM_GAIN) is not None
 
 
-def test_the_real_rsgain_while_the_library_is_scanned(qtbot, window, service, library_dir, monkeypatch):
+def test_the_real_rsgain_while_the_library_is_scanned(qtbot, open_app, service, library_dir, monkeypatch):
     """Hugo's report (2026-10-15): ReplayGain never completed while the library was still being indexed."""
     import threading
 
@@ -180,15 +207,15 @@ def test_the_real_rsgain_while_the_library_is_scanned(qtbot, window, service, li
     service.indexer.scan_root(service.roots()[0].id)
     qtbot.waitUntil(lambda: service.indexer.busy, timeout=5000)
     album = library_dir / "Fixture Artist" / "Album B"
-    open_card(window, service, album)
-    qtbot.waitUntil(lambda: window.rg_view.state in ("result", "error"), timeout=30000)
+    window = start(qtbot, open_app, service, album)
+    qtbot.waitUntil(lambda: window.view.state in ("result", "error"), timeout=30000)
     assert service.indexer.busy  # the scan was still running all along
-    finished = window.rg_view.finished
+    finished = window.view.finished
     gate.set()
-    assert [log.result() for log in finished.album_logs] == ["OK"], window.rg_view.text.toPlainText()
+    assert [log.result() for log in finished.album_logs] == ["OK"], window.view.text.toPlainText()
 
 
-def test_the_real_rsgain_while_tags_are_read(qtbot, window, service, library_dir, fixtures_dir, monkeypatch):
+def test_the_real_rsgain_while_tags_are_read(qtbot, open_app, service, library_dir, fixtures_dir, monkeypatch):
     """The same, in the scan's second phase: hundreds of audio files having their tags read meanwhile."""
     import time
 
@@ -210,33 +237,22 @@ def test_the_real_rsgain_while_tags_are_read(qtbot, window, service, library_dir
     qtbot.wait(1500)  # well into reading tags
     album = library_dir / "Fixture Artist" / "Album B"
     started = time.monotonic()
-    open_card(window, service, album)
-    qtbot.waitUntil(lambda: window.rg_view.state in ("result", "error"), timeout=60000)
+    window = start(qtbot, open_app, service, album)
+    qtbot.waitUntil(lambda: window.view.state in ("result", "error"), timeout=60000)
     elapsed = time.monotonic() - started
     assert service.indexer.busy, "the tag reading should still be running"
-    finished = window.rg_view.finished
-    assert [log.result() for log in finished.album_logs] == ["OK"], window.rg_view.text.toPlainText()
+    finished = window.view.finished
+    assert [log.result() for log in finished.album_logs] == ["OK"], window.view.text.toPlainText()
     assert elapsed < 20, elapsed
 
 
-def test_indexing_pauses_while_replaygain_runs(qtbot, window, service, library_dir, fake):
-    paused = []
-    fake.before = lambda folder: paused.append(service.indexer.paused)
-    run(qtbot, window, service, library_dir / "Fixture Artist" / "Album B")
-    assert paused == [True]  # rsgain had the drive to itself
-    assert not service.indexer.paused  # and indexing resumed after the job
-    window.show_index_progress(type("P", (), {"root_id": -1, "phase": "tags", "tags_done": 1, "tags_total": 2})())
-    assert "paused" not in window.index_label.text()
-
-
-def test_elapsed_time_while_an_album_is_scanned(qtbot, window, service, library_dir, fake):
+def test_elapsed_time_while_an_album_is_scanned(qtbot, open_app, service, library_dir, fake):
     """rsgain's output only arrives when it exits, so the page shows the album's elapsed time meanwhile."""
     import threading
 
     release = threading.Event()
     fake.before = lambda folder: release.wait(10)  # the "rsgain" run lasts until the test releases it
-    open_card(window, service, library_dir / "Fixture Artist" / "Album B")
-    view = window.rg_view
+    view = start(qtbot, open_app, service, library_dir / "Fixture Artist" / "Album B").view
     qtbot.waitUntil(lambda: view.message.text().startswith("Album 1 of 1: Album B · 0:0"), timeout=5000)
     first = view.message.text()
     assert "rsgain reports each album when it is done" in first
@@ -246,67 +262,37 @@ def test_elapsed_time_while_an_album_is_scanned(qtbot, window, service, library_
     assert not view._clock.isActive() and view.message.text().startswith("Done")
 
 
-# -- at once, or after the recap (SPEC §30, Hugo 2026-10-22) --
-
-def no_recap(recap):
-    raise AssertionError("the habitual case runs at once, without a recap")
-
-
-def test_the_habitual_case_runs_at_once(qtbot, window, service, library_dir, fake):
-    album = library_dir / "Fixture Artist" / "Album C"
-    shutil.copytree(library_dir / "Fixture Artist" / "Album A", album, ignore=shutil.ignore_patterns("CD2", "bonus",
-                                                                                                    "lite"))
-    service.indexer.scan_path(album, recursive=True)
-    qtbot.waitUntil(lambda: any(True for _ in service.conn.execute(
-        "SELECT 1 FROM entries WHERE name = 'Album C'")), timeout=10000)
-    window.open_folder(folder_id(service, album))
-    qtbot.waitUntil(lambda: len(window.file_view.model.rows) == 3, timeout=10000)
-    window.file_view.select_ids([])
-    window.tools.confirm_replaygain = no_recap
-    window.tools.start(REPLAYGAIN)
-    assert window.tools.rg_job is not None  # started on the click
-    qtbot.waitUntil(lambda: window.rg_view.state in ("result", "error"), timeout=20000)
+def test_the_selection_is_kept_after_replaygain(qtbot, open_app, service, library_dir, fake):
+    album = library_dir / "Fixture Artist" / "Album B"
+    main = open_app.window
+    window = run(qtbot, open_app, service, album, names=["01 Loud.flac", "02 Quiet.mp3"],
+                 entry="ReplayGain: these 2 tracks as an album")
+    assert window.view.finished.album_logs[0].result() == "OK"
+    ids = {r.name: r.id for r in main.file_view.model.rows}
+    model = main.file_view.model
+    qtbot.waitUntil(lambda: model.rows[model.row_for(ids["01 Loud.flac"])].rg == "full",
+                    timeout=10000)  # the main window's rescan reached the list: the row shows the new tags
+    assert main.file_view.selected_ids() == [ids["01 Loud.flac"], ids["02 Quiet.mp3"]]
 
 
-@pytest.mark.parametrize("case", ["subfolders", "selection", "discography"])
-def test_other_cases_show_the_recap_first(qtbot, window, service, library_dir, fake, case):
-    album = library_dir / "Fixture Artist" / ("Album A" if case != "discography" else "")
-    window.open_folder(folder_id(service, album))
-    window.file_view.select_ids([])
-    if case == "selection":
-        ids = {r.name: r.id for r in window.file_view.model.rows}
-        window.file_view.select_ids([ids["01 Tone.flac"]])
-    window.tools.cards.replaygain_card.scope_group.buttons()[1 if case == "discography" else 0].setChecked(True)
-    recaps = []
-    window.tools.confirm_replaygain = lambda recap: recaps.append(recap) or False  # Cancel
-    window.tools.start(REPLAYGAIN)
-    assert window.tools.rg_job is None  # not yet: the recap is read on the worker
-    qtbot.waitUntil(lambda: bool(recaps), timeout=10000)
-    [recap] = recaps
-    assert recap.folder == album and recap.discography is (case == "discography")
-    assert window.tools.rg_job is None and fake.calls == []  # Cancel starts nothing
-    if case != "discography":
-        rows = {(each.folder.name, name): what for each in recap.folders for name, what in each.rows}
-        assert rows[("Album A", "01 Tone.flac")] == "measured: track and album gain"  # the whole folder
-        assert rows[("lite", "02 Spike.flac")] == "album and track values copied"
-        assert rows[("CD2", "01 Disc Two.flac")] == "album values copied"
-        window.tools.confirm_replaygain = lambda recap: True  # OK runs
-        window.tools.start(REPLAYGAIN)
-        qtbot.waitUntil(lambda: window.rg_view.state in ("result", "error") and window.tools.rg_job is None,
-                        timeout=20000)
-        assert [log.result() for log in window.rg_view.finished.album_logs] == ["OK"]
-    window.tools.cards.replaygain_card.scope_group.buttons()[0].setChecked(True)
+def test_m5_done_when_the_windows_replaygain_log_matches_the_script(qtbot, open_app, service, library_dir,
+                                                                     reference_music_tools, monkeypatch, tmp_path):
+    """M5's "Done when": the app's replaygain.log, from a run through the ReplayGain window with the real rsgain,
+    matches a script run on a copy of the same album (timestamps masked); the tags match too."""
+    import contextlib
 
+    from test_replaygain_parity import compare_trees
 
-def test_the_recap_window_lists_every_file(qtbot, library_dir):
-    from music_desk.core import replaygain
-    from music_desk.ui.tools.rg_recap import RecapDialog
+    from music_desk.paths import rsgain_path
 
-    album = library_dir / "Fixture Artist" / "Album A"
-    dialog = RecapDialog(replaygain.recap(album, replaygain.ReplayGainOptions(), False))
-    qtbot.addWidget(dialog)
-    rows = dialog.rows()
-    assert (str(album), "01 Tone.flac", "measured: track and album gain") in rows
-    assert (str(album / "bonus"), "01 Tone.flac", "album values copied") in rows
-    assert (str(album), "replaygain.log", "written (replaces the last one)") in rows
-    assert [b.text() for b in dialog.buttons.buttons()] == ["OK", "Cancel"]
+    monkeypatch.setattr(reference_music_tools, "RSGAIN_PATH", str(rsgain_path()))
+    monkeypatch.setattr(reference_music_tools, "AUDIO_EXTENSIONS", {".flac", ".mp3"})
+    app_album = library_dir / "Fixture Artist" / "Album A"
+    script_album = shutil.copytree(app_album, tmp_path / "script" / "Album A")
+    with contextlib.chdir(script_album):
+        reference_music_tools.process_album()
+
+    window = start(qtbot, open_app, service, app_album)
+    qtbot.waitUntil(lambda: window.view.state in ("result", "error"), timeout=60000)
+    assert window.view.finished.album_logs[0].result() == "OK", window.view.text.toPlainText()
+    assert compare_trees(script_album, app_album) == 1

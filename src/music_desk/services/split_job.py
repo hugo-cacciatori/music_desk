@@ -4,7 +4,7 @@ proves and finishes one album with one flac process. A split is just a split: no
 nothing is deleted but this run's own .partial files.
 
 Nothing here reads a file on the UI thread (Ground rule 2). The job holds a lock on the image's folder and the
-destination for the whole run (owner "the Split tool"), taken on the caller's thread so a conflict is refused at
+destination for the whole run (owner "Split"), taken on the caller's thread so a conflict is refused at
 once. Stop kills flac and deletes this run's .partial files; once the tracks are being renamed, Stop takes effect
 after them.
 """

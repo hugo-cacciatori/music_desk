@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from music_desk.context_menu.entries import OPTIONS_WHERE
 from music_desk.core.cue import CueError
 from music_desk.core.cue_edit import CueDocument, validate
 from music_desk.core.path_locks import LockedError, PathLocks
@@ -159,7 +160,7 @@ class SplitRecapWindow(QWidget):
         plan = self.plan = planned.plan
         reasons = []
         if not self.cards.names_card.valid:
-            reasons.append("The File names masks need fixing: MusicDesk > Settings in the right-click menu.")
+            reasons.append(f"The File names masks need fixing: {OPTIONS_WHERE}.")
         if any(problem.blocks_save for problem in validate(document, plan.info)):
             reasons.append("The cue sheet has values to fix.")
         if plan.refusal:

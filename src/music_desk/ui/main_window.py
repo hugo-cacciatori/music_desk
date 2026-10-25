@@ -57,11 +57,9 @@ from music_desk.ui.about_dialog import AboutDialog
 from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.advanced_search import AdvancedSearchWindow
 from music_desk.ui.controllers import STATUS_MS
-from music_desk.ui.controllers.cleanup import CleanupController
 from music_desk.ui.controllers.delete import DeleteController
 from music_desk.ui.controllers.search import SearchController
 from music_desk.ui.controllers.split import SplitController
-from music_desk.ui.controllers.tidy import TidyController
 from music_desk.ui.controllers.tools import ToolsController
 from music_desk.ui.controllers.trim import TrimController
 from music_desk.ui.file_view import FileView
@@ -181,14 +179,11 @@ class MainWindow(QMainWindow):
             "file type, or the file isn't reachable.", path, False))
         locks = library.locks if library is not None else PathLocks()
         # Each feature's flow lives in its controller (SPEC §16), which owns its pages; the window lays them out.
-        self.tools = ToolsController(self, locks, self, cards)  # Rename, ReplayGain, Tidy (SPEC §10, §30)
+        self.tools = ToolsController(self, self, cards)  # the toolbar's tools, as their entries (SPEC §30, §35)
         self.tools.cards.hideFoldersChanged.connect(self.set_hide_folders_without_music)  # the Browser page
-        self.rename_preview, self.rg_view = self.tools.pages
         self.split = SplitController(self, locks, self)  # the cue split (SPEC §22)
         self.split_page = self.split.page
         self.trim = TrimController(self, locks, self)  # trimming one track into a copy (SPEC §23)
-        self.tidy = TidyController(self, locks, self)  # a whole tree: split, rename, ReplayGain (SPEC §28)
-        self.cleanup = CleanupController(self, locks, self)  # the Redundant files window for a tree (SPEC §32)
         self.trim_page = self.trim.page
         self.side_panel.metadata.trimRequested.connect(self.trim.open)
         self.side_panel.metadata.newCueRequested.connect(self.split.new_sheet)
@@ -213,11 +208,8 @@ class MainWindow(QMainWindow):
         self.center = QStackedWidget()  # the file list, the search results, or a tool's page
         self.center.addWidget(self.file_view)
         self.center.addWidget(self.search_view)
-        self.center.addWidget(self.rename_preview)
-        self.center.addWidget(self.rg_view)
         self.center.addWidget(self.split_page)
         self.center.addWidget(self.trim_page)
-        self.center.addWidget(self.tidy.page)
         # The playlist builder (SPEC §15): a narrow column between the centre and the side panel, hidden until asked.
         self.playlist_panel = PlaylistPanel(conn)
         self.playlist_file: Path | None = (self.settings.path.with_name("playlist.json")
@@ -555,9 +547,10 @@ class MainWindow(QMainWindow):
         self._update_navigation()
 
     def _build_tools_bar(self) -> None:
-        """The second row (SPEC §30), always visible: Tidy, Rename, ReplayGain and Clean up, plain buttons whose click
-        starts the tool (the options are in File > Options… only), then the playlist builder and Advanced search.
-        Icons with a short label; Tidy first and in evidence (SPEC §33)."""
+        """The second row (SPEC §30), always visible: Tidy, Rename, ReplayGain and Clean up, then the playlist
+        builder and Advanced search. Tidy, Rename and Clean up are plain buttons starting their right-click entry on
+        the selection or the open folder; ReplayGain lists its entries (SPEC §35). The options are in File >
+        Options… only. Icons with a short label; Tidy first and in evidence (SPEC §33)."""
         color = self.palette().color(QPalette.ColorRole.ButtonText)
         bar = QToolBar("Tools")
         bar.setMovable(False)
@@ -569,9 +562,16 @@ class MainWindow(QMainWindow):
         on_accent = QColor("black") if accent.lightnessF() > 0.6 else QColor("white")
         for tool, label in ((TIDY, "Tidy"), (RENAME, "Rename"), (REPLAYGAIN, "ReplayGain"), (CLEANUP, "Clean up")):
             action = QAction(tool_icon(tool, on_accent if tool == TIDY else color), label, self)
-            action.triggered.connect(lambda _=False, tool=tool: self.tools.start(tool))
+            if tool == REPLAYGAIN:  # its entries, as the right-click menu lists them (Hugo, 2026-10-25)
+                entries = QMenu(self)
+                entries.aboutToShow.connect(lambda entries=entries: self.tools.fill_replaygain_menu(entries))
+                action.setMenu(entries)
+            else:
+                action.triggered.connect(lambda _=False, tool=tool: self.tools.start(tool))
             action.hovered.connect(lambda tool=tool: self._update_tool_tip(tool))
             bar.addAction(action)
+            if tool == REPLAYGAIN and isinstance(button := bar.widgetForAction(action), QToolButton):
+                button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)  # a click opens the list
             self.tool_actions[tool] = action
             self._update_tool_tip(tool)
         self.tidy_action = self.tool_actions[TIDY]
@@ -605,7 +605,7 @@ class MainWindow(QMainWindow):
     def _update_tool_tip(self, tool: str) -> None:
         """The hover text names the target, or says why a click can't start, read as the mouse comes over the
         button (SPEC §30). The button stays enabled: a click says the same in the status bar."""
-        self.tool_actions[tool].setToolTip(self.tools.hover_text(tool)[0])
+        self.tool_actions[tool].setToolTip(self.tools.hover_text(tool))
 
     def _build_playlist_and_advanced_search(self) -> None:
         self.playlist_action = QAction("Playlist builder", self, checkable=True,
@@ -774,7 +774,6 @@ class MainWindow(QMainWindow):
         if self.center.currentWidget() is not self.file_view:
             if self.showing_search:
                 self.search.leave()
-            self.tools.cancel_planning()
             self.center.setCurrentWidget(self.file_view)
             self.file_view.view.setFocus()
 
@@ -823,11 +822,7 @@ class MainWindow(QMainWindow):
             self.center.setCurrentWidget(self.trim_page)
         elif "trim" in job.reports:
             self.trim.show_report(job.reports["trim"])
-        elif job_id == self.tidy.job:
-            self.center.setCurrentWidget(self.tidy.page)
-        elif "tidy" in job.reports:
-            self.tidy.show_report(job.reports["tidy"])
-        elif not self.tools.show_job(job_id, job):
+        else:
             self.toast.show_message(f"{job.kind} in {job.folder}: {job.status}")
 
     def stop_job(self, job_id: int) -> None:
@@ -835,10 +830,6 @@ class MainWindow(QMainWindow):
             self.split.runner.cancel()
         elif job_id == self.trim.job:
             self.trim.runner.cancel()
-        elif job_id == self.tidy.job:
-            self.tidy.runner.cancel()
-        else:
-            self.tools.stop_job(job_id)
 
     def confirm_quit_with_jobs(self, names: list[str]) -> bool:
         answer = QMessageBox.question(
@@ -1133,13 +1124,8 @@ class MainWindow(QMainWindow):
         if running and not self.confirm_quit_with_jobs(running):
             event.ignore()
             return
-        self.tools.shutdown()  # a running rename stops between two files; a running rsgain is killed
         self.split.close()  # a running flac is killed; this run's .partial files are deleted
         self.trim.close()  # likewise for a trim's .partial
-        self.tidy.shutdown()  # its split, rename or rsgain stops as those tools' do
-        if self.tidy.offer is not None:
-            self.tidy.offer.close()  # closing keeps every file
-        self.cleanup.shutdown()  # likewise
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
         self._playlist_save.stop()
@@ -1206,16 +1192,7 @@ class MainWindow(QMainWindow):
         """Explorer's right-click entries for these items (SPEC §31, §35: the same rules, labels and windows), as
         items of this menu itself, one group then a separator: no MusicDesk submenu in the app (Hugo, 2026-10-25).
         `background`: the open folder, as empty space. Open in MusicDesk and Settings are Explorer's only."""
-        conn = self.open_library.conn
-        paths, folders = [], set()
-        for entry_id in ids:
-            row = conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()
-            if row is None:
-                continue
-            path = str(path_of(conn, entry_id))
-            paths.append(path)
-            if row[0]:
-                folders.add(path)
+        paths, folders = self.entry_paths(ids)
         if not paths:
             return
         selection = Selection.of(paths, background, is_dir=folders.__contains__)  # the index knows, not the disk
@@ -1228,6 +1205,29 @@ class MainWindow(QMainWindow):
             added = True
         if added:
             menu.addSeparator()
+
+    def entry_paths(self, ids: list[int]) -> tuple[list[str], set[str]]:
+        """These entries' paths, in order, and which of them are folders (from the index: the disk isn't asked)."""
+        conn = self.open_library.conn
+        paths, folders = [], set()
+        for entry_id in ids:
+            row = conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()
+            if row is None:
+                continue
+            path = str(path_of(conn, entry_id))
+            paths.append(path)
+            if row[0]:
+                folders.add(path)
+        return paths, folders
+
+    def apply_renames(self, steps) -> None:
+        """A Rename window's renames (old, new paths): the index applies them in place, one folder at a time, so ids,
+        tags and the selection stay (SPEC §10 A); `entry_finished` then re-reads the folders for anything else."""
+        by_folder: dict[Path, list] = {}
+        for step in steps:
+            by_folder.setdefault(Path(step[0]).parent, []).append(step)
+        for folder_steps in by_folder.values():
+            self.open_library.indexer.apply_renames(folder_steps)
 
     def entry_finished(self, folders: list[Path]) -> None:
         """A right-click entry's run changed files under these folders: the index re-reads them, and the Metadata

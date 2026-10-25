@@ -8,7 +8,6 @@ import pytest
 
 from music_desk.context_menu import request as menu
 from music_desk.context_menu.cleanup_entry import CleanupEntry
-from music_desk.ui.tools.tool_cards import CLEANUP, ToolScope
 
 ALBUM = "Fixture Artist - Fixture Album"
 
@@ -44,17 +43,6 @@ def test_several_folders_one_window(qtbot, open_app, library_dir, monkeypatch):
     assert {path.name for path in entry.recycled} == names
     assert set(requested) == {lrc, cue}  # the main window's index re-reads them
     offer.close()
-
-
-def test_the_toolbars_clean_up_keeps_its_status_line(qtbot, window, library_dir):
-    """The toolbar's Clean up, finding nothing, says so in the status bar (the right-click one in a window)."""
-    album = library_dir / "Artist" / ALBUM
-    for junk in album.rglob("*"):
-        if junk.suffix.lower() in (".cue", ".nfo", ".sfv", ".txt", ".lrc"):
-            junk.unlink()
-    window.cleanup.open(window.tools.cards.request(CLEANUP, ToolScope(album, -1)))
-    qtbot.waitUntil(lambda: "Nothing to clean up" in window.statusBar().currentMessage(), timeout=10000)
-    assert window.cleanup.offer is None
 
 
 def test_the_entry_parses():

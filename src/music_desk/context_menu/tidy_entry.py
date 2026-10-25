@@ -14,10 +14,11 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox, QVBoxLayout, QWidget
 from shiboken6 import isValid
 
+from music_desk.context_menu.entries import OPTIONS_WHERE
 from music_desk.core import cleanup, fsops
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.core.replaygain import plural
-from music_desk.services.tidy_job import TidyFinished, TidyPlanned, TidyRunner, report_text
+from music_desk.services.tidy_job import OWNER, TidyFinished, TidyPlanned, TidyRunner, report_text
 from music_desk.ui.recycle_window import RecycleWindow
 from music_desk.ui.tools.tidy_page import TidyPage
 from music_desk.ui.tools.tool_cards import TIDY, ToolCards
@@ -76,8 +77,7 @@ class TidyWindow(QWidget):
             self.page.show_error("Nothing was clicked.")
             return False
         if self.cards.problems(TIDY):
-            self.page.show_error("The File names, Rename or ReplayGain options need fixing. They are in the "
-                                 "right-click menu's MusicDesk > Settings.")
+            self.page.show_error(f"The File names, Rename or ReplayGain options need fixing: {OPTIONS_WHERE}.")
             return False
         settings = self.cards.settings
         self._token = self.runner.plan(roots, self.cards.rename_options(), self.cards.replaygain_card.options(),
@@ -115,7 +115,7 @@ class TidyWindow(QWidget):
             self._show_offer(result.offers, result.root)
 
     def _show_offer(self, items: list[cleanup.Item], folder: Path) -> None:
-        self.offer = RecycleWindow(None, folder, items, locks=self.locks, owner="the Tidy tool", intro=INTRO,
+        self.offer = RecycleWindow(None, folder, items, locks=self.locks, owner=OWNER, intro=INTRO,
                                    recycle=self.recycle, check_recycle=self.check_recycle)
         self.offer.finished.connect(lambda report: self.finished.emit(report.folders))
         self.offer.revealRequested.connect(lambda path, is_dir: reveal(path, is_dir))

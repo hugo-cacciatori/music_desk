@@ -1,54 +1,34 @@
-"""The tools' controller (SPEC §10, §16, §30): the toolbar's buttons and their hover texts, the Options window,
-Rename with its preview, ReplayGain (at once, or after its recap), their jobs and reports, and Remove ReplayGain
-tags. Tidy has its own controller (ui/controllers/tidy.py, SPEC
-§28), which the toolbar's Tidy opens.
+"""The toolbar's tools (SPEC §30, §35) and the Options window.
 
-A tool runs one job at a time: while its job runs, its page shows that job instead. Rename is previewed and
-applied on its runner; ReplayGain has no preview, but outside the habitual case (the open folder's own tracks, no
-subfolder, no selection, This album) a recap window lists every file first.
+Each button starts the right-click entry for what a right-click would act on: the file list's selection, or the
+open folder when nothing is selected (Explorer's empty space). Tidy, Rename and Clean up start their entry, whose
+window opens beside the main window (app.Starter); ReplayGain lists its entries for that selection, as the
+right-click menu shows them. A selection the entry doesn't take (Tidy on files) is refused in the status bar, with
+what to select instead. The entries' rules, labels and help texts are `context_menu/entries.py`'s.
 
-Dialogs go through ask_* and confirm_* methods, which tests replace.
+Also here: the right-click ReplayGain and Rename windows' headings and checks, shared with their windows.
 """
 
-import os
 from pathlib import Path
 
 from PySide6.QtCore import QObject
+from PySide6.QtWidgets import QMenu
 
 from music_desk.context_menu import request as menu
-from music_desk.core import rename
-from music_desk.core.formats import AUDIO_EXTENSIONS
-from music_desk.core.index import queries
-from music_desk.core.index.store import path_of
-from music_desk.core.path_locks import LockedError, busy_text
+from music_desk.context_menu.entries import MenuEntry, Selection, menu_entries
 from music_desk.core.replaygain import plural
-from music_desk.services import jobs as jobs_module
-from music_desk.services.rename_job import Applied, Planned, RenameRunner
-from music_desk.services.replaygain_job import (
-    ALBUM,
-    ALBUMS,
-    DISCOGRAPHY,
-    LOOSE,
-    TRACKS,
-    Finished,
-    Recapped,
-    ReplayGainRunner,
-)
+from music_desk.services.replaygain_job import ALBUM, ALBUMS, DISCOGRAPHY, LOOSE, TRACKS
 from music_desk.ui.controllers import STATUS_MS
-from music_desk.ui.tools.rename_preview import RenamePreview
-from music_desk.ui.tools.rg_recap import RecapDialog
-from music_desk.ui.tools.rg_report import ReplayGainView, short_result
-from music_desk.ui.tools.tool_cards import (
-    CLEANUP,
-    RENAME,
-    REPLAYGAIN,
-    TIDY,
-    ToolCards,
-    ToolRequest,
-    ToolScope,
-)
+from music_desk.ui.tools.tool_cards import CLEANUP, RENAME, REPLAYGAIN, TIDY, ToolCards
 
 TOOL_NAMES = {RENAME: "Rename", REPLAYGAIN: "ReplayGain", TIDY: "Tidy", CLEANUP: "Clean up"}
+TOOL_ENTRIES = {RENAME: menu.RENAME, TIDY: menu.TIDY, CLEANUP: menu.CLEANUP}  # ReplayGain: a list of them
+REFUSALS = {  # a selection the tool's entry doesn't take: what to select instead
+    RENAME: "select folders or music files, or nothing for the open folder",
+    REPLAYGAIN: "select folders, or tracks it measures, or nothing for the open folder",
+    TIDY: "it works on folders: select folders, or nothing for the open folder",
+    CLEANUP: "it works on folders: select folders, or nothing for the open folder",
+}
 
 # The right-click menu's ReplayGain entries (SPEC §31) and the job each runs.
 ENTRY_KINDS = {menu.REPLAYGAIN_ALBUM: ALBUM, menu.REPLAYGAIN_DISCOGRAPHY: DISCOGRAPHY,
@@ -87,400 +67,94 @@ def entry_problem(kind: str, targets: list[Path]) -> str | None:
 
 
 class ToolsController(QObject):
-    def __init__(self, window, locks, parent: QObject | None = None, cards: ToolCards | None = None) -> None:
+    def __init__(self, window, parent: QObject | None = None, cards: ToolCards | None = None) -> None:
         super().__init__(parent)
         self.window = window
-        self.locks = locks
-        # The options, in dialogs (SPEC §30); `cards`: those the right-click Settings entry already made (§31).
+        # The options, in dialogs (SPEC §30); `cards`: the process's, which app.Starter shares with the entries.
         self.cards = cards or ToolCards(window.settings, window)
         if cards is not None:
             cards.adopt(window)
         window.tag_io.renameFields.connect(self._tool_example)
         self._example_token: int | None = None
 
-        self.rename_preview = RenamePreview()
-        self.rename_preview.backRequested.connect(window.close_tools)
-        self.rename_preview.doneRequested.connect(window.close_tools)
-        self.rename_preview.applyRequested.connect(self.apply_rename)
-        self.rename_preview.cancelRequested.connect(lambda: self.rename_runner.cancel())
-        self.rename_runner = RenameRunner(locks, self)
-        self.rename_runner.planned.connect(self._rename_planned)
-        self.rename_runner.applied.connect(self._rename_applied)
-        self._rename_token: int | None = None
-        self.rename_job: int | None = None  # the job id of the running rename (or Tidy's rename step)
+    # -- the target: what a right-click would act on --
 
-        self.rg_view = ReplayGainView()
-        self.rg_view.backRequested.connect(window.close_tools)
-        self.rg_view.doneRequested.connect(window.close_tools)
-        self.rg_view.cancelRequested.connect(lambda: self.rg_runner.cancel())
-        self.rg_view.openLogRequested.connect(self.open_log)
-        self.rg_view.revealRequested.connect(lambda path: window._in_shell(
-            lambda: window.show_in_explorer(path, True), f"File Explorer couldn't show {path}.", "", True))
-        self.rg_runner = ReplayGainRunner(locks, self)
-        self.rg_runner.lines.connect(self.rg_view.add_lines)
-        self.rg_runner.progress.connect(self.rg_view.set_progress)
-        self.rg_runner.progress.connect(self._rg_progress)
-        self.rg_runner.finished.connect(self._rg_finished)
-        self.rg_runner.recapped.connect(self._rg_recapped)
-        self._rg_token: int | None = None
-        self._recap_token: int | None = None
-        self._recap_request: ToolRequest | None = None
-        self._rg_request: ToolRequest | None = None
-        self.rg_job: int | None = None
-
-    @property
-    def pages(self) -> tuple:
-        """The centre pages this controller shows."""
-        return self.rename_preview, self.rg_view
-
-    def shutdown(self) -> None:
-        self.rename_runner.close()  # a running rename stops between two files
-        self.rg_runner.close()  # a running rsgain is killed; its album is reported as cancelled
-
-    # -- the target and the toolbar --
-
-    def scope_for(self, ids: list[int]) -> ToolScope | None:
-        """What the tools act on: one folder (from the list, the tree or the folder summary); else the audio
-        files among the selected items in the open folder (a selection); with nothing selected, the open folder."""
+    def target(self) -> tuple[Selection, list[str]] | None:
+        """The file list's selection, else the open folder as empty space; None without an open folder."""
         window = self.window
         if not window._library_open():
             return None
-        conn = window.open_library.conn
-        kinds = {i: row[0] for i in ids
-                 if (row := conn.execute("SELECT is_dir FROM entries WHERE id = ?", (i,)).fetchone())}
-        if len(ids) == 1 and kinds.get(ids[0]):
-            folder_id, files = ids[0], ()
-        elif ids:
-            if window.folder_id is None or window.folder_path is None:
+        ids = window.file_view.selected_ids()
+        background = not ids
+        if background:
+            if window.folder_id is None:
                 return None
-            model = window.file_view.model
-            rows = [model.rows[r] for i in ids if (r := model.row_for(i)) is not None]
-            files = tuple(Path(window.folder_path, row.name) for row in rows if row.is_audio)
-            if not files:
-                return None
-            folder_id = window.folder_id
-        elif window.folder_id is not None:
-            folder_id, files = window.folder_id, ()
-        else:
+            ids = [window.folder_id]
+        paths, folders = window.entry_paths(ids)
+        if not paths:
             return None
-        if not window._folder_exists(folder_id):
-            return None
-        folder = path_of(conn, folder_id)
-        summary = None if files else queries.folder_summary(conn, folder_id)
-        first = files[0] if files else summary.first_track if summary else None
-        return ToolScope(folder, folder_id, files, Path(first) if first else None)
+        return Selection.of(paths, background, is_dir=folders.__contains__), paths
 
-    def target(self, tool: str) -> ToolScope | None:
-        """What the toolbar's Start acts on: the file list's selection, else the open folder. ReplayGain and Tidy
-        take a file selection's folder (SPEC §30)."""
-        scope = self.scope_for(self.window.file_view.selected_ids())
-        if scope is not None and tool != RENAME and scope.is_selection:
-            return ToolScope(scope.folder, scope.folder_id)
-        return scope
+    def entries(self, tool: str) -> tuple[list[MenuEntry], list[str]]:
+        """The tool's entries for the target (ReplayGain: all of its own; the others: theirs, if the selection
+        takes it), and the target's paths."""
+        found = self.target()
+        if found is None:
+            return [], []
+        selection, paths = found
+        items = menu_entries(selection, self.cards.replaygain_card.options().target)
+        wanted = menu.REPLAYGAIN_ENTRIES if tool == REPLAYGAIN else (TOOL_ENTRIES[tool],)
+        return [item for item in items if item.entry in wanted], paths
 
-    @staticmethod
-    def target_text(scope: ToolScope) -> str:
-        count = len(scope.files)
-        if count:
-            return f"{count} selected file{'s' if count != 1 else ''}"
-        return scope.folder.name or str(scope.folder)
+    def why_not(self, tool: str, paths: list[str]) -> str:
+        return f"{TOOL_NAMES[tool]}: {REFUSALS[tool] if paths else 'open a folder first'}."
 
-    def blocked(self, tool: str, scope: ToolScope | None) -> str | None:
-        """Why a click can't start the tool (SPEC §30), said in the status bar and the hover text; None if it can."""
-        if scope is None:
-            return "open a folder first"
-        cards = self.cards
-        if tool in (REPLAYGAIN, TIDY) and cards.replaygain_card.unavailable:
-            return "rsgain couldn't run"
-        if cards.problems(tool):
-            if tool in (RENAME, TIDY) and not cards.names_card.valid:
-                which = "File names"
-            elif tool in (RENAME, TIDY) and not cards.rename_card.valid:
-                which = "Rename"
-            elif tool in (REPLAYGAIN, TIDY) and not cards.replaygain_card.valid:
-                which = "ReplayGain"
-            else:
-                which = "Clean up"
-            return f"fix the {which} options first: File > Options…"
-        return None
-
-    def hover_text(self, tool: str) -> tuple[str, bool]:
-        """The button's hover text, read as the mouse comes over it: the target, or why it can't start."""
-        scope = self.target(tool)
-        why = self.blocked(tool, scope)
-        if why is not None or scope is None:
-            return f"{TOOL_NAMES[tool]}: {why}", False
-        name = self.target_text(scope)
-        if tool == RENAME:
-            if scope.is_selection:
-                return f"Rename {name}", True
-            below = " and its subfolders" if self.cards.rename_card.options().recursive else ""
-            return f"Rename the music files in {name}{below}", True
+    def hover_text(self, tool: str) -> str:
+        """The button's hover text, read as the mouse comes over it: the entry it starts and on what, or why it
+        can't start."""
+        items, paths = self.entries(tool)
+        if not items:
+            return self.why_not(tool, paths)
+        where = (Path(paths[0]).name or paths[0]) if len(paths) == 1 else f"{len(paths)} selected items"
         if tool == REPLAYGAIN:
-            discography = self.cards.replaygain_card.scope == "discography"
-            return f"ReplayGain on {name}{', as a discography' if discography else ''}", True
-        if tool == CLEANUP:
-            below = " and its subfolders" if self.cards.cleanup_card.options().recursive else ""
-            return f"Clean up {name}{below}", True
-        return f"Tidy {name} and its subfolders", True
+            return f"ReplayGain on {where}: choose how"
+        return f"{items[0].label} ({where}). {items[0].help}."
 
     def start(self, tool: str) -> None:
-        """A toolbar button's click: the rename preview, ReplayGain (at once or after its recap), Tidy's plan, or
-        Clean up's list. A click that can't start says why in the status bar and starts nothing."""
-        scope = self.target(tool)
-        why = self.blocked(tool, scope)
-        request = self.cards.request(tool, scope) if why is None and scope is not None else None
-        if request is None:
-            self.window.statusBar().showMessage(f"{TOOL_NAMES[tool]}: {why or 'its options need fixing'}.",
-                                                STATUS_MS)
+        """Tidy, Rename or Clean up: its entry on the target, in its own window, as from the right-click menu."""
+        items, paths = self.entries(tool)
+        if not items:
+            self.window.statusBar().showMessage(self.why_not(tool, paths), STATUS_MS)
             return
-        self.run_tool(request)
+        self.window.entryRequested.emit(items[0].entry, paths)
+
+    def fill_replaygain_menu(self, replaygain: QMenu) -> None:
+        """The ReplayGain button's list, as it opens: the right-click menu's ReplayGain entries for the target
+        (Hugo, 2026-10-25), or why there are none."""
+        replaygain.clear()
+        items, paths = self.entries(REPLAYGAIN)
+        for item in items:
+            action = replaygain.addAction(item.label,
+                                          lambda entry=item.entry: self.window.entryRequested.emit(entry, paths))
+            action.setStatusTip(item.help)
+        if not items:
+            replaygain.addAction(self.why_not(REPLAYGAIN, paths)).setEnabled(False)
+
+    # -- the Options window --
 
     def open_options(self, which: str | None = None) -> None:
         """The Options window, on `which`'s page. File names gets its live example from the first track of the
         target, whichever page it opens on (its page is a click away)."""
-        scope = self.target(RENAME)
-        first = scope.first_track if scope is not None else None
+        found = self.target()
+        self.open_options_on(found[1] if found else [], which)
+
+    def open_options_on(self, paths: list[str], which: str | None = None) -> None:
+        """The Options window, its File names example from these items' first track (the right-click Settings
+        entry's too, SPEC §31); the main window stays where it is."""
         self.cards.set_example(None, "")
-        self._example_token = self.window.tag_io.read_rename_fields(first) if first else None
+        self._example_token = self.window.tag_io.read_first_track_fields(paths) if paths else None
         self.cards.open_options(which)
-
-    def open_options_on(self, paths: list[str]) -> None:
-        """The right-click Settings entry, with MusicDesk open (SPEC §31): the Options window as it was, its File
-        names example from the clicked items' first track; the main window stays where it is."""
-        self.cards.set_example(None, "")
-        self._example_token = self.window.tag_io.read_first_track_fields(paths)
-        self.cards.open_options()
-
-    def cancel_planning(self) -> None:
-        """Leaving the rename preview while it plans: the plan isn't needed any more."""
-        if self.rename_preview.state == "planning":
-            self.rename_runner.cancel()
 
     def _tool_example(self, token: int, fields: dict | None, extension: str) -> None:
         if token == self._example_token:
             self.cards.set_example(fields, extension)
-
-    def run_tool(self, request: ToolRequest, confirmed: bool = False) -> None:
-        """A click: the rename preview, ReplayGain (`confirmed`: its recap was OKed), or Tidy's plan (its
-        controller). A tool runs one job at a time: while its job runs, its page shows that job instead."""
-        window = self.window
-        if request.tool == TIDY:
-            window.tidy.open(request)
-            return
-        if request.tool == CLEANUP:
-            window.cleanup.open(request)
-            return
-        busy = None
-        if request.tool == RENAME and self.rename_job is not None:
-            busy = self.rename_job
-        elif request.tool == REPLAYGAIN and self.rg_job is not None:
-            busy = self.rg_job
-        if busy is not None:
-            job = window.jobs.get(busy)
-            assert job is not None  # a running job stays in the list
-            window.toast.show_message(f"{job.kind} is still running in {job.folder}. It can be followed in the jobs "
-                                      "panel; start another run when it has finished.")
-            window.show_job(busy)
-            return
-        if request.tool == RENAME:
-            self.preview_rename(request)
-        elif request.tool == REPLAYGAIN and confirmed:
-            self.run_replaygain(request)  # no preview: it only writes tags and the logs (Hugo, 2026-10-15)
-        elif request.tool == REPLAYGAIN:
-            self.start_replaygain(request)
-
-    # -- the jobs panel --
-
-    def show_job(self, job_id: int, job) -> bool:
-        """The page of one of this controller's jobs (live, or its report). False if it isn't one of them."""
-        center = self.window.center
-        if job_id == self.rename_job:
-            center.setCurrentWidget(self.rename_preview)
-        elif job_id == self.rg_job:
-            center.setCurrentWidget(self.rg_view)
-        elif "replaygain" in job.reports:
-            self.rg_view.show_result(job.reports["replaygain"])
-            self.rg_view.heading.setText(f"<b>{job.kind}</b> · {job.folder}")
-            center.setCurrentWidget(self.rg_view)
-        elif "rename" in job.reports:
-            self.rename_preview.heading.setText(f"<b>{job.kind}</b> · {job.folder}")
-            self.rename_preview.show_report(job.reports["rename"])
-            center.setCurrentWidget(self.rename_preview)
-        else:
-            return False
-        return True
-
-    def stop_job(self, job_id: int) -> None:
-        if job_id == self.rename_job:
-            self.rename_runner.cancel()
-        elif job_id == self.rg_job:
-            self.rg_runner.cancel()
-
-    # -- the ReplayGain tool (SPEC §10 B) --
-
-    def start_replaygain(self, request: ToolRequest) -> None:
-        """At once in the habitual case, else after the recap (SPEC §30). A blocked run shows no recap."""
-        window = self.window
-        folder = request.scope.folder
-        owner = self.locks.conflict(folder)
-        if owner is not None:
-            window.statusBar().showMessage(f"ReplayGain: {busy_text(folder, owner)}", STATUS_MS)
-            return
-        if self.habitual(request):
-            self.run_replaygain(request)  # no preview: it only writes tags and the logs (Hugo, 2026-10-15)
-            return
-        self._recap_request = request
-        assert request.replaygain_options is not None  # set for every ReplayGain request
-        self._recap_token = self.rg_runner.recap(folder, request.replaygain_options, request.discography)
-        window.statusBar().showMessage(f"ReplayGain: reading what the run will do in {folder}…", STATUS_MS)
-
-    def habitual(self, request: ToolRequest) -> bool:
-        """'ReplayGain this album': no selection, so the open folder, holding tracks and no subfolder, with the
-        This album scope. Read from the index (the UI thread never lists a folder)."""
-        window = self.window
-        if request.discography or window.file_view.selected_ids() or request.scope.folder_id != window.folder_id:
-            return False
-        rows = window.open_library.conn.execute("SELECT is_dir, ext FROM entries WHERE parent_id = ?",
-                                                (request.scope.folder_id,)).fetchall()
-        # By extension: a folder just added has its entries before its tags are read.
-        return not any(is_dir for is_dir, _ext in rows) and any(ext in AUDIO_EXTENSIONS for _is_dir, ext in rows)
-
-    def _rg_recapped(self, result: Recapped) -> None:
-        if result.token != self._recap_token or self._recap_request is None:
-            return
-        request, self._recap_token, self._recap_request = self._recap_request, None, None
-        window = self.window
-        recap = result.recap
-        if recap is None:
-            window.statusBar().showMessage(f"ReplayGain couldn't read {request.scope.folder}: {result.error}",
-                                           STATUS_MS)
-            return
-        if not recap.measured:
-            window.statusBar().showMessage(f"ReplayGain: there is nothing to measure in {request.scope.folder}.",
-                                           STATUS_MS)
-            return
-        if self.confirm_replaygain(recap):
-            self.run_tool(request, confirmed=True)  # a job may have started meanwhile: run_tool shows it instead
-
-    def confirm_replaygain(self, recap) -> bool:
-        """The recap window, OK or Cancel (replaced in tests)."""
-        return RecapDialog(recap, self.window).exec() == RecapDialog.DialogCode.Accepted
-
-    def run_replaygain(self, request: ToolRequest | None = None, title: str | None = None) -> bool:
-        """Start the ReplayGain job (the card's Run). False when it didn't start."""
-        window = self.window
-        request = request or self._rg_request
-        if request is None or not window._library_open():
-            return False
-        folder = request.scope.folder
-        if window._unsaved_edits_under(folder):
-            return False
-        assert request.replaygain_options is not None  # set for every ReplayGain request
-        try:
-            self._rg_token = self.rg_runner.run(folder, request.replaygain_options, request.discography)
-        except LockedError as e:
-            window.toast.show_message(str(e))
-            return False
-        self._rg_request = request
-        self.rg_job = window._start_job(jobs_module.REPLAYGAIN, folder)
-        self.rg_view.show_running(folder, title, request.discography)
-        window.center.setCurrentWidget(self.rg_view)
-        return True
-
-    def _rg_progress(self, done: int, total: int, label: str) -> None:
-        if self.rg_job is not None and label != "done":
-            self.window.jobs.update(self.rg_job, status=label, progress=(done, total))
-
-    def _rg_finished(self, finished: Finished) -> None:
-        if finished.token != self._rg_token:
-            return
-        window = self.window
-        if window._library_open():
-            for folder in finished.folders:
-                window.refresh_after_tool(folder)  # new tags and replaygain.log files
-        self.rg_view.show_result(finished)
-        if self.rg_job is not None:
-            window.jobs.report(self.rg_job, "replaygain", finished)
-            state = jobs_module.FAILED if finished.error else jobs_module.STOPPED if finished.cancelled else \
-                jobs_module.DONE
-            window.jobs.finish(self.rg_job, state, short_result(finished))
-            self.rg_job = None
-        if not finished.error and not finished.nothing:
-            albums = len(finished.album_logs)
-            what = "stopped" if finished.cancelled else "done"
-            window.statusBar().showMessage(f"ReplayGain {what}: {albums} album{'s' if albums != 1 else ''}.",
-                                           STATUS_MS)
-
-    def open_log(self, path: str) -> None:
-        window = self.window
-        window._in_shell(lambda: window.launch(path), f"Windows couldn't open {os.path.basename(path)}.",
-                         os.path.dirname(path), True)
-
-    # -- the Rename tool (SPEC §10 A) --
-
-    def preview_rename(self, request: ToolRequest) -> None:
-        scope = request.scope
-        assert request.rename_options is not None  # set for every Rename request
-        self.rename_preview.show_planning(scope.folder, len(scope.files))
-        self.window.center.setCurrentWidget(self.rename_preview)
-        self._rename_token = self.rename_runner.plan(scope.folder, request.rename_options,
-                                                     list(scope.files) or None)
-
-    def _rename_planned(self, result: Planned) -> None:
-        if result.token != self._rename_token or result.cancelled:
-            return
-        if result.plan is None:
-            self.rename_preview.show_error(f"The preview failed: {result.error}")
-        else:
-            self.rename_preview.show_plan(result.plan)
-
-    def apply_rename(self) -> None:
-        window = self.window
-        plan = self.rename_preview.plan
-        if plan is None or not window._library_open():
-            return
-        if any(window._unsaved_edits_under(tree) for tree in plan.trees):  # unsaved edits on a file to be renamed
-            return
-        # Junk listed in the preview goes to the Recycle Bin without a question (Hugo, 2026-10-17): the option is
-        # ticked on the Rename card, and the preview names every file.
-        try:
-            self._rename_token = self.rename_runner.apply(plan)
-        except LockedError as e:
-            window.toast.show_message(str(e))
-            return
-        self.rename_job = window._start_job(jobs_module.RENAME, plan.folder)
-        window.jobs.update(self.rename_job, status="Renaming")
-        self.rename_preview.show_applying()
-
-    def _rename_applied(self, result: Applied) -> None:
-        if result.token != self._rename_token:
-            return
-        window = self.window
-        if result.report is None:
-            self.rename_preview.show_error(f"Renaming failed: {result.error}")
-            if self.rename_job is not None:
-                window.jobs.finish(self.rename_job, jobs_module.FAILED, f"Renaming failed: {result.error}")
-                self.rename_job = None
-            return
-        report = result.report
-        job = self.rename_job
-        if job is not None:
-            window.jobs.report(job, "rename", report)
-        if window._library_open():
-            by_folder: dict[Path, list] = {}
-            for step in report.steps:  # the index applies renames one folder at a time
-                by_folder.setdefault(Path(step[0]).parent, []).append(step)
-            for steps in by_folder.values():
-                window.open_library.indexer.apply_renames(steps)  # in place: ids, tags and selection kept
-            plan = self.rename_preview.plan
-            for tree in plan.trees if plan is not None else []:  # then the whole scope: sidecars, anything else
-                window.refresh_after_tool(tree)
-        self.rename_preview.show_report(report)
-        count = len(report.renamed)
-        window.statusBar().showMessage(f"Renamed {count} file{'s' if count != 1 else ''}.", STATUS_MS)
-        summary = rename.summary_sections(report, dry_run=False)[0][0]
-        if job is not None:
-            window.jobs.finish(job, jobs_module.STOPPED if report.cancelled else jobs_module.DONE, summary)
-            self.rename_job = None
-

@@ -15,6 +15,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QVBoxLayout, QWidget
 
+from music_desk.context_menu.entries import OPTIONS_WHERE
 from music_desk.core import fsops
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services.replaygain_job import DISCOGRAPHY, LOOSE, TRACKS, Finished, ReplayGainRunner
@@ -78,8 +79,7 @@ class ReplayGainWindow(QWidget):
             return False
         problems = self.cards.problems(REPLAYGAIN)
         if problems:
-            self.view.show_error(f"ReplayGain didn't start: {problems[0]}. The options are in the right-click "
-                                 "menu's MusicDesk > Settings.")
+            self.view.show_error(f"ReplayGain didn't start: {problems[0]}. The options: {OPTIONS_WHERE}.")
             return False
         try:
             self.runner.start(kind, targets, self.cards.replaygain_card.options())

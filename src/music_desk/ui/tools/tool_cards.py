@@ -9,8 +9,6 @@ toolbar's: `request` turns a tool and its target into a ToolRequest, or says why
 """
 
 import dataclasses
-from dataclasses import dataclass
-from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (
@@ -37,30 +35,6 @@ NAMES, RENAME, REPLAYGAIN, TIDY, CLEANUP = "names", "rename", "replaygain", "tid
 SPLIT, TRIM, BROWSER = "split", "trim", "browser"
 PAGE_TITLES = {NAMES: "File names", RENAME: "Rename", REPLAYGAIN: "ReplayGain", CLEANUP: "Clean up",
                SPLIT: "Split", TRIM: "Trim", BROWSER: "Browser"}  # the Options window's list, in order
-
-
-@dataclass(frozen=True)
-class ToolScope:
-    """What the tools act on: a folder, or a selection of files inside it."""
-
-    folder: Path
-    folder_id: int
-    files: tuple[Path, ...] = ()  # a selection; empty for the whole folder
-    first_track: Path | None = None  # for the File names card's live example
-
-    @property
-    def is_selection(self) -> bool:
-        return bool(self.files)
-
-
-@dataclass(frozen=True)
-class ToolRequest:
-    tool: str  # RENAME, REPLAYGAIN, TIDY or CLEANUP
-    scope: ToolScope
-    rename_options: rename.RenameOptions | None = None
-    replaygain_options: replaygain.ReplayGainOptions | None = None
-    discography: bool = False
-    cleanup_options: cleanup.CleanupOptions | None = None  # Clean up's; Tidy reads its picture and video lists
 
 
 class OptionsWindow(QDialog):
@@ -247,22 +221,6 @@ class ToolCards(QObject):
         """Clean up's options for a run: the ReplayGain log (its configured name) is never junk."""
         options = self.cleanup_card.options()
         return dataclasses.replace(options, protected_names=(self.replaygain_card.options().log_file,))
-
-    def request(self, tool: str, scope: ToolScope) -> ToolRequest | None:
-        """The run's request, or None while the options need fixing. ReplayGain and Tidy work on folders: a
-        selection's files are left to Rename."""
-        if self.problems(tool):
-            return None
-        if tool == RENAME:
-            return ToolRequest(RENAME, scope, rename_options=self.rename_options())
-        folder_scope = dataclasses.replace(scope, files=())
-        if tool == REPLAYGAIN:
-            return ToolRequest(REPLAYGAIN, folder_scope, replaygain_options=self.replaygain_card.options(),
-                               discography=self.replaygain_card.scope == "discography")
-        if tool == CLEANUP:
-            return ToolRequest(CLEANUP, folder_scope, cleanup_options=self.cleanup_options())
-        return ToolRequest(TIDY, folder_scope, rename_options=self.rename_options(),
-                           replaygain_options=self.replaygain_card.options(), cleanup_options=self.cleanup_options())
 
     # -- saving --
 

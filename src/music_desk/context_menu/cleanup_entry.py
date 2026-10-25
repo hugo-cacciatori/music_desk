@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal
 from shiboken6 import isValid
 
+from music_desk.context_menu.entries import OPTIONS_WHERE
 from music_desk.context_menu.notice import NoticeWindow
 from music_desk.context_menu.tidy_entry import reveal
 from music_desk.core import fsops
@@ -44,7 +45,7 @@ class CleanupEntry(QObject):
             self._say("Nothing was clicked.")
             return False
         if self.cards.problems(CLEANUP):
-            self._say("The Clean up options need fixing. They are in the right-click menu's MusicDesk > Settings.")
+            self._say(f"The Clean up options need fixing: {OPTIONS_WHERE}.")
             return False
         self._token = self.finder.find(folders, self.cards.cleanup_options())
         return True

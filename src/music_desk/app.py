@@ -202,6 +202,8 @@ class Starter(QObject):
         """An entry's own window: kept until it closes; the process ends with its last window."""
         self.entry_windows.append(alone)
         alone.closed.connect(lambda: self._window_closed(alone))
+        if isinstance(alone, RenameWindow):
+            alone.renamed.connect(self._renamed)
         alone.finished.connect(self._refresh_index)
         qt_util.app().aboutToQuit.connect(alone.shutdown)
 
@@ -217,6 +219,11 @@ class Starter(QObject):
         Finished, or a list of folders): its index, and its Metadata tab (`MainWindow.entry_finished`)."""
         if self.window is not None and self.window._library_open():
             self.window.entry_finished(list(finished.folders if isinstance(finished, Finished) else finished))
+
+    def _renamed(self, steps) -> None:
+        """A Rename window's renames: an open main window's index applies them in place, ids and tags kept."""
+        if self.window is not None and self.window._library_open():
+            self.window.apply_renames(steps)
 
     def _window_closed(self, alone: EntryWindow) -> None:
         if alone in self.entry_windows:

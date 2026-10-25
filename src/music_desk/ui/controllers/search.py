@@ -127,7 +127,6 @@ class SearchController(QObject):
         if not self.showing:
             if not window.side_panel.can_leave():  # unsaved tag edits on the selection the search replaces
                 return
-            window.tools.cancel_planning()
             window.center.setCurrentWidget(self.view)
             window.side_panel.tabs.setCurrentWidget(window.side_panel.lyrics)  # the page's detail pane: the lyrics
             window._show_selection(self.view.selected_ids())

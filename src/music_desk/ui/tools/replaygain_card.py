@@ -1,4 +1,4 @@
-"""The ReplayGain card (SPEC §10 B, §30): options, scope and validation.
+"""The ReplayGain card (SPEC §10 B, §30): options and validation. The scope is the entry's (SPEC §35).
 
 The cards only collect options and validate them (core.replaygain.validate). Run (ReplayGain) and Preview rename
 (Tidy) stay disabled until they pass, and while rsgain is unavailable. The job and the preview come from the
@@ -7,14 +7,11 @@ window.
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QButtonGroup,
     QDoubleSpinBox,
     QFormLayout,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
-    QRadioButton,
     QWidget,
 )
 
@@ -27,12 +24,8 @@ DESCRIPTION = (
     "gain to the lowest track gain and the album peak to the highest track peak, and writes 'LUFS Target : X' in "
     "the comment. It then copies the album values into the lite/bonus/CD2 subfolders, plus the track values into "
     "'lite' subfolders for files with the same name. Its report replaces replaygain.log in the album folder.")
-DISCOGRAPHY_NOTE = (
-    "Discography: every folder below that holds music is an album (its lite/bonus/CD2 subfolders go with it). "
-    "Then every album is leveled to the lowest album gain, and a summary replaces replaygain.log in this folder.")
 SELECTION_NOTE = ("ReplayGain works on album folders. Open the album folder (or the artist folder, for a "
                   "discography) to use it.")
-ALBUM, DISCOGRAPHY = "album", "discography"
 
 
 def parse_keywords(text: str) -> tuple[str, ...]:
@@ -44,35 +37,6 @@ def format_keywords(keywords) -> str:
     return ", ".join(keywords)
 
 
-SCOPE_TIPS = {
-    ALBUM: "Only this folder, as one album with its lite, bonus and CD2 subfolders",
-    DISCOGRAPHY: "Every album below this folder, then all leveled to the quietest album so they play alike",
-}
-
-
-def scope_buttons(owner: QWidget, changed) -> tuple[QButtonGroup, QWidget]:
-    group = QButtonGroup(owner)
-    row = QWidget()
-    layout = QHBoxLayout(row)
-    layout.setContentsMargins(0, 0, 0, 0)
-    for scope, text in ((ALBUM, "This album"), (DISCOGRAPHY, "Discography")):
-        button = QRadioButton(text)
-        button.setProperty("scope", scope)
-        button.setToolTip(SCOPE_TIPS[scope])
-        group.addButton(button)
-        layout.addWidget(button)
-    layout.addStretch(1)
-    group.buttons()[0].setChecked(True)
-    group.buttonToggled.connect(lambda *_args: changed())
-    return group, row
-
-
-def checked_scope(group: QButtonGroup) -> str:
-    button = group.checkedButton()
-    assert button is not None  # the first one is checked when the group is made
-    return button.property("scope")
-
-
 class ReplayGainCard(Card):
     changed = Signal()
     runRequested = Signal()
@@ -82,7 +46,6 @@ class ReplayGainCard(Card):
         self._loading = False
         self.unavailable: str | None = None  # why rsgain can't run, if it can't
         self.selection = False
-        self.scope_group, scope_row = scope_buttons(self, self._edited)
         self.scope_note = QLabel()
         self.scope_note.setWordWrap(True)
 
@@ -137,7 +100,6 @@ class ReplayGainCard(Card):
         advanced_form.addRow("Comment text:", self.comment)
 
         form = QFormLayout()
-        form.addRow("Scope:", scope_row)
         form.addRow("Target loudness:", self.target)
         self.body.addLayout(form)
         self.body.addWidget(self.scope_note)
@@ -180,10 +142,6 @@ class ReplayGainCard(Card):
     def reset(self) -> None:
         self.set_options(replaygain.DEFAULT_OPTIONS)
 
-    @property
-    def scope(self) -> str:
-        return checked_scope(self.scope_group)
-
     def problems_list(self) -> list[str]:
         return replaygain.validate(self.options())
 
@@ -207,8 +165,6 @@ class ReplayGainCard(Card):
         notes = []
         if self.selection:
             notes.append(SELECTION_NOTE)
-        elif self.scope == DISCOGRAPHY:
-            notes.append(DISCOGRAPHY_NOTE)
         if self.unavailable:
             notes.append(self.unavailable)
         self.scope_note.setText("\n".join(notes))

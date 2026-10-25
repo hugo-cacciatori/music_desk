@@ -71,11 +71,11 @@ AREAS: dict[str, Area] = {
          "ui/test_right_click_rename.py")),
     "replaygain": Area(
         ("core/replaygain.py", "core/rsgain.py", "services/replaygain_job.py", "ui/tools/replaygain_card.py",
-         "ui/tools/rg_report.py", "ui/tools/rg_recap.py", "ui/controllers/tools.py"),
+         "ui/tools/rg_report.py", "ui/controllers/tools.py"),
         ("core/test_replaygain.py", "core/test_replaygain_parity.py", "core/test_replaygain_remove.py",
          "core/test_replaygain_loose.py", "ui/test_right_click_replaygain.py",
          "core/test_rsgain.py", "core/test_rsgain_keys.py", "core/test_rsgain_scan.py",
-         "ui/test_replaygain_tool.py", "ui/test_jobs_panel.py"),
+         "ui/test_replaygain_tool.py"),
         ("resources/rsgain/",)),
     "split": Area(
         ("core/cue.py", "core/cue_edit.py", "core/flac.py", "core/split.py", "services/split_job.py",
@@ -89,7 +89,7 @@ AREAS: dict[str, Area] = {
         ("core/test_trim.py", "core/test_waveform.py", "ui/test_trim_tool.py"),
         ("resources/flac/",)),
     "tidy": Area(
-        ("core/tidy.py", "services/tidy_job.py", "ui/controllers/tidy.py", "ui/tools/tidy_page.py",
+        ("core/tidy.py", "services/tidy_job.py", "ui/tools/tidy_page.py",
          "ui/recycle_window.py", "services/recycle_job.py"),
         ("core/test_tidy.py", "ui/test_tidy_tool.py")),
     "cleanup": Area(
@@ -108,7 +108,7 @@ AREAS: dict[str, Area] = {
         ("core/test_preview.py", "ui/test_file_preview.py")),
     "jobs": Area(
         ("core/cancel.py", "core/path_locks.py", "services/jobs.py", "ui/jobs_panel.py"),
-        ("core/test_path_locks.py", "ui/test_jobs_panel.py", "ui/test_metadata_tab.py", "ui/test_delete.py")),
+        ("core/test_path_locks.py", "ui/test_metadata_tab.py", "ui/test_delete.py")),
     "options": Area(
         ("settings.py", "ui/tools/tool_cards.py", "ui/tools/settings_cards.py", "ui/toolbar_icons.py",
          "ui/controllers/tools.py"),

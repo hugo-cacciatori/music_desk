@@ -52,32 +52,6 @@ def fill(widget: QTableWidget, rows: list[tuple[str, ...]]) -> None:
     widget.resizeColumnsToContents()
 
 
-def short_result(finished: Finished) -> str:
-    """One line for the jobs panel (after its state word: Done, Stopped, Failed)."""
-    if finished.error:
-        return finished.error
-    if finished.nothing:
-        return "nothing to do, no audio file rsgain can scan"
-    if finished.loose is not None:
-        results = [run_log.result() for run_log in finished.loose.logs]
-        problems = sum(1 for r in results if r != "OK")
-        text = f"{plural(len(results), 'track')} each on its own"
-        if finished.cancelled:
-            return f"{text}, {plural(len(finished.loose.not_run), 'track')} not processed"
-        return f"{text}, {problems} need{'s' if problems == 1 else ''} checking" if problems else f"{text}, OK"
-    if finished.cancelled:
-        return "nothing was leveled; see the report"
-    results = [run_log.result() for run_log in finished.album_logs]
-    problems = sum(1 for r in results if r != "OK")
-    if problems:
-        text = f"{plural(len(results), 'album')}, {problems} need{'s' if problems == 1 else ''} checking"
-    else:
-        text = f"{plural(len(results), 'album')} OK"
-    if finished.result is not None and finished.result.target is not None:
-        text += f", leveled to {format_gain(finished.result.target)}"
-    return text
-
-
 class ReplayGainView(QWidget):
     backRequested = Signal()
     cancelRequested = Signal()
@@ -266,4 +240,3 @@ class ReplayGainView(QWidget):
     def summary_rows(self) -> list[tuple[str, ...]]:
         return [tuple(cell_text(self.summary_table, r, c) for c in range(len(SUMMARY_COLUMNS)))
                 for r in range(self.summary_table.rowCount())]
-

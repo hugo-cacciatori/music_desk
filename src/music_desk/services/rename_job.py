@@ -1,7 +1,7 @@
 """The Rename tool's background work (SPEC §10 A): planning (the preview reads every file's tags) and applying,
 one at a time, on a worker thread, so the UI never waits.
 
-Applying holds a lock on the folder tree for its whole run (owner "the Rename tool"), taken on the caller's thread
+Applying holds a lock on the folder tree for its whole run (owner "Rename"), taken on the caller's thread
 so a conflict is refused at once: tag saves and inline renames under that folder are refused meanwhile, and a
 running job elsewhere in the tree refuses this one. core.rename.apply_plan re-checks every item, so a file
 changed since the preview is skipped, never renamed blindly.

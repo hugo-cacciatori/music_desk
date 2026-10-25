@@ -12,6 +12,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox, QVBoxLayout, QWidget
 
+from music_desk.context_menu.entries import OPTIONS_WHERE
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services.rename_job import Applied, Planned, RenameRunner
 from music_desk.ui.controllers.tools import rename_target_text
@@ -24,6 +25,7 @@ TITLE = "MusicDesk · Rename from tags"
 class RenameWindow(QWidget):
     closed = Signal()
     finished = Signal(object)  # list[Path]: the folders renamed in; the index of an open main window catches up
+    renamed = Signal(object)  # the report's steps (old, new paths), first: an open main window's index renames in place
 
     def __init__(self, cards: ToolCards, locks: PathLocks, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -57,8 +59,7 @@ class RenameWindow(QWidget):
             self.view.show_error("Rename didn't start: nothing was clicked.")
             return False
         if self.cards.problems(RENAME):
-            self.view.show_error("Rename didn't start: the File names or Rename options need fixing. They are in "
-                                 "the right-click menu's MusicDesk > Settings.")
+            self.view.show_error(f"Rename didn't start: the File names or Rename options need fixing: {OPTIONS_WHERE}.")
             return False
         self._token = self.runner.plan_paths(targets, self.cards.rename_options())
         return True
@@ -96,6 +97,7 @@ class RenameWindow(QWidget):
             self.view.show_error(f"Renaming failed: {result.error}")
         else:
             self.view.show_report(result.report)
+            self.renamed.emit(result.report.steps)
         if self.view.plan is not None:
             self.finished.emit(self.view.plan.trees)
 

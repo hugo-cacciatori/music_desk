@@ -1,6 +1,6 @@
 """Recycling the Redundant files window's checked items (SPEC §32): one worker for Clean up and Tidy.
 
-The run holds a lock on the items (its owner: "Clean up" or "the Tidy tool"), taken on the caller's thread so a
+The run holds a lock on the items (its owner: "Clean up" or "Tidy"), taken on the caller's thread so a
 conflict is refused at once. Each item is checked again first (gone, or a folder that now holds something else, is
 skipped). Where Windows can't recycle, nothing is deleted for good: the item is kept. Stop takes effect between two
 items.

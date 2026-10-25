@@ -5,7 +5,7 @@ deleted but this run's own .partial (and the subfolder, if this run created it a
 
 Nothing here reads a file on the UI thread (Ground rule 2). The waveform has its own worker, so a long read never
 holds up a plan or the job, and a newer track stops it. The job holds a lock on the track's folder (which holds the
-subfolder) for the whole run, owner "the Trim tool", taken on the caller's thread so a conflict is refused at once.
+subfolder) for the whole run, owner "Trim", taken on the caller's thread so a conflict is refused at once.
 """
 
 import logging

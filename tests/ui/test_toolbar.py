@@ -2,7 +2,6 @@
 validation and saved defaults; Start's target; the dialogs; what the toolbar replaced."""
 
 import shutil
-from pathlib import Path
 
 import pytest
 from PySide6.QtGui import QPalette
@@ -19,11 +18,9 @@ from music_desk.ui.tools.tool_cards import (
     TIDY,
     OptionsWindow,
     ToolCards,
-    ToolScope,
 )
 
 ALBUM = "Fixture Artist - Fixture Album"
-SCOPE = ToolScope(Path("C:/lib/Album"), 1)
 
 
 @pytest.fixture
@@ -148,10 +145,10 @@ def test_replaygain_card_target_stays_in_rsgains_range(cards):
     assert card.options().target == -30.0
 
 
-def test_replaygain_scope_and_unavailable_rsgain(cards):
+def test_no_scope_and_unavailable_rsgain(cards):
+    """The scope is the entry's ("as an album", "as a discography"), not an option (SPEC §35)."""
     card = cards.replaygain_card
-    card.scope_group.buttons()[1].setChecked(True)
-    assert card.scope == "discography" and card.scope_note.text().startswith("Discography:")
+    assert not hasattr(card, "scope") and not hasattr(card, "scope_group")
     cards.set_rsgain_unavailable("rsgain couldn't run, so ReplayGain is unavailable.")
     assert "rsgain couldn't run" in card.scope_note.text()
     assert "rsgain couldn't run" in cards.problems(REPLAYGAIN)[-1] and cards.problems(TIDY)
@@ -159,29 +156,17 @@ def test_replaygain_scope_and_unavailable_rsgain(cards):
     assert cards.problems(REPLAYGAIN) == []
 
 
-def test_requests_carry_the_options(cards):
+def test_the_replaygain_log_is_never_junk(cards):
     cards.replaygain_card.log_file.setText("rg.log")
     cards.replaygain_card.log_file.textEdited.emit("rg.log")
-    selection = ToolScope(SCOPE.folder, 1, (SCOPE.folder / "a.flac",))
-    rename_request = cards.request(RENAME, selection)
-    rg_request = cards.request(REPLAYGAIN, selection)
-    tidy_request = cards.request(TIDY, selection)
-    cleanup_request = cards.request(CLEANUP, selection)
-    assert rename_request is not None and rg_request is not None and tidy_request is not None
-    assert cleanup_request is not None and cleanup_request.cleanup_options is not None
-    assert cleanup_request.cleanup_options.protected_names == ("rg.log",)  # the configured log is never junk
-    assert cleanup_request.scope.files == ()  # Clean up works on the folder
-    assert tidy_request.cleanup_options is not None  # Tidy reads Clean up's picture and video lists
-    assert rename_request.scope.files == selection.files  # Rename renames the selected files
-    assert rg_request.replaygain_options.log_file == "rg.log" and not rg_request.discography
-    assert rg_request.scope.files == () and tidy_request.scope.files == ()  # ReplayGain and Tidy: the folder
-    assert tidy_request.rename_options.masks == rename.DEFAULT_OPTIONS.masks
+    assert cards.cleanup_options().protected_names == ("rg.log",)  # the configured log
+    assert cards.rename_options().masks == rename.DEFAULT_OPTIONS.masks
 
 
-def test_invalid_options_make_no_request(cards):
+def test_invalid_masks_are_problems_for_rename_and_tidy_only(cards):
     cards.names_card.masks.item(0).setText("{nope}")
-    assert cards.request(RENAME, SCOPE) is None and cards.request(TIDY, SCOPE) is None
-    assert cards.request(REPLAYGAIN, SCOPE) is not None  # ReplayGain doesn't use the masks
+    assert cards.problems(RENAME) and cards.problems(TIDY)
+    assert cards.problems(REPLAYGAIN) == []  # ReplayGain doesn't use the masks
 
 
 def test_options_are_saved_and_restored(qtbot, tmp_path):
@@ -252,46 +237,60 @@ def test_three_rows_search_address_then_the_tools(window):
     assert window.toolBarBreak(tools)
     assert bar_texts(tools) == ["Tidy", "Rename", "ReplayGain", "Clean up", "|", "Playlist", "Advanced search"]
     assert tools.toolButtonStyle().name == "ToolButtonTextBesideIcon"
-    for tool in (RENAME, REPLAYGAIN, TIDY, CLEANUP):  # plain buttons: no dropdown (Hugo, 2026-10-22)
+    for tool in (RENAME, TIDY, CLEANUP):  # plain buttons: no dropdown (Hugo, 2026-10-22)
         action = window.tool_actions[tool]
         assert not action.icon().isNull() and action.menu() is None
         button = tools.widgetForAction(action)
         assert isinstance(button, QToolButton)
         assert button.popupMode() is not QToolButton.ToolButtonPopupMode.InstantPopup
+    # ReplayGain lists its entries (Hugo, 2026-10-25, SPEC §35): a click opens the list.
+    replaygain = tools.widgetForAction(window.tool_actions[REPLAYGAIN])
+    assert isinstance(replaygain, QToolButton) and window.tool_actions[REPLAYGAIN].menu() is not None
+    assert replaygain.popupMode() is QToolButton.ToolButtonPopupMode.InstantPopup
     assert not window.playlist_action.icon().isNull() and not window.advanced_search_action.icon().isNull()
 
 
-def test_hover_text_names_the_target(window, service, library_dir):
+def test_hover_text_names_the_entry_and_the_target(window, service, library_dir):
+    """The button starts the right-click entry for the selection, or the open folder (SPEC §35): its hover text
+    says which, on what, and the entry's help; a selection the entry doesn't take says what to select."""
     album = library_dir / "Artist" / ALBUM
-    assert window.tools.hover_text(RENAME) == ("Rename: open a folder first", False)
+    assert window.tools.hover_text(RENAME) == "Rename: open a folder first."
     window.open_folder(folder_id(service, album))
     window.file_view.select_ids([])
     window.tool_actions[RENAME].hovered.emit()  # the mouse comes over the button
-    assert window.tool_actions[RENAME].toolTip() == f"Rename the music files in {ALBUM} and its subfolders"
-    assert window.tools.hover_text(REPLAYGAIN) == (f"ReplayGain on {ALBUM}", True)
-    assert window.tools.hover_text(TIDY) == (f"Tidy {ALBUM} and its subfolders", True)
+    assert window.tool_actions[RENAME].toolTip() == (
+        f"Rename from tags… ({ALBUM}). Previews renaming the music files from their tags; nothing changes until you "
+        "apply.")
+    assert window.tools.hover_text(TIDY).startswith(f"Tidy this folder… ({ALBUM}). Plans Tidy")
+    assert window.tools.hover_text(REPLAYGAIN) == f"ReplayGain on {ALBUM}: choose how"
     ids = {r.name: r.id for r in window.file_view.model.rows}
     window.file_view.select_ids([ids["track2.flac"], ids["notes.txt"]])
-    assert window.tools.hover_text(RENAME) == ("Rename 1 selected file", True)  # the music files only
-    assert window.tools.hover_text(REPLAYGAIN) == (f"ReplayGain on {ALBUM}", True)  # a selection's folder
-    assert window.tools.target(TIDY).folder == album and not window.tools.target(TIDY).is_selection
-    window.tools.cards.names_card.masks.item(0).setText("{nope}")
-    why = "fix the File names options first: File > Options…"
-    assert window.tools.hover_text(RENAME) == (f"Rename: {why}", False)
-    assert window.tools.hover_text(TIDY) == (f"Tidy: {why}", False)
-    assert window.tools.hover_text(REPLAYGAIN)[1]  # ReplayGain doesn't use the masks
-    window.tool_actions[RENAME].trigger()  # a click that can't start says why and starts nothing
-    assert window.statusBar().currentMessage() == f"Rename: {why}."
+    assert window.tools.hover_text(RENAME).startswith("Rename from tags… (2 selected items)")
+    assert window.tools.hover_text(TIDY) == "Tidy: it works on folders: select folders, or nothing for the open folder."
+    window.tool_actions[TIDY].trigger()  # a click that can't start says why and starts nothing
+    assert window.statusBar().currentMessage() == window.tools.hover_text(TIDY)
     assert not window.showing_tools
-    window.tools.cards.names_card.reset()
 
 
 def test_a_folder_selected_in_the_list_is_the_target(window, service, library_dir):
     window.open_folder(folder_id(service, library_dir / "Artist"))
     window.file_view.select_ids([folder_id(service, library_dir / "Artist" / ALBUM)])
-    scope = window.tools.target(RENAME)
-    assert scope is not None and scope.folder == library_dir / "Artist" / ALBUM and not scope.is_selection
-    assert scope.first_track == library_dir / "Artist" / ALBUM / "01 First.flac"  # natural order
+    found = window.tools.target()
+    assert found is not None
+    selection, paths = found
+    assert paths == [str(library_dir / "Artist" / ALBUM)] and selection.folders == 1 and not selection.background
+
+
+def test_a_click_starts_the_entry(qtbot, open_app, service, library_dir):
+    main = open_app.window
+    main.open_folder(folder_id(service, library_dir / "Artist" / ALBUM))
+    main.file_view.select_ids([])
+    with qtbot.waitSignal(main.entryRequested) as blocker:
+        main.tool_actions[TIDY].trigger()
+    assert blocker.args == ["tidy", [str(library_dir / "Artist" / ALBUM)]]
+    tidy = open_app.entry_windows[-1]
+    qtbot.addWidget(tidy)
+    assert type(tidy).__name__ == "TidyWindow"
 
 
 def test_start_without_a_folder_says_so(window):
@@ -352,15 +351,6 @@ def test_no_tools_entries_left(window, service, library_dir):
     window.side_panel.show_folder(artist)
     assert not hasattr(window.side_panel.summary, "tools_button")
     assert "Tools…" not in [a.text() for a in window.list_menu([]).actions()]
-
-
-def test_rsgain_unavailable_disables_replaygain(window, service, library_dir):
-    window.open_folder(folder_id(service, library_dir / "Artist" / ALBUM))
-    window.show_rsgain_version(None)
-    assert window.tools.hover_text(REPLAYGAIN) == ("ReplayGain: rsgain couldn't run", False)
-    assert window.tools.hover_text(TIDY) == ("Tidy: rsgain couldn't run", False)
-    window.show_rsgain_version("rsgain 3.6")
-    assert window.tools.hover_text(REPLAYGAIN)[1]
 
 
 def test_every_page_restores_its_defaults_and_restore_all_asks(qtbot, window):

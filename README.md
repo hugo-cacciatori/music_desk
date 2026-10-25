@@ -42,14 +42,17 @@ to the Recycle Bin.
 - **Delete** files and folders (Del) from the file list, the folder tree or search results. They go straight to
   the Recycle Bin (no question: restore them from there), never deleted for good, and where Windows has no Recycle Bin (a network
   share, a removable drive) MusicDesk refuses and offers File Explorer instead.
-- **Tools**, always one click away on the toolbar's second row: a click starts the tool, and its hover text says
-  what it will act on (the open folder or the selection). Their options are in **File > Options…**:
+- **Tools**, always one click away on the toolbar's second row. Each does what the right-click menu does on the
+  selection (or, with nothing selected, the open folder), in a small window of its own: you can keep browsing, and
+  start another tool on other folders meanwhile; only files a tool is working on are refused until it ends. The
+  hover text says what a button will act on. Their options are in **File > Options…**:
   - **Rename from tags**, with masks such as `{track:02} {title}`. You see a preview first, and `.lrc` files
     follow their audio file. Renaming never deletes anything.
-  - **ReplayGain** for an album or a whole discography, with the bundled [rsgain](https://github.com/complexlogic/rsgain).
-    An album's own folder runs at once; anything else (subfolders, a selection, a discography) first lists every
-    file and what will happen to it, with OK and Cancel. Images still waiting to be split are left alone. Each run
-    writes a fresh `replaygain.log`; right-click selected tracks to remove their ReplayGain tags.
+  - **ReplayGain** with the bundled [rsgain](https://github.com/complexlogic/rsgain): the button lists the ways it
+    can run on the selection, as the right-click menu does (a folder as an album or as a discography, several
+    albums, selected tracks as an album or each on its own), and the one you pick starts at once. Images still
+    waiting to be split are left alone. Each album run writes a fresh `replaygain.log`; right-click selected tracks
+    to remove their ReplayGain tags.
   - **Tidy**: a whole folder tree at once, album by album. Albums still in one file with their cue sheet are split
     into tracks, tracks are renamed to the masks, then ReplayGain runs where it's missing or for another target.
     You see the whole plan first and run it with one button; at the end, the Redundant files window lists the
@@ -59,7 +62,6 @@ to the Recycle Bin.
     In that window every box is checked: uncheck what to keep, then Delete selected sends the rest to the Recycle
     Bin; closing it keeps everything.
 
-  Jobs run in the background, and you can keep browsing meanwhile; the status bar's Jobs button (Ctrl+J) shows them.
 - **Split a single-file album**, such as an EAC rip (one FLAC, WAV or AIFF image, its `.cue` and its log), into
   one FLAC file per track: select the `.cue`, then **Split** on its preview to split it at once with the defaults
   (every track, into its folder), or **Edit…** to check it first (**Play** plays the album). The Split page shows the

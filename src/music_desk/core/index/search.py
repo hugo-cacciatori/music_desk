@@ -39,6 +39,7 @@ FIELDS = (*TEXT_FIELDS, "year", "ext", *VALUE_FIELDS)
 TAG_FILTERS = ("artist", "album", "genre", "year", *VALUE_FIELDS)  # only audio files whose tags are read
 LIMIT = 5000
 FTS_MIN = 3  # trigram needs 3 characters; shorter text is matched with LIKE
+EXTRACT_CONTEXT = 1  # a card's extract: the matching line and one line on each side
 
 _TOKEN = re.compile(r'(?P<field>\b[A-Za-z]+):(?:"(?P<quoted>[^"]*)"?|(?P<bare>[^\s"]*))|"(?P<phrase>[^"]*)"?')
 
@@ -309,10 +310,13 @@ class SearchRow(FileRow):
     title_spans: tuple[tuple[int, int], ...] = ()
     artist_spans: tuple[tuple[int, int], ...] = ()
     snippet_spans: tuple[tuple[int, int], ...] = ()
+    extract: str = ""  # Lyrics search: the matching line and its neighbours, for the result's card
+    extract_spans: tuple[tuple[int, int], ...] = ()
 
 
-def snippet(texts: list[str | None], needles: list[str]) -> str:
-    """The first line of these texts (the LRCLIB lyrics) that contains a needle (folded)."""
+def _matching_lines(texts: list[str | None], needles: list[str]) -> tuple[list[str], int]:
+    """The non-empty lines (stripped, timestamps removed) of the first of these texts with a needle (folded), and
+    the index of the first line that contains one; ([], -1) when none does."""
     for text in texts:
         if not text:
             continue
@@ -320,17 +324,32 @@ def snippet(texts: list[str | None], needles: list[str]) -> str:
         folded = fold_text(text)
         if not any(n in folded for n in needles):
             continue
-        for line, folded_line in zip(text.splitlines(), folded.splitlines(), strict=False):
-            if line.strip() and any(n in folded_line for n in needles):
-                return line.strip()
-    return ""
+        pairs = [(line.strip(), folded_line) for line, folded_line in
+                 zip(text.splitlines(), folded.splitlines(), strict=False) if line.strip()]
+        for i, (_line, folded_line) in enumerate(pairs):
+            if any(n in folded_line for n in needles):
+                return [line for line, _folded in pairs], i
+    return [], -1
+
+
+def snippet(texts: list[str | None], needles: list[str]) -> str:
+    """The first line of these texts (the LRCLIB lyrics) that contains a needle (folded)."""
+    lines, i = _matching_lines(texts, needles)
+    return lines[i] if lines else ""
+
+
+def extract(texts: list[str | None], needles: list[str], context: int = EXTRACT_CONTEXT) -> str:
+    """A Lyrics search card's extract (SPEC §6 "Direction task 6"): the first matching line with up to `context`
+    lines before and after it, joined by line breaks."""
+    lines, i = _matching_lines(texts, needles)
+    return "\n".join(lines[max(0, i - context):i + context + 1]) if lines else ""
 
 
 def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery,
                 cancelled: Callable[[], bool] | None = None, *, mode: str = FILES) -> list[SearchRow]:
     """The shown results in `ids` order, with their folder, highlights and snippet. Ids gone since are dropped.
     `cancelled` is checked now and then (a newer query): the rows built so far are returned. File search
-    highlights the free text in the title and artist; Lyrics search, in the snippet only."""
+    highlights the free text in the title and artist; Lyrics search, in the snippet and its card's extract only."""
     if not ids:
         return []
     with consistent_read(conn):
@@ -356,8 +375,10 @@ def result_rows(conn: sqlite3.Connection, ids: list[int], query: SearchQuery,
                 fields.update(n_tracks=None, mtime=None)  # a folder row: its name and parent, nothing else
             parent_id, albumartist, lrclib = extra[entry_id]
             line = snippet([lrclib], free) if lyrics and free else ""
+            lines = extract([lrclib], free) if line else ""
             results.append(SearchRow(
                 **fields, folder_id=parent_id, folder=folders.path(parent_id), albumartist=albumartist,
                 snippet=line, title_spans=spans(fields["title"], title_needles),
-                artist_spans=spans(fields["artist"], artist_needles), snippet_spans=spans(line, free)))
+                artist_spans=spans(fields["artist"], artist_needles), snippet_spans=spans(line, free),
+                extract=lines, extract_spans=spans(lines, free)))
     return results

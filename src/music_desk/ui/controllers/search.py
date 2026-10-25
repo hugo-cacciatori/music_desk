@@ -3,7 +3,8 @@ the search service.
 
 The query is typed in the big field on top of the window, focused at startup, and runs as you type (debounced);
 the results stand in for the file list until Esc, or until a result is opened. The toggle picks File search
-(names, tags, the date) or Lyrics search (LRCLIB's lyrics); the last one used is kept.
+(names, tags, the date) or Lyrics search (LRCLIB's lyrics, shown as cards); the last one used is kept. A click on
+a card shows its lyrics in the side panel; a right-click gets to its folder, in the app or in File Explorer.
 
 When the index changes while the page is shown, the same query runs again and the rows are updated in place, so the
 selection stays. Enter in the field runs the query afresh from anywhere, so results left behind catch up with what
@@ -42,6 +43,7 @@ class SearchController(QObject):
         self.window = window
         self.view = SearchView()
         self.view.resultActivated.connect(self.go_to_result)
+        self.view.cardClicked.connect(self.show_lyrics)
         self.view.menuRequested.connect(lambda ids, pos: self.result_menu(ids).exec(pos))
         self.view.playRequested.connect(window.play_selection)
         self.view.artistRequested.connect(self.add_artist_filter)
@@ -213,6 +215,11 @@ class SearchController(QObject):
             self.field.setText(f"{text.rstrip()} {term}".strip())
             self.run()
 
+    def show_lyrics(self, _entry_id: int) -> None:
+        """A click on a card: the side panel shows its whole lyrics (the click selected it)."""
+        side_panel = self.window.side_panel
+        side_panel.tabs.setCurrentWidget(side_panel.lyrics)
+
     def go_to_result(self, entry_id: int) -> None:
         """Enter or a double-click on a result: its folder, with the file selected; a folder result opens."""
         window = self.window
@@ -238,13 +245,18 @@ class SearchController(QObject):
         menu = QMenu(window)
         if not window._library_open() or not ids:
             return with_status_tips(menu)
+        cards = self.view.showing_cards  # a card's menu starts with its two ways to the folder (SPEC §33)
         go = menu.addAction("Go to folder", lambda: self.go_to_result(ids[0]))
         go.setEnabled(len(ids) == 1)
+        if cards:
+            menu.addAction("Open in File Explorer", lambda: window.reveal(ids[0]))
+            menu.addSeparator()
         open_action = menu.addAction("Open", lambda: window.open_files(ids))
         open_action.setEnabled(len(ids) == 1)
         menu.addAction("Play selection", lambda: window.play_selection(ids))
         menu.addSeparator()
-        menu.addAction("Open in File Explorer", lambda: window.reveal(ids[0]))
+        if not cards:
+            menu.addAction("Open in File Explorer", lambda: window.reveal(ids[0]))
         menu.addAction("Copy path" if len(ids) == 1 else "Copy paths", lambda: window.copy_paths(ids))
         menu.addSeparator()
         menu.addAction("Remove ReplayGain tags…", lambda: window.remove_replaygain(ids))

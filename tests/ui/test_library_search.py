@@ -14,7 +14,7 @@ from music_desk.core.index.lyrics_index import record_lyrics
 from music_desk.core.index.search import FILES, LYRICS
 from music_desk.settings import Settings
 from music_desk.ui.main_window import MainWindow
-from music_desk.ui.search_view import SEARCH_COLUMN_INDEX
+from music_desk.ui.search_view import CARD_COLUMN, SEARCH_COLUMN_INDEX, SEARCH_COLUMNS, line_spans
 from music_desk.ui.side_panel.lyrics_tab import FOUND_STATE
 
 ALBUM = "Fixture Artist - Fixture Album"
@@ -115,7 +115,7 @@ def test_the_toggle_runs_the_query_again_and_is_kept(qtbot, window, lyrics):
     assert window.settings.search_mode == LYRICS and window.search_field.hasFocus()
     qtbot.waitUntil(lambda: window.search.shown not in (None, before), timeout=10000)
     assert names(window) == [], shown(window)  # no lyrics say "first"
-    assert not header.isSectionHidden(SEARCH_COLUMN_INDEX["snippet"])
+    assert not header.isSectionHidden(SEARCH_COLUMN_INDEX["snippet"]) and window.search_view.showing_cards
     assert "Search lyrics" in window.search_field.placeholderText()
     search(qtbot, window, "tear us")
     assert names(window) == ["track6.FLAC"], shown(window)
@@ -287,6 +287,43 @@ def test_results_follow_new_lyrics(qtbot, window, service):
     put_lyrics(service, "Second", "How does it feel... blue monday")
     window.lyrics_updated([entry(service, "Other", ALBUM)])
     qtbot.waitUntil(lambda: sorted(names(window)) == ["02 Second.flac", "track2.flac"], timeout=10000)
+
+
+def test_lyrics_search_shows_cards(qtbot, window, service, lyrics):
+    """Direction task 6 (SPEC §6, §33): the Lyrics column alone, without the header, painted as cards; File search's
+    table comes back with its columns and widths."""
+    view = window.search_view
+    header = view.view.header()
+    header.resizeSection(SEARCH_COLUMN_INDEX["title"], 333)
+    window.search.set_mode(LYRICS)
+    search(qtbot, window, "darkness")
+    assert view.showing_cards and header.isHidden()
+    assert [i for i in range(len(SEARCH_COLUMNS)) if not header.isSectionHidden(i)] == [CARD_COLUMN]
+    first = entry(service, "Other", ALBUM, "01 First.flac")
+    row = view.row(first)
+    assert row is not None and row.extract == "Hello darkness, my old friend\nI've come to talk with you again"
+    assert line_spans(row.extract, row.extract_spans) == [("Hello darkness, my old friend", ((6, 14),)),
+                                                          ("I've come to talk with you again", ())]
+    height = view.view.visualRect(view.model.index(view.model.row_for(first), CARD_COLUMN)).height()
+    assert height > 3 * view.view.fontMetrics().height()  # a card: title, artist and album, the extract
+    window.search.set_mode(FILES)
+    assert not view.showing_cards and header.isVisibleTo(view)
+    assert header.isSectionHidden(CARD_COLUMN) and header.sectionSize(SEARCH_COLUMN_INDEX["title"]) == 333
+
+
+def test_a_click_on_a_card_shows_its_lyrics(qtbot, window, service, lyrics):
+    window.search.set_mode(LYRICS)
+    search(qtbot, window, "darkness")
+    panel = window.side_panel
+    panel.tabs.setCurrentWidget(panel.metadata)
+    first = entry(service, "Other", ALBUM, "01 First.flac")
+    view = window.search_view.view
+    rect = view.visualRect(window.search_view.model.index(window.search_view.model.row_for(first), CARD_COLUMN))
+    QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
+    assert window.search_view.selected_ids() == [first] and panel.tabs.currentWidget() is panel.lyrics
+    qtbot.waitUntil(lambda: "Hello darkness" in panel.lyrics.shown_text(), timeout=5000)
+    texts = [a.text() for a in window.search.result_menu([first]).actions() if a.text()]
+    assert texts[:2] == ["Go to folder", "Open in File Explorer"]  # a card's ways to its folder come first
 
 
 def test_result_menu(qtbot, window, service):

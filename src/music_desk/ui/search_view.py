@@ -1,16 +1,19 @@
 """The library search page (SPEC §6): seek_lyrics' songs.html search box inside the app. The query is typed in
-the toolbar's search field; this page shows the count and the results (folders and audio files), with the
-match highlighted in the Title, Artist and Lyrics cells. The side panel is the detail pane.
+the search row's field; this page shows the count and the results (folders and audio files). File search shows
+them as a table, with the match highlighted in the Title and Artist cells; Lyrics search as cards, each with the
+extract of the lyrics where the match is (SPEC §6 "Direction task 6"). The side panel is the detail pane.
 """
 
+from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QModelIndex, QPoint, QRect, Qt, Signal
+from PySide6.QtCore import QByteArray, QModelIndex, QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QKeySequence, QPainter, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QPushButton,
     QStyle,
@@ -27,6 +30,8 @@ from music_desk.ui.file_view import COLUMNS, ENTRY_ID_ROLE, Column, FileListMode
 from music_desk.ui.qt_util import shortcut
 
 HIGHLIGHT_ROLE = Qt.ItemDataRole.UserRole + 10  # ((start, end), ...) in the cell's text
+ROW_ROLE = Qt.ItemDataRole.UserRole + 11  # the SearchRow itself (a Lyrics search card)
+CARD_LINES = 3  # a card's extract: the matching line and one on each side (core EXTRACT_CONTEXT)
 
 _BY_KEY = {column.key: column for column in COLUMNS}
 # Folder sorts by the result order (natural folder, then name order), which is also the default order.
@@ -52,6 +57,7 @@ SEARCH_COLUMN_INDEX = {column.key: i for i, column in enumerate(SEARCH_COLUMNS)}
 _NO_PARENT = QModelIndex()
 _ROW_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled
 _SPANS = {"title": "title_spans", "artist": "artist_spans", "snippet": "snippet_spans"}
+CARD_COLUMN = SEARCH_COLUMN_INDEX["snippet"]  # Lyrics search shows this column alone, painted as cards
 _FILTERS = ("Filters: artist: album: year: genre: ext: lrclib:synced|plain|instrumental|notfound|pending|error|"
             "notags rg:none|partial|full, and \"quoted text\".")
 PROMPTS = {
@@ -157,10 +163,15 @@ class SearchResultsModel(FileListModel):
         if role == HIGHLIGHT_ROLE and index.isValid():
             attr = _SPANS.get(self.columns[index.column()].key)
             return getattr(self.rows[index.row()], attr) if attr else ()
+        if role == ROW_ROLE and index.isValid():
+            return self.rows[index.row()]
         if role == Qt.ItemDataRole.ToolTipRole and index.isValid() and not self.rows[index.row()].read_error:
             key = self.columns[index.column()].key
-            if key in ("folder", "snippet"):
+            if key == "folder":
                 return self.columns[index.column()].text(self.rows[index.row()]) or None
+            if key == "snippet":  # a card: where the file is
+                row = cast(SearchRow, self.rows[index.row()])
+                return str(Path(row.folder, row.name))
         return super().data(index, role)
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
@@ -188,27 +199,102 @@ class HighlightDelegate(QStyledItemDelegate):
         colour = opt.palette.color(QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text)
         mark = QColor(opt.palette.color(QPalette.ColorRole.Highlight))
         mark.setAlpha(70)
-        bold = QFont(opt.font)
-        bold.setBold(True)
         painter.save()
         painter.setClipRect(rect)
-        x, end = rect.left(), rect.right()
-        for piece, highlighted in _pieces(text, spans):
-            font = bold if highlighted else opt.font
-            metrics = QFontMetrics(font)
+        _draw_pieces(painter, rect, text, spans, opt.font, colour, None if selected else mark)
+        painter.restore()
+
+
+def _draw_pieces(painter: QPainter, rect: QRect, text: str, spans, font: QFont, colour: QColor,
+                 mark: QColor | None) -> None:
+    """One line of text, its spans in bold (on `mark`, when given), elided on the right at the rect's end."""
+    bold = QFont(font)
+    bold.setBold(True)
+    x, end = rect.left(), rect.right()
+    for piece, highlighted in _pieces(text, spans):
+        piece_font = bold if highlighted else font
+        metrics = QFontMetrics(piece_font)
+        width = metrics.horizontalAdvance(piece)
+        if x + width > end:
+            piece = metrics.elidedText(piece, Qt.TextElideMode.ElideRight, max(0, end - x))
             width = metrics.horizontalAdvance(piece)
-            if x + width > end:
-                piece = metrics.elidedText(piece, Qt.TextElideMode.ElideRight, max(0, end - x))
-                width = metrics.horizontalAdvance(piece)
-            if highlighted and not selected:
-                painter.fillRect(QRect(x, rect.top() + 1, width, rect.height() - 2), mark)
-            painter.setFont(font)
-            painter.setPen(colour)
-            painter.drawText(QRect(x, rect.top(), width + 1, rect.height()),
-                             int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), piece)
-            x += width
-            if x >= end:
-                break
+        if highlighted and mark is not None:
+            painter.fillRect(QRect(x, rect.top() + 1, width, rect.height() - 2), mark)
+        painter.setFont(piece_font)
+        painter.setPen(colour)
+        painter.drawText(QRect(x, rect.top(), width + 1, rect.height()),
+                         int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), piece)
+        x += width
+        if x >= end:
+            break
+
+
+def line_spans(text: str, spans) -> list[tuple[str, tuple[tuple[int, int], ...]]]:
+    """A multi-line text's lines, each with its part of the spans, as offsets into the line."""
+    lines, start = [], 0
+    for line in text.split("\n"):
+        end = start + len(line)
+        lines.append((line, tuple((max(a, start) - start, min(b, end) - start) for a, b in spans
+                                  if a < end and b > start)))
+        start = end + 1
+    return lines
+
+
+class CardDelegate(QStyledItemDelegate):
+    """A Lyrics search result as a card (SPEC §6 "Direction task 6"): the title, the artist and album, then the
+    extract of the lyrics, the match in bold on the highlight colour. Every card has the same height (uniform rows
+    keep 5,000 results fast)."""
+
+    MARGIN, PADDING, GAP = 6, 10, 4
+    TITLE_SCALE, TEXT_SCALE = 1.2, 1.1
+
+    def _fonts(self, font: QFont) -> tuple[QFont, QFont, QFont]:
+        title = QFont(font)
+        title.setPointSizeF(font.pointSizeF() * self.TITLE_SCALE)
+        title.setBold(True)
+        text = QFont(font)
+        text.setPointSizeF(font.pointSizeF() * self.TEXT_SCALE)
+        return title, QFont(font), text
+
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:  # noqa: N802 - Qt's name
+        title, meta, text = (QFontMetrics(f).height() for f in self._fonts(option.font))
+        return QSize(option.rect.width(), 2 * (self.MARGIN + self.PADDING) + title + meta + 2 * self.GAP
+                     + CARD_LINES * text)
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+        row = index.data(ROW_ROLE)
+        if row is None:
+            return
+        palette = option.palette
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        accent = QColor(palette.color(QPalette.ColorRole.Highlight))
+        card = option.rect.adjusted(self.MARGIN, self.MARGIN // 2, -self.MARGIN, -self.MARGIN // 2)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        fill = QColor(accent) if selected else palette.color(QPalette.ColorRole.Base)
+        if selected:
+            fill.setAlpha(45)
+        painter.setPen(accent if selected else palette.color(QPalette.ColorRole.Mid))
+        painter.setBrush(fill)
+        painter.drawRoundedRect(card, 6, 6)
+        inside = self.PADDING - self.MARGIN // 2
+        inner = card.adjusted(self.PADDING, inside, -self.PADDING, -inside)
+        painter.setClipRect(inner)
+        title_font, meta_font, text_font = self._fonts(option.font)
+        text_colour = palette.color(QPalette.ColorRole.Text)
+        mark = QColor(accent)
+        mark.setAlpha(70)
+        y = inner.top()
+        meta = " · ".join(part for part in (row.artist, row.album) if part)
+        lines = [(row.title or row.name, row.title_spans if row.title else (), title_font, text_colour, None),
+                 (meta, row.artist_spans, meta_font, palette.color(QPalette.ColorRole.PlaceholderText), None)]
+        lines += [(line, spans, text_font, text_colour, mark)
+                  for line, spans in line_spans(row.extract, row.extract_spans)[:CARD_LINES]]
+        for n, (text, spans, font, colour, line_mark) in enumerate(lines):
+            height = QFontMetrics(font).height()
+            _draw_pieces(painter, QRect(inner.left(), y, inner.width(), height), text, spans, font, colour,
+                         line_mark)
+            y += height + (self.GAP if n < 2 else 0)
         painter.restore()
 
 
@@ -247,6 +333,7 @@ class SearchView(QWidget):
     """The results page. The window owns the query and runs it; this page reports what the user does."""
 
     resultActivated = Signal(int)  # Enter or a double-click: go to the file in its folder, or open the folder
+    cardClicked = Signal(int)  # Lyrics search: a click on a card shows its whole lyrics in the side panel
     selectionChanged = Signal(list)  # entry ids
     menuRequested = Signal(list, QPoint)
     playRequested = Signal(list)  # the shown results, in view order
@@ -258,6 +345,7 @@ class SearchView(QWidget):
         self.model = SearchResultsModel(self)
         self.mode = FILES
         self._prompting = False
+        self._table_state: QByteArray | None = None  # File search's header, kept while the cards show
 
         count_row = QHBoxLayout()
         count_row.setSpacing(4)
@@ -289,8 +377,9 @@ class SearchView(QWidget):
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.view.customContextMenuRequested.connect(self._menu_requested)
         delegate = HighlightDelegate(self.view)
-        for key in _SPANS:
+        for key in ("title", "artist"):
             self.view.setItemDelegateForColumn(SEARCH_COLUMN_INDEX[key], delegate)
+        self.view.setItemDelegateForColumn(CARD_COLUMN, CardDelegate(self.view))
         self.view.setItemDelegateForColumn(SEARCH_COLUMN_INDEX["folder"], ElideLeftDelegate(self.view))
         self.view.activated.connect(lambda index: self.resultActivated.emit(index.data(ENTRY_ID_ROLE)))
         self.view.clicked.connect(self._clicked)
@@ -299,7 +388,7 @@ class SearchView(QWidget):
         header = self.view.header()
         header.setSectionsMovable(True)
         for i, column in enumerate(SEARCH_COLUMNS):
-            header.setSectionHidden(i, column.hidden_by_default)
+            header.setSectionHidden(i, column.hidden_by_default or i == CARD_COLUMN)  # cards: Lyrics search
         for key, width in (("name", 200), ("title", 160), ("snippet", 260), ("folder", 240)):
             header.resizeSection(SEARCH_COLUMN_INDEX[key], width)
         self.view.sortByColumn(SEARCH_COLUMN_INDEX["folder"], Qt.SortOrder.AscendingOrder)
@@ -317,9 +406,22 @@ class SearchView(QWidget):
     # -- results --
 
     def set_mode(self, mode: str) -> None:
-        """File or Lyrics search: the Lyrics column (the matching line) shows in Lyrics search only."""
+        """File search shows a table, Lyrics search cards: the Lyrics column alone, without the header, each row
+        painted as a card. The table's columns, widths and sort come back as they were."""
+        header = self.view.header()
+        if mode == LYRICS and self._table_state is None:
+            self._table_state = header.saveState()
+            for i in range(len(SEARCH_COLUMNS)):
+                header.setSectionHidden(i, i != CARD_COLUMN)
+            header.setSectionResizeMode(CARD_COLUMN, QHeaderView.ResizeMode.Stretch)
+            header.hide()
+            self.view.setAlternatingRowColors(False)
+        elif mode == FILES and self._table_state is not None:
+            header.restoreState(self._table_state)
+            self._table_state = None
+            header.show()
+            self.view.setAlternatingRowColors(True)
         self.mode = mode
-        self.view.header().setSectionHidden(SEARCH_COLUMN_INDEX["snippet"], mode == FILES)
         if self._prompting:
             self.show_prompt()
 
@@ -395,8 +497,16 @@ class SearchView(QWidget):
         if self.model.rowCount() and not self.view.selectionModel().hasSelection():
             self.view.setCurrentIndex(self.model.index(0, 0))
 
+    @property
+    def showing_cards(self) -> bool:
+        return self._table_state is not None
+
     def _clicked(self, index: QModelIndex) -> None:
-        """Ctrl+click on an artist adds it as a filter (the page's artist checkboxes)."""
+        """A click on a card shows its lyrics. Ctrl+click on an artist adds it as a filter (the page's artist
+        checkboxes)."""
+        if self.showing_cards:
+            self.cardClicked.emit(index.data(ENTRY_ID_ROLE))
+            return
         if index.column() == SEARCH_COLUMN_INDEX["artist"] and \
                 QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier and index.data():
             self.artistRequested.emit(index.data())

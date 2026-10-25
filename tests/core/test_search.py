@@ -14,6 +14,7 @@ from music_desk.core.index.scanner import Scanner
 from music_desk.core.index.schema import configure, migrate
 from music_desk.core.index.search import (
     LYRICS,
+    extract,
     fold,
     fold_text,
     parse_query,
@@ -318,6 +319,9 @@ def test_result_rows(lib, songs):
     assert (row.name, row.folder, row.folder_id) == ("01 Hunter.flac", "C:\\Music\\Björk - Homogenic", album)
     assert row.snippet == "If travel is searching"
     assert row.snippet_spans == ((10, 19),)
+    assert row.extract == "If travel is searching\nAnd home what's been found"  # the card's: the line, the next
+    assert row.extract_spans == tuple((a + row.extract.index(row.snippet), b + row.extract.index(row.snippet))
+                                      for a, b in row.snippet_spans)
     assert row.lrclib == "synced" and row.rg == "full"
 
     query = parse_query("BJÖ")
@@ -334,6 +338,7 @@ def test_snippets_in_lyrics_search_only(lib, songs):
     query = parse_query("glove")
     [row] = result_rows(lib.conn, text_search(lib.conn, query).ids, query)
     assert row.title_spans == ((0, 5),) and row.snippet == ""  # File search: no snippet, though the lyrics match
+    assert row.extract == "" and row.extract_spans == ()
 
 
 def test_artist_filter_values_are_highlighted(lib, songs):
@@ -351,6 +356,16 @@ def test_rows_gone_meanwhile_are_dropped(lib, songs):
 
 def test_snippet_strips_timestamps():
     assert snippet([None, "[00:01.00] La la\n[00:02.00] Glove"], ["glove"]) == "Glove"
+
+
+def test_extract_takes_a_line_on_each_side():
+    """A Lyrics search card (SPEC §6 "Direction task 6"): the first matching line, between its neighbours; blank
+    lines and timestamps don't count."""
+    lyrics = "[00:01.00] One\n\nTwo glove\nThree\nFour glove"
+    assert extract([lyrics], ["glove"]) == "One\nTwo glove\nThree"
+    assert extract(["Glove first\nthen"], ["glove"]) == "Glove first\nthen"
+    assert extract(["only the end\nglove"], ["glove"]) == "only the end\nglove"
+    assert extract(["nothing"], ["glove"]) == "" and extract([None], ["glove"]) == ""
 
 
 # -- through the scanner --

@@ -197,10 +197,6 @@ class Starter(QObject):
         qt_util.app().aboutToQuit.connect(self.settings_entry.close)
         self.settings_entry.open(paths).finished.connect(self._entry_closed)
 
-    @property
-    def replaygain_windows(self) -> list[ReplayGainWindow]:
-        return [w for w in self.entry_windows if isinstance(w, ReplayGainWindow)]
-
     def _own(self, alone: EntryWindow) -> None:
         """An entry's own window: kept until it closes; the process ends with its last window."""
         self.entry_windows.append(alone)
@@ -209,12 +205,8 @@ class Starter(QObject):
         qt_util.app().aboutToQuit.connect(alone.shutdown)
 
     def run_replaygain(self, entry: str, paths: list[str]) -> None:
-        """A ReplayGain entry: refused while one of the entries' runs is going (one rsgain at a time), else the
-        ReplayGain page alone in a new window (SPEC §31)."""
-        running = next((w for w in self.replaygain_windows if w.running), None)
-        if running is not None:
-            running.refuse()
-            return
+        """A ReplayGain entry: the ReplayGain page alone in a new window (SPEC §31), started at once. Runs go side by
+        side (SPEC §35): only folders another task holds are refused, in the window."""
         window = ReplayGainWindow(self.cards(), self.locks)
         self._own(window)
         window.start(entry, paths)

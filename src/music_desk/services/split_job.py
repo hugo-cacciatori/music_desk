@@ -30,7 +30,7 @@ from music_desk.core.tags import TaggedFile
 
 log = logging.getLogger(__name__)
 
-OWNER = "the Split tool"
+OWNER = "Split"
 
 
 @dataclass(frozen=True)

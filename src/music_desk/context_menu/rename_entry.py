@@ -70,7 +70,7 @@ class RenameWindow(QWidget):
         try:
             self._token = self.runner.apply(plan)
         except LockedError as e:
-            self.view.message.setText(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            self.view.message.setText(str(e))
             return
         self.view.show_applying()
 

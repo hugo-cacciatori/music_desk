@@ -28,7 +28,7 @@ from music_desk.core.tidy import Kind, TidyCancelled, TidyPlan
 
 log = logging.getLogger(__name__)
 
-OWNER = "the Tidy tool"
+OWNER = "Tidy"
 LINE_INTERVAL = 0.1  # seconds between batches of log lines
 
 

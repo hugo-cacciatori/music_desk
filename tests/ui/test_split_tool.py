@@ -353,7 +353,7 @@ def test_a_save_in_a_locked_folder_is_refused(qtbot, window, split, library_dir)
     folder = library_dir / "Albums" / HIDDEN
     open_sheet(qtbot, split, folder / SHEET)
     edit_cell(qtbot, split, 3, "title", "A Duet")
-    lock = window.library.locks.acquire([folder], "the ReplayGain tool")
+    lock = window.library.locks.acquire([folder], "ReplayGain")
     try:
         assert not split.save() and b"A Duet" not in (folder / SHEET).read_bytes()
     finally:

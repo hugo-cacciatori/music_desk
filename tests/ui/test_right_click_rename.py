@@ -51,9 +51,9 @@ def test_folders_and_files_in_one_preview(qtbot, open_app, library_dir, monkeypa
 def test_a_folder_in_use_is_refused_at_apply(qtbot, open_app, service, library_dir):
     album = library_dir / "Artist" / ALBUM
     window = preview(qtbot, open_app, [album])
-    lock = service.locks.acquire([album], "the Split tool")
+    lock = service.locks.acquire([album], "Split")
     window.view.apply_button.click()
-    assert "is in use by the Split tool" in window.view.message.text() and window.view.state == "preview"
+    assert "is busy: Split is running on it" in window.view.message.text() and window.view.state == "preview"
     service.locks.release(lock)
     assert (album / "track2.flac").exists()
 

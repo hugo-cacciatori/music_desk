@@ -27,7 +27,7 @@ from music_desk.core.cue_edit import (
     save_cue,
     validate,
 )
-from music_desk.core.path_locks import LockedError
+from music_desk.core.path_locks import LockedError, busy_text
 from music_desk.services import jobs as jobs_module
 from music_desk.services.split_job import Loaded, Planned, SplitFinished, SplitRunner
 from music_desk.ui import track_lengths
@@ -522,7 +522,7 @@ class SplitController(QObject):
             return False
         owner = self.runner.locks.owner(target.parent)
         if owner is not None:
-            self.window.toast.show_message(f"{target.parent} is in use by {owner}. Save when it has finished.")
+            self.window.toast.show_message(busy_text(target.parent, owner))
             return False
         overwrite = False
         while True:
@@ -579,7 +579,7 @@ class SplitController(QObject):
         try:
             token = self.runner.run(plan)
         except LockedError as e:
-            self.window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            self.window.toast.show_message(str(e))
             return
         self._run_token = token
         self.job = self.window._start_job(jobs_module.SPLIT, folder)

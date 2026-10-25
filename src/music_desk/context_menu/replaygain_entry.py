@@ -1,4 +1,4 @@
-"""The right-click ReplayGain entries with MusicDesk not open (SPEC §31): the app's ReplayGain page alone, in a
+"""The right-click ReplayGain entries (SPEC §31, §35): the app's ReplayGain page alone, in a
 window of its own: rsgain's lines, the progress bar and Stop, then the report with its buttons. No main window.
 
 The run is the app's own job (`ReplayGainRunner.start`), with the Options window's ReplayGain options and the
@@ -46,7 +46,7 @@ class ReplayGainWindow(QWidget):
             lambda: fsops.open_with_default_app(path), f"Windows couldn't open {os.path.basename(path)}."))
         self.view.revealRequested.connect(lambda path: self._in_shell(
             lambda: fsops.open_in_explorer(path, True), f"File Explorer couldn't show {path}."))
-        self.note = QLabel()  # a later entry refused while this one runs
+        self.note = QLabel()  # the log or File Explorer couldn't open
         self.note.setWordWrap(True)
         self.note.hide()
         layout = QVBoxLayout(self)
@@ -84,19 +84,11 @@ class ReplayGainWindow(QWidget):
         try:
             self.runner.start(kind, targets, self.cards.replaygain_card.options())
         except LockedError as e:
-            self.view.show_error(f"ReplayGain didn't start: {e.path} is in use by {e.owner}. Try again when it has "
-                                 "finished.")
+            self.view.show_error(f"ReplayGain didn't start: {e}")
             return False
         self.view.show_running(folder, entry_title(kind, targets), kind == DISCOGRAPHY,
                                "Track" if kind == LOOSE else "Album")
         return True
-
-    def refuse(self) -> None:
-        """Another ReplayGain entry while this one runs: one rsgain at a time (SPEC §10 B)."""
-        self.bring_to_front()
-        self.note.setText("Another ReplayGain entry wasn't started: this run is still going. Choose it again when "
-                          "this one has finished.")
-        self.note.show()
 
     def bring_to_front(self) -> None:
         if self.isMinimized():
@@ -106,7 +98,6 @@ class ReplayGainWindow(QWidget):
         self.activateWindow()
 
     def _finished(self, finished: Finished) -> None:
-        self.note.hide()
         self.view.show_result(finished)
         QApplication.alert(self)  # the taskbar button flashes if the window is behind others
         self.finished.emit(finished)

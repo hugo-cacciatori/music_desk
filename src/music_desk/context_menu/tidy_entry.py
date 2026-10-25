@@ -101,7 +101,7 @@ class TidyWindow(QWidget):
         try:
             self._token = self.runner.run(plan, self.cards.replaygain_card.options())
         except LockedError as e:
-            self.page.message.setText(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            self.page.message.setText(str(e))
             self.page.message.show()
             return
         self.page.show_running()

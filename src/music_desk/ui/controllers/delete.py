@@ -76,7 +76,7 @@ class DeleteController(QObject):
         try:
             lock = window.open_library.locks.acquire([item.path for item in items], DELETE_OWNER)
         except LockedError as e:
-            window.toast.show_message(f"{Path(e.path).name} is in use by {e.owner}. Try again when it has finished.")
+            window.toast.show_message(str(e))
             return
         request = DeleteRequest(items, lock, view, self._row_after(ids, view))
         check = self.recycle_check

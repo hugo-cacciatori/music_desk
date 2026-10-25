@@ -2,7 +2,7 @@
 
 - A lock on a folder covers everything below it. Paths compare ignoring case, as Windows does.
 - Two locks can't overlap: a second job on the same tree, or a save of a file a job owns, is refused with the
-  owner's name, so the user is told what to wait for.
+  owner's name, so the user is told what to wait for (`busy_text`). Anything else runs side by side (SPEC §35).
 - Listeners are called after every change (from the thread that changed it), so the UI can grey out locked
   files.
 
@@ -19,9 +19,15 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
+def busy_text(path: str | Path, owner: str) -> str:
+    """The one refusal for files a task holds (Hugo, 2026-10-25, SPEC §35): "Kid A is busy: ReplayGain is running
+    on it." `owner` is the task's name, as the locks hold it."""
+    return f"{Path(path).name or path} is busy: {owner} is running on it."
+
+
 class LockedError(Exception):
     def __init__(self, path: str, owner: str) -> None:
-        super().__init__(f"{path} is in use by {owner}")
+        super().__init__(busy_text(path, owner))
         self.path = path
         self.owner = owner
 

@@ -166,7 +166,7 @@ class RecycleWindow(QWidget):
         try:
             self.runner.run(marked, self.owner, self.recycle)
         except LockedError as e:
-            self.progress.setText(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            self.progress.setText(str(e))
             return
         self._show("deleting")
 

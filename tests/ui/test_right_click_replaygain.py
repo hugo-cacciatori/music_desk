@@ -136,9 +136,9 @@ def test_the_target_is_the_options_one(qtbot, open_app, artist, fake):
 
 
 def test_a_folder_in_use_is_refused(qtbot, open_app, service, artist, fake):
-    lock = service.locks.acquire([artist / "Album A"], "the Split tool")
+    lock = service.locks.acquire([artist / "Album A"], "Split")
     window = run_entry(qtbot, open_app, menu.REPLAYGAIN_ALBUM, [artist / "Album A"])
-    assert "is in use by the Split tool" in window.view.message.text()
+    assert "is busy: Split is running on it" in window.view.message.text()
     service.locks.release(lock)
     assert fake.calls == []
 

@@ -111,10 +111,10 @@ def test_the_button_is_greyed_while_flac_is_unavailable_or_the_file_locked(qtbot
     window.show_flac_version("flac 1.5.0")
     assert metadata.trim_button.isEnabled()
     assert metadata.trim_button.toolTip() == TRIM_TIP  # the reason gone, the hover text is back (SPEC §24)
-    lock = window.library.locks.acquire([album], "the ReplayGain tool")
+    lock = window.library.locks.acquire([album], "ReplayGain")
     try:
         qtbot.waitUntil(lambda: not metadata.trim_button.isEnabled(), timeout=5000)
-        assert metadata.trim_button.toolTip() == "Unavailable while the ReplayGain tool is running."
+        assert metadata.trim_button.toolTip() == "Unavailable while ReplayGain is running."
     finally:
         window.library.locks.release(lock)
     qtbot.waitUntil(lambda: metadata.trim_button.isEnabled(), timeout=5000)
@@ -278,7 +278,7 @@ def test_a_trim_holds_a_lock_on_the_folder(qtbot, window, album, monkeypatch):
     page = open_page(qtbot, window, album / HIDDEN)
     type_time(qtbot, window, page.end_edit, "0:03.000")
     run(qtbot, window)
-    assert seen == ["the Trim tool"] and window.library.locks.owner(album) is None
+    assert seen == ["Trim"] and window.library.locks.owner(album) is None
 
 
 def test_stop_leaves_nothing(qtbot, window, album, monkeypatch):

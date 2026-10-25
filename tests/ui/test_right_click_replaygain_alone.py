@@ -61,9 +61,13 @@ def starter(qtbot, service):
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
 
 
+def rg_windows(starter) -> list[replaygain_entry.ReplayGainWindow]:
+    return [w for w in starter.entry_windows if isinstance(w, replaygain_entry.ReplayGainWindow)]
+
+
 def start(qtbot, starter, entry, paths):
     starter.run_entry(entry, [str(p) for p in paths])
-    window = starter.replaygain_windows[-1]
+    window = rg_windows(starter)[-1]
     qtbot.addWidget(window)
     return window
 
@@ -84,7 +88,7 @@ def test_an_album_runs_in_its_own_window(qtbot, starter, artist, fake, quits):
     assert window.view.open_log_button.isVisible() and window.view.done_button.isVisible()
     assert quits == []  # the report stays until it is closed
     window.view.done_button.click()
-    assert starter.replaygain_windows == [] and quits == [True]
+    assert rg_windows(starter) == [] and quits == [True]
 
 
 def test_loose_tracks_report_in_the_window(qtbot, starter, artist, fake, quits):
@@ -95,13 +99,19 @@ def test_loose_tracks_report_in_the_window(qtbot, starter, artist, fake, quits):
     assert not window.view.open_log_button.isVisible()
 
 
-def test_a_second_entry_while_running_is_refused(qtbot, starter, artist, gated, quits):
-    window = start(qtbot, starter, menu.REPLAYGAIN_ALBUM, [artist / "Album A"])
-    starter.run_entry(menu.REPLAYGAIN_ALBUM, [str(artist / "Album B")])
-    assert len(starter.replaygain_windows) == 1 and window.note.isVisible()  # one rsgain at a time
+def test_runs_go_side_by_side_and_only_busy_folders_are_refused(qtbot, starter, artist, gated, quits):
+    """SPEC §35: a second entry on another folder runs at once in its own window; one on a folder a run holds is
+    refused in its window, naming the task."""
+    first = start(qtbot, starter, menu.REPLAYGAIN_ALBUM, [artist / "Album A"])
+    second = start(qtbot, starter, menu.REPLAYGAIN_ALBUM, [artist / "Album B"])
+    assert first.running and second.running
+    busy = start(qtbot, starter, menu.REPLAYGAIN_LOOSE, [artist / "Album A" / "01 Tone.flac"])
+    assert busy.view.state == "error"
+    assert busy.view.message.text() == "ReplayGain didn't start: Album A is busy: ReplayGain is running on it."
     gated.set()
-    wait_done(qtbot, window)
-    assert not (artist / "Album B" / "replaygain.log").exists()
+    wait_done(qtbot, first)
+    wait_done(qtbot, second)
+    assert (artist / "Album A" / "replaygain.log").exists() and (artist / "Album B" / "replaygain.log").exists()
 
 
 def test_after_a_report_a_new_entry_gets_a_new_window(qtbot, starter, artist, fake, quits):
@@ -125,7 +135,7 @@ def test_closing_while_running_asks_first(qtbot, starter, artist, gated, quits):
     window.confirm_stop = lambda: True
     gated.set()
     window.close()
-    assert starter.replaygain_windows == [] and quits == [True]
+    assert rg_windows(starter) == [] and quits == [True]
 
 
 def test_options_needing_a_fix_refuse_the_run(qtbot, starter, artist, fake, quits):

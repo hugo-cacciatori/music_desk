@@ -93,9 +93,9 @@ def test_renaming_never_recycles(qtbot, window, service, library_dir, recycled):
 def test_a_job_lock_refuses_the_run(qtbot, window, service, library_dir, recycled):
     album = library_dir / "Artist" / ALBUM
     view = preview(qtbot, window, service, album)
-    token = service.locks.acquire([library_dir / "Artist"], "the ReplayGain tool")
+    token = service.locks.acquire([library_dir / "Artist"], "ReplayGain")
     view.apply_button.click()
-    assert window.toast.label.text().endswith("is in use by the ReplayGain tool. Try again when it has finished.")
+    assert window.toast.label.text().endswith("is busy: ReplayGain is running on it.")
     assert view.state == "preview" and (album / "track2.flac").exists()
     service.locks.release(token)
 

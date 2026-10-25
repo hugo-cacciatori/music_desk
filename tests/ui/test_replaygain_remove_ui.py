@@ -87,9 +87,9 @@ def test_a_selection_of_tracks(qtbot, window, service, library_dir, asked):
 
 def test_a_job_lock_refuses_and_says_so(qtbot, window, service, library_dir, asked):
     album = library_dir / "Artist" / "Album"
-    token = service.locks.acquire([album / "02 Two.flac"], "the ReplayGain tool")
+    token = service.locks.acquire([album / "02 Two.flac"], "ReplayGain")
     window.tools.remove_replaygain([entry(service, "Artist", "Album")])
-    qtbot.waitUntil(lambda: "is in use by the ReplayGain tool" in window.toast.label.text(), timeout=10000)
+    qtbot.waitUntil(lambda: "is busy: ReplayGain is running on it" in window.toast.label.text(), timeout=10000)
     service.locks.release(token)
     assert has_rg(album / "02 Two.flac") and not has_rg(album / "01 One.flac")
 

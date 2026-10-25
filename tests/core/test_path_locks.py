@@ -29,7 +29,8 @@ def test_overlaps_are_refused(tmp_path, held, wanted):
     with pytest.raises(LockedError) as error:
         locks.acquire([tmp_path / wanted], "the second")
     assert error.value.owner == "the first" and str(tmp_path / wanted) == error.value.path
-    assert "in use by the first" in str(error.value)
+    # The one refusal (SPEC §35): the item's name and the task holding it.
+    assert str(error.value) == f"{(tmp_path / wanted).name} is busy: the first is running on it."
 
 
 def test_separate_trees_and_release(tmp_path):

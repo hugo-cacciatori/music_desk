@@ -312,7 +312,7 @@ def test_a_locked_write_is_refused(qtbot, locks, fixture_copy):
         with locks.lock([path.parent], "Tidy album"), qtbot.waitSignal(writer.written, timeout=5000) as blocker:
             writer.write(path, {"title": "Nope"})
         result = blocker.args[0]
-        assert result.snapshot is None and "in use by Tidy album" in result.error
+        assert result.snapshot is None and result.error == "tone.flac is busy: Tidy album is running on it."
         assert TaggedFile(path).fields().title == "Tone tone.flac"
     finally:
         writer.close()

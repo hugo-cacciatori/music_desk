@@ -94,7 +94,7 @@ class TidyController(QObject):
         try:
             self._run_token = self.runner.run(plan, request.replaygain_options)
         except LockedError as e:
-            window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            window.toast.show_message(str(e))
             return
         self.job = window._start_job(jobs_module.TIDY, plan.root)
         self.page.show_running()

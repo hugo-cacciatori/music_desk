@@ -27,7 +27,7 @@ from music_desk.core.inline_rename import RESERVED_NAMES
 from music_desk.core.playlists import PreviewSheet, PreviewTrack
 
 DEFAULT_SUBFOLDER = "lite"
-OWNER = "the Trim tool"
+OWNER = "Trim"
 NUDGE_MS, PAGE_MS = 10, 1000  # Up / Down, Page Up / Page Down in the time fields
 # Lyrics are never copied, synced or not (SPEC §23): the app's lyrics come from LRCLIB, and synced lyrics would no
 # longer match once the start moves.

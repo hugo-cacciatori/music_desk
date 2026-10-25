@@ -105,11 +105,10 @@ def test_a_library_root_is_refused(qtbot, window, service, library_dir, recycle_
 
 
 def test_an_item_a_job_holds_is_refused(qtbot, window, service, library_dir, recycle_bin):
-    token = service.locks.acquire([album_dir(library_dir)], "the Rename tool")
+    token = service.locks.acquire([album_dir(library_dir)], "Rename")
     try:
         window.delete.delete_entries([entry(service, "Artist", "Album", "Track 2.flac")], window.file_view.view)
-        assert window.toast.label.text() == ("Track 2.flac is in use by the Rename tool. Try again when it has "
-                                             "finished.")
+        assert window.toast.label.text() == "Track 2.flac is busy: Rename is running on it."
     finally:
         service.locks.release(token)
     assert recycle_bin.paths == []

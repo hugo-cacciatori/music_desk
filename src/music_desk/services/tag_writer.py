@@ -115,7 +115,7 @@ class TagWriter(QObject):
                 with self.locks.lock([path], SAVE_OWNER):
                     changed = replaygain.remove_replaygain(path, options)
             except LockedError as e:
-                failed.append((path, f"{name} is in use by {e.owner}. Try again when it has finished."))
+                failed.append((path, str(e)))
                 continue
             except Exception as e:  # noqa: BLE001 - reported; the other files go on
                 log.warning("removing ReplayGain from %s failed: %s", path, e)
@@ -155,7 +155,7 @@ class TagWriter(QObject):
                 snapshot = (metadata.write_fields(path, changes, *name_masks) if name_masks
                             else metadata.write_fields(path, changes))
         except LockedError as e:
-            return None, f"{name} is in use by {e.owner}. Try again when it has finished."
+            return None, str(e)
         except Exception as e:  # noqa: BLE001 - shown to the user; the fields stay dirty
             log.warning("saving tags of %s failed: %s", path, e)
             return None, f"{name}: {type(e).__name__}: {e}"

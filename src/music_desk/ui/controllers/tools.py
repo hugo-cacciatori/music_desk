@@ -21,7 +21,7 @@ from music_desk.core import rename
 from music_desk.core.formats import AUDIO_EXTENSIONS
 from music_desk.core.index import queries
 from music_desk.core.index.store import path_of
-from music_desk.core.path_locks import LockedError
+from music_desk.core.path_locks import LockedError, busy_text
 from music_desk.core.replaygain import plural
 from music_desk.services import jobs as jobs_module
 from music_desk.services.rename_job import Applied, Planned, RenameRunner
@@ -329,8 +329,7 @@ class ToolsController(QObject):
         folder = request.scope.folder
         owner = self.locks.conflict(folder)
         if owner is not None:
-            window.statusBar().showMessage(f"ReplayGain: {folder} is in use by {owner}. Try again when it has "
-                                           "finished.", STATUS_MS)
+            window.statusBar().showMessage(f"ReplayGain: {busy_text(folder, owner)}", STATUS_MS)
             return
         if self.habitual(request):
             self.run_replaygain(request)  # no preview: it only writes tags and the logs (Hugo, 2026-10-15)
@@ -385,7 +384,7 @@ class ToolsController(QObject):
         try:
             self._rg_token = self.rg_runner.run(folder, request.replaygain_options, request.discography)
         except LockedError as e:
-            window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            window.toast.show_message(str(e))
             return False
         self._rg_request = request
         self.rg_job = window._start_job(jobs_module.REPLAYGAIN, folder)
@@ -452,7 +451,7 @@ class ToolsController(QObject):
         try:
             self._rename_token = self.rename_runner.apply(plan)
         except LockedError as e:
-            window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            window.toast.show_message(str(e))
             return
         self.rename_job = window._start_job(jobs_module.RENAME, plan.folder)
         window.jobs.update(self.rename_job, status="Renaming")

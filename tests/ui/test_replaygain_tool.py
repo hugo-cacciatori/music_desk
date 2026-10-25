@@ -63,7 +63,7 @@ def test_album_run(qtbot, window, service, library_dir, fake):
     finished = run(qtbot, window, service, album)
     view = window.rg_view
     assert "ReplayGain · This album" in view.heading.text()
-    assert owners == ["the ReplayGain tool"] and service.locks.owner(album) is None  # locked during the run only
+    assert owners == ["ReplayGain"] and service.locks.owner(album) is None  # locked during the run only
     assert [log.result() for log in finished.album_logs] == ["OK"]
     assert view.message.text() == "Done: 1 album OK."
     assert "Result: OK." in view.text.toPlainText()  # the album's report, as written to its log
@@ -102,11 +102,10 @@ def test_stop_reports_a_cancelled_album(qtbot, window, service, library_dir, fak
 
 def test_a_job_lock_refuses_the_run(qtbot, window, service, library_dir, fake):
     album = library_dir / "Fixture Artist" / "Album B"
-    token = service.locks.acquire([album / "01 Loud.flac"], "the Rename tool")
+    token = service.locks.acquire([album / "01 Loud.flac"], "Rename")
     recaps = []
     open_card(window, service, album, recaps=recaps)
-    assert window.statusBar().currentMessage() == (f"ReplayGain: {album} is in use by the Rename tool. Try again "
-                                                   "when it has finished.")
+    assert window.statusBar().currentMessage() == f"ReplayGain: {album.name} is busy: Rename is running on it."
     assert window.center.currentWidget() is window.file_view and fake.calls == []  # still on the file list
     assert recaps == []  # a blocked run shows no recap
     service.locks.release(token)

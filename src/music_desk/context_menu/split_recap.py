@@ -198,7 +198,7 @@ class SplitRecapWindow(QWidget):
         try:
             self._run_token = self.runner.run(plan)
         except LockedError as e:
-            self.message.setText(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            self.message.setText(str(e))
             return
         self.message.setText("Splitting…")
         self.busy.setRange(0, max(len(plan.written), 1))

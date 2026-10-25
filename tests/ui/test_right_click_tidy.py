@@ -70,9 +70,9 @@ def test_several_folders_one_plan_one_run(qtbot, open_app, rips, fake, monkeypat
 
 def test_a_folder_in_use_is_refused_at_run(qtbot, open_app, service, rips, fake):
     window = plan(qtbot, open_app, [rips / "EAC", rips / "Album B"])
-    lock = service.locks.acquire([rips / "Album B"], "the Split tool")
+    lock = service.locks.acquire([rips / "Album B"], "Split")
     window.page.run_button.click()
-    assert "is in use by the Split tool" in window.page.message.text() and window.page.state == "plan"
+    assert "is busy: Split is running on it" in window.page.message.text() and window.page.state == "plan"
     service.locks.release(lock)
 
 

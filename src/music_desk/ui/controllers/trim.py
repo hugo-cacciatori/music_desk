@@ -198,7 +198,7 @@ class TrimController(QObject):
         try:
             token = self.runner.run(plan)
         except LockedError as e:
-            self.window.toast.show_message(f"{e.path} is in use by {e.owner}. Try again when it has finished.")
+            self.window.toast.show_message(str(e))
             return
         self._run_token = token
         self.job = self.window._start_job(jobs_module.TRIM, plan.source.parent)

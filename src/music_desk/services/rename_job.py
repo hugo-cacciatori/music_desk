@@ -22,7 +22,7 @@ from music_desk.core.rename import RenameOptions, RenamePlan, RenameReport
 
 log = logging.getLogger(__name__)
 
-OWNER = "the Rename tool"
+OWNER = "Rename"
 
 
 @dataclass(frozen=True)

@@ -86,13 +86,12 @@ def test_cancelling_the_question_changes_nothing(qtbot, open_app, album, asked):
 
 
 def test_a_file_in_use_is_reported_with_why(qtbot, open_app, service, album, asked):
-    lock = service.locks.acquire([album / "02 Two.mp3"], "the ReplayGain tool")
+    lock = service.locks.acquire([album / "02 Two.mp3"], "ReplayGain")
     report = remove(qtbot, open_app, [album / "01 One.flac", album / "02 Two.mp3"])
     service.locks.release(lock)
     assert report.message.text() == ("Removed the ReplayGain tags of 1 track. 1 file couldn't be changed: see "
                                      "below.")
-    assert report.details.toPlainText() == "02 Two.mp3 is in use by the ReplayGain tool. Try again when it has " \
-        "finished."
+    assert report.details.toPlainText() == "02 Two.mp3 is busy: ReplayGain is running on it."
     assert has_rg(album / "02 Two.mp3")
 
 

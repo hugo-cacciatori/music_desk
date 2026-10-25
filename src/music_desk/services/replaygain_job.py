@@ -26,7 +26,7 @@ from music_desk.core.replaygain import DiscographyResult, LooseResult, Recap, Re
 
 log = logging.getLogger(__name__)
 
-OWNER = "the ReplayGain tool"
+OWNER = "ReplayGain"
 ALBUM, DISCOGRAPHY = "album", "discography"  # one folder
 ALBUMS = "albums"  # several folders, each as an album, in turn
 TRACKS = "tracks"  # tracks of one folder, as an album: the folder's other files aren't measured nor tagged

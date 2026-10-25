@@ -109,9 +109,9 @@ def test_rename_alone_refuses_options_needing_a_fix(qtbot, starter, artist, quit
 def test_rename_alone_respects_the_locks(qtbot, starter, artist, quits):
     album = artist / ALBUM
     window = rename_window(qtbot, starter, [album])
-    lock = starter.locks.acquire([album], "the ReplayGain tool")
+    lock = starter.locks.acquire([album], "ReplayGain")
     window.view.apply_button.click()
-    assert "is in use by the ReplayGain tool" in window.view.message.text() and window.view.state == "preview"
+    assert "is busy: ReplayGain is running on it" in window.view.message.text() and window.view.state == "preview"
     starter.locks.release(lock)
 
 

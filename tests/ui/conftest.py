@@ -11,6 +11,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QWidget
 
 from music_desk.services.library import LibraryService
+from music_desk.settings import Settings
 from music_desk.ui.main_window import MainWindow
 
 ALBUM = "Fixture Artist - Fixture Album"
@@ -66,7 +67,7 @@ def service(qtbot, tmp_path, library_dir):
 
 @pytest.fixture
 def window(qtbot, service):
-    window = MainWindow(service)
+    window = MainWindow(service, Settings(tree_visible=True))  # the tests drive the tree, hidden by default
     qtbot.addWidget(window)
     window.show()
     return window

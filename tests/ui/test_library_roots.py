@@ -121,6 +121,15 @@ def test_add_folder_through_the_picker(qtbot, window, service, library_dir, monk
     assert not window.sidebar.empty_hint.isVisibleTo(window)
 
 
+def test_the_tree_shows_while_the_library_is_empty(qtbot, window, service, library_dir):
+    """SPEC §33: the tree is hidden by default, but an empty library shows it, with its Add folder… button."""
+    assert window.sidebar.isVisibleTo(window) and window.folders_action.isChecked()
+    assert not window.folders_action.isEnabled()
+    add(qtbot, service, library_dir / "Music")
+    qtbot.waitUntil(lambda: not window.sidebar.isVisibleTo(window))
+    assert window.folders_action.isEnabled() and not window.folders_action.isChecked()
+
+
 def test_cancelled_picker_adds_nothing(window, monkeypatch):
     monkeypatch.setattr(window, "choose_folder", lambda: "")
     window.add_folder()

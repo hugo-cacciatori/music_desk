@@ -5,6 +5,10 @@ import shutil
 from browser_helpers import column, entry
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
+from PySide6.QtTest import QTest
+
+from music_desk.settings import Settings
+from music_desk.ui.main_window import MainWindow
 
 
 def open_path(window, service, *names):
@@ -215,3 +219,36 @@ def test_a_long_path_never_pushes_the_toolbar_into_its_overflow(qtbot, window, s
     needed = sum(button.sizeHint().width() for button in bar.buttons) + 8
     window.resize(window.width() + 2 * (needed - bar.width()) + 200, 600)
     qtbot.waitUntil(lambda: window.address_bar.hidden_segments() == 0, timeout=3000)
+
+
+# -- the folder tree and File Explorer (SPEC §33) --
+
+
+def test_the_tree_is_hidden_by_default_and_kept(qtbot, service):
+    settings = Settings()
+    window = MainWindow(service, settings)
+    qtbot.addWidget(window)
+    window.show()
+    centre = window.splitter.sizes()[1]
+    assert not window.sidebar.isVisibleTo(window) and not window.folders_action.isChecked()
+    window.folders_action.trigger()  # one click shows it
+    assert window.sidebar.isVisibleTo(window) and settings.tree_visible
+    sizes = window.splitter.sizes()
+    handle = window.splitter.handleWidth()  # shows and hides with the tree
+    assert sizes[0] > 0 and abs(sizes[1] - (centre - sizes[0])) <= handle  # its width comes from the centre only
+    window.activateWindow()
+    qtbot.waitUntil(window.isActiveWindow)
+    QTest.keyClick(window, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+    assert not window.sidebar.isVisibleTo(window) and not settings.tree_visible
+    assert abs(window.splitter.sizes()[1] - centre) <= handle
+
+
+def test_open_in_file_explorer(qtbot, window, service, library_dir):
+    shown = []
+    window.show_in_explorer = lambda path, is_dir: shown.append((path, is_dir))
+    open_path(window, service, "Artist", "Album")
+    assert window.explorer_action.isEnabled()
+    window.explorer_action.trigger()
+    qtbot.waitUntil(lambda: bool(shown))
+    assert shown == [(str(library_dir / "Artist" / "Album"), True)]
+

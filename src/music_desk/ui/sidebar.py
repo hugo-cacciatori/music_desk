@@ -48,6 +48,11 @@ class Sidebar(QWidget):
         self.folder_menu_provider: Callable[[QMenu, int], None] | None = None
         self.set_roots([])
 
+    @property
+    def empty(self) -> bool:
+        """No folder in the library: the pane is where one is added."""
+        return not self._roots
+
     def set_roots(self, roots: list[Root]) -> None:
         self._roots = {root.id: root for root in roots}
         self.model.set_roots(roots)

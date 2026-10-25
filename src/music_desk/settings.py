@@ -37,6 +37,8 @@ class Settings:
     file_list_header: str = ""  # base64 of QHeaderView.saveState(): column order, sizes, hidden, sort
     expanded_folders: list[str] = field(default_factory=list)  # folder paths expanded in the tree
     last_folder: str = ""
+    tree_visible: bool = False  # the folder tree, hidden by default (SPEC §33); shown anyway while the library is empty
+    tree_width: int = 240
     playlist_visible: bool = False  # the playlist builder's panel (SPEC §15)
     playlist_width: int = 300
     playlist_header: str = ""  # base64 of the panel's QHeaderView.saveState()

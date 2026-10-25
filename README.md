@@ -32,6 +32,8 @@ to the Recycle Bin.
   an album to open its folder; Refresh search updates the list as you fix them.
 - **Preview** rip logs, cue sheets, notes, `.nfo` files and scans beside the list, read-only. Each text file is
   read in its own encoding, such as an EAC log's UTF-16 or an `.nfo`'s DOS code page.
+- **Browse** with the address bar; the **Folders** button (Ctrl+Shift+F) shows the folder tree, hidden until you
+  ask for it, and **Open in File Explorer** opens the folder you are in.
 - **Delete** files and folders (Del) from the file list, the folder tree or search results. They go straight to
   the Recycle Bin (no question: restore them from there), never deleted for good, and where Windows has no Recycle Bin (a network
   share, a removable drive) MusicDesk refuses and offers File Explorer instead.

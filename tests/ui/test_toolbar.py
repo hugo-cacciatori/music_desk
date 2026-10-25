@@ -244,7 +244,9 @@ def test_three_rows_search_address_then_the_tools(window):
     assert search.geometry().top() < top.geometry().top() < tools.geometry().top()
     assert window.search_field.height() > window.address_bar.height() // 2
     assert window.search_field.font().pointSizeF() > window.font().pointSizeF()
-    assert top.widgetForAction(top.actions()[-1]) is window.address_bar  # the address bar ends its row, alone
+    # Folders, then the navigation, the address bar and Open in File Explorer (SPEC §33).
+    assert top.actions()[0] is window.folders_action and top.actions()[-1] is window.explorer_action
+    assert top.widgetForAction(top.actions()[-2]) is window.address_bar
     assert not any(isinstance(top.widgetForAction(a), QToolButton) and top.widgetForAction(a).text() in
                    ("Tools", "Playlist builder", "Advanced search") for a in top.actions())
     assert window.toolBarBreak(tools)

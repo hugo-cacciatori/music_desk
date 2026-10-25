@@ -245,6 +245,7 @@ class MainWindow(QMainWindow):
         self._build_navigation(conn)
         self._restore_state()
         self._restore_playlist()
+        self._apply_tree()  # hidden by default; refresh_roots applies it again once the folders are known
 
         self.add_folder_action = QAction("&Add folder…", self, shortcut=QKeySequence("Ctrl+O"))
         self.add_folder_action.triggered.connect(self.add_folder)
@@ -477,6 +478,16 @@ class MainWindow(QMainWindow):
         self.refresh_action.triggered.connect(self.rescan_folder)
         self.refresh_action.setToolTip("Read this folder from the disk again now, to show changes made outside "
                                        "MusicDesk (F5)")
+        # The folder tree is a side function (SPEC §33): hidden by default, one click shows it.
+        self.folders_action = QAction(standard_icon(QStyle.StandardPixmap.SP_DirIcon), "Folders", self,
+                                      checkable=True, shortcut=QKeySequence("Ctrl+Shift+F"))
+        self.folders_action.setToolTip("Show or hide the folder tree (Ctrl+Shift+F)")
+        self.folders_action.toggled.connect(self.set_tree_visible)
+        self.explorer_action = QAction(standard_icon(QStyle.StandardPixmap.SP_DirOpenIcon), "Open in File Explorer",
+                                       self)
+        self.explorer_action.setToolTip("Open this folder in File Explorer")
+        self.explorer_action.triggered.connect(
+            lambda: self.reveal(self.folder_id) if self.folder_id is not None else None)
         self.address_action = QAction("Edit address", self, shortcut=QKeySequence("Ctrl+L"))
         self.address_action.triggered.connect(lambda: self.address_bar.edit())
         self.addAction(self.address_action)
@@ -510,9 +521,16 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar("Navigation")
         toolbar.setMovable(False)
         toolbar.setObjectName("navigation")
+        toolbar.addAction(self.folders_action)
+        toolbar.addSeparator()
         for action in (self.back_action, self.forward_action, self.up_action, self.refresh_action):
             toolbar.addAction(action)
         toolbar.addWidget(self.address_bar)
+        toolbar.addAction(self.explorer_action)
+        for action in (self.folders_action, self.explorer_action):  # labelled: clear at a glance
+            button = toolbar.widgetForAction(action)
+            if isinstance(button, QToolButton):
+                button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.addToolBar(toolbar)
         self.navigation_bar = toolbar
         self.addToolBarBreak()
@@ -605,6 +623,7 @@ class MainWindow(QMainWindow):
         self.up_action.setEnabled(open_ and self.folder_id is not None
                                   and queries.parent_folder(self.open_library.conn, self.folder_id) is not None)
         self.refresh_action.setEnabled(open_)
+        self.explorer_action.setEnabled(open_)
 
     def go_back(self) -> None:
         self._step(self.history_back, self.history_forward)
@@ -960,6 +979,41 @@ class MainWindow(QMainWindow):
 
     # -- the playlist builder (SPEC §15) --
 
+    # -- the folder tree (SPEC §33) --
+
+    def set_tree_visible(self, visible: bool) -> None:
+        """The Folders button: the user's choice, kept. The tree still shows while the library is empty, where its
+        Add folder… button is."""
+        self.settings.tree_visible = visible
+        self._apply_tree()
+
+    def _apply_tree(self) -> None:
+        shown = self.settings.tree_visible or self.sidebar.empty
+        empty = self.sidebar.empty
+        self.folders_action.setEnabled(not empty)
+        self.folders_action.setToolTip("The folder tree shows until a folder is added" if empty
+                                       else "Show or hide the folder tree (Ctrl+Shift+F)")
+        if self.folders_action.isChecked() != shown:
+            self.folders_action.blockSignals(True)
+            self.folders_action.setChecked(shown)
+            self.folders_action.blockSignals(False)
+        if shown == (not self.sidebar.isHidden()):
+            return
+        # As the playlist panel: the tree takes its width from the centre only, and gives it back when hidden.
+        sizes = self.splitter.sizes()
+        if shown:
+            width = min(max(self.settings.tree_width, 150), max(0, sizes[1] - 200))
+            sizes[1] -= width
+            sizes[0] = width
+            self.sidebar.show()
+        else:
+            if sizes[0] > 0:
+                self.settings.tree_width = sizes[0]
+            sizes[1] += sizes[0]
+            sizes[0] = 0
+            self.sidebar.hide()
+        self.splitter.setSizes(sizes)
+
     def set_playlist_visible(self, visible: bool) -> None:
         """Show or hide the panel. It takes its width from the centre only, so the tree and the side panel keep
         theirs (the list scrolls sideways if its columns no longer fit), and gives it back when hidden."""
@@ -1052,6 +1106,8 @@ class MainWindow(QMainWindow):
             self.set_playlist_visible(False)
             self.settings.playlist_visible = True
         self.settings.playlist_header = self.playlist_panel.save_layout()
+        if not self.sidebar.isHidden() and self.splitter.sizes()[0] > 0:
+            self.settings.tree_width = self.splitter.sizes()[0]
         self.settings.window_geometry = base64.b64encode(self.saveGeometry().data()).decode("ascii")
         self.settings.splitter_state = base64.b64encode(self.splitter.saveState().data()).decode("ascii")
         self.settings.file_list_header = self.file_view.save_layout()
@@ -1330,6 +1386,7 @@ class MainWindow(QMainWindow):
             return
         self._keep_open_folder()  # its root may have been removed, or merged into a new one
         self.sidebar.set_roots(self.open_library.roots())
+        self._apply_tree()
 
     def choose_folder(self) -> str:
         return QFileDialog.getExistingDirectory(self, "Add a music folder to the library")

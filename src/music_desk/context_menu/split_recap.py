@@ -37,7 +37,7 @@ from music_desk.ui.controllers.split import plural, report_text
 from music_desk.ui.tools.tool_cards import ToolCards
 
 TITLE = "MusicDesk · Split"
-FIX_IT = 'To fix it, use "Edit this cue sheet…" in the right-click menu.'
+FIX_IT = 'To fix it, use "Edit this cue sheet…" in the right-click menu, or Edit… on its preview in MusicDesk.'
 
 
 def clock(samples: int, rate: int) -> str:

@@ -32,6 +32,7 @@ CLEANUP = "cleanup"  # folders (or the open one): one Redundant files window
 SPLIT = "split"  # one .cue: a recap, then Split or Cancel
 EDIT_CUE = "edit-cue"  # one .cue: the cue editor alone
 TRIM = "trim"  # one FLAC, WAV or AIFF file: the Trim page
+NEW_CUE = "new-cue"  # the Metadata tab's New cue sheet… (SPEC §35): the cue editor on a new sheet; not a menu entry
 # The entries built so far; the option is "--" + the entry.
 ENTRIES = (SETTINGS, *REPLAYGAIN_ENTRIES, RENAME, REMOVE_REPLAYGAIN, TIDY, CLEANUP, SPLIT, EDIT_CUE, TRIM)
 LIST_OPTION = "--list"

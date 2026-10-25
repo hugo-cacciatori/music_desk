@@ -62,8 +62,8 @@ def editor(qtbot, starter, paths) -> CueEditorWindow:
 
 
 def on_screen(page) -> list[str]:
-    return [b.text() for b in (page.back_button, page.save_button, page.save_as_button, page.preview_button,
-                                page.split_button, page.stop_button, page.done_button) if b.isVisible()]
+    return [b.text() for b in (page.save_button, page.save_as_button, page.preview_button, page.done_button)
+            if b.isVisible()]
 
 
 def test_the_editor_alone_edits_and_saves(qtbot, starter, albums, quits):
@@ -101,7 +101,7 @@ def test_the_editor_asks_about_unsaved_edits_before_closing(qtbot, starter, albu
 
 def test_the_editor_refuses_anything_but_one_cue(qtbot, starter, albums, quits):
     page = editor(qtbot, starter, [albums / "tone.wav"]).controller.page
-    assert page.state == "error" and on_screen(page) == ["Close"]  # Done reads Close here
+    assert page.state == "error" and on_screen(page) == ["Close"]
 
 
 def test_with_musicdesk_open_the_editor_is_its_own_window(qtbot, starter, service, albums, quits):

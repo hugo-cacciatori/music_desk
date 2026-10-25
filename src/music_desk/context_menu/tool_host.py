@@ -1,5 +1,6 @@
-"""Pages of the app alone in a window of their own (SPEC §31), driven by the app's own controller: the cue editor
-("Edit this cue sheet…", MusicDesk open or closed) and the Trim page ("Trim this track…", MusicDesk closed).
+"""Pages of the app alone in a window of their own (SPEC §31, §35), driven by the app's own controller: the cue
+editor ("Edit this cue sheet…", the cue preview's Edit…, New cue sheet…) and the Trim page ("Trim this track…", the
+Metadata tab's Trim…), MusicDesk open or closed.
 
 `ToolHost` is the part of the main window those controllers use, and nothing else: the page area, the status bar,
 the toast, a job list, the Options window's settings, the shell, and Preview in player. There is no index here:
@@ -100,13 +101,13 @@ class ToolHost(QMainWindow):
 
     @property
     def running(self) -> bool:
-        return self.controller is not None and self.controller.job is not None
+        """A trim being written (the cue editor runs nothing: it edits and saves)."""
+        return isinstance(self.controller, TrimController) and self.controller.job is not None
 
     def confirm_stop(self) -> bool:
-        what = "the split" if isinstance(self.controller, SplitController) else "the trim"
         answer = QMessageBox.question(
             self, "Still running",
-            f"Stop {what} and close? It deletes the files it was writing and leaves the original as it was.")
+            "Stop the trim and close? It deletes the copy it was writing and leaves the original as it was.")
         return answer == QMessageBox.StandardButton.Yes
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -123,7 +124,7 @@ class ToolHost(QMainWindow):
 
     def shutdown(self) -> None:
         if self.controller is not None:
-            self.controller.close()  # a running flac is killed; this run's .partial files are deleted
+            self.controller.close()  # a running trim's flac is killed and its .partial file deleted
         self._shell.shutdown(wait=False)
 
 
@@ -134,7 +135,6 @@ class CueEditorWindow(ToolHost):
     def __init__(self, cards: ToolCards, locks: PathLocks) -> None:
         super().__init__(cards, locks, "Edit cue sheet")
         self.controller = SplitController(self, locks, self)
-        self.controller.page.set_standalone()
         self.center.addWidget(self.controller.page)
 
     def start(self, paths: list[str]) -> bool:
@@ -145,6 +145,18 @@ class CueEditorWindow(ToolHost):
             controller.page.show_error("Nothing to edit: choose one cue sheet (.cue).")
             return False
         controller.open(paths[0])
+        return True
+
+    def start_new(self, paths: list[str]) -> bool:
+        """The Metadata tab's New cue sheet… (SPEC §22, §35): the editor on a new, unsaved sheet for one audio file,
+        filled from its tags."""
+        self.bring_to_front()
+        controller = self.controller
+        assert isinstance(controller, SplitController)
+        if len(paths) != 1 or os.path.isdir(paths[0]):
+            controller.page.show_error("Nothing to edit: choose one audio file.")
+            return False
+        controller.new_sheet(paths[0])
         return True
 
 

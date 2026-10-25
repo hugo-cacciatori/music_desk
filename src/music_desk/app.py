@@ -14,6 +14,7 @@ from music_desk.context_menu.replaygain_entry import ReplayGainWindow
 from music_desk.context_menu.request import (
     CLEANUP,
     EDIT_CUE,
+    NEW_CUE,
     REMOVE_REPLAYGAIN,
     RENAME,
     REPLAYGAIN_ENTRIES,
@@ -172,11 +173,15 @@ class Starter(QObject):
             self._own(recap)
             recap.start(paths)
             return
-        if entry == EDIT_CUE:
-            # The cue editor alone, with MusicDesk open or closed, as Split's recap (SPEC §31).
+        if entry in (EDIT_CUE, NEW_CUE):
+            # The cue editor alone, with MusicDesk open or closed, as Split's recap (SPEC §31); New cue sheet… on
+            # the Metadata tab opens it on a new sheet (SPEC §35).
             editor = CueEditorWindow(self.cards(), self.locks)
             self._own(editor)
-            editor.start(paths)
+            if entry == NEW_CUE:
+                editor.start_new(paths)
+            else:
+                editor.start(paths)
             return
         if entry in ALONE:
             # The Rename preview alone; Remove's question and report; the Tidy page then Redundant files; Clean

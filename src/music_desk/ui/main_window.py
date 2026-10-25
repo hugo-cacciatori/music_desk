@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from music_desk.context_menu.entries import OPEN, Selection, menu_entries
-from music_desk.context_menu.request import SETTINGS
+from music_desk.context_menu.request import EDIT_CUE, NEW_CUE, SETTINGS, SPLIT, TRIM
 from music_desk.core import fsops, inline_rename, playlists
 from music_desk.core.index import queries
 from music_desk.core.index.roots import AddResult, AddStatus, Root
@@ -59,9 +59,7 @@ from music_desk.ui.advanced_search import AdvancedSearchWindow
 from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.controllers.delete import DeleteController
 from music_desk.ui.controllers.search import SearchController
-from music_desk.ui.controllers.split import SplitController
 from music_desk.ui.controllers.tools import ToolsController
-from music_desk.ui.controllers.trim import TrimController
 from music_desk.ui.file_view import FileView
 from music_desk.ui.hover import with_status_tips
 from music_desk.ui.jobs_panel import JobsPanel
@@ -172,21 +170,19 @@ class MainWindow(QMainWindow):
         self.side_panel.lyrics.textSizeChanged.connect(lambda points: setattr(self.settings, "lyrics_text_size",
                                                                               points))
         self.side_panel.summary.playRequested.connect(self.play_folder)
-        self.side_panel.preview.splitRequested.connect(lambda path: self.split.split_now(Path(path)))
-        self.side_panel.preview.editRequested.connect(lambda path: self.split.open(Path(path)))
+        # The cue preview's Split and Edit…, the Metadata tab's Trim… and New cue sheet…: the right-click windows
+        # (SPEC §35), through app.Starter.
+        self.side_panel.preview.splitRequested.connect(lambda path: self.entryRequested.emit(SPLIT, [path]))
+        self.side_panel.preview.editRequested.connect(lambda path: self.entryRequested.emit(EDIT_CUE, [path]))
+        self.side_panel.metadata.trimRequested.connect(lambda path: self.entryRequested.emit(TRIM, [str(path)]))
+        self.side_panel.metadata.newCueRequested.connect(
+            lambda path: self.entryRequested.emit(NEW_CUE, [str(path)]))
         self.side_panel.preview.openRequested.connect(lambda path: self._in_shell(
             lambda: self.launch(path), f"Windows couldn't open {os.path.basename(path)}: no app is set for this "
             "file type, or the file isn't reachable.", path, False))
-        locks = library.locks if library is not None else PathLocks()
-        # Each feature's flow lives in its controller (SPEC §16), which owns its pages; the window lays them out.
+        # Each feature's flow lives in its controller (SPEC §16); every task has its own window (SPEC §35).
         self.tools = ToolsController(self, self, cards)  # the toolbar's tools, as their entries (SPEC §30, §35)
         self.tools.cards.hideFoldersChanged.connect(self.set_hide_folders_without_music)  # the Browser page
-        self.split = SplitController(self, locks, self)  # the cue split (SPEC §22)
-        self.split_page = self.split.page
-        self.trim = TrimController(self, locks, self)  # trimming one track into a copy (SPEC §23)
-        self.trim_page = self.trim.page
-        self.side_panel.metadata.trimRequested.connect(self.trim.open)
-        self.side_panel.metadata.newCueRequested.connect(self.split.new_sheet)
         self.delete = DeleteController(self, self)  # Delete to the Recycle Bin (SPEC §19)
         # The jobs panel (SPEC §10): this session's runs, in a bottom drawer; they go on while you browse.
         self.jobs = JobList(self)
@@ -208,8 +204,6 @@ class MainWindow(QMainWindow):
         self.center = QStackedWidget()  # the file list, the search results, or a tool's page
         self.center.addWidget(self.file_view)
         self.center.addWidget(self.search_view)
-        self.center.addWidget(self.split_page)
-        self.center.addWidget(self.trim_page)
         # The playlist builder (SPEC §15): a narrow column between the centre and the side panel, hidden until asked.
         self.playlist_panel = PlaylistPanel(conn)
         self.playlist_file: Path | None = (self.settings.path.with_name("playlist.json")
@@ -326,13 +320,10 @@ class MainWindow(QMainWindow):
             None if version else "rsgain couldn't run, so ReplayGain is unavailable. See the log for details.")
 
     def show_flac_version(self, version: str | None) -> None:
-        """The startup self-check of the bundled flac (SPEC §13). The Split page's Split button is disabled with
-        the reason when it failed; nothing else uses flac, so it has no status-bar label."""
+        """The startup self-check of the bundled flac (SPEC §13): the Metadata tab's Trim… is disabled with the
+        reason when it failed (a Split or Trim window says so itself when it reads its file)."""
         self.flac_version = version
-        self.split.set_unavailable(
-            None if version else "flac couldn't run, so the split is unavailable. See the log for details.")
         reason = None if version else "flac couldn't run, so trimming is unavailable. See the log for details."
-        self.trim.set_unavailable(reason)
         self.side_panel.metadata.set_trim_unavailable(reason)
 
     def open_about(self) -> None:
@@ -425,7 +416,7 @@ class MainWindow(QMainWindow):
             if self.folder_id is not None:
                 self.sidebar.tree.select_entry(queries.folder_path_ids(self.open_library.conn, self.folder_id))
             return
-        self.close_tools()  # browsing elsewhere goes back to the file list (the tools keep their options)
+        self.close_search()  # browsing elsewhere goes back to the file list
         came_from = self.folder_id
         if record and self.folder_id is not None:
             self.history_back.append(self.folder_id)
@@ -759,21 +750,16 @@ class MainWindow(QMainWindow):
         self.side_panel.refresh_folder()
         self.search.refresh_later()
 
-    # -- the pages in the centre: the file list, the search (SPEC §6), the tools (SPEC §10), the split --
+    # -- the centre: the file list or the search results (SPEC §6); every task has its own window (SPEC §35) --
 
     @property
     def showing_search(self) -> bool:
         return self.search.showing
 
-    @property
-    def showing_tools(self) -> bool:
-        return self.center.currentWidget() not in (self.file_view, self.search_view)
-
-    def close_tools(self) -> None:
-        """Back to the file list. A running job goes on (the jobs panel shows it and reopens its page)."""
-        if self.center.currentWidget() is not self.file_view:
-            if self.showing_search:
-                self.search.leave()
+    def close_search(self) -> None:
+        """Back to the file list (browsing elsewhere leaves the search results)."""
+        if self.showing_search:
+            self.search.leave()
             self.center.setCurrentWidget(self.file_view)
             self.file_view.view.setFocus()
 
@@ -814,22 +800,10 @@ class MainWindow(QMainWindow):
         job = self.jobs.get(job_id)
         if job is None:
             return
-        if job_id == self.split.job:
-            self.center.setCurrentWidget(self.split_page)
-        elif "split" in job.reports:
-            self.split.show_report(job.reports["split"])
-        elif job_id == self.trim.job:
-            self.center.setCurrentWidget(self.trim_page)
-        elif "trim" in job.reports:
-            self.trim.show_report(job.reports["trim"])
-        else:
-            self.toast.show_message(f"{job.kind} in {job.folder}: {job.status}")
+        self.toast.show_message(f"{job.kind} in {job.folder}: {job.status}")
 
     def stop_job(self, job_id: int) -> None:
-        if job_id == self.split.job:
-            self.split.runner.cancel()
-        elif job_id == self.trim.job:
-            self.trim.runner.cancel()
+        """Nothing runs as a job of this window any more (SPEC §35); the panel goes with task 7."""
 
     def confirm_quit_with_jobs(self, names: list[str]) -> bool:
         answer = QMessageBox.question(
@@ -1117,15 +1091,13 @@ class MainWindow(QMainWindow):
             self.search_field.setFocus()  # the app opens on its search (SPEC §33), ready to type into
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if not self.side_panel.can_leave() or not self.split.can_leave():
+        if not self.side_panel.can_leave():
             event.ignore()
             return
         running = [f"{job.kind}: {job.folder}" for job in self.jobs.running]
         if running and not self.confirm_quit_with_jobs(running):
             event.ignore()
             return
-        self.split.close()  # a running flac is killed; this run's .partial files are deleted
-        self.trim.close()  # likewise for a trim's .partial
         self.tag_writer.close()  # the queued saves finish first
         self.tag_io.close()
         self._playlist_save.stop()

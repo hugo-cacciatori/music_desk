@@ -269,7 +269,7 @@ def test_hover_text_names_the_entry_and_the_target(window, service, library_dir)
     assert window.tools.hover_text(TIDY) == "Tidy: it works on folders: select folders, or nothing for the open folder."
     window.tool_actions[TIDY].trigger()  # a click that can't start says why and starts nothing
     assert window.statusBar().currentMessage() == window.tools.hover_text(TIDY)
-    assert not window.showing_tools
+    assert window.center.currentWidget() is window.file_view
 
 
 def test_a_folder_selected_in_the_list_is_the_target(window, service, library_dir):
@@ -296,7 +296,7 @@ def test_a_click_starts_the_entry(qtbot, open_app, service, library_dir):
 def test_start_without_a_folder_says_so(window):
     window.tool_actions[TIDY].trigger()
     assert window.statusBar().currentMessage() == "Tidy: open a folder first."
-    assert not window.showing_tools
+    assert window.center.currentWidget() is window.file_view
 
 
 def test_options_open_the_window_on_the_tools_page(qtbot, window, service, library_dir):
@@ -315,7 +315,7 @@ def test_options_open_the_window_on_the_tools_page(qtbot, window, service, libra
     assert window.tools.cards.options_window is dialog and dialog.isVisible()  # the same window, raised
     assert dialog.current == RENAME
     dialog.close()
-    assert not window.showing_tools  # the file list stays
+    assert window.center.currentWidget() is window.file_view  # the file list stays
 
 
 def test_file_options_holds_every_option(qtbot, window, service, library_dir):

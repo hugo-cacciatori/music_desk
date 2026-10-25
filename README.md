@@ -63,22 +63,24 @@ to the Recycle Bin.
     Bin; closing it keeps everything.
 
 - **Split a single-file album**, such as an EAC rip (one FLAC, WAV or AIFF image, its `.cue` and its log), into
-  one FLAC file per track: select the `.cue`, then **Split** on its preview to split it at once with the defaults
-  (every track, into its folder), or **Edit…** to check it first (**Play** plays the album). The Split page shows the
-  whole sheet, editable: which audio file it points to, start times and gaps, titles and the other fields,
-  tracks to add or delete, and the text encoding of old sheets. Save writes your edits back into the `.cue`,
-  changing only the lines you edited; Save as makes another version of the sheet, so one image can be split in
-  several ways; Preview in player plays it. The page only edits: Split, on the sheet's preview, writes every
-  track into the album's folder. Each one is cut with the bundled
+  one FLAC file per track: select the `.cue`, then **Split** on its preview (or right-click it in File Explorer:
+  Split this cue sheet…). A window lists the tracks it will write, with Split and Cancel; a sheet that can't be
+  split as it is says why. **Edit…** (Edit this cue sheet… in File Explorer) opens the whole sheet in a window of
+  its own, editable: which audio file it points to, start times and gaps, titles and the other fields, tracks to
+  add or delete, and the text encoding of old sheets. Save writes your edits back into the `.cue`, changing only
+  the lines you edited; Save as makes another version of the sheet, so one image can be split in several ways;
+  Preview in player plays it (**Play** on the preview plays the album). Split writes every track into the album's
+  folder. Each one is cut with the bundled
   [flac](https://xiph.org/flac/), tagged from the sheet with the album's cover, named with your file name masks,
   and checked sample for sample against its part of the original. Nothing is overwritten (a taken name gets a
   number), and the image, its sheet and its log are never touched.
 
-  No sheet yet? Select the audio file and click **New cue sheet…** on the Metadata tab: the Split page opens on a
-  new sheet filled from its tags. **Fill from track lengths…** sets the start times from a tracklist's lengths,
+  No sheet yet? Select the audio file and click **New cue sheet…** on the Metadata tab: the editor opens on a new
+  sheet filled from its tags. **Fill from track lengths…** sets the start times from a tracklist's lengths,
   and **Preview in player** opens the sheet as it is, unsaved edits included, in your default player (one that
   reads cue sheets, such as foobar2000), so you can hear each cut before anything is written.
-- **Trim a track**: select one FLAC, WAV or AIFF file and click **Trim…** on the Metadata tab. Drag the two
+- **Trim a track**: select one FLAC, WAV or AIFF file and click **Trim…** on the Metadata tab (or right-click it
+  in File Explorer: Trim this track…); its window opens. Drag the two
   handles on the waveform (or type the times) to drop a long silence or a hidden track at either end, hear the
   result with Preview in player, then Trim. A FLAC copy goes into a subfolder (`lite` by default) with the
   original's tags, checked sample for sample against its part of the original. The original is never touched.

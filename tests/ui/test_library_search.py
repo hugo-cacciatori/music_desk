@@ -69,7 +69,7 @@ def lyrics(service):
 def test_ctrl_k_opens_the_search_with_a_prompt(qtbot, window):
     window.activateWindow()
     QTest.keyClick(window, Qt.Key.Key_K, Qt.KeyboardModifier.ControlModifier)
-    assert window.showing_search and not window.showing_tools
+    assert window.showing_search
     qtbot.waitUntil(lambda: window.search_field.hasFocus())
     note = window.search_view.note
     assert note.isVisibleTo(window.search_view) and "Type to search" in note.text()

@@ -1,11 +1,11 @@
-"""The cue split's controller (SPEC §22, §16): the Split page, its sheet, its saves and its job.
+"""The cue editor's controller (SPEC §22, §16, §35): the "Edit this cue sheet…" window's page, its sheet and its
+saves. The split itself is "Split this cue sheet…"'s recap window (context_menu/split_recap.py), which takes
+`report_text` from here.
 
-One page, one `.cue`: the side panel's "Split into tracks…" on a .cue preview opens it. The sheet is a
-cue_edit.CueDocument; every edit is applied to it, validated at once on the UI thread (pure Python, no file read),
-then planned again on the runner's worker after a short pause, so the lengths and new names follow. The app keeps
-no split state: edits live only in the open document until they are saved into a .cue, and the ticks and the
-destination start afresh each time the page opens. A split is just a split (Hugo, 2026-10-17): it writes the
-tracks, and nothing runs after it.
+One window, one `.cue` (or a new sheet for an audio file, New cue sheet…). The sheet is a cue_edit.CueDocument;
+every edit is applied to it, validated at once on the UI thread (pure Python, no file read), then planned again on
+the runner's worker after a short pause, so the lengths and new names follow, and Preview in player plays it. The
+app keeps no split state: edits live only in the open document until they are saved into a .cue.
 
 Dialogs go through ask_* / confirm_* / choose_* methods, which tests replace.
 """
@@ -27,8 +27,7 @@ from music_desk.core.cue_edit import (
     save_cue,
     validate,
 )
-from music_desk.core.path_locks import LockedError, busy_text
-from music_desk.services import jobs as jobs_module
+from music_desk.core.path_locks import busy_text
 from music_desk.services.split_job import Loaded, Planned, SplitFinished, SplitRunner
 from music_desk.ui import track_lengths
 from music_desk.ui.split_page import SplitPage
@@ -36,24 +35,12 @@ from music_desk.ui.split_page import SplitPage
 log = logging.getLogger(__name__)
 
 PLAN_DELAY_MS = 150  # after an edit, the plan follows once typing pauses
-FIX_NAMES = "Fix the file names first (File > Options…, File names)."
 NO_CUE_PLAYER = ("No app is set to open .cue sheets. To choose one, open Windows Settings > Apps > Default apps "
                  "and search for .cue.")
 
 
 def plural(count: int, noun: str) -> str:
     return f"{count} {noun}{'' if count == 1 else 's'}"
-
-
-def short_result(result: SplitFinished) -> str:
-    """One line for the jobs panel (after its state word)."""
-    if result.error:
-        return result.error
-    if result.cancelled:
-        return "nothing left half-done"
-    if result.split and result.finished is not None:
-        return f"{plural(len(result.finished.tracks), 'track')} split"
-    return "not split"
 
 
 def report_text(result: SplitFinished) -> str:
@@ -89,46 +76,32 @@ class SplitController(QObject):
         self.runner = SplitRunner(locks, self)
         self.recycle = fsops.send_to_recycle_bin  # a saved-over .cue goes there; replaced in tests (a recorder)
         self.check_recycle = fsops.can_recycle  # replaced in tests with the recorder
-        self.unavailable: str | None = None  # flac's self-check failed
         self.doc: CueDocument | None = None
         self.path: Path | None = None  # for a new sheet, the <stem>.cue it would be saved as
         self.new = False  # New cue sheet…: not on disk until saved
         self.codec: str | None = None  # the encoding picked (None: Auto)
-        self.destination: Path | None = None  # where the tracks go; None: the image's folder
         self.audio: tuple[str, ...] = ()  # the audio files beside the sheet (the source picker)
         self.auto_label: str | None = None  # what Auto chose when the sheet was read
         self.plan = None
         self.info: SourceInfo | None = None
         self.problems: list[Problem] = []
-        self.ticked: dict[int, bool] = {}  # sheet row -> ticked; a hidden track is HIDDEN
-        self.hidden_ticked = True
         self.hidden = False  # the last plan that had tracks found a hidden track (the table's row 0)
-        self.job: int | None = None
-        self._run_token: int | None = None
         self._load_token: int | None = None
         self._plan_token: int | None = None
         self._planning = False
-        self._split_after_plan = False
-        self._split_now = False  # the preview's Split: split once the sheet is planned, if it needs no look
         self._plan_timer = QTimer(self, singleShot=True, interval=PLAN_DELAY_MS)
         self._plan_timer.timeout.connect(self._request_plan)
 
         page = self.page
-        page.backRequested.connect(self.back)
         page.doneRequested.connect(self.done)
         page.saveRequested.connect(self.save)
         page.saveAsRequested.connect(self.save_as)
-        page.splitRequested.connect(self.split)
-        page.stopRequested.connect(self.runner.cancel)
         page.encodingPicked.connect(self.pick_encoding)
         page.sourcePicked.connect(lambda name: self._edit(lambda d: d.set_file(name)) if name else None)
-        page.destinationEdited.connect(self.set_destination)
-        page.browseRequested.connect(self.browse_destination)
         page.albumEdited.connect(lambda key, value: self._edit(lambda d: d.set_album(key, value)))
         page.albumOtherEdited.connect(lambda text: self._edit(lambda d: d.set_album_other(text)))
         page.trackEdited.connect(lambda row, key, value: self._edit(lambda d: d.set_track(row, key, value)))
         page.trackOtherEdited.connect(lambda row, text: self._edit(lambda d: d.set_track_other(row, text)))
-        page.tickToggled.connect(self._tick)
         page.addRequested.connect(self.add_track)
         page.deleteRequested.connect(self.delete_tracks)
         page.fillRequested.connect(self.fill_from_lengths)
@@ -139,92 +112,30 @@ class SplitController(QObject):
             lambda: self.page.set_new(True, self._audio_name, window.settings.save_cue_beside) if self.new else None)
         self.runner.loaded.connect(self._loaded)
         self.runner.planned.connect(self._planned)
-        self.runner.progress.connect(self._progress)
-        self.runner.finished.connect(self._finished)
 
     # -- opening and leaving --
 
-    @property
-    def showing(self) -> bool:
-        return self.window.center.currentWidget() is self.page
-
     def open(self, path: str | Path) -> None:
-        """"Split into tracks…" on a .cue preview. The same sheet comes back as it was left, unsaved edits
-        included; another one asks first about those edits."""
+        """The sheet at `path`, read on the worker."""
         path = Path(path)
-        if self.job is not None:
-            self._show_running_job()
-            return
-        if self.doc is not None and self.path is not None and self.page.state in ("editing", "loading") and \
-                not self.new and fsops.is_same_file(self.path, path):
-            self.window.center.setCurrentWidget(self.page)
-            return
-        if not self.can_leave():
-            return
         self._start(path, new=False)
         self._load_token = self.runner.load(path)
 
-    def split_now(self, path: str | Path) -> None:
-        """The preview's Split (SPEC §22): the sheet opens on the Split page and splits with the defaults as soon as
-        it is planned, unless it needs a look (then the page stays, saying why)."""
-        path = Path(path)
-        self.open(path)
-        if self.path is None or not fsops.is_same_file(self.path, path) or self.window.center.currentWidget() \
-                is not self.page or self.page.state not in ("loading", "editing"):
-            return  # a split running, or Cancel on unsaved edits
-        self._split_now = True
-        if self.page.state == "editing" and not self._planning:
-            self._split_when_planned()  # the same sheet was already open and planned
-
-    def _split_when_planned(self) -> None:
-        self._split_now = False
-        plan = self.plan
-        why = None
-        if plan is not None and plan.warnings:
-            why = plan.warnings[0].rstrip(".")
-        elif not self.page.split_button.isEnabled():
-            why = self.page.split_note.text().rstrip(".") or "it can't be split as it is"
-        if why:
-            self.window.toast.show_message(f"Not split: {why}. Fix it here and save, then use Split on the cue "
-                                           "sheet's preview.")
-            return
-        self.split()
-
     def new_sheet(self, audio: str | Path) -> None:
-        """New cue sheet… on the Metadata tab: the page on a new, unsaved sheet for this audio file (SPEC §22).
-        The same new sheet comes back as it was left; another sheet with unsaved edits asks first."""
+        """New cue sheet… on the Metadata tab: a new, unsaved sheet for this audio file, filled from its tags
+        (SPEC §22)."""
         audio = Path(audio)
-        if self.job is not None:
-            self._show_running_job()
-            return
-        cue_path = audio.with_suffix(".cue")
-        if self.doc is not None and self.new and self.page.state in ("editing", "loading") and \
-                self.path is not None and fsops.is_same_file(self.path.parent, cue_path.parent) and \
-                self.doc.file.casefold() == audio.name.casefold():
-            self.window.center.setCurrentWidget(self.page)
-            return
-        if not self.can_leave():
-            return
-        self._start(cue_path, new=True, audio_name=audio.name)
+        self._start(audio.with_suffix(".cue"), new=True, audio_name=audio.name)
         self._load_token = self.runner.load_new(audio)
 
     def _start(self, path: Path, new: bool, audio_name: str = "") -> None:
-        self._split_now = False
         self.doc, self.path, self.codec, self.plan, self.info = None, path, None, None, None
-        self.ticked, self.hidden_ticked, self.hidden, self.problems = {}, True, False, []
-        self.destination, self.audio, self.new = None, (), new
-        self.page.show_destination(str(path.parent))
+        self.hidden, self.problems = False, []
+        self.audio, self.new = (), new
         self.page.set_encoding(None)
         self.page.show_loading(path)
         self._audio_name = audio_name
         self.page.set_new(new, audio_name, self.window.settings.save_cue_beside)
-        self.window.center.setCurrentWidget(self.page)
-
-    def _show_running_job(self) -> None:
-        job = self.window.jobs.get(self.job)
-        self.window.toast.show_message(f"A split is still running in {job.folder}. Open another cue sheet when "
-                                       "it has finished.")
-        self.window.show_job(self.job)
 
     @property
     def cue_path(self) -> Path:
@@ -243,11 +154,6 @@ class SplitController(QObject):
             return self.save()
         self._reload_saved()
         return True
-
-    def back(self) -> None:
-        """Also while the split runs: it goes on, and the jobs panel reopens its page (SPEC §22)."""
-        if self.page.state != "editing" or self.can_leave():
-            self.window.close_tools()
 
     def done(self) -> None:
         self.doc, self.plan = None, None
@@ -271,8 +177,6 @@ class SplitController(QObject):
         self.audio = loaded.audio
         if self.codec is None:
             self.auto_label = self.doc.encoding
-        self.ticked = {row: True for row in range(len(self.doc.tracks()))}
-        self.hidden_ticked = True
         self._refresh()
 
     # -- edits --
@@ -290,40 +194,22 @@ class SplitController(QObject):
         if self.info is not None:
             frames = self.info.samples * FRAMES_PER_SECOND // self.info.rate
         try:
-            row = self.doc.add_track(after, frames)
+            self.doc.add_track(after, frames)
         except CueError as e:
             self.window.toast.show_message(str(e))
             return
-        ticks = [self.ticked.get(r, True) for r in range(len(self.doc.tracks()) - 1)]
-        ticks.insert(row, True)
-        self.ticked = dict(enumerate(ticks))
         self._refresh()
 
     def delete_tracks(self, rows: list[int]) -> None:
         if self.doc is None or not rows:
             return
-        ticks = [t for r, t in sorted(self.ticked.items()) if r not in rows]
         self.doc.delete_tracks(rows)
-        self.ticked = dict(enumerate(ticks))
         self._refresh()
 
-    def _tick(self, number: int, on: bool) -> None:
-        if self.doc is None:
-            return
-        if number == 0 and self.hidden:
-            self.hidden_ticked = on
-        else:
-            for view in self.doc.tracks():
-                if (view.number if view.number is not None else view.row + 1) == number:
-                    self.ticked[view.row] = on
-        self._refresh()
-
-    def ticked_numbers(self) -> set[int]:
-        numbers = {v.number if v.number is not None else v.row + 1
-                   for v in self.doc.tracks() if self.ticked.get(v.row, True)} if self.doc else set()
-        if self.hidden_ticked:
-            numbers.add(0)
-        return numbers
+    def track_numbers(self) -> set[int]:
+        """Every track's number, a hidden track's 0 too: the plan covers them all."""
+        numbers = {v.number if v.number is not None else v.row + 1 for v in self.doc.tracks()} if self.doc else set()
+        return numbers | {0}
 
     def pick_encoding(self, codec) -> None:
         if self.doc is None or codec == self.codec:
@@ -346,22 +232,6 @@ class SplitController(QObject):
             problem = "not found"
         self.page.show_sources(self.audio, current, problem)
 
-    def set_destination(self, text: str) -> None:
-        """The destination field, as typed: empty, or the image's folder, is the default."""
-        text = text.strip().strip('"')
-        folder = Path(text) if text else None
-        if folder is not None and self.path is not None and folder == self.path.parent:
-            folder = None
-        if folder != self.destination:
-            self.destination = folder
-            self._refresh()
-
-    def browse_destination(self) -> None:
-        chosen = self.choose_destination_folder(str(self.destination or (self.path.parent if self.path else "")))
-        if chosen:
-            self.page.show_destination(chosen)
-            self.set_destination(chosen)
-
     # -- validation and the plan --
 
     def _refresh(self) -> None:
@@ -372,7 +242,7 @@ class SplitController(QObject):
         self.page.show_document(self.doc, f"{self.path} (new, not saved yet)" if self.new else self.path,
                                 self.auto_label)
         self._show_sources()
-        self.page.show_tracks(self.doc, self.plan, self.ticked_numbers(), self.problems, self.hidden)
+        self.page.show_tracks(self.doc, self.plan, self.problems, self.hidden)
         self._show_problems()
         self._planning = True
         self._plan_timer.start()
@@ -389,8 +259,7 @@ class SplitController(QObject):
             self._refresh_buttons()
             return
         masks, replacement = self.window._name_masks()
-        self._plan_token = self.runner.plan(sheet, self.cue_path, masks, replacement, self.ticked_numbers(),
-                                            self.destination)
+        self._plan_token = self.runner.plan(sheet, self.cue_path, masks, replacement, self.track_numbers(), None)
 
     def _planned(self, planned: Planned) -> None:
         if planned.token != self._plan_token or self.doc is None:
@@ -405,14 +274,9 @@ class SplitController(QObject):
         if self.plan.info is not None and self.plan.info != self.info:
             self.info = self.plan.info
             self.problems = validate(self.doc, self.info)  # a start past the end of the audio
-        self.page.show_tracks(self.doc, self.plan, self.ticked_numbers(), self.problems, self.hidden)
+        self.page.show_tracks(self.doc, self.plan, self.problems, self.hidden)
         self._show_problems()
         self._refresh_buttons()
-        if self._split_after_plan and not self._planning:
-            self._split_after_plan = False
-            self.split()
-        elif self._split_now and not self._planning:
-            self._split_when_planned()
 
     def source_warning(self) -> str | None:
         """Why the sheet's source can't be used, for the Source control's mark (SPEC §22): several files, none,
@@ -455,32 +319,13 @@ class SplitController(QObject):
         if self.doc is None:
             return
         sheet_ok = not any(p.blocks_save for p in self.problems)
-        # From the ticks themselves: a refused plan has no tracks to count.
-        ticked = sum(self.ticked.get(row, True) for row in range(len(self.doc.tracks()))) + (
-            1 if self.hidden and self.hidden_ticked else 0)
-        reasons = []
-        if not self.window.tools.cards.names_card.valid:
-            reasons.append(FIX_NAMES)
-        if self.unavailable:
-            reasons.append(self.unavailable)
-        if not sheet_ok:
-            reasons.append("Fix the marked values first.")
-        elif self.plan is not None and self.plan.refusal and self.plan.refusal != "No track is ticked.":
-            reasons.append(f"Can't split: {self.plan.refusal}")
-        if not ticked:
-            reasons.append("Tick the tracks to write.")
-        ready = (not reasons and self.plan is not None and not self._planning and self.plan.refusal is None
-                 and ticked > 0 and self.job is None)
         # A new sheet can be saved once it could be split, as far as the sheet itself goes (Hugo, 2026-10-17).
         save = sheet_ok and (self.source_warning() is None if self.new else self.doc.modified)
         plan = self.plan
         preview = (sheet_ok and plan is not None and not self._planning and plan.info is not None
                    and bool(plan.tracks) and self.source_warning() is None)
-        self.page.set_buttons(
-            save=save, save_as=sheet_ok, split=ready,
-            split_text=f"Split {plural(ticked, 'track')}",
-            split_note=" ".join(reasons), can_delete=bool(self.doc.tracks()), preview=preview,
-            fill=self.info is not None and bool(self.doc.tracks()))
+        self.page.set_buttons(save=save, save_as=sheet_ok, can_delete=bool(self.doc.tracks()), preview=preview,
+                              fill=self.info is not None and bool(self.doc.tracks()))
 
     # -- saving --
 
@@ -556,41 +401,11 @@ class SplitController(QObject):
             self._request_plan()  # the page now works on the new file
         return True
 
-    # -- the job --
-
-    def split(self) -> None:
-        if self.doc is None or not self.page.split_button.isEnabled() and not self._split_after_plan:
-            return
-        if self.doc.modified or self.new:
-            answer = self.ask_save_first(self.cue_path.name)
-            if answer == "cancel":
-                return
-            if not (self.save() if answer == "save" else self.save_as()):
-                return
-            if self._planning or self.plan is None or self.plan.cue != self.path:
-                self._split_after_plan = True  # once the saved sheet is planned
-                return
-        plan = self.plan
-        if plan is None or plan.refusal is not None or not self.window._library_open():
-            return
-        folder = plan.folder
-        if self.window._unsaved_edits_under(folder):
-            return
-        try:
-            token = self.runner.run(plan)
-        except LockedError as e:
-            self.window.toast.show_message(str(e))
-            return
-        self._run_token = token
-        self.job = self.window._start_job(jobs_module.SPLIT, folder)
-        self.page.show_running()
-        self._refresh_buttons()
-
     # -- Preview in player --
 
     def preview(self) -> None:
         """The page's sheet as it is now, unsaved edits included, as a temporary cue sheet in the default player:
-        every track the split would write, ticked or not (SPEC §22). Nothing in the library is written."""
+        every track the split would write (SPEC §22). Nothing in the library is written."""
         plan = self.plan
         if plan is None or plan.info is None or not plan.tracks or self._planning:
             return
@@ -627,44 +442,8 @@ class SplitController(QObject):
         result = self.ask_track_lengths(lengths, first, audio_frames)
         if result is None:
             return
-        count = len(result) + 1
-        self.ticked = {row: self.ticked.get(row, True) for row in range(count)}
         self.doc.fill_from_lengths(result)
         self._refresh()
-
-    def _progress(self, done: int, total: int, name: str) -> None:
-        self.page.set_progress(done, total, name)
-        if self.job is not None and name != "done":
-            album = self.plan.cue.parent.name if self.plan is not None else ""
-            self.window.jobs.update(self.job, status=f"Running ({done + 1} of {total}): {album}",
-                                    progress=(done, total))
-
-    def _finished(self, result: SplitFinished) -> None:
-        if result.token != self._run_token:
-            return
-        if self.window._library_open():
-            self.window.refresh_after_tool(result.folder)  # the new tracks
-        self.page.show_result(report_text(result))
-        if self.job is not None:
-            self.window.jobs.report(self.job, "split", result)
-            state = (jobs_module.FAILED if result.error else jobs_module.STOPPED if result.cancelled
-                     else jobs_module.DONE)
-            self.window.jobs.finish(self.job, state, short_result(result))
-            self.job = None
-        self.doc = None  # the page shows the report; the sheet is read again if opened again
-        if result.split and result.finished is not None:
-            self.window.statusBar().showMessage(f"Split {plural(len(result.finished.tracks), 'track')}.", 8000)
-
-    def show_report(self, result: SplitFinished) -> None:
-        """A finished split's report, from the jobs panel."""
-        if self.page.state == "editing" and self.doc is not None and self.doc.modified and not self.can_leave():
-            return
-        self.page.show_result(report_text(result), f"<b>Split</b> · {result.plan.cue}")
-        self.window.center.setCurrentWidget(self.page)
-
-    def set_unavailable(self, reason: str | None) -> None:
-        self.unavailable = reason
-        self._refresh_buttons()
 
     def close(self) -> None:
         self.runner.close()  # a running flac is killed; this run's .partial files are deleted
@@ -679,12 +458,6 @@ class SplitController(QObject):
         """'save', 'discard' or 'cancel'."""
         return self._ask("Unsaved changes", f"Save the changes to {name}?",
                          (("Save", "save"), ("Discard", "discard"), ("Cancel", "cancel")))
-
-    def ask_save_first(self, name: str) -> str:
-        """Split with unsaved edits: 'save', 'save_as' or 'cancel'. The tracks always match a .cue on disk."""
-        return self._ask("Save the cue sheet first?",
-                         f"The tracks are made from the cue sheet on disk. Save the changes to {name} first?",
-                         (("Save", "save"), ("Save as…", "save_as"), ("Cancel", "cancel")))
 
     def ask_replace_or_keep(self, name: str) -> str:
         """Save as onto an existing file: 'replace', 'keep' or 'cancel'."""
@@ -709,10 +482,6 @@ class SplitController(QObject):
             self.window, "Unsaved changes",
             "Reading the cue sheet with another encoding loses the unsaved changes. Go on?")
         return answer == QMessageBox.StandardButton.Yes
-
-    def choose_destination_folder(self, start: str) -> str:
-        """The destination's Browse…: an existing folder, or '' when cancelled (the app creates no folder)."""
-        return QFileDialog.getExistingDirectory(self.window, "Write the tracks to", start)
 
     def choose_cue_file(self, suggested: str) -> str:
         """Save as: a path, or '' when cancelled. The app asks about an existing file itself."""

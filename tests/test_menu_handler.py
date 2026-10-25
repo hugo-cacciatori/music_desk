@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from music_desk.context_menu.entries import Selection, menu_entries
 from music_desk.context_menu.request import (
     CLEANUP,
     EDIT_CUE,
@@ -255,3 +256,24 @@ def test_an_entry_the_selection_doesnt_have_starts_nothing(dll, items):
     array, count = paths_array([album, other])
     assert dll.MusicDeskMenu_Command(array, count, False, "musicdesk.open", EXE, out, len(out)) != 0
     assert out.value == ""
+
+
+def test_the_apps_entry_list_is_the_handlers(dll, items, appdata):
+    """One list in Python (context_menu/entries.py, the app's own submenu and toolbar, SPEC §35) and the handler's
+    in C++: the same entries, order and labels for every kind of selection, with the default target and another."""
+    album, other = items
+    selections = [([album], True), ([album], False), ([album, other], False), ([album / "01.flac"], False),
+                  ([album / "02.MP3"], False), ([album / "image.CUE"], False),
+                  ([album / "image.CUE", album / "01.flac"], False),
+                  ([album / "01.flac", album / "02.MP3", album / "notes.txt"], False),
+                  ([album / "01.flac", other / "01.opus"], False), ([album / "03.aac", album / "notes.txt"], False),
+                  ([album, album / "01.flac"], False), ([album / "notes.txt"], False),
+                  ([album, other, album / "01.flac"], False)]
+    for target in (None, -18.5):
+        if target is not None:
+            (appdata / "MusicDesk").mkdir(parents=True, exist_ok=True)
+            (appdata / "MusicDesk" / "settings.json").write_text(
+                json.dumps({"replaygain_options": {"target": target}}), encoding="utf-8")
+        for paths, background in selections:
+            ours = menu_entries(Selection.of(paths, background), -15.0 if target is None else target)
+            assert submenu(dll, paths, background) == [(f"musicdesk.{e.entry}", e.label) for e in ours], paths

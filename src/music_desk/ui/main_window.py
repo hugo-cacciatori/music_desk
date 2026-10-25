@@ -166,6 +166,9 @@ class MainWindow(QMainWindow):
         self.side_panel = SidePanel(self.tag_io, self.tag_writer, conn,
                                     lyrics_service=library.lyrics if library is not None else None)
         self.side_panel.lyrics.urlRequested.connect(self.open_url)
+        self.side_panel.lyrics.set_text_size(self.settings.lyrics_text_size)  # as last set (SPEC §8)
+        self.side_panel.lyrics.textSizeChanged.connect(lambda points: setattr(self.settings, "lyrics_text_size",
+                                                                              points))
         self.side_panel.summary.playRequested.connect(self.play_folder)
         self.side_panel.preview.splitRequested.connect(lambda path: self.split.split_now(Path(path)))
         self.side_panel.preview.editRequested.connect(lambda path: self.split.open(Path(path)))
@@ -235,7 +238,7 @@ class MainWindow(QMainWindow):
         self.splitter.setCollapsible(1, False)
         self.splitter.setCollapsible(2, False)
         self.playlist_panel.hide()
-        self.splitter.setSizes([260, 640, 0, 340])
+        self.splitter.setSizes([240, 560, 0, 440])  # a first start: a lyrics pane wide enough to read (SPEC §8)
         self._selected_ids: list[int] = []
         self._restoring_selection = False
         self.setCentralWidget(self.splitter)

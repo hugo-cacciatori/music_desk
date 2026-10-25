@@ -4,6 +4,9 @@
 Everything comes from the index on the UI's read connection, so showing a track reads no file. The tab follows the
 lyrics service: a result for the shown key, a change of state (offline, paused, unreachable) or a retry re-renders
 it. Opening the Genius and Google searches is left to the window, which launches off the UI thread.
+
+The lyrics are for reading while listening (SPEC §33): large text, generous line spacing, and a text size the user
+sets with A− / A+ (or Ctrl+− / Ctrl+= / Ctrl+0, Ctrl+wheel), which the window keeps between sessions.
 """
 
 import sqlite3
@@ -11,15 +14,17 @@ from collections.abc import Callable
 from datetime import date, datetime
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeyEvent, QKeySequence, QTextBlockFormat, QTextCursor, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QHBoxLayout,
     QLabel,
-    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -43,9 +48,42 @@ PAUSED_STATE = "paused"
 
 
 TIMESTAMPS_TIP = "Show the time of each line in front of it, as LRCLIB's synced lyrics give it"
+TEXT_SIZES = (9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 24, 28, 32, 36)  # points, A− / A+ steps
+DEFAULT_TEXT_SIZE = 14  # Settings.lyrics_text_size's default too
+LINE_HEIGHT = 140  # percent of the font's line: room between the lines, for reading
+TEXT_MARGIN = 12
+
+
+class LyricsText(QTextEdit):
+    """The lyrics, read-only. Ctrl+wheel and the zoom keys (Ctrl+= / Ctrl+−, Ctrl+0) step the text size as A− / A+
+    do, so the size is always one the tab keeps (QTextEdit's own zoom would change it behind the setting)."""
+
+    stepRequested = Signal(int)  # +1 larger, -1 smaller, 0 the default size
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt's name
+        control = event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        if event.matches(QKeySequence.StandardKey.ZoomIn) or (control and event.key() == Qt.Key.Key_Equal):
+            self.stepRequested.emit(1)
+        elif event.matches(QKeySequence.StandardKey.ZoomOut):
+            self.stepRequested.emit(-1)
+        elif control and event.key() == Qt.Key.Key_0:
+            self.stepRequested.emit(0)
+        else:
+            super().keyPressEvent(event)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802 - Qt's name
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            delta = event.angleDelta().y()
+            if delta:
+                self.stepRequested.emit(1 if delta > 0 else -1)
+            event.accept()
+            return
+        super().wheelEvent(event)
+
 
 class LyricsTab(QWidget):
     urlRequested = Signal(str)  # a Genius or Google search, opened by the window
+    textSizeChanged = Signal(int)  # points: the window keeps it (Settings.lyrics_text_size)
 
     def __init__(self, conn: Callable[[], sqlite3.Connection | None], service: LyricsService | None = None,
                  parent: QWidget | None = None) -> None:
@@ -70,8 +108,22 @@ class LyricsTab(QWidget):
         status_row.addWidget(self.spinner)
         status_row.addWidget(self.status, 1)
 
-        self.text = QPlainTextEdit()
+        self.text = LyricsText()
         self.text.setReadOnly(True)
+        self.text.setAcceptRichText(False)
+        self.text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse
+                                          | Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        self.text.document().setDocumentMargin(TEXT_MARGIN)
+        self.text.stepRequested.connect(self.step_text_size)
+        self.text_size = DEFAULT_TEXT_SIZE
+        self.smaller = QToolButton()
+        self.smaller.setText("A−")
+        self.smaller.setToolTip("Smaller lyrics text (Ctrl+−)")
+        self.smaller.clicked.connect(lambda: self.step_text_size(-1))
+        self.larger = QToolButton()
+        self.larger.setText("A+")
+        self.larger.setToolTip("Larger lyrics text (Ctrl+=)")
+        self.larger.clicked.connect(lambda: self.step_text_size(1))
         self.timestamps = QCheckBox("Show timestamps")
         self.timestamps.setToolTip(TIMESTAMPS_TIP)
         self.timestamps.toggled.connect(self._show_text)
@@ -79,6 +131,9 @@ class LyricsTab(QWidget):
         self.source.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         options = QHBoxLayout()
         options.addWidget(self.timestamps)
+        options.addSpacing(8)
+        options.addWidget(self.smaller)
+        options.addWidget(self.larger)
         options.addStretch(1)
         options.addWidget(self.source)
 
@@ -112,7 +167,40 @@ class LyricsTab(QWidget):
             service.entryReady.connect(self._entry_ready)
             service.progress.connect(self._progress)
             service.resumed.connect(self.refresh)
+        self.set_text_size(DEFAULT_TEXT_SIZE)
         self.show_message("Select a track to see its lyrics from LRCLIB.")
+
+    # -- the text size --
+
+    def set_text_size(self, points: int, *, emit: bool = False) -> None:
+        """The lyrics' size, the nearest of TEXT_SIZES (a hand-edited settings.json may hold any number)."""
+        points = min(TEXT_SIZES, key=lambda size: (abs(size - points), size))
+        changed = points != self.text_size
+        self.text_size = points
+        font = self.text.font()
+        font.setPointSize(points)
+        self.text.setFont(font)
+        self.smaller.setEnabled(points > TEXT_SIZES[0])
+        self.larger.setEnabled(points < TEXT_SIZES[-1])
+        self._space_lines()
+        if emit and changed:
+            self.textSizeChanged.emit(points)
+
+    def step_text_size(self, step: int) -> None:
+        """One size larger (+1) or smaller (-1); 0 goes back to the default size."""
+        if step == 0:
+            self.set_text_size(DEFAULT_TEXT_SIZE, emit=True)
+            return
+        i = TEXT_SIZES.index(self.text_size) + step
+        if 0 <= i < len(TEXT_SIZES):
+            self.set_text_size(TEXT_SIZES[i], emit=True)
+
+    def _space_lines(self) -> None:
+        cursor = QTextCursor(self.text.document())
+        cursor.select(QTextCursor.SelectionType.Document)
+        block = QTextBlockFormat()
+        block.setLineHeight(LINE_HEIGHT, QTextBlockFormat.LineHeightTypes.ProportionalHeight.value)
+        cursor.mergeBlockFormat(block)
 
     # -- what is shown --
 
@@ -184,6 +272,8 @@ class LyricsTab(QWidget):
         self.text.setVisible(state == FOUND_STATE)
         self.filler.setVisible(state != FOUND_STATE)
         self.timestamps.setVisible(state == FOUND_STATE)
+        self.smaller.setVisible(state == FOUND_STATE)
+        self.larger.setVisible(state == FOUND_STATE)
         self.source.setVisible(found)
         self.copy_button.setVisible(state == FOUND_STATE)
         self.genius_button.setVisible(searches)
@@ -207,6 +297,7 @@ class LyricsTab(QWidget):
         entry = self.info.entry
         text = entry.get("synced") if self.timestamps.isChecked() and entry.get("synced") else entry.get("plain")
         self.text.setPlainText(text or "")
+        self._space_lines()
 
     def _found(self) -> tuple[LyricsInfo, dict]:
         """The track and its LRCLIB entry, in the states that show one (found, instrumental)."""

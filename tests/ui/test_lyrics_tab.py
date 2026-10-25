@@ -7,6 +7,9 @@ from datetime import date
 
 import pytest
 from lrclib_fake import ScriptedLrclib, SleepRecorder, collect, found_for, http_error, no_jitter, unreachable
+from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtGui import QWheelEvent
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from music_desk.core.index.roots import add_root
@@ -15,6 +18,7 @@ from music_desk.core.index.store import DbWriter, connect_read, path_of
 from music_desk.core.lyrics import LrclibClient, LyricsOptions
 from music_desk.core.tags import TaggedFile
 from music_desk.services.lyrics_service import LyricsService
+from music_desk.settings import Settings
 from music_desk.ui.main_window import MainWindow
 from music_desk.ui.side_panel import lyrics_tab as tab_module
 from music_desk.ui.side_panel.lyrics_tab import LyricsTab
@@ -293,3 +297,40 @@ def test_window_shows_the_selected_track_and_opens_searches(qtbot, service, libr
     qtbot.waitUntil(lambda: lyrics.status.text() == "Select a single track to see its lyrics.")
     window.file_view.select_ids([ids["CD 2"]])
     qtbot.waitUntil(lambda: lyrics.state == tab_module.MESSAGE and lyrics.entry_id is None)
+
+
+def test_lyrics_read_large_with_their_text_size_kept(qtbot, make, read, library):
+    """SPEC §8, §33: large text with room between the lines; A− / A+, Ctrl+wheel and Ctrl+0 step through the sizes;
+    timestamps hidden until asked."""
+    service, tab = make()
+    sizes = []
+    tab.textSizeChanged.connect(sizes.append)
+    select(service, tab, track(read, library, "track6.FLAC"))
+    qtbot.waitUntil(lambda: tab.state == tab_module.FOUND_STATE, timeout=5000)
+    assert not tab.timestamps.isChecked() and tab.shown_text() == "la la"
+    assert tab.text.font().pointSize() == tab_module.DEFAULT_TEXT_SIZE and tab.larger.isVisible()
+    assert tab.text.document().firstBlock().blockFormat().lineHeight() == tab_module.LINE_HEIGHT
+    tab.larger.click()
+    tab.larger.click()
+    assert tab.text.font().pointSize() == 18 and sizes == [16, 18]
+    QTest.keyClick(tab.text, Qt.Key.Key_Minus, Qt.KeyboardModifier.ControlModifier)
+    assert tab.text_size == 16
+    tab.text.wheelEvent(QWheelEvent(QPointF(5, 5), QPointF(5, 5), QPoint(), QPoint(0, 120), Qt.MouseButton.NoButton,
+                                    Qt.KeyboardModifier.ControlModifier, Qt.ScrollPhase.NoScrollPhase, False))
+    assert tab.text_size == 18
+    QTest.keyClick(tab.text, Qt.Key.Key_0, Qt.KeyboardModifier.ControlModifier)
+    assert tab.text_size == tab_module.DEFAULT_TEXT_SIZE and sizes[-1] == tab_module.DEFAULT_TEXT_SIZE
+    tab.set_text_size(1000)  # a hand-edited settings.json: the nearest size, and the end of the steps
+    assert tab.text_size == tab_module.TEXT_SIZES[-1] and not tab.larger.isEnabled()
+    tab.timestamps.setChecked(True)
+    assert tab.text.document().firstBlock().blockFormat().lineHeight() == tab_module.LINE_HEIGHT
+
+
+def test_the_window_keeps_the_text_size(qtbot, service):
+    settings = Settings(lyrics_text_size=20)
+    window = MainWindow(service, settings)
+    qtbot.addWidget(window)
+    lyrics = window.side_panel.lyrics
+    assert lyrics.text_size == 20
+    lyrics.larger.click()
+    assert settings.lyrics_text_size == 22

@@ -6,6 +6,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from music_desk.ui import theme
+
 
 class NoticeWindow(QWidget):
     closed = Signal()
@@ -13,6 +15,7 @@ class NoticeWindow(QWidget):
     def __init__(self, title: str, text: str, parent: QWidget | None = None) -> None:
         super().__init__(parent, Qt.WindowType.Window)
         self.setWindowTitle(f"Refrain · {title}")
+        theme.task_window(self)
         self.message = QLabel(text)
         self.message.setWordWrap(True)
         self.message.setMinimumWidth(360)

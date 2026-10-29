@@ -19,6 +19,7 @@ from music_desk.core import cleanup, fsops
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.core.replaygain import plural
 from music_desk.services.tidy_job import OWNER, TidyFinished, TidyPlanned, TidyRunner, report_text
+from music_desk.ui import theme
 from music_desk.ui.recycle_window import RecycleWindow
 from music_desk.ui.tools.tidy_page import TidyPage
 from music_desk.ui.tools.tool_cards import TIDY, ToolCards
@@ -38,6 +39,7 @@ class TidyWindow(QWidget):
         super().__init__(parent)
         self.setWindowTitle(TITLE)
         self.resize(900, 640)
+        theme.task_window(self)  # the window background under its page's cards (SPEC §36 task 4)
         self.cards = cards
         self.locks = locks
         self.page = TidyPage()
@@ -71,7 +73,7 @@ class TidyWindow(QWidget):
         roots = [Path(path) for path in paths]
         self.page.show_planning(roots[0] if roots else Path())
         if len(roots) > 1:
-            self.page.heading.setText(f"<b>Tidy</b> · {plural(len(roots), 'folder')} in {roots[0].parent}")
+            self.page.heading.set("Tidy", f"{plural(len(roots), 'folder')} in {roots[0].parent}")
         if not roots:
             self.page.show_error("Nothing was clicked.")
             return False

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QMessageBox, QVBoxLayout, QWidget
 from music_desk.context_menu.entries import OPTIONS_WHERE
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services.rename_job import Applied, Planned, RenameRunner
+from music_desk.ui import theme
 from music_desk.ui.controllers.tools import rename_target_text
 from music_desk.ui.tools.rename_preview import RenamePreview
 from music_desk.ui.tools.tool_cards import RENAME, ToolCards
@@ -31,6 +32,7 @@ class RenameWindow(QWidget):
         super().__init__(parent)
         self.setWindowTitle(TITLE)
         self.resize(900, 600)
+        theme.task_window(self)  # the window background under its page's cards (SPEC §36 task 4)
         self.cards = cards
         self.view = RenamePreview()
         self.view.backRequested.connect(self.close)

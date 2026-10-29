@@ -33,7 +33,9 @@ from music_desk.core.cue import CueError
 from music_desk.core.cue_edit import CueDocument, validate
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services.split_job import Loaded, Planned, SplitFinished, SplitRunner
+from music_desk.ui import theme
 from music_desk.ui.controllers.split import plural, report_text
+from music_desk.ui.task_header import TaskHeader
 from music_desk.ui.tools.tool_cards import ToolCards
 
 TITLE = "Refrain · Split"
@@ -53,6 +55,7 @@ class SplitRecapWindow(QWidget):
         super().__init__(parent)
         self.setWindowTitle(TITLE)
         self.resize(720, 460)
+        theme.task_window(self)
         self.cards = cards
         self.state = "loading"  # recap, running, result, error
         self.path: Path | None = None
@@ -62,8 +65,7 @@ class SplitRecapWindow(QWidget):
         self._token: int | None = None
         self._run_token: int | None = None
 
-        self.heading = QLabel()
-        self.heading.setWordWrap(True)
+        self.heading = TaskHeader()
         self.message = QLabel("Reading the cue sheet…")
         self.message.setWordWrap(True)
         self.details = QLabel()  # the source, the destination, the encoding
@@ -78,8 +80,10 @@ class SplitRecapWindow(QWidget):
         self.busy.setTextVisible(False)
         self.report = QPlainTextEdit()
         self.report.setReadOnly(True)
+        for view in (self.tracks, self.report):
+            theme.card(view)
 
-        self.split_button = QPushButton("Split")
+        self.split_button = theme.primary(QPushButton("Split"))
         self.split_button.setToolTip("Write these tracks as FLAC files in the cue sheet's folder, each proven against "
                                      "the original; the image and its cue sheet aren't touched")
         self.split_button.setDefault(True)
@@ -125,7 +129,7 @@ class SplitRecapWindow(QWidget):
             self._fail("Split didn't start: choose one cue sheet (.cue).")
             return False
         self.path = Path(paths[0])
-        self.heading.setText(f"<b>Split</b> · {self.path}")
+        self.heading.set("Split", self.path)
         self._token = self.runner.load(self.path)
         return True
 

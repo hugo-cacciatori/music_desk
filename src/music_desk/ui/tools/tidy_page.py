@@ -6,7 +6,7 @@ Run Tidy does it. There is no separate ReplayGain step to start.
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (
 
 from music_desk.core import cleanup, rename
 from music_desk.core.tidy import AlbumTidy, FolderPlan, Kind, TidyPlan
-from music_desk.ui.tools.rename_card import Card
+from music_desk.ui import theme
+from music_desk.ui.task_header import TaskHeader
 
 
 def plural(count: int, noun: str) -> str:
@@ -72,15 +73,7 @@ class TidyPage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.state = "empty"  # planning, plan, running, result, error
-        self.back_button = QPushButton("Close")  # before the run: leave without changing anything
-        self.back_button.setToolTip("Close this window; nothing has been changed")
-        self.back_button.clicked.connect(self.backRequested)
-        self.heading = QLabel()
-        self.heading.setWordWrap(True)
-        self.heading.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        header = QHBoxLayout()
-        header.addWidget(self.back_button)
-        header.addWidget(self.heading, 1)
+        self.heading = TaskHeader()
 
         self.summary = QLabel()
         self.summary.setWordWrap(True)
@@ -96,10 +89,12 @@ class TidyPage(QWidget):
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(5000)
+        for view in (self.tree, self.log):
+            theme.card(view)
 
         self.busy = QProgressBar()
         self.busy.setMaximumWidth(160)
-        self.run_button = Card.primary(QPushButton("Run Tidy"))
+        self.run_button = theme.primary(QPushButton("Run Tidy"))
         self.run_button.setToolTip("Do everything listed: split, rename, then ReplayGain, album by album")
         self.run_button.clicked.connect(self.runRequested)
         self.stop_button = QPushButton("Stop")
@@ -108,15 +103,17 @@ class TidyPage(QWidget):
         self.done_button = QPushButton("Done")
         self.done_button.setToolTip("Close this window")
         self.done_button.clicked.connect(self.doneRequested)
-        buttons = QHBoxLayout()
-        buttons.addWidget(self.run_button)
-        buttons.addWidget(self.stop_button)
+        self.back_button = QPushButton("Close")  # before the run: leave without changing anything
+        self.back_button.setToolTip("Close this window; nothing has been changed")
+        self.back_button.clicked.connect(self.backRequested)
+        buttons = QHBoxLayout()  # the main action, then Close, at the bottom right (SPEC §36 task 4)
         buttons.addStretch(1)
         buttons.addWidget(self.busy)
-        buttons.addWidget(self.done_button)
+        for button in (self.run_button, self.stop_button, self.back_button, self.done_button):
+            buttons.addWidget(button)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(header)
+        layout.addWidget(self.heading)
         layout.addWidget(self.summary)
         layout.addWidget(self.message)
         layout.addWidget(self.tree, 1)
@@ -127,7 +124,7 @@ class TidyPage(QWidget):
     # -- states --
 
     def show_planning(self, folder: Path) -> None:
-        self.heading.setText(f"<b>Tidy</b> · {folder}")
+        self.heading.set("Tidy", folder)
         self.summary.setText("Reading the albums…")
         self.busy.setRange(0, 0)
         self.tree.clear()
@@ -193,9 +190,7 @@ class TidyPage(QWidget):
     def add_lines(self, lines: list[str]) -> None:
         self.log.appendPlainText("\n".join(lines))
 
-    def show_result(self, text: str, heading: str | None = None) -> None:
-        if heading:
-            self.heading.setText(heading)
+    def show_result(self, text: str) -> None:
         self.summary.setText(text.split("\n", 1)[0])
         self.log.setPlainText(text)
         self._show("result")

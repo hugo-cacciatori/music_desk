@@ -28,6 +28,8 @@ from music_desk.core import fsops
 from music_desk.core.cleanup import Item
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services.recycle_job import RecycleReport, RecycleRunner, report_text
+from music_desk.ui import theme
+from music_desk.ui.task_header import TaskHeader
 
 INDEX_ROLE = Qt.ItemDataRole.UserRole
 
@@ -47,6 +49,9 @@ class RecycleWindow(QWidget):
         self.report: RecycleReport | None = None
         self.setWindowTitle(f"Redundant files: {folder.name or folder}")
         self.resize(860, 460)
+        theme.task_window(self)
+        self.heading = TaskHeader()
+        self.heading.set("Redundant files", folder)
         self.intro = QLabel(intro)
         self.intro.setWordWrap(True)
 
@@ -78,6 +83,8 @@ class RecycleWindow(QWidget):
 
         self.report_view = QPlainTextEdit()
         self.report_view.setReadOnly(True)
+        for view in (self.list, self.report_view):
+            theme.card(view)
         self.progress = QLabel()
 
         self.check_all = QPushButton("Check all")
@@ -89,7 +96,7 @@ class RecycleWindow(QWidget):
         checks.addWidget(self.uncheck_all)
         checks.addStretch(1)
 
-        self.delete_button = QPushButton("Delete selected")
+        self.delete_button = theme.primary(QPushButton("Delete selected"))
         self.delete_button.setToolTip("Send the checked items to the Recycle Bin now")
         self.delete_button.clicked.connect(self.apply)
         self.stop_button = QPushButton("Stop")
@@ -105,6 +112,7 @@ class RecycleWindow(QWidget):
         buttons.addWidget(self.close_button)
 
         layout = QVBoxLayout(self)
+        layout.addWidget(self.heading)
         layout.addWidget(self.intro)
         layout.addLayout(checks)
         layout.addWidget(self.list, 1)

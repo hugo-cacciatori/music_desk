@@ -79,9 +79,10 @@ def test_the_plan_lists_every_album_and_one_run_button(qtbot, open_app, service,
     assert rows["EAC"] == "Split image.cue into 2 tracks, then ReplayGain (after the split)"
     assert rows["Album B"] == "Rename 1 file, then ReplayGain (missing tags); offer 1 folder"  # Scans: a picture
     assert page.summary.text() == "2 albums: 1 to split, 1 to rename, 2 to ReplayGain, 1 with files to offer."
-    # One action: Tidy says what it will do; there is no ReplayGain (or rename) button of its own.
+    # One action: Tidy says what it will do; there is no ReplayGain (or rename) button of its own. Close comes
+    # after it (SPEC §36 task 4).
     assert page.run_button.isVisible() and page.run_button.text() == "Run Tidy"
-    assert [b.text() for b in page.findChildren(type(page.run_button)) if b.isVisible()] == ["Close", "Run Tidy"]
+    assert [b.text() for b in page.findChildren(type(page.run_button)) if b.isVisible()] == ["Run Tidy", "Close"]
     assert not list((library_dir / "Rips" / "EAC").glob("0*.flac"))  # nothing changed yet
 
 

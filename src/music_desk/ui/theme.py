@@ -10,7 +10,7 @@ colour change needs no widget to be told.
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QPalette
-from PySide6.QtWidgets import QAbstractItemView, QApplication, QFrame, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QAbstractScrollArea, QApplication, QFrame, QPushButton, QWidget
 
 # Spacing steps, on Windows 11's 4 px grid.
 SPACE_XS, SPACE_S, SPACE_M, SPACE_L, SPACE_XL = 4, 8, 12, 16, 24
@@ -20,8 +20,9 @@ SPACE_XS, SPACE_S, SPACE_M, SPACE_L, SPACE_XL = 4, 8, 12, 16, 24
 SCALE_CARD_TEXT = 1.1  # a lyrics search card's lines
 SCALE_TIDY = 1.15  # the Tidy button's label
 SCALE_CARD_TITLE = 1.2  # a lyrics search card's title
-SCALE_TOOL_TITLE = 1.3  # a tool card's title
 SCALE_SEARCH = 1.35  # the search field and its toggle
+SCALE_TASK_NAME = 1.15  # a task window's folder or file name, under its title
+SCALE_TASK_TITLE = 1.6  # a task window's title (Tidy, Trim…) and an Options page's
 OVERLAY_TEXT_PX = 22  # the drop overlay's "Add to library"
 ABOUT_TITLE_PX = 16  # the About window's app name
 
@@ -114,9 +115,33 @@ def is_invalid(widget: QWidget) -> bool:
     return bool(widget.property("invalid"))
 
 
+def secondary(widget: QWidget) -> None:
+    """Text of less weight, in the secondary colour: a full path under its name."""
+    widget.setProperty("tone", "secondary")
+    _repolish(widget)
+
+
+def primary(button: QPushButton) -> QPushButton:
+    """A window's main action (Run Tidy, Apply renames, Trim…), filled with the accent colour (SPEC §36 task 4)."""
+    button.setProperty("primary", True)
+    _repolish(button)
+    return button
+
+
+def task_window(window: QWidget) -> None:
+    """A task window or dialog on the window background colour, its lists and reports drawn as cards."""
+    window.setProperty("taskWindow", True)
+    window.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+    _repolish(window)
+
+
 def card(widget: QWidget) -> None:
-    """A panel drawn as a card: a rounded surface with a thin edge; its lists lose their own frame inside it."""
+    """A panel drawn as a card: a rounded surface with a thin edge; its lists lose their own frame inside it. A list
+    or a text box itself gets the card's edge and a padding instead of an inset."""
     widget.setProperty("card", True)
+    if isinstance(widget, QAbstractScrollArea):
+        _repolish(widget)
+        return
     widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
     widget.setContentsMargins(CARD_INSET, CARD_INSET, CARD_INSET, CARD_INSET)
     for view in widget.findChildren(QAbstractItemView):
@@ -154,6 +179,25 @@ def style_sheet() -> str:
         "QToolButton#moreButton::menu-indicator { image: none; }\n"
         f'[card="true"] {{ background: palette(base); border: 1px solid {_pick(CARD_BORDER)};'
         f" border-radius: {CARD_RADIUS}px; }}\n"
+        f'QAbstractScrollArea[card="true"] {{ padding: {CARD_INSET}px; }}\n'
+        # Task windows and dialogs (SPEC §36 task 4): the window background, a secondary tone, the accent main action.
+        f'[taskWindow="true"] {{ background: {_pick(LAYER)}; }}\n'
+        f'[tone="secondary"] {{ color: {_pick(SECONDARY_TEXT)}; }}\n'
+        f'QPushButton[primary="true"] {{ background: {accent().name()}; color: {on_accent().name()};'
+        f" border: 1px solid {accent().name()}; border-radius: 4px; padding: 5px 16px; }}\n"
+        # The Options window: Windows 11's page list (the selected page on a surface, an accent bar beside it), and
+        # the pages see-through, their card on the window background.
+        "QListWidget#optionsPages { background: transparent; border: none; }\n"
+        "QListWidget#optionsPages::item { padding: 6px 10px; margin: 1px 0; border-radius: 4px;"
+        " border-left: 3px solid transparent; color: palette(text); }\n"
+        f"QListWidget#optionsPages::item:selected {{ background: palette(base); border-left: 3px solid"
+        f" {accent().name()}; }}\n"
+        f"QListWidget#optionsPages::item:hover:!selected {{ background: {_pick(CARD_BORDER)}; }}\n"
+        "QScrollArea#optionsPage, QScrollArea#optionsPage > QWidget > QWidget { background: transparent; }\n"
+        f'QPushButton[primary="true"]:hover {{ background: {hover.name()}; }}\n'
+        f'QPushButton[primary="true"]:pressed {{ background: {pressed.name()}; }}\n'
+        f'QPushButton[primary="true"]:disabled {{ background: {_pick(CONTROL_BORDER)};'
+        f" color: {_pick(SECONDARY_TEXT)}; border-color: {_pick(CONTROL_BORDER)}; }}\n"
         # The search toggle joined to the field, which has a magnifier and an accent line under it.
         f"QToolButton#searchMode {{ background: palette(base); border: 1px solid {_pick(CONTROL_BORDER)};"
         " border-right: none; padding: 0 12px; }\n"

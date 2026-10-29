@@ -28,7 +28,9 @@ from PySide6.QtWidgets import (
 
 from music_desk.core.replaygain import format_gain, plural
 from music_desk.services.replaygain_job import Finished
+from music_desk.ui import theme
 from music_desk.ui.qt_util import cell_text
+from music_desk.ui.task_header import TaskHeader
 
 SUMMARY_COLUMNS = ("Album", "Result", "Album gain", "Leveled to", "Files changed")
 
@@ -69,10 +71,7 @@ class ReplayGainView(QWidget):
         self.finished: Finished | None = None
         self.folder: Path | None = None
 
-        self.heading = QLabel()
-        self.heading.setWordWrap(True)
-        header = QHBoxLayout()
-        header.addWidget(self.heading, 1)
+        self.heading = TaskHeader()
 
         self.busy = QProgressBar()
         self.busy.setTextVisible(False)
@@ -91,6 +90,8 @@ class ReplayGainView(QWidget):
         mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         mono.setStyleHint(QFont.StyleHint.Monospace)
         self.text.setFont(mono)  # the RunLog tables line up in columns
+        for view in (self.summary_table, self.text):
+            theme.card(view)
 
         self.stop_button = QPushButton("Stop")
         self.stop_button.setToolTip("Stop ReplayGain: rsgain is stopped and the album being measured isn't "
@@ -105,14 +106,15 @@ class ReplayGainView(QWidget):
         self.done_button = QPushButton("Done")
         self.done_button.setToolTip("Close this window")
         self.done_button.clicked.connect(self.doneRequested)
-        buttons = QHBoxLayout()
-        for button in (self.stop_button, self.open_log_button, self.reveal_button):
+        buttons = QHBoxLayout()  # the log and the folder on the left, Stop or Done on the right (SPEC §36 task 4)
+        for button in (self.open_log_button, self.reveal_button):
             buttons.addWidget(button)
         buttons.addStretch(1)
+        buttons.addWidget(self.stop_button)
         buttons.addWidget(self.done_button)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(header)
+        layout.addWidget(self.heading)
         layout.addLayout(status)
         layout.addWidget(self.summary_table)
         layout.addWidget(self.text, 2)
@@ -128,7 +130,7 @@ class ReplayGainView(QWidget):
         if folder is not None:
             self.folder = folder
         what = title or f"ReplayGain · {'Discography' if discography else 'This album'}"
-        self.heading.setText(f"<b>{what}</b> · {self.folder}")
+        self.heading.set(what, self.folder or "")
         self.text.clear()
         self.busy.setRange(0, 0)
         self._album = "Starting"

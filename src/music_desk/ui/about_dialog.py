@@ -32,6 +32,7 @@ class AboutDialog(QDialog):
                  flac_version: str | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("About Refrain")
+        theme.task_window(self)
         title = QLabel(f"<b>Refrain {__version__}</b>")
         font = title.font()
         font.setPixelSize(theme.ABOUT_TITLE_PX)
@@ -41,6 +42,7 @@ class AboutDialog(QDialog):
             f"ReplayGain: {rsgain_version or 'rsgain unavailable'} · "
             f"Cue split: {flac_version or 'flac unavailable'}")
         self.table = QTableWidget(len(COMPONENTS), len(HEADERS))
+        theme.card(self.table)
         self.table.setHorizontalHeaderLabels(HEADERS)
         self.table.verticalHeader().hide()
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)

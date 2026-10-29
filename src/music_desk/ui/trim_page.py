@@ -26,6 +26,7 @@ from music_desk.core import trim, waveform
 from music_desk.core.trim import TrimPlan
 from music_desk.core.waveform import Peaks
 from music_desk.ui import theme
+from music_desk.ui.task_header import TaskHeader
 
 HANDLE_GRAB_PX = 8  # how near a handle a press must be to drag it
 WAVEFORM_HEIGHT = 70  # px; filling the page, it was much too big (Hugo, M16)
@@ -232,15 +233,7 @@ class TrimPage(QWidget):
         super().__init__(parent)
         self.state = "empty"  # loading, editing, running, result, error
 
-        self.back_button = QPushButton("Close")
-        self.back_button.setToolTip("Close this window without trimming; the times you chose aren't kept")
-        self.back_button.clicked.connect(self.backRequested)
-        self.heading = QLabel()
-        self.heading.setWordWrap(True)
-        self.heading.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        header = QHBoxLayout()
-        header.addWidget(self.back_button)
-        header.addWidget(self.heading, 1)
+        self.heading = TaskHeader()
         self.format_label = QLabel()
 
         self.waveform = WaveformView()
@@ -290,6 +283,7 @@ class TrimPage(QWidget):
         self.message.setWordWrap(True)
         self.report = QPlainTextEdit()
         self.report.setReadOnly(True)
+        theme.card(self.report)
         self.busy = QProgressBar()
         self.busy.setRange(0, 0)
         self.busy.setMaximumWidth(120)
@@ -298,7 +292,7 @@ class TrimPage(QWidget):
         self.preview_button.setToolTip("Open the cut start, the kept part and the cut end as three tracks in your "
                                        "default player, to hear the cuts before trimming")
         self.preview_button.clicked.connect(self.previewRequested)
-        self.trim_button = QPushButton("Trim")
+        self.trim_button = theme.primary(QPushButton("Trim"))
         self.trim_button.setToolTip("Write the kept part as a FLAC copy in the subfolder; the original isn't changed")
         self.trim_button.clicked.connect(self.trimRequested)
         self.stop_button = QPushButton("Stop")
@@ -310,15 +304,18 @@ class TrimPage(QWidget):
         self.trim_note = QLabel()
         self.trim_note.setWordWrap(True)
         theme.mark_danger(self.trim_note)
-        buttons = QHBoxLayout()
-        for button in (self.preview_button, self.trim_button, self.stop_button):
-            buttons.addWidget(button)
+        self.back_button = QPushButton("Close")
+        self.back_button.setToolTip("Close this window without trimming; the times you chose aren't kept")
+        self.back_button.clicked.connect(self.backRequested)
+        buttons = QHBoxLayout()  # Preview on the left; Trim, then Close, on the right (SPEC §36 task 4)
+        buttons.addWidget(self.preview_button)
         buttons.addWidget(self.trim_note, 1)
         buttons.addWidget(self.busy)
-        buttons.addWidget(self.done_button)
+        for button in (self.trim_button, self.stop_button, self.back_button, self.done_button):
+            buttons.addWidget(button)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(header)
+        layout.addWidget(self.heading)
         layout.addWidget(self.message)
         layout.addWidget(self.editor, 1)
         layout.addWidget(self.report, 1)
@@ -328,7 +325,7 @@ class TrimPage(QWidget):
     # -- states --
 
     def show_loading(self, path) -> None:
-        self.heading.setText(f"<b>Trim</b> · {path}")
+        self.heading.set("Trim", path)
         self.report.clear()
         self._show("loading", "Reading the track…")
 
@@ -338,9 +335,7 @@ class TrimPage(QWidget):
     def show_running(self, name: str) -> None:
         self._show("running", f"Trimming {name}… Files in this folder can't be edited meanwhile.")
 
-    def show_result(self, text: str, heading: str | None = None) -> None:
-        if heading:
-            self.heading.setText(heading)
+    def show_result(self, text: str) -> None:
         self.report.setPlainText(text)
         self._show("result", "")
 
@@ -364,7 +359,7 @@ class TrimPage(QWidget):
 
     def show_track(self, path, format_line: str, total_ms: int, subfolder: str) -> None:
         """A track read: its values from scratch (the two times are the page's only state)."""
-        self.heading.setText(f"<b>Trim</b> · {path}")
+        self.heading.set("Trim", path)
         self.format_label.setText(f"<b>{path.name}</b> · {format_line}")
         for name, edit in (("start", self.start_edit), ("end", self.end_edit)):
             edit.total_ms = total_ms

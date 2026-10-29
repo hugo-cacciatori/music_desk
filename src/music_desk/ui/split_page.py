@@ -37,6 +37,7 @@ from music_desk.core.cue_edit import CueDocument, Problem, format_time
 from music_desk.ui import theme
 from music_desk.ui.hover import exempt
 from music_desk.ui.qt_util import cell_text
+from music_desk.ui.task_header import TaskHeader
 
 # The table's columns: (key, header). Keys are cue_edit.TRACK_FIELDS' where the cell is editable.
 COLUMNS = (("number", "#"), ("start", "Start"), ("gap", "Gap"), ("length", "Length"),
@@ -86,11 +87,7 @@ class SplitPage(QWidget):
         self._refreshing = False
         self._table_stale = False  # a refresh came while a cell was being edited
 
-        self.heading = QLabel()
-        self.heading.setWordWrap(True)
-        self.heading.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        header = QHBoxLayout()
-        header.addWidget(self.heading, 1)
+        self.heading = TaskHeader()
 
         # -- the source and the encoding --
         self.source = QComboBox()
@@ -138,6 +135,7 @@ class SplitPage(QWidget):
 
         # -- the tracks --
         self.table = QTableWidget(0, len(COLUMNS))
+        theme.card(self.table)
         self.table.setHorizontalHeaderLabels([header for _key, header in COLUMNS])
         for key, tip in HEADER_TIPS.items():
             header_item = self.table.horizontalHeaderItem(COLUMN[key])
@@ -182,7 +180,7 @@ class SplitPage(QWidget):
         self.notes.setWordWrap(True)
 
         # -- the buttons --
-        self.save_button = QPushButton("Save")
+        self.save_button = theme.primary(QPushButton("Save"))
         self.save_button.setToolTip(SAVE_TIP)
         self.save_button.clicked.connect(self.saveRequested)
         self.save_as_button = QPushButton("Save as…")
@@ -218,17 +216,16 @@ class SplitPage(QWidget):
         self.done_button = QPushButton("Close")  # after an error: the window has nothing else to show
         self.done_button.setToolTip("Close this window")
         self.done_button.clicked.connect(self.doneRequested)
-        buttons = QHBoxLayout()
-        buttons.addWidget(self.save_button)
-        buttons.addWidget(self.save_note)
-        for button in (self.save_as_button, self.preview_button):
-            buttons.addWidget(button)
+        buttons = QHBoxLayout()  # Preview on the left; Save as…, Save on the right (SPEC §36 task 4)
+        buttons.addWidget(self.preview_button)
         buttons.addStretch(1)
         buttons.addWidget(self.busy)
-        buttons.addWidget(self.done_button)
+        buttons.addWidget(self.save_note)
+        for button in (self.save_as_button, self.save_button, self.done_button):
+            buttons.addWidget(button)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(header)
+        layout.addWidget(self.heading)
         layout.addWidget(self.message)
         layout.addWidget(self.editor, 1)
         layout.addLayout(buttons)
@@ -237,7 +234,7 @@ class SplitPage(QWidget):
     # -- states --
 
     def show_loading(self, path) -> None:
-        self.heading.setText(f"<b>Cue sheet</b> · {path}")
+        self.heading.set("Cue sheet", path)
         self._show("loading", "Reading the cue sheet…")
 
     def show_error(self, text: str) -> None:
@@ -259,7 +256,7 @@ class SplitPage(QWidget):
 
     def show_document(self, doc: CueDocument, path, auto_label: str | None) -> None:
         """The sheet's values, after it was read or edited. Fields being typed in keep their cursor."""
-        self.heading.setText(f"<b>Cue sheet</b> · {path}")
+        self.heading.set("Cue sheet", path)
         self._refreshing = True
         try:
             album = doc.album()

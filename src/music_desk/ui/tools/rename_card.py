@@ -8,7 +8,6 @@ masks are the File names card's (SPEC §21): this card only shows where they are
 import re
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
@@ -55,16 +54,14 @@ class Card(QFrame):
 
     def __init__(self, title: str, description: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFrameShape(QFrame.Shape.StyledPanel)
-        # A clear hierarchy (Hugo, M17): a larger title, the description in a softer colour, the Run button bold.
+        # A clear hierarchy (Hugo, M17): the page's name as its title (SPEC §36 task 4), the description in the
+        # secondary colour, on a card.
+        theme.card(self)
         self.title = QLabel(title)
-        font = self.title.font()
-        font.setBold(True)
-        font.setPointSizeF(font.pointSizeF() * theme.SCALE_TOOL_TITLE)
-        self.title.setFont(font)
+        self.title.setFont(theme.scaled(self.title.font(), theme.SCALE_TASK_TITLE, strong=True))
         self.description = QLabel(description)
         self.description.setWordWrap(True)
-        self.description.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        theme.secondary(self.description)
         self.body = QVBoxLayout()
         self.problems = QLabel()
         self.problems.setWordWrap(True)
@@ -78,14 +75,6 @@ class Card(QFrame):
         layout.addLayout(self.body)
         layout.addWidget(self.problems)
         layout.addLayout(self.buttons)
-
-    @staticmethod
-    def primary(button: QPushButton) -> QPushButton:
-        """The card's main action, in bold so it stands out from Restore defaults."""
-        font = button.font()
-        font.setBold(True)
-        button.setFont(font)
-        return button
 
     def reset(self) -> None:
         """Restore defaults: every page has one (SPEC §12)."""

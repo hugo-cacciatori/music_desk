@@ -14,6 +14,7 @@ from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QFrame,
     QHBoxLayout,
     QListWidget,
     QMessageBox,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core import cleanup, rename, replaygain
 from music_desk.settings import Settings
+from music_desk.ui import theme
 from music_desk.ui.tools.cleanup_card import CleanupCard
 from music_desk.ui.tools.names_card import FileNamesCard
 from music_desk.ui.tools.rename_card import FIX_FIRST, Card, RenameCard
@@ -47,14 +49,18 @@ class OptionsWindow(QDialog):
         self.cards = [card for _which, card in cards]
         self.setWindowTitle("Options")
         self.setModal(False)
+        theme.task_window(self)
         self.pages: list[str] = []
         self.list = QListWidget()
+        self.list.setObjectName("optionsPages")  # Windows 11's page list: theme.style_sheet
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.stack = QStackedWidget()
         for which, card in cards:
             self.pages.append(which)
             self.list.addItem(PAGE_TITLES[which])
             scroll = QScrollArea()
+            scroll.setObjectName("optionsPage")  # see-through: the card on the window background
+            scroll.setFrameShape(QFrame.Shape.NoFrame)
             scroll.setWidgetResizable(True)
             scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # the card wraps instead
             holder = QWidget()  # the card at its own height, the space below it empty

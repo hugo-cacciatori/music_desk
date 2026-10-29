@@ -26,7 +26,9 @@ from PySide6.QtWidgets import (
 
 from music_desk.core import rename
 from music_desk.core.rename import PlanItem, RenamePlan, RenameReport, Status
+from music_desk.ui import theme
 from music_desk.ui.qt_util import cell_text
+from music_desk.ui.task_header import TaskHeader
 
 ALL = "All files"
 COLUMNS = ("Folder", "Name", "New name", "Status", "Details")
@@ -76,10 +78,7 @@ class RenamePreview(QWidget):
         self.report: RenameReport | None = None
         self.state = "idle"  # planning, preview, applying, result, error
 
-        self.heading = QLabel()
-        self.heading.setWordWrap(True)
-        header = QHBoxLayout()
-        header.addWidget(self.heading, 1)
+        self.heading = TaskHeader()
 
         self.busy = QProgressBar()
         self.busy.setRange(0, 0)
@@ -118,8 +117,10 @@ class RenamePreview(QWidget):
         self.extras = QPlainTextEdit()  # junk files, sidecars and warnings; then the result
         self.extras.setReadOnly(True)
         self.extras.setMaximumHeight(160)
+        for view in (self.table, self.extras):
+            theme.card(view)
 
-        self.apply_button = QPushButton("Apply renames")
+        self.apply_button = theme.primary(QPushButton("Apply renames"))
         self.apply_button.setToolTip("Rename exactly the files listed, as shown; in Tidy, ReplayGain then runs on "
                                      "the final names")
         self.apply_button.clicked.connect(self.applyRequested)
@@ -132,15 +133,13 @@ class RenamePreview(QWidget):
         self.done_button = QPushButton("Done")
         self.done_button.setToolTip("Close this window")
         self.done_button.clicked.connect(self.doneRequested)
-        buttons = QHBoxLayout()
-        buttons.addWidget(self.apply_button)
-        buttons.addWidget(self.back_bottom)
-        buttons.addWidget(self.cancel_button)
+        buttons = QHBoxLayout()  # the main action, then Close, at the bottom right (SPEC §36 task 4)
         buttons.addStretch(1)
-        buttons.addWidget(self.done_button)
+        for button in (self.apply_button, self.cancel_button, self.back_bottom, self.done_button):
+            buttons.addWidget(button)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(header)
+        layout.addWidget(self.heading)
         layout.addLayout(status_row)
         layout.addWidget(self.summary)
         layout.addWidget(self.filter_widget)
@@ -157,8 +156,7 @@ class RenamePreview(QWidget):
         if what is None:
             what = f"{selection} selected file{'s' if selection != 1 else ''} in {folder}" if selection else \
                 str(folder)
-        title = "Rename: check the changes"
-        self.heading.setText(f"<b>{title}</b> · {what}")
+        self.heading.set("Rename: check the changes", what)
         self.apply_button.setText("Apply renames")
         self.table.setRowCount(0)
         self._show("planning", "Reading the tags… Nothing is renamed until you apply.")

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import QMainWindow, QMessageBox, QStackedWidget
 
 from music_desk.core import fsops
 from music_desk.core.path_locks import PathLocks
+from music_desk.ui import theme
 from music_desk.ui.controllers.split import SplitController
 from music_desk.ui.controllers.trim import TrimController
 from music_desk.ui.toast import Toast
@@ -38,6 +39,7 @@ class ToolHost(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"Refrain · {title}")
         self.resize(980, 680)
+        theme.task_window(self)  # the window background under its page's cards (SPEC §36 task 4)
         self.settings = cards.settings
         self.tools = SimpleNamespace(cards=cards)  # what the controllers read: the Options window's cards
         self.center = QStackedWidget()

@@ -19,6 +19,7 @@ from music_desk.context_menu.entries import OPTIONS_WHERE
 from music_desk.core import fsops
 from music_desk.core.path_locks import LockedError, PathLocks
 from music_desk.services.replaygain_job import DISCOGRAPHY, LOOSE, TRACKS, Finished, ReplayGainRunner
+from music_desk.ui import theme
 from music_desk.ui.controllers.tools import ENTRY_KINDS, entry_problem, entry_title
 from music_desk.ui.tools.rg_report import ReplayGainView
 from music_desk.ui.tools.tool_cards import REPLAYGAIN, ToolCards
@@ -37,6 +38,7 @@ class ReplayGainWindow(QWidget):
         super().__init__(parent)
         self.setWindowTitle(TITLE)
         self.resize(900, 600)
+        theme.task_window(self)  # the window background under its page's cards (SPEC §36 task 4)
         self.cards = cards
         self.view = ReplayGainView()
         self.view.doneRequested.connect(self.close)
@@ -70,7 +72,7 @@ class ReplayGainWindow(QWidget):
         targets = [Path(path) for path in paths]
         folder = targets[0].parent if targets and kind in (TRACKS, LOOSE) else targets[0] if targets else None
         self.view.folder = folder  # Open in File Explorer, also after a refusal
-        self.view.heading.setText(f"<b>{entry_title(kind, targets)}</b>" + (f" · {folder}" if folder else ""))
+        self.view.heading.set(entry_title(kind, targets), folder or "")
         problem = entry_problem(kind, targets)
         if problem:
             self.view.show_error(f"ReplayGain didn't start: {problem}.")

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core.index.album_search import NOT_SPLIT, SEARCHES, WITHOUT_REPLAYGAIN
 from music_desk.services.album_search_service import AlbumSearchService, SearchDone
+from music_desk.ui import theme
 
 FOLDER_ROLE = Qt.ItemDataRole.UserRole
 
@@ -38,6 +39,7 @@ class AdvancedSearchWindow(QWidget):
         self.last_search: str | None = None  # what Refresh search runs again
         self._token: int | None = None
         self.setWindowTitle("Advanced search")
+        theme.task_window(self)
         self.resize(640, 480)
 
         self.options = QButtonGroup(self)
@@ -52,7 +54,7 @@ class AdvancedSearchWindow(QWidget):
             button.setToolTip(tips[key])
             self.options.addButton(button)
             options.addWidget(button)
-        self.start_button = QPushButton("Start")
+        self.start_button = theme.primary(QPushButton("Start"))
         self.start_button.setToolTip("Search the library index for the chosen kind of album; nothing is changed")
         self.start_button.clicked.connect(self.start)
         self.refresh_button = QPushButton("Refresh search")
@@ -72,6 +74,7 @@ class AdvancedSearchWindow(QWidget):
         buttons.addWidget(self.status, 1)
 
         self.results = QListWidget()
+        theme.card(self.results)
         self.results.setToolTip("Double-click an album to show its folder in Refrain.")
         self.results.itemActivated.connect(self._activated)
 

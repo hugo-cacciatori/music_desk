@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 from music_desk.core.formats import format_for
 from music_desk.core.replaygain import plural
 from music_desk.services.tag_writer import ReplayGainRemoved
+from music_desk.ui import theme
+from music_desk.ui.task_header import TaskHeader
 
 TITLE = "Refrain · Remove ReplayGain tags"
 
@@ -73,14 +75,16 @@ class RemoveReport(QWidget):
         super().__init__(parent, Qt.WindowType.Window)
         self.setWindowTitle(TITLE)
         self.resize(640, 320)
+        theme.task_window(self)
         self.folder = folder
-        self.heading = QLabel(f"<b>Remove ReplayGain tags</b> · {folder}")
-        self.heading.setWordWrap(True)
+        self.heading = TaskHeader()
+        self.heading.set("Remove ReplayGain tags", folder)
         self.message = QLabel("Removing the ReplayGain tags…")
         self.message.setWordWrap(True)
         self.details = QPlainTextEdit()
         self.details.setReadOnly(True)
         self.details.hide()
+        theme.card(self.details)
         reveal = QPushButton("Open in File Explorer")
         reveal.setToolTip("Show the tracks' folder in File Explorer")
         reveal.clicked.connect(lambda: self.revealRequested.emit(self.folder))

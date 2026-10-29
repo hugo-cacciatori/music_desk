@@ -24,25 +24,25 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from refrain.core.cancel import CancelToken
 from refrain.core.formats import AUDIO_EXTENSIONS
-from refrain.core.index.roots import is_inside
+from refrain.core.index.queries import find_folder
+from refrain.core.index.scan_read import Child, list_folder, read_file
+from refrain.core.index.scan_write import (
+    adjust_folder_stats,
+    match_renames,
+    stats_values,
+    update_folder_stats,
+    update_sidecars,
+    update_sidecars_in_folder,
+    write_tracks,
+)
 from refrain.core.index.store import DbWriter, connect_read, path_of
-from refrain.core.lyrics import FOUND, cache_key, track_from_fields
-from refrain.core.tags import TaggedFile
 
 log = logging.getLogger(__name__)
 
 PAUSE_POLL_S = 0.1  # how often a paused scan looks for folders the user asks for
-RG_KEYS = ("replaygain_track_gain", "replaygain_track_peak", "replaygain_album_gain", "replaygain_album_peak")
-TRACK_COLUMNS = (
-    "format", "tag_family", "title", "artist", "albumartist", "album", "track", "track_total", "disc", "disc_total",
-    "date", "genre", "composer", "comment", "has_lyrics_tag", "has_cover", "duration", "bitrate", "sample_rate",
-    "bit_depth", "channels", "rg_track_gain", "rg_track_peak", "rg_album_gain", "rg_album_peak", "lyrics_key",
-    "read_size", "read_mtime", "read_error",
-)
 _AUDIO_SQL = ", ".join(f"'{ext}'" for ext in sorted(AUDIO_EXTENSIONS))
 
 
@@ -72,15 +72,6 @@ class ScanReport:
     folder_id: int | None = None  # the scanned folder (the root's top entry for a root scan)
 
 
-@dataclass
-class _Child:
-    name: str
-    is_dir: bool
-    ext: str | None
-    size: int | None
-    mtime: float
-
-
 class _Ref:
     """A folder entry id, known now or once the batch that inserts it is written."""
 
@@ -97,80 +88,12 @@ class _Batch:
     def clear(self) -> None:
         self.deletes: list[int] = []
         self.updates: list[tuple] = []  # (name, size, mtime, gen, id)
-        self.inserts: list[tuple[_Ref, _Child, _Ref | None]] = []  # (parent, child, ref for a new folder)
+        self.inserts: list[tuple[_Ref, Child, _Ref | None]] = []  # (parent, child, ref for a new folder)
         self.started = time.monotonic()
 
     @property
     def rows(self) -> int:
         return len(self.deletes) + len(self.updates) + len(self.inserts)
-
-
-def list_folder(path: str) -> list[_Child]:
-    """The folder's entries, without following junctions or symbolic links. Raises OSError if it can't be listed."""
-    children = []
-    with os.scandir(path) as entries:
-        for entry in entries:
-            try:
-                if entry.is_symlink() or entry.is_junction():
-                    log.debug("not following link %s", entry.path)
-                    continue
-                is_dir = entry.is_dir(follow_symlinks=False)
-                stat = entry.stat(follow_symlinks=False)  # cached by scandir on Windows
-            except OSError as e:
-                log.warning("skipping %s: %s", entry.path, e)
-                continue
-            ext = None if is_dir else os.path.splitext(entry.name)[1].lower()
-            children.append(_Child(entry.name, is_dir, ext, None if is_dir else stat.st_size, stat.st_mtime))
-    return children
-
-
-def read_file(path: Path, size: int | None, mtime: float | None) -> tuple[dict, str | None]:
-    """A `tracks` row for an audio file, and the lyrics text for the search index: always None, since the files'
-    own lyrics tags are no longer shown or searched (M12, SPEC §26). Never raises."""
-    row: dict[str, Any] = dict.fromkeys(TRACK_COLUMNS)
-    row.update(format=path.suffix.lstrip(".").upper(), read_size=size, read_mtime=mtime,
-               has_lyrics_tag=0, has_cover=0)
-    try:
-        tagged = TaggedFile(path, shared=True)  # never blocks a delete or rename of this file (SPEC §7)
-        fields = tagged.fields()
-        stream = tagged.stream_info()
-        track = track_from_fields(fields, path.name, stream.duration)
-        row.update(
-            tag_family=tagged.info.family.value, title=fields.title, artist=fields.artist,
-            albumartist=fields.albumartist, album=fields.album, track=fields.track, track_total=fields.track_total,
-            disc=fields.disc, disc_total=fields.disc_total, date=fields.year, genre=fields.genre,
-            composer=fields.composer, comment=fields.comment,
-            has_cover=int(tagged.cover() is not None), duration=stream.duration, bitrate=stream.bitrate,
-            sample_rate=stream.sample_rate, bit_depth=stream.bits_per_sample, channels=stream.channels,
-            lyrics_key=cache_key(track.artist, track.title) if track.artist and track.title else None,
-        )
-        for key in RG_KEYS:
-            row["rg_" + key.removeprefix("replaygain_")] = tagged.get_replaygain(key)
-        return row, None
-    except Exception as e:  # noqa: BLE001 - a broken file is indexed with its error, the scan goes on
-        row["read_error"] = f"{type(e).__name__}: {e}"
-        return row, None
-
-
-def find_folder(conn: sqlite3.Connection, path: str | Path) -> tuple[int, bool] | None:
-    """The indexed folder for a path: (entry id, True) when indexed, else its nearest indexed ancestor
-    (entry id, False). None when the path is outside every root. A file path resolves to its folder's lookup."""
-    path = os.path.normpath(os.path.abspath(path))
-    for root_path, top in conn.execute(
-            "SELECT r.path, e.id FROM roots r JOIN entries e ON e.root_id = r.id AND e.parent_id IS NULL"):
-        if os.path.normcase(path) == os.path.normcase(root_path):
-            return top, True
-        if not is_inside(path, root_path):
-            continue
-        current = top
-        for name in Path(path).relative_to(root_path).parts:
-            row = conn.execute("SELECT id, is_dir FROM entries WHERE parent_id = ? AND name = ? COLLATE NOCASE",
-                               (current, name)).fetchone()
-            if row is None or not row[1]:
-                return current, False
-            current = row[0]
-        return current, True
-    return None
 
 
 class Scanner:
@@ -304,11 +227,11 @@ class Scanner:
         entry = (entry_id, folder_id, path.name, stat.st_size, stat.st_mtime)
 
         def write(conn: sqlite3.Connection) -> None:
-            before = _stats_values(conn, entry_id)
+            before = stats_values(conn, entry_id)
             conn.execute("UPDATE entries SET name = ?, size = ?, mtime = ? WHERE id = ?",
                          (path.name, stat.st_size, stat.st_mtime, entry_id))
-            _write_tracks(conn, [entry], [(track, lyrics)])
-            adjust_folder_stats(conn, folder_id, before, _stats_values(conn, entry_id))
+            write_tracks(conn, [entry], [(track, lyrics)])
+            adjust_folder_stats(conn, folder_id, before, stats_values(conn, entry_id))
 
         self.writer.submit(write).result()
         report = ScanReport(root_id, files=1, updated=1, tags_read=1, folder_id=folder_id)
@@ -354,7 +277,7 @@ class Scanner:
                     conn.execute("DELETE FROM tracks WHERE entry_id = ?", (entry_id,))
                     conn.execute("DELETE FROM search WHERE rowid = ?", (entry_id,))
                     conn.execute("INSERT INTO search (rowid, name) VALUES (?, ?)", (entry_id, new.name))
-            _update_sidecars_in_folder(conn, folder_id)
+            update_sidecars_in_folder(conn, folder_id)
 
         self.writer.submit(write).result()
         root_id = rows[0][0][1]
@@ -453,7 +376,7 @@ class Scanner:
 
         # A vanished entry and a new one alike in kind, extension, size and mtime (one of each) were renamed
         # outside the app, or by the app just before its own index update: keep the row, its id and its tags.
-        renamed = _match_renames(list(known.values()), new_children)
+        renamed = match_renames(list(known.values()), new_children)
         for row, child in renamed:
             del known[row[1].casefold()]
             new_children.remove(child)
@@ -548,7 +471,7 @@ class Scanner:
             chunk = stale[start:start + self.tag_batch]
             paths = [Path(ctx.path_of(parent_id), name) for _id, parent_id, name, _s, _m in chunk]
             results = list(ctx.pool.map(read_file, paths, [r[3] for r in chunk], [r[4] for r in chunk]))
-            self.writer.submit(lambda conn, c=chunk, r=results: _write_tracks(conn, c, r)).result()
+            self.writer.submit(lambda conn, c=chunk, r=results: write_tracks(conn, c, r)).result()
             ctx.report.tags_read += len(chunk)
             ctx.report.tag_errors += sum(1 for row, _lyrics in results if row["read_error"])
             ctx.progress.tags_done += len(chunk)
@@ -558,8 +481,8 @@ class Scanner:
 
     def _finish(self, root_id: int, last_scan: str | None) -> None:
         def write(conn: sqlite3.Connection) -> None:
-            _update_sidecars(conn, root_id)
-            _update_folder_stats(conn, root_id)
+            update_sidecars(conn, root_id)
+            update_folder_stats(conn, root_id)
             if last_scan:
                 conn.execute("UPDATE roots SET last_scan = ? WHERE id = ?", (last_scan, root_id))
         self.writer.submit(write).result()
@@ -583,123 +506,3 @@ class _Context:
         if path is None:
             path = self.paths[entry_id] = str(path_of(self.conn, entry_id))
         return path
-
-
-def _write_tracks(conn: sqlite3.Connection, chunk: list, results: list) -> None:
-    columns = ", ".join(TRACK_COLUMNS)
-    marks = ", ".join("?" * (len(TRACK_COLUMNS) + 1))
-    for (entry_id, _parent, name, _size, _mtime), (row, lyrics) in zip(chunk, results, strict=True):
-        if conn.execute("SELECT 1 FROM entries WHERE id = ?", (entry_id,)).fetchone() is None:
-            continue  # gone since it was listed
-        conn.execute(f"INSERT OR REPLACE INTO tracks (entry_id, {columns}) VALUES ({marks})",
-                     (entry_id, *(row[c] for c in TRACK_COLUMNS)))
-        conn.execute("DELETE FROM search WHERE rowid = ?", (entry_id,))
-        # lrclib: a new copy of an already-found song is searchable by its lyrics at once (SPEC §6).
-        conn.execute("INSERT INTO search (rowid, name, title, artist, albumartist, album, genre, lyrics, lrclib) "
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, "
-                     "(SELECT plain FROM lyrics WHERE key = ? AND status = 'found'))",
-                     (entry_id, name, row["title"], row["artist"], row["albumartist"], row["album"], row["genre"],
-                      lyrics, row["lyrics_key"]))
-
-
-def _update_sidecars(conn: sqlite3.Connection, root_id: int) -> None:
-    """has_lrc_sidecar: a same-stem .lrc next to the audio file (it can appear without the audio changing)."""
-    conn.execute(
-        """
-        UPDATE tracks SET has_lrc_sidecar = EXISTS (
-            SELECT 1 FROM entries s
-            WHERE s.parent_id = e.parent_id AND s.ext = '.lrc'
-              AND lower(substr(s.name, 1, length(s.name) - 4))
-                = lower(substr(e.name, 1, length(e.name) - length(e.ext)))
-        )
-        FROM entries e WHERE e.id = tracks.entry_id AND e.root_id = ?
-        """, (root_id,))
-
-
-def _match_renames(vanished: list, appeared: list[_Child]) -> list[tuple]:
-    """Pairs (row, child) that are the same entry under a new name: same kind, lowercase extension, size and
-    mtime, and the only such pair. Anything ambiguous stays a delete plus an insert."""
-    def key(is_dir, name, size, mtime):
-        return (bool(is_dir), None if is_dir else os.path.splitext(name)[1].lower(), None if is_dir else size,
-                mtime)
-
-    old: dict[tuple, list] = {}
-    for row in vanished:
-        old.setdefault(key(row[2], row[1], row[3], row[4]), []).append(row)
-    new: dict[tuple, list[_Child]] = {}
-    for child in appeared:
-        new.setdefault(key(child.is_dir, child.name, child.size, child.mtime), []).append(child)
-    return [(rows[0], new[k][0]) for k, rows in old.items() if len(rows) == 1 and len(new.get(k, [])) == 1]
-
-
-def _update_sidecars_in_folder(conn: sqlite3.Connection, folder_id: int) -> None:
-    """has_lrc_sidecar for one folder's tracks (after a rename there)."""
-    conn.execute(
-        """
-        UPDATE tracks SET has_lrc_sidecar = EXISTS (
-            SELECT 1 FROM entries s
-            WHERE s.parent_id = e.parent_id AND s.ext = '.lrc'
-              AND lower(substr(s.name, 1, length(s.name) - 4))
-                = lower(substr(e.name, 1, length(e.name) - length(e.ext)))
-        )
-        FROM entries e WHERE e.id = tracks.entry_id AND e.parent_id = ?
-        """, (folder_id,))
-
-
-def _stats_values(conn: sqlite3.Connection, entry_id: int) -> tuple:
-    """What one file adds to its folders' totals: (tracks, duration, with RG, with lyrics tag, LRCLIB found)."""
-    row = conn.execute(
-        """
-        SELECT t.read_error IS NULL, t.duration, t.rg_track_gain IS NOT NULL, t.has_lyrics_tag, l.status = ?
-        FROM tracks t LEFT JOIN lyrics l ON l.key = t.lyrics_key WHERE t.entry_id = ?
-        """, (FOUND, entry_id)).fetchone()
-    if row is None or not row[0]:
-        return (0, 0.0, 0, 0, 0)
-    return (1, row[1] or 0.0, int(bool(row[2])), int(bool(row[3])), int(bool(row[4])))
-
-
-def adjust_folder_stats(conn: sqlite3.Connection, folder_id: int, before: tuple, after: tuple) -> None:
-    """Apply one file's change to its folder and every folder above it (the formats list is left to scans)."""
-    delta = tuple(a - b for a, b in zip(after, before, strict=True))
-    if not any(delta):
-        return
-    folder = folder_id
-    while folder is not None:
-        conn.execute("INSERT OR IGNORE INTO folder_stats (entry_id) VALUES (?)", (folder,))
-        conn.execute(
-            "UPDATE folder_stats SET n_tracks = n_tracks + ?, duration = duration + ?, n_with_rg = n_with_rg + ?, "
-            "n_with_lyrics_tag = n_with_lyrics_tag + ?, n_lrclib_found = n_lrclib_found + ? WHERE entry_id = ?",
-            (*delta, folder))
-        folder = conn.execute("SELECT parent_id FROM entries WHERE id = ?", (folder,)).fetchone()[0]
-
-
-def _update_folder_stats(conn: sqlite3.Connection, root_id: int) -> None:
-    """Totals for every folder of the root, counting its whole subtree."""
-    rows = conn.execute(
-        """
-        SELECT e.id, e.parent_id, e.is_dir, t.entry_id IS NOT NULL AND t.read_error IS NULL, t.duration, t.format,
-               t.rg_track_gain IS NOT NULL, t.has_lyrics_tag, l.status = ?
-        FROM entries e LEFT JOIN tracks t ON t.entry_id = e.id LEFT JOIN lyrics l ON l.key = t.lyrics_key
-        WHERE e.root_id = ?
-        """, (FOUND, root_id)).fetchall()
-    parent = {row[0]: row[1] for row in rows}
-    stats = {row[0]: [0, 0.0, 0, 0, 0, set()] for row in rows if row[2]}
-    for _id, parent_id, is_dir, is_track, duration, fmt, has_rg, has_lyrics, found in rows:
-        if is_dir or not is_track:
-            continue
-        folder = parent_id
-        while folder is not None:
-            s = stats[folder]
-            s[0] += 1
-            s[1] += duration or 0
-            s[2] += bool(has_rg)
-            s[3] += bool(has_lyrics)
-            s[4] += bool(found)
-            s[5].add(fmt)
-            folder = parent[folder]
-    conn.execute("DELETE FROM folder_stats WHERE entry_id IN (SELECT id FROM entries WHERE root_id = ?)", (root_id,))
-    conn.executemany(
-        "INSERT INTO folder_stats (entry_id, n_tracks, duration, n_with_rg, n_with_lyrics_tag, n_lrclib_found, "
-        "formats) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [(folder, s[0], s[1], s[2], s[3], s[4], ", ".join(sorted(f for f in s[5] if f)) or None)
-         for folder, s in stats.items()])

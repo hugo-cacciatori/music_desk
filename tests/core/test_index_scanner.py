@@ -9,7 +9,8 @@ import pytest
 
 from refrain.core.cancel import CancelToken
 from refrain.core.index.roots import add_root, list_roots
-from refrain.core.index.scanner import Scanner, read_file
+from refrain.core.index.scan_read import read_file
+from refrain.core.index.scanner import Scanner
 from refrain.core.index.store import DbWriter, connect_read, path_of
 from refrain.core.lyrics import cache_key
 
@@ -377,7 +378,7 @@ def test_hundred_thousand_entries(writer, tmp_path):
 # -- path scans (the watcher's entry point) --
 
 def test_find_folder(writer, read, library, root_id):
-    from refrain.core.index.scanner import find_folder
+    from refrain.core.index.queries import find_folder
 
     scanner(writer).scan_root(root_id)
     album = entry_id(read, library, f"Fixture Artist/{ALBUM}")

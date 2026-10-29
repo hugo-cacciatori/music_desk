@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from refrain.core import inline_rename
 from refrain.core.index import queries
-from refrain.core.index.scanner import find_folder
+from refrain.core.index.queries import find_folder
 from refrain.core.index.store import path_of
 from refrain.ui.controllers import STATUS_MS
 

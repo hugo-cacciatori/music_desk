@@ -2,12 +2,14 @@
 list. They run on the UI's read-only connection and only touch indexed data, so opening a folder is instant even
 on a slow drive."""
 
+import os
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
 from refrain.core.formats import AUDIO_EXTENSIONS
 from refrain.core.fsops import natural_key
+from refrain.core.index.roots import is_inside
 from refrain.core.index.store import consistent_read, path_of
 from refrain.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND
 from refrain.core.playlists import PlaylistEntry
@@ -325,3 +327,24 @@ def _folder_summary(conn: sqlite3.Connection, folder_id: int) -> FolderSummary |
         formats=stats[2], n_with_rg=stats[3] or 0, n_lrclib_found=stats[4] or 0,
         n_subfolders=subfolders, n_files=files, first_track=first_track(conn, folder_id),
     )
+
+
+def find_folder(conn: sqlite3.Connection, path: str | Path) -> tuple[int, bool] | None:
+    """The indexed folder for a path: (entry id, True) when indexed, else its nearest indexed ancestor
+    (entry id, False). None when the path is outside every root. A file path resolves to its folder's lookup."""
+    path = os.path.normpath(os.path.abspath(path))
+    for root_path, top in conn.execute(
+            "SELECT r.path, e.id FROM roots r JOIN entries e ON e.root_id = r.id AND e.parent_id IS NULL"):
+        if os.path.normcase(path) == os.path.normcase(root_path):
+            return top, True
+        if not is_inside(path, root_path):
+            continue
+        current = top
+        for name in Path(path).relative_to(root_path).parts:
+            row = conn.execute("SELECT id, is_dir FROM entries WHERE parent_id = ? AND name = ? COLLATE NOCASE",
+                               (current, name)).fetchone()
+            if row is None or not row[1]:
+                return current, False
+            current = row[0]
+        return current, True
+    return None

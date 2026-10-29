@@ -29,7 +29,8 @@ from PySide6.QtWidgets import (
 from refrain.context_menu.request import EDIT_CUE, NEW_CUE, SPLIT, TRIM
 from refrain.core import playlists
 from refrain.core.index import queries
-from refrain.core.index.scanner import ScanReport, find_folder
+from refrain.core.index.queries import find_folder
+from refrain.core.index.scanner import ScanReport
 from refrain.core.index.store import path_of
 from refrain.core.path_locks import PathLocks
 from refrain.licenses import licenses_dir

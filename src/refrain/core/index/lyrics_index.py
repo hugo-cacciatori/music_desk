@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from refrain.core.formats import TagFamily
-from refrain.core.index.scanner import adjust_folder_stats
+from refrain.core.index.scan_write import adjust_folder_stats
 from refrain.core.index.store import read_lyrics, upsert_lyrics
 from refrain.core.lyrics import FOUND, NOT_FOUND, LyricsOptions, Track, track_from_fields
 from refrain.core.tags import Fields

@@ -17,7 +17,8 @@ from typing import Any
 from PySide6.QtCore import QObject, Signal
 
 from refrain.core.cancel import CancelToken
-from refrain.core.index.scanner import Scanner, ScanProgress, find_folder
+from refrain.core.index.queries import find_folder
+from refrain.core.index.scanner import Scanner, ScanProgress
 from refrain.core.index.store import DbWriter, connect_read
 
 log = logging.getLogger(__name__)

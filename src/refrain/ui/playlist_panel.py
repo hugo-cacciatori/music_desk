@@ -35,8 +35,7 @@ from PySide6.QtWidgets import (
 
 from refrain.core.fsops import natural_key
 from refrain.core.index import queries
-from refrain.core.index.queries import TrackRow
-from refrain.core.index.scanner import find_folder
+from refrain.core.index.queries import TrackRow, find_folder
 from refrain.core.playlist_builder import Builder, Item
 from refrain.core.playlists import PlaylistEntry
 from refrain.ui import theme

@@ -44,7 +44,8 @@ AREAS: dict[str, Area] = {
         ("ui/test_metadata_tab.py", "ui/test_file_preview.py", "ui/test_folder_summary.py",
          "ui/test_lyrics_tab.py")),
     "index": Area(
-        ("core/index/schema.py", "core/index/store.py", "core/index/scanner.py", "core/index/roots.py",
+        ("core/index/schema.py", "core/index/store.py", "core/index/scanner.py", "core/index/scan_read.py",
+         "core/index/scan_write.py", "core/index/roots.py",
          "core/index/queries.py", "services/indexer.py", "services/watcher.py", "services/library.py",
          "ui/controllers/roots.py"),
         ("core/test_index_schema.py", "core/test_index_store.py", "core/test_index_scanner.py",

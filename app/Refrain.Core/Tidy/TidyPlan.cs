@@ -386,3 +386,56 @@ public static class Tidying
             ? $"cue sheet of {image}" : "image whose tracks are already split")).ToList();
     }
 }
+
+/// <summary>The plan in words, as the Python app's Tidy page says it (SPEC §28 "The plan page").</summary>
+public static class TidyText
+{
+    /// <summary>What Tidy does in one folder.</summary>
+    public static List<string> FolderActions(FolderPlan plan)
+    {
+        if (plan.Kind == FolderKind.Skipped) return [$"Skipped: {plan.Skip}"];
+        return plan.RenameCount > 0 ? [$"Rename {ReplayGain.Report.Plural(plan.RenameCount, "file")}"] : [];
+    }
+
+    /// <summary>"Offer 3 pictures, 1 video, 1 folder".</summary>
+    public static string ClutterText(IReadOnlyList<OfferItem> items)
+    {
+        (int Count, string Noun)[] counts =
+        [
+            (items.Count(i => i.Why == Clutter.PictureBesideMusic), "picture"), (items.Count(i => i.Why == Clutter.VideoBesideMusic), "video"),
+            (items.Count(i => i.IsFolder), "folder"),
+        ];
+        return "Offer " + string.Join(", ", counts.Where(c => c.Count > 0).Select(c => ReplayGain.Report.Plural(c.Count, c.Noun)));
+    }
+
+    public static string AlbumText(AlbumTidy album)
+    {
+        if (album.IsTidy) return "Already tidy";
+        var actions = FolderActions(album.Own);
+        if (album.Folders.Skip(1).Any(d => FolderActions(d).Count > 0)) actions.Add("work in its disc folders");
+        if (album.ReplayGain is not null) actions.Add($"ReplayGain ({album.ReplayGain})");
+        var text = string.Join(", then ", actions);
+        if (album.Clutter.Count > 0)
+        {
+            var offer = ClutterText(album.Clutter);
+            text = text.Length > 0 ? $"{text}; {char.ToLowerInvariant(offer[0])}{offer[1..]}" : offer;
+        }
+        return text.Length > 0 ? text : "Nothing to do";
+    }
+
+    /// <summary>A loose clutter folder's line under its parent: "Offer empty folder Scans", "Offer folder Artwork (12
+    /// pictures)".</summary>
+    public static string LooseText(OfferItem item) => item.Why == "empty folder"
+        ? $"Offer empty folder {Path.GetFileName(item.Path)}"
+        : $"Offer folder {Path.GetFileName(item.Path)} ({(item.Why.StartsWith("folder of ", StringComparison.Ordinal) ? item.Why["folder of ".Length..] : item.Why)})";
+
+    /// <summary>The line under the summary, once the plan is read.</summary>
+    public const string RunNote = "Run Tidy does all of this, album by album. The files offered are kept; you choose " +
+                                  "which to recycle at the end.";
+
+    /// <summary>What the Redundant files window says first, for Tidy.</summary>
+    public const string OfferIntro = "Tidy made these files redundant (images whose tracks are split, and their cue " +
+        "sheets), or found them beside the music (pictures, videos, folders holding nothing else). Every box is " +
+        "checked: uncheck what to keep, then click Delete selected to send the rest to the Recycle Bin. Closing this " +
+        "window keeps them all.";
+}

@@ -109,10 +109,10 @@ public sealed class StartTests : IDisposable
     [Fact]
     public void The_menu_offers_the_entries_of_spec_31_by_what_was_clicked()
     {
-        string[] onFolder = ["Open in Refrain", "ReplayGain as an album (−15 LUFS)", "ReplayGain as a discography (−15 LUFS)", "—", "Settings"];
+        string[] onFolder = ["Open in Refrain", "ReplayGain as an album (−15 LUFS)", "ReplayGain as a discography (−15 LUFS)", "Tidy this folder…", "—", "Settings"];
         Assert.Equal(onFolder, Labels(false, (@"D:\Music", true)));
         Assert.Equal(onFolder, Labels(true, (@"D:\Music", true)));
-        Assert.Equal(["ReplayGain: 3 folders, each as an album (−15 LUFS)", "—", "Settings"],
+        Assert.Equal(["ReplayGain: 3 folders, each as an album (−15 LUFS)", "Tidy 3 folders…", "—", "Settings"],
             Labels(false, (@"D:\A", true), (@"D:\B", true), (@"D:\C", true)));
         Assert.Equal(["ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.flac", false)));
         Assert.Equal(["ReplayGain: these 2 tracks as an album (−15 LUFS)", "ReplayGain: each of these 2 tracks on its own (−15 LUFS)",
@@ -175,15 +175,15 @@ public sealed class StartTests : IDisposable
         var listsBefore = Lists();
         var music = temp.Sub("Music", "Album");
         var report = Run(music, background: false, out var added);
-        Assert.Equal(5, added);  // Open in Refrain, ReplayGain as an album and as a discography, a separator, Settings
+        Assert.Equal(6, added);  // Open in Refrain, ReplayGain as an album and as a discography, Tidy, a separator, Settings
         Assert.Contains("position=2\n", report);  // just below 7-Zip
         Assert.Contains("again=0\n", report);  // asked twice for one menu: one submenu
         // The labels carry the target of the user's own settings: only their start is checked.
         Assert.Matches(@"Open in Refrain\|refrain\.open\nReplayGain as an album \(.* LUFS\)\|refrain\.replaygain-album\n" +
-                       @"ReplayGain as a discography \(.* LUFS\)\|refrain\.replaygain-discography\n-\nSettings\|refrain\.settings\n", report);
+                       @"ReplayGain as a discography \(.* LUFS\)\|refrain\.replaygain-discography\nTidy this folder…\|refrain\.tidy\n-\nSettings\|refrain\.settings\n", report);
         Assert.Contains($"command={Path.GetDirectoryName(Path.GetFullPath(dll))}\\Refrain.exe \"{music}\"\n", report);
         Run(music, background: true, out added);
-        Assert.Equal(5, added);
+        Assert.Equal(6, added);
         var file = Path.Combine(music, "a.flac");
         File.WriteAllText(file, "");
         report = Run(file, background: false, out added);
@@ -192,7 +192,7 @@ public sealed class StartTests : IDisposable
         Assert.Contains($"--replaygain-loose --list <list: {file}|>", report);  // described, never written
         var other = temp.Sub("Music", "Other");
         Run(music + "\n" + other, background: false, out added);
-        Assert.Equal(3, added);  // ReplayGain: 2 folders, each as an album; a separator; Settings
+        Assert.Equal(4, added);  // ReplayGain: 2 folders, each as an album; Tidy 2 folders…; a separator; Settings
         Assert.Equal(listsBefore, Lists());  // nothing written into the real data folder
     }
 }

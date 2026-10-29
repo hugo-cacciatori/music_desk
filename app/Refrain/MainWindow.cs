@@ -73,6 +73,7 @@ public sealed partial class MainWindow : Window
     readonly Button rescanButton = Icon("", "Rescan this folder (F5)");
     readonly Button explorerButton = new();
     readonly DropDownButton replayGainButton = new();
+    readonly Button tidyButton = new();
     readonly DispatcherQueueTimer searchTimer;
     readonly DispatcherQueueTimer liveSearchTimer;
     readonly DispatcherQueueTimer refreshTimer;
@@ -261,6 +262,14 @@ public sealed partial class MainWindow : Window
     FrameworkElement ToolsRow()
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 0, 0, 8) };
+        // Tidy first and in evidence (SPEC §30, §33): filled with the accent colour.
+        tidyButton.Content = Labelled("\uE8CB", "Tidy");
+        tidyButton.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
+        tidyButton.Click += (_, _) => StartTidy();
+        var tidyTip = new ToolTip();
+        tidyTip.Opened += (_, _) => tidyTip.Content = TidyHover();
+        ToolTipService.SetToolTip(tidyButton, tidyTip);
+        row.Children.Add(tidyButton);
         replayGainButton.Content = Labelled("\uE767", "ReplayGain");
         var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft };
         menu.Opening += (_, _) => FillReplayGainMenu(menu);
@@ -869,9 +878,43 @@ public sealed partial class MainWindow : Window
     /// <summary>The ReplayGain entries for the button's target: the shown list's selection, else the open folder.</summary>
     (List<string> Paths, List<Entry> Entries) ReplayGainEntries()
     {
-        var selected = resultsShown ? ShownResults.SelectedRows : files.SelectedRows;
-        var (paths, entries) = EntriesFor(selected, background: selected.Count == 0);
+        var (paths, entries) = TargetEntries();
         return (paths, entries.Where(e => MenuLogic.ReplayGainVerbs.Contains(e.Verb)).ToList());
+    }
+
+    /// <summary>The tools' target: the shown list's selection, else the open folder as empty space.</summary>
+    (List<string> Paths, List<Entry> Entries) TargetEntries()
+    {
+        var selected = resultsShown ? ShownResults.SelectedRows : files.SelectedRows;
+        return EntriesFor(selected, background: selected.Count == 0);
+    }
+
+    (List<string> Paths, Entry? Entry) TidyEntry()
+    {
+        var (paths, entries) = TargetEntries();
+        return (paths, entries.FirstOrDefault(e => e.Verb == MenuLogic.Tidy));
+    }
+
+    static string WhyNoTidy(List<string> paths) => paths.Count == 0
+        ? "Tidy: open a folder first."
+        : "Tidy works on folders: select only folders, or nothing for the open folder.";
+
+    /// <summary>Tidy's entry on the target, in its own window, as from the right-click menu; a target the menu would
+    /// refuse (files) says why in the status line.</summary>
+    void StartTidy()
+    {
+        var (paths, entry) = TidyEntry();
+        if (entry is null) Status(WhyNoTidy(paths));
+        else _ = App.Instance.RunEntry(entry.Verb, paths);
+    }
+
+    string TidyHover()
+    {
+        var (paths, entry) = TidyEntry();
+        if (entry is null) return WhyNoTidy(paths);
+        var where = paths.Count == 1 ? Path.GetFileName(Path.TrimEndingDirectorySeparator(paths[0])) is { Length: > 0 } name ? name : paths[0]
+            : $"{paths.Count} folders";
+        return $"{entry.Label} ({where}). {entry.Help}.";
     }
 
     static string WhyNoReplayGain(List<string> paths) => paths.Count == 0
@@ -916,7 +959,8 @@ public sealed partial class MainWindow : Window
 
     void PauseForTasks()
     {
-        var paused = App.Instance.Locks.Owners().Contains(ReplayGainTask.Owner);
+        var owners = App.Instance.Locks.Owners();
+        var paused = owners.Contains(ReplayGainTask.Owner) || owners.Contains(Core.Tidy.TidyTask.Owner);
         if (paused == library.Indexer.Paused) return;
         library.Indexer.Paused = paused;
         if (paused) Status("Indexing is paused while a task reads albums.", sticky: true);

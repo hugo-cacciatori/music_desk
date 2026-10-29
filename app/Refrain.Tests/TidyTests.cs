@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Refrain.Core;
 using Refrain.Core.Options;
 using Refrain.Core.ReplayGain;
 using Refrain.Core.Tidy;
@@ -203,5 +204,57 @@ public sealed class TidyTests
         File.WriteAllText(Path.Combine(temp.Path, "Scans", "Inner", "x.nfo"), "");
         Assert.Equal("it now holds other files", Clutter.Recheck(scans));
         Assert.Empty(Clutter.Find(Path.Combine(temp.Path, "Scans", "Inner"), lists, TestContext.Current.CancellationToken));  // root itself: never
+    }
+
+    [Fact]
+    public void Recycling_rechecks_keeps_what_has_no_recycle_bin_and_stops_between_items()
+    {
+        using var temp = new TempFolder();
+        string Make(string name)
+        {
+            var path = Path.Combine(temp.Path, name);
+            File.WriteAllText(path, "");
+            return path;
+        }
+        var lists = ClutterLists.Of(Tidy);
+        OfferItem[] items =
+        [
+            new(Make("a.jpg"), Clutter.PictureBesideMusic), new(Path.Combine(temp.Path, "gone.jpg"), Clutter.PictureBesideMusic),
+            new(Make("network.jpg"), Clutter.PictureBesideMusic), new(Make("busy.jpg"), Clutter.PictureBesideMusic),
+            new(temp.Sub("Scans"), "empty folder", "Scans (empty folder)", lists),
+        ];
+        var sent = new List<string>();
+        void Fake(string path)
+        {
+            if (path.EndsWith("network.jpg")) throw new CannotRecycleException(@"\\nas\ is a network location, which has no Recycle Bin");
+            if (path.EndsWith("busy.jpg")) throw new IOException("it is in use");
+            sent.Add(path);
+        }
+
+        var report = RecycleTask.Run(items, TestContext.Current.CancellationToken, Fake);
+        Assert.Equal([items[0].Path, items[4].Path], sent);
+        Assert.Equal([(items[1], "gone")], report.Skipped);
+        Assert.Equal(@"no Recycle Bin: \\nas\ is a network location, which has no Recycle Bin", Assert.Single(report.Kept).Why);
+        Assert.Equal("it is in use", Assert.Single(report.Failed).Why);
+        Assert.StartsWith("Sent 2 items to the Recycle Bin.\n\nSent to the Recycle Bin:\n    " + items[0].Path + "  (picture beside music)", report.Text());
+
+        using var stopped = new CancellationTokenSource();
+        stopped.Cancel();
+        var none = RecycleTask.Run(items, stopped.Token, Fake);
+        Assert.True(none.Cancelled);
+        Assert.All(none.Skipped, s => Assert.Equal("not reached: stopped", s.Why));
+        Assert.Null(Recycle.CanRecycle(temp.Path));  // the temporary folder is on a fixed drive with a Recycle Bin
+    }
+
+    [Fact]
+    public void The_plan_reads_as_the_python_apps_page()
+    {
+        using var temp = new TempFolder();
+        Setup.Copy(Path.Combine(Setup.Fixtures, "album"), temp.Path);
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Fixture Artist - Fixture Album", "Scans"));
+        var plan = Tidying.Plan(temp.Path, Names, Gain, Tidy, TestContext.Current.CancellationToken);
+        var album = Assert.Single(plan.Albums);
+        Assert.Equal("Rename 5 files, then ReplayGain (missing tags); offer 1 folder", TidyText.AlbumText(album));
+        Assert.Equal("Offer empty folder Scans", TidyText.LooseText(Assert.Single(album.Clutter)));
     }
 }

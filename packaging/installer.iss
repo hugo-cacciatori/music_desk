@@ -41,6 +41,9 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 LicenseFile=..\LICENSE
 SetupIconFile=..\resources\icons\music_desk.ico
+; The wizard images at every display scale, drawn into build\wizard by build_installer.py (make_icon.py --wizard).
+WizardImageFile=..\build\wizard\large-164x314.bmp,..\build\wizard\large-192x386.bmp,..\build\wizard\large-246x459.bmp,..\build\wizard\large-273x556.bmp,..\build\wizard\large-328x604.bmp,..\build\wizard\large-355x700.bmp,..\build\wizard\large-410x797.bmp
+WizardSmallImageFile=..\build\wizard\small-55x58.bmp,..\build\wizard\small-64x68.bmp,..\build\wizard\small-83x80.bmp,..\build\wizard\small-92x97.bmp,..\build\wizard\small-110x106.bmp,..\build\wizard\small-119x123.bmp,..\build\wizard\small-138x140.bmp
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 OutputDir=..\dist\v{#AppVersion}

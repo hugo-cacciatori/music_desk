@@ -1,8 +1,8 @@
 """Builds the release: the PyInstaller folder (dist/MusicDesk), the right-click menu's handler DLL into it
 (packaging/build_menu.py, SPEC §31), the release gate (a copy of dist/MusicDesk in a temporary folder outside the
-repository runs `MusicDesk.exe --self-test`; a failure stops the build), then the Inno Setup installer and its
-checksum: the local release
-dist/v<version>/ (MusicDesk-Setup-<version>.exe, SHA256SUMS.txt). Older dist/v* folders and the intermediate
+repository runs `MusicDesk.exe --self-test`; a failure stops the build), then the wizard images (make_icon.py
+--wizard, into build/wizard), the Inno Setup installer and its checksum: the local release dist/v<version>/
+(MusicDesk-Setup-<version>.exe, SHA256SUMS.txt). Older dist/v* folders and the intermediate
 build output (build/, dist/MusicDesk) are deleted afterwards; only the newest local release is kept.
 Run from the project root:  uv run python packaging/build_installer.py
 
@@ -74,6 +74,9 @@ def main(argv: list[str]) -> int:
             shutil.rmtree(ROOT / "dist" / "MusicDesk", ignore_errors=True)
         print("The release gate passed (no installer built: --self-test-only).")
         return 0
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen")  # the wizard images, drawn into build/wizard
+    wizard = [sys.executable, str(ROOT / "packaging" / "make_icon.py"), "--wizard", str(ROOT / "build" / "wizard")]
+    subprocess.run(wizard, cwd=ROOT, env=env, check=True)
     subprocess.run([str(find_iscc()), f"/DAppVersion={__version__}", str(ROOT / "packaging" / "installer.iss")],
                    cwd=ROOT, check=True)
     release = ROOT / "dist" / f"v{__version__}"

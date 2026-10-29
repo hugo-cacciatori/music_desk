@@ -58,6 +58,21 @@ def test_installer_script():
         assert (ROOT / path).is_file()
 
 
+def test_the_installer_lists_every_wizard_image(monkeypatch):
+    """The wizard images (SPEC §36) are drawn into build/wizard at build time: the installer lists exactly the
+    files make_icon.py writes, smallest first, and build_installer.py asks for them before Inno Setup."""
+    monkeypatch.syspath_prepend(str(ROOT / "packaging"))
+    import make_icon
+
+    iss = (ROOT / "packaging" / "installer.iss").read_text(encoding="utf-8")
+    for key, kind in (("WizardImageFile", "large"), ("WizardSmallImageFile", "small")):
+        listed = re.search(rf"^{key}=(.*)$", iss, re.MULTILINE)
+        assert listed is not None
+        assert listed.group(1).split(",") == [rf"..\build\wizard\{name}" for name in make_icon.wizard_files(kind)]
+    build = (ROOT / "packaging" / "build_installer.py").read_text(encoding="utf-8")
+    assert build.index('"--wizard"') < build.index("find_iscc()),")
+
+
 def test_flac_is_bundled():
     """flac.exe and its one DLL ship in resources/flac (SPEC §13), with their licences."""
     spec = (ROOT / "packaging" / "music_desk.spec").read_text(encoding="utf-8")

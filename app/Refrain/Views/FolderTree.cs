@@ -32,6 +32,8 @@ public sealed partial class FolderTree : Grid
     public event Action? AddRequested;
     public event Action<Root>? RemoveRequested;
     public event Action<long>? RescanRequested;
+    /// <summary>A folder's task entries (Explorer's, SPEC §35), as menu items.</summary>
+    public Func<string, List<MenuFlyoutItemBase>>? EntryItems { get; set; }
     public Func<long, Task<List<FolderNode>>>? Subfolders { get; set; }
 
     public FolderTree()
@@ -165,6 +167,11 @@ public sealed partial class FolderTree : Grid
         var rescan = new MenuFlyoutItem { Text = "Rescan" };
         rescan.Click += (_, _) => RescanRequested?.Invoke(folder.Id);
         menu.Items.Add(rescan);
+        if (EntryItems?.Invoke(folder.Path) is { Count: > 0 } entries)
+        {
+            menu.Items.Add(new MenuFlyoutSeparator());
+            foreach (var entry in entries) menu.Items.Add(entry);
+        }
         if (folder.Root is { } root)
         {
             menu.Items.Add(new MenuFlyoutSeparator());

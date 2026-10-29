@@ -17,6 +17,7 @@ public sealed class Indexer : IDisposable
     readonly BlockingCollection<Job> jobs = new();
     readonly ConcurrentQueue<long> urgent = new();
     readonly CancellationTokenSource stop = new();
+    readonly ManualResetEventSlim running = new(true);  // reset while paused
     readonly Thread thread;
     int filesRead;
     int foldersListed;
@@ -59,6 +60,20 @@ public sealed class Indexer : IDisposable
         jobs.Add(job);
     }
 
+    /// <summary>Paused while a task reads albums from the drive (SPEC §35: ReplayGain, later Tidy and the split):
+    /// the indexer stops between folders and tag batches, and goes on where it was.</summary>
+    public bool Paused
+    {
+        get => !running.IsSet;
+        set
+        {
+            if (value) running.Reset();
+            else running.Set();
+        }
+    }
+
+    void WaitWhilePaused() => running.Wait(stop.Token);
+
     /// <summary>Jobs queued or running.</summary>
     public bool Busy => Volatile.Read(ref pendingJobs) > 0;
     int pendingJobs;
@@ -71,6 +86,7 @@ public sealed class Indexer : IDisposable
             {
                 try
                 {
+                    WaitWhilePaused();
                     ServeUrgent();
                     switch (job)
                     {
@@ -148,6 +164,7 @@ public sealed class Indexer : IDisposable
         while (queue.Count > 0)
         {
             stop.Token.ThrowIfCancellationRequested();
+            WaitWhilePaused();
             ServeUrgent();
             var (id, folder) = queue.Dequeue();
             var found = Reconcile(id, folder);
@@ -179,6 +196,7 @@ public sealed class Indexer : IDisposable
         while (pending.Count > 0)
         {
             stop.Token.ThrowIfCancellationRequested();
+            WaitWhilePaused();
             ServeUrgent();
             var batch = new List<ToRead>();
             while (pending.Count > 0 && batch.Count < TagBatch) batch.Add(pending.Dequeue());

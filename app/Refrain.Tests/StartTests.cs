@@ -103,16 +103,46 @@ public sealed class StartTests : IDisposable
         Assert.False(Instance.HandOver(StartRequest.None, $"RefrainTest-{Guid.NewGuid():N}"));  // nobody listens
     }
 
+    static List<string> Labels(bool background, params (string, bool)[] items) =>
+        MenuLogic.Entries(MenuLogic.Classify(background, items), items, -15).Select(e => e.IsSeparator ? "—" : e.Label).ToList();
+
     [Fact]
-    public void The_menu_offers_open_on_one_folder_or_empty_space_and_settings_always()
+    public void The_menu_offers_the_entries_of_spec_31_by_what_was_clicked()
     {
-        (string, bool)[] folder = [(@"D:\Music", true)];
-        Assert.Equal([MenuLogic.Open, MenuLogic.Separator, MenuLogic.Settings], MenuLogic.Entries(MenuLogic.Classify(false, folder), folder));
-        Assert.Equal([MenuLogic.Open, MenuLogic.Separator, MenuLogic.Settings], MenuLogic.Entries(MenuLogic.Classify(true, folder), folder));
-        (string, bool)[] file = [(@"D:\Music\a.flac", false)];
-        Assert.Equal([MenuLogic.Settings], MenuLogic.Entries(MenuLogic.Classify(false, file), file));
-        (string, bool)[] two = [(@"D:\A", true), (@"D:\B", true)];
-        Assert.Equal([MenuLogic.Settings], MenuLogic.Entries(MenuLogic.Classify(false, two), two));
+        string[] onFolder = ["Open in Refrain", "ReplayGain as an album (−15 LUFS)", "ReplayGain as a discography (−15 LUFS)", "—", "Settings"];
+        Assert.Equal(onFolder, Labels(false, (@"D:\Music", true)));
+        Assert.Equal(onFolder, Labels(true, (@"D:\Music", true)));
+        Assert.Equal(["ReplayGain: 3 folders, each as an album (−15 LUFS)", "—", "Settings"],
+            Labels(false, (@"D:\A", true), (@"D:\B", true), (@"D:\C", true)));
+        Assert.Equal(["ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.flac", false)));
+        Assert.Equal(["ReplayGain: these 2 tracks as an album (−15 LUFS)", "ReplayGain: each of these 2 tracks on its own (−15 LUFS)",
+            "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.flac", false), (@"D:\A\2.MP3", false)));
+        // Tracks of two folders aren't one album; a cover in the selection keeps Remove away; folders and tracks together
+        // get no ReplayGain entry.
+        Assert.Equal(["ReplayGain: each of these 2 tracks on its own (−15 LUFS)", "Remove ReplayGain tags…", "—", "Settings"],
+            Labels(false, (@"D:\A\1.flac", false), (@"D:\B\2.flac", false)));
+        Assert.Equal(["ReplayGain this track (−15 LUFS)", "—", "Settings"], Labels(false, (@"D:\A\1.flac", false), (@"D:\A\cover.jpg", false)));
+        Assert.Equal(["Settings"], Labels(false, (@"D:\A", true), (@"D:\A\1.flac", false)));
+        Assert.Equal(["Settings"], Labels(false, (@"D:\A\notes.txt", false)));
+        Assert.Equal("−18.5 LUFS", MenuLogic.TargetText(-18.5));
+        Assert.Equal(Formats.ReplayGain.Order(), MenuLogic.ReplayGainExtensions.Order());  // one list, in step
+    }
+
+    [Fact]
+    public void The_menu_reads_the_target_from_the_settings()
+    {
+        using var temp = new TempFolder();
+        var file = Path.Combine(temp.Path, "settings.json");
+        Assert.Equal(-15, MenuLogic.Target(file));  // no file yet
+        File.WriteAllText(file, """{"replay_gain": {"target": -18.5}}""");
+        Assert.Equal(-18.5, MenuLogic.Target(file));
+        File.WriteAllText(file, """{"replay_gain": {"target": "loud"}}""");
+        Assert.Equal(-15, MenuLogic.Target(file));
+    }
+
+    [Fact]
+    public void An_entry_hands_its_paths_through_a_list()
+    {
         Assert.Equal((@"C:\App\Refrain.exe", "\"D:\\\\\"", null), MenuLogic.Command(MenuLogic.Open, [@"D:\"], @"C:\App"));
         var (_, args, list) = MenuLogic.Command(new Entry("tidy", "Tidy", ""), [@"D:\A", @"D:\B"], @"C:\App");
         Assert.Equal("--tidy --list ", args);
@@ -145,22 +175,24 @@ public sealed class StartTests : IDisposable
         var listsBefore = Lists();
         var music = temp.Sub("Music", "Album");
         var report = Run(music, background: false, out var added);
-        Assert.Equal(3, added);  // Open in Refrain, a separator, Settings
+        Assert.Equal(5, added);  // Open in Refrain, ReplayGain as an album and as a discography, a separator, Settings
         Assert.Contains("position=2\n", report);  // just below 7-Zip
         Assert.Contains("again=0\n", report);  // asked twice for one menu: one submenu
-        Assert.Contains("Open in Refrain|refrain.open\n-\nSettings|refrain.settings\n", report);
+        // The labels carry the target of the user's own settings: only their start is checked.
+        Assert.Matches(@"Open in Refrain\|refrain\.open\nReplayGain as an album \(.* LUFS\)\|refrain\.replaygain-album\n" +
+                       @"ReplayGain as a discography \(.* LUFS\)\|refrain\.replaygain-discography\n-\nSettings\|refrain\.settings\n", report);
         Assert.Contains($"command={Path.GetDirectoryName(Path.GetFullPath(dll))}\\Refrain.exe \"{music}\"\n", report);
         Run(music, background: true, out added);
-        Assert.Equal(3, added);
+        Assert.Equal(5, added);
         var file = Path.Combine(music, "a.flac");
         File.WriteAllText(file, "");
         report = Run(file, background: false, out added);
-        Assert.Equal(1, added);
-        Assert.Contains("Settings|refrain.settings\n", report);
-        Assert.Contains($"--settings --list <list: {file}|>", report);  // described, never written
+        Assert.Equal(4, added);  // ReplayGain this track, Remove ReplayGain tags…, a separator, Settings
+        Assert.Contains("Remove ReplayGain tags…|refrain.remove-replaygain\n", report);
+        Assert.Contains($"--replaygain-loose --list <list: {file}|>", report);  // described, never written
         var other = temp.Sub("Music", "Other");
         Run(music + "\n" + other, background: false, out added);
-        Assert.Equal(1, added);
+        Assert.Equal(3, added);  // ReplayGain: 2 folders, each as an album; a separator; Settings
         Assert.Equal(listsBefore, Lists());  // nothing written into the real data folder
     }
 }

@@ -1,7 +1,9 @@
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Graphics;
 using Windows.Storage.Streams;
 
 namespace Refrain.Views;
@@ -10,6 +12,46 @@ namespace Refrain.Views;
 static class Ui
 {
     public static Brush Brush(string key) => (Brush)Application.Current.Resources[key];
+
+    /// <summary>A window of its own (SPEC §35: own taskbar button): title, backdrop, icon and size. In an agent's
+    /// off-screen check it sits beyond every monitor and out of Alt+Tab.</summary>
+    public static void Prepare(Window window, string title, int width, int height)
+    {
+        window.Title = title;
+        window.SystemBackdrop = new MicaBackdrop();
+        window.AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "refrain.ico"));
+        window.AppWindow.Resize(new SizeInt32(width, height));
+        if (!MainWindow.Offscreen) return;
+        var areas = DisplayArea.FindAll();
+        var right = 0;
+        for (var i = 0; i < areas.Count; i++) right = Math.Max(right, areas[i].OuterBounds.X + areas[i].OuterBounds.Width);
+        window.AppWindow.Move(new PointInt32(right + 200, 0));
+        window.AppWindow.IsShownInSwitchers = false;
+    }
+
+    /// <summary>Shows a window: activated normally, never taking the focus in an agent's off-screen check.</summary>
+    public static void Show(Window window)
+    {
+        if (MainWindow.Offscreen) window.AppWindow.Show(activateWindow: false);
+        else window.Activate();
+    }
+
+    /// <summary>Report text in a fixed-width font, so the reports' tables line up; read-only, selectable, scrolled
+    /// both ways.</summary>
+    public static TextBox ReportBox()
+    {
+        var box = new TextBox
+        {
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+            FontSize = 13,
+        };
+        ScrollViewer.SetHorizontalScrollBarVisibility(box, ScrollBarVisibility.Auto);
+        ScrollViewer.SetVerticalScrollBarVisibility(box, ScrollBarVisibility.Auto);
+        return box;
+    }
 
     public static TextBlock Secondary(string text = "") => new()
     {

@@ -30,18 +30,7 @@ public sealed partial class OptionsWindow : Window
         this.settings = settings;
         this.save = save;
         this.examplePath = examplePath;
-        Title = "Refrain · Options";
-        SystemBackdrop = new MicaBackdrop();
-        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "refrain.ico"));
-        AppWindow.Resize(new SizeInt32(900, 680));
-        if (MainWindow.Offscreen)
-        {
-            var areas = DisplayArea.FindAll();
-            var right = 0;
-            for (var i = 0; i < areas.Count; i++) right = Math.Max(right, areas[i].OuterBounds.X + areas[i].OuterBounds.Width);
-            AppWindow.Move(new PointInt32(right + 200, 0));
-            AppWindow.IsShownInSwitchers = false;
-        }
+        Ui.Prepare(this, "Refrain · Options", 900, 680);
 
         builders["File names"] = FileNamesPage;
         builders["ReplayGain"] = ReplayGainPage;
@@ -96,11 +85,7 @@ public sealed partial class OptionsWindow : Window
     }
 
     /// <summary>Shows the window: activated normally, never taking the focus in an agent's off-screen check.</summary>
-    public void ShowWindow()
-    {
-        if (MainWindow.Offscreen) AppWindow.Show(activateWindow: false);
-        else Activate();
-    }
+    public void ShowWindow() => Ui.Show(this);
 
     void ShowPage(string name)
     {

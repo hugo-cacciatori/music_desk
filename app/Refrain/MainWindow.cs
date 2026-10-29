@@ -13,8 +13,10 @@ using Refrain.Core;
 using Refrain.Core.Browser;
 using Refrain.Core.Index;
 using Refrain.Core.Lyrics;
+using Refrain.Core.ReplayGain;
 using Refrain.Core.Search;
 using Refrain.Views;
+using RefrainMenu;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.Storage;
@@ -70,6 +72,7 @@ public sealed partial class MainWindow : Window
     readonly Button upButton = Icon("", "Up (Alt+Up, Backspace)");
     readonly Button rescanButton = Icon("", "Rescan this folder (F5)");
     readonly Button explorerButton = new();
+    readonly DropDownButton replayGainButton = new();
     readonly DispatcherQueueTimer searchTimer;
     readonly DispatcherQueueTimer liveSearchTimer;
     readonly DispatcherQueueTimer refreshTimer;
@@ -117,14 +120,18 @@ public sealed partial class MainWindow : Window
         var root = new Grid { Padding = new Thickness(8, 0, 8, 0), AllowDrop = true };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.Children.Add(SearchRow());
         var nav = NavigationRow();
         Grid.SetRow(nav, 1);
         root.Children.Add(nav);
+        var tools = ToolsRow();
+        Grid.SetRow(tools, 2);
+        root.Children.Add(tools);
         var body = Body();
-        Grid.SetRow(body, 2);
+        Grid.SetRow(body, 3);
         root.Children.Add(body);
         var statusRow = new Grid();
         statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -136,7 +143,7 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(lyricsRetry, 2);
         statusRow.Children.Add(lyricsRetry);
         ToolTipService.SetToolTip(lyricsRetry, "Try LRCLIB again now");
-        Grid.SetRow(statusRow, 3);
+        Grid.SetRow(statusRow, 4);
         root.Children.Add(statusRow);
         Content = root;
 
@@ -246,6 +253,22 @@ public sealed partial class MainWindow : Window
             Grid.SetColumn((FrameworkElement)items[i], i);
             row.Children.Add(items[i]);
         }
+        return row;
+    }
+
+    /// <summary>The tools' own row (SPEC §30, §36 "1." task 3; Tidy joins it first with rebuild task 8e): ReplayGain
+    /// opens the list of its entries for the target, as the right-click would show them (SPEC §35 decision 2).</summary>
+    FrameworkElement ToolsRow()
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 0, 0, 8) };
+        replayGainButton.Content = Labelled("\uE767", "ReplayGain");
+        var menu = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft };
+        menu.Opening += (_, _) => FillReplayGainMenu(menu);
+        replayGainButton.Flyout = menu;
+        var tip = new ToolTip();
+        tip.Opened += (_, _) => tip.Content = ReplayGainHover();  // names the target as the mouse comes over it
+        ToolTipService.SetToolTip(replayGainButton, tip);
+        row.Children.Add(replayGainButton);
         return row;
     }
 
@@ -366,6 +389,8 @@ public sealed partial class MainWindow : Window
             else if (status.Text.StartsWith("Indexing", StringComparison.Ordinal)) status.Text = "";
         });
         library.RootsChanged += () => ui.TryEnqueue(() => _ = LoadRoots());
+        // Indexing waits while ReplayGain reads albums from the drive (SPEC §35 task 1), from any window.
+        App.Instance.Locks.Changed += () => ui.TryEnqueue(PauseForTasks);
         var lyrics = library.Lyrics;
         lyrics.FoldersChanged += folders => ui.TryEnqueue(() =>
         {
@@ -459,6 +484,7 @@ public sealed partial class MainWindow : Window
         tree.AddRequested += () => _ = PickFolder();
         tree.RemoveRequested += r => _ = ConfirmRemove(r);
         tree.RescanRequested += id => library.Indexer.Urgent(id);
+        tree.EntryItems = path => EntryItems([path], TaskEntries([(path, true)], background: false));
 
         foldersButton.Click += (_, _) =>
         {
@@ -799,7 +825,102 @@ public sealed partial class MainWindow : Window
             if (fromResults && !string.IsNullOrEmpty(row.Artist))
                 Add($"Filter by {row.Artist}", () => FilterByArtist(row.Artist));
         }
+        // Explorer's entries, as items of this menu (no Refrain submenu in the app, SPEC §35 decision 1).
+        var (entryPaths, entries) = EntriesFor(rows, background: rows.Count == 0);
+        if (entries.Count > 0) menu.Items.Add(new MenuFlyoutSeparator());
+        foreach (var item in EntryItems(entryPaths, entries)) menu.Items.Add(item);
         menu.ShowAt(anchor, point);
+    }
+
+    // -- the tasks' entries (SPEC §31, §35) --
+
+    /// <summary>Explorer's entries for these rows (the open folder as empty space when <paramref name="background"/>),
+    /// and their paths. Folders are told from files by the index, not the disk. Open in Refrain and Settings are
+    /// Explorer's only.</summary>
+    (List<string> Paths, List<Entry> Entries) EntriesFor(IReadOnlyList<FileRow> rows, bool background)
+    {
+        var items = new List<(string Path, bool IsFolder)>();
+        using (var conn = library.Db.Read())
+        {
+            if (background)
+            {
+                if (current is { } open && Queries.PathOf(conn, open) is { } path) items.Add((path, true));
+            }
+            else
+                foreach (var row in rows)
+                    if (Queries.PathOf(conn, row.Id) is { } path) items.Add((path, row.IsDir));
+        }
+        return (items.Select(i => i.Path).ToList(), TaskEntries(items, background));
+    }
+
+    List<Entry> TaskEntries(List<(string Path, bool IsFolder)> items, bool background) => items.Count == 0 ? [] :
+        MenuLogic.Entries(MenuLogic.Classify(background, items), items, settings.GetReplayGain().Target)
+            .Where(e => !e.IsSeparator && e != MenuLogic.Open && e != MenuLogic.Settings).ToList();
+
+    /// <summary>Menu items that start these entries on these paths, each with its help as hover text.</summary>
+    static List<MenuFlyoutItemBase> EntryItems(List<string> paths, List<Entry> entries) => entries.Select(entry =>
+    {
+        var item = new MenuFlyoutItem { Text = entry.Label };
+        ToolTipService.SetToolTip(item, entry.Help);
+        item.Click += (_, _) => _ = App.Instance.RunEntry(entry.Verb, paths);
+        return (MenuFlyoutItemBase)item;
+    }).ToList();
+
+    /// <summary>The ReplayGain entries for the button's target: the shown list's selection, else the open folder.</summary>
+    (List<string> Paths, List<Entry> Entries) ReplayGainEntries()
+    {
+        var selected = resultsShown ? ShownResults.SelectedRows : files.SelectedRows;
+        var (paths, entries) = EntriesFor(selected, background: selected.Count == 0);
+        return (paths, entries.Where(e => MenuLogic.ReplayGainVerbs.Contains(e.Verb)).ToList());
+    }
+
+    static string WhyNoReplayGain(List<string> paths) => paths.Count == 0
+        ? "ReplayGain: open a folder first."
+        : "ReplayGain works on folders, or on tracks: select only one kind.";
+
+    void FillReplayGainMenu(MenuFlyout menu)
+    {
+        menu.Items.Clear();
+        var (paths, entries) = ReplayGainEntries();
+        if (entries.Count == 0) menu.Items.Add(new MenuFlyoutItem { Text = WhyNoReplayGain(paths), IsEnabled = false });
+        foreach (var item in EntryItems(paths, entries)) menu.Items.Add(item);
+    }
+
+    string ReplayGainHover()
+    {
+        var (paths, entries) = ReplayGainEntries();
+        if (entries.Count == 0) return WhyNoReplayGain(paths);
+        var where = paths.Count == 1 ? Path.GetFileName(Path.TrimEndingDirectorySeparator(paths[0])) is { Length: > 0 } name ? name : paths[0]
+            : $"{paths.Count} selected items";
+        return $"ReplayGain on {where}: choose how";
+    }
+
+    /// <summary>Unsaved Metadata edits on files a task will change (a clicked file, or one under a clicked folder):
+    /// Save, Discard or Cancel first (SPEC §35). False when the user cancels.</summary>
+    public async Task<bool> AllowChanges(IReadOnlyList<string> paths)
+    {
+        var edited = panel.EditedPaths;
+        if (edited.Count == 0) return true;
+        static bool Covers(string path, string file) =>
+            string.Equals(path, file, StringComparison.OrdinalIgnoreCase) ||
+            file.StartsWith(Path.TrimEndingDirectorySeparator(path) + "\\", StringComparison.OrdinalIgnoreCase);
+        if (!edited.Any(file => paths.Any(path => Covers(path, file)))) return true;
+        return await panel.ConfirmLeave();
+    }
+
+    /// <summary>A task changed files in these folders: the index re-reads them, with their subfolders.</summary>
+    public void TaskChanged(IReadOnlyList<string> folders)
+    {
+        foreach (var folder in folders) library.Indexer.ScanPath(folder, recursive: true);
+    }
+
+    void PauseForTasks()
+    {
+        var paused = App.Instance.Locks.Owners().Contains(ReplayGainTask.Owner);
+        if (paused == library.Indexer.Paused) return;
+        library.Indexer.Paused = paused;
+        if (paused) Status("Indexing is paused while a task reads albums.", sticky: true);
+        else if (status.Text.StartsWith("Indexing is paused", StringComparison.Ordinal)) status.Text = "";
     }
 
     /// <summary>Plays through the default app (SPEC §14): the entries come from the index and the playlist is written

@@ -12,7 +12,7 @@ namespace Refrain.Tests;
 /// and every replaygain.log must match, with the twin folder, clock times and durations masked.</summary>
 public sealed class ReplayGainTests
 {
-    static string Rsgain
+    internal static string Rsgain
     {
         get
         {

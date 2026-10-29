@@ -27,6 +27,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Refrain.Core\Refrain.Core.csproj" />
+    <!-- One entry list for Explorer's menu and the app's (SPEC §35): the handler's own file, compiled here too. -->
+    <Compile Include="..\RefrainMenu\MenuLogic.cs" Link="Entries\MenuLogic.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -15,7 +15,9 @@ public sealed class AlbumOutcome(string name, string folder)
     public List<string> Errors { get; set; } = [];
 }
 
-public sealed record DiscographyResult(IReadOnlyList<AlbumOutcome> Albums, double? Target, bool Cancelled);
+/// <summary>A discography run: its albums, the gain they were leveled to, and the summary written to the artist
+/// folder's log.</summary>
+public sealed record DiscographyResult(IReadOnlyList<AlbumOutcome> Albums, double? Target, bool Cancelled, string Summary);
 
 /// <summary>Discography mode: every album under a folder, one at a time, then all leveled to the lowest album gain.
 /// Ported from the Python app's <c>core/replaygain/discography.py</c>.</summary>
@@ -138,9 +140,12 @@ public static class Discography
         }
 
         // 3. The summary in the artist folder
-        WriteSummary(root, options, start, clock.Elapsed.TotalSeconds, albums, target, cancelled);
+        var summary = SummaryText(root, options, start, clock.Elapsed.TotalSeconds, albums, target, cancelled);
+        // It replaces the artist folder's log, unless that folder was also one of this run's albums: then it follows
+        // that album's report, written minutes earlier in the same run.
+        Report.WriteText(Path.Combine(root, options.LogFile), summary, append: albums.Any(a => a.Folder == root));
         reporter.Progress(folders.Count, folders.Count, "done");
-        return new DiscographyResult(albums, target, cancelled);
+        return new DiscographyResult(albums, target, cancelled, summary);
     }
 
     public static string SummaryText(string root, ReplayGainOptions options, DateTime start, double duration,
@@ -179,15 +184,5 @@ public static class Discography
                   $"{Report.Plural(albums.Count, "album")}, {nLeveled} leveled, {Python.Fixed(duration, 1)} s");
         lines.Add("");
         return string.Join("\n", lines) + "\n";
-    }
-
-    /// <summary>The summary replaces the artist folder's log, unless that folder was also one of this run's albums:
-    /// then it follows that album's report, written minutes earlier in the same run.</summary>
-    static void WriteSummary(string root, ReplayGainOptions options, DateTime start, double duration,
-        IReadOnlyList<AlbumOutcome> albums, double? target, bool cancelled)
-    {
-        var append = albums.Any(a => a.Folder == root);
-        Report.WriteText(Path.Combine(root, options.LogFile),
-            SummaryText(root, options, start, duration, albums, target, cancelled), append);
     }
 }

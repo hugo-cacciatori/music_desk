@@ -2,7 +2,9 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Refrain.Core;
+using Refrain.Core.ReplayGain;
 using Refrain.Views;
+using RefrainMenu;
 
 namespace Refrain;
 
@@ -37,8 +39,8 @@ public static partial class Program
     }
 }
 
-/// <summary>The app's windows: the main window, and the Options window shared by the … menu and Explorer's Settings
-/// entry. The process ends when its last window closes.</summary>
+/// <summary>The app's windows: the main window, the Options window shared by the … menu and Explorer's Settings entry,
+/// and each task's own window (SPEC §35). The process ends when its last window closes.</summary>
 public partial class App : Application
 {
     readonly Instance? instance;
@@ -46,6 +48,11 @@ public partial class App : Application
     readonly Settings settings = Settings.Load(AppPaths.Settings);
     MainWindow? window;
     OptionsWindow? options;
+
+    /// <summary>The process's one set of path locks: every task window and the main window share it (SPEC §35).</summary>
+    public PathLocks Locks { get; } = new();
+
+    public Settings Settings => settings;
 
     public App(Instance? instance, StartRequest request)
     {
@@ -75,6 +82,11 @@ public partial class App : Application
             ShowOptions(start.Paths.FirstOrDefault());
             return;
         }
+        if (start.Entry is { } entry && IsTask(entry))
+        {
+            _ = RunEntry(entry, start.Paths);
+            return;
+        }
         if (window is null)
         {
             window = new MainWindow(start, settings);
@@ -84,6 +96,41 @@ public partial class App : Application
             return;
         }
         _ = window.OpenFromOutside(start);
+    }
+
+    static readonly Dictionary<string, ReplayGainKind> ReplayGainKinds = new()
+    {
+        [MenuLogic.ReplayGainAlbum] = ReplayGainKind.Album,
+        [MenuLogic.ReplayGainDiscography] = ReplayGainKind.Discography,
+        [MenuLogic.ReplayGainAlbums] = ReplayGainKind.Albums,
+        [MenuLogic.ReplayGainTracks] = ReplayGainKind.Tracks,
+        [MenuLogic.ReplayGainLoose] = ReplayGainKind.Loose,
+    };
+
+    static bool IsTask(string entry) => ReplayGainKinds.ContainsKey(entry) || entry == MenuLogic.RemoveReplayGain;
+
+    /// <summary>A task entry, from Explorer or from the app (SPEC §35): unsaved Metadata edits on the files it changes
+    /// are asked about first, then the task opens its own window, which alone comes to the front.</summary>
+    public async Task RunEntry(string entry, IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0) return;
+        if (window is not null && !await window.AllowChanges(paths)) return;
+        var replayGain = settings.GetReplayGain();
+        if (ReplayGainKinds.TryGetValue(entry, out var kind))
+        {
+            var items = paths.Select(p => (p, Directory.Exists(p))).ToList();
+            var label = MenuLogic.Entries(MenuLogic.Classify(false, items), items, replayGain.Target)
+                .FirstOrDefault(e => e.Verb == entry)?.Label ?? "ReplayGain";
+            var task = new ReplayGainWindow(label, kind, paths, replayGain, Locks);
+            task.Finished += folders => window?.TaskChanged(folders);
+            task.Start();
+        }
+        else
+        {
+            var task = new RemoveWindow(paths, replayGain, Locks);
+            task.Finished += folders => window?.TaskChanged(folders);
+            task.Start();
+        }
     }
 
     /// <summary>The one Options window, brought forward if already open; the File names example reads its first track

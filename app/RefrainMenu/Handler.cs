@@ -57,7 +57,7 @@ public sealed partial class Handler : IShellExtInit, IContextMenu
     public int QueryContextMenu(nint menu, uint index, uint firstId, uint lastId, uint flags)
     {
         if ((flags & DefaultOnly) != 0 || items.Count == 0) return 0;
-        entries = MenuLogic.Entries(MenuLogic.Classify(background, items), items);
+        entries = MenuLogic.Entries(MenuLogic.Classify(background, items), items, MenuLogic.Target(Path.Combine(MenuLogic.DataFolder, "settings.json")));
         if (entries.Count == 0 || firstId + (uint)entries.Count > lastId) return 0;
         // Explorer's navigation pane may ask twice for one menu: a submenu already there is left alone (SPEC §31).
         if (Native.FindItem(menu, MenuLogic.SubmenuLabel) >= 0) return 0;

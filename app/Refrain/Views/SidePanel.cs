@@ -88,6 +88,9 @@ public sealed partial class SidePanel : Grid
 
     public bool Dirty => metadataLoaded && metadata.Dirty;
 
+    /// <summary>The files whose edits aren't saved yet (none when nothing is edited).</summary>
+    public IReadOnlyList<string> EditedPaths => Dirty && audioPaths is { } shown ? shown.Audio : [];
+
     /// <summary>Unsaved edits: Save, Discard or Cancel (SPEC §7). False when the user cancels, or the save failed.</summary>
     public async Task<bool> ConfirmLeave()
     {

@@ -97,7 +97,7 @@ to the Recycle Bin.
 ## Install
 
 Download `Refrain-Setup-<version>.exe` from the
-[latest release](https://github.com/hugo-cacciatori/music_desk/releases/latest) and run it (64-bit Windows 10 or
+[latest release](https://github.com/hugo-cacciatori/refrain/releases/latest) and run it (64-bit Windows 10 or
 11). It installs for all users in Program Files, or only for you if you choose that on its first page. The setup
 isn't signed, so Windows SmartScreen may warn about it: choose "More info", then "Run anyway".
 

@@ -20,13 +20,14 @@ public sealed partial record SearchQuery(
     /// <summary>Filters with a fixed set of values.</summary>
     public static readonly IReadOnlyDictionary<string, string[]> ValueFields = new Dictionary<string, string[]>
     {
+        ["lrclib"] = ["synced", "plain", "instrumental", "notfound", "pending", "error", "notags"],
         ["rg"] = ["none", "partial", "full"],
     };
 
     static readonly HashSet<string> Fields = [.. TextFields.Keys, "year", "ext", .. ValueFields.Keys];
 
     /// <summary>The filters that need tags: they limit the results to audio files whose tags are read.</summary>
-    public static readonly IReadOnlySet<string> TagFilters = new HashSet<string> { "artist", "album", "genre", "year", "rg" };
+    public static readonly IReadOnlySet<string> TagFilters = new HashSet<string> { "artist", "album", "genre", "year", "lrclib", "rg" };
 
     [GeneratedRegex("""(?<field>\b[A-Za-z]+):(?:"(?<quoted>[^"]*)"?|(?<bare>[^\s"]*))|"(?<phrase>[^"]*)"?""")]
     private static partial Regex Token();

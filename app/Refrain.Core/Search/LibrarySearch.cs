@@ -7,15 +7,31 @@ namespace Refrain.Core.Search;
 /// how many there are in all.</summary>
 public sealed record SearchResult(List<long> Ids, int Total);
 
-/// <summary>File search (SPEC §6, §33): a case- and accent-insensitive substring over the names of folders and audio
-/// files, their tags and the date, plus the field filters. Names are found from the folder walk on, tags once read.
-/// Lyrics search comes with LRCLIB (rebuild task 6).</summary>
+/// <summary>The two searches (SPEC §6, §33): File search's free text matches names, tags and the date; Lyrics
+/// search's only LRCLIB's plain text.</summary>
+public enum SearchMode { Files, Lyrics }
+
+/// <summary>Library search (SPEC §6, §33): a case- and accent-insensitive substring, plus the field filters. Names are
+/// found from the folder walk on, tags once read, lyrics once LRCLIB answered.</summary>
 public static class LibrarySearch
 {
     public const int Limit = 5000;
     const int FtsMin = 3;  // trigram needs 3 characters; shorter text is matched with LIKE
     const string Date = "date";  // tracks.date, not a column of the search table: LIKE, and only text with a digit
     static readonly string[] FileColumns = ["name", "title", "artist", "albumartist", "album", Date];
+    static readonly string[] LyricsColumns = ["lrclib"];
+    const int ExtractContext = 1;  // a card's extract: the matching line and one line on each side
+
+    /// <summary>The LRCLIB column's states (Queries' LrclibState), in SQL.</summary>
+    const string LrclibState = """
+        CASE
+            WHEN t.read_error IS NOT NULL THEN ''
+            WHEN t.lyrics_key IS NULL THEN 'notags'
+            WHEN l.status = 'found' THEN CASE WHEN coalesce(l.synced, '') != '' THEN 'synced' ELSE 'plain' END
+            WHEN l.status = 'instrumental' THEN 'instrumental'
+            WHEN l.status = 'not_found' THEN 'notfound'
+            ELSE 'pending' END
+        """;
 
     static readonly string AudioList = string.Join(", ", Formats.Audio.Select(e => $"'{e}'"));
 
@@ -26,8 +42,12 @@ public static class LibrarySearch
     const string RgCount = "((t.rg_track_gain IS NOT NULL) + (t.rg_track_peak IS NOT NULL) + " +
                            "(t.rg_album_gain IS NOT NULL) + (t.rg_album_peak IS NOT NULL))";
 
-    public static SearchResult Find(SqliteConnection conn, SearchQuery query, int limit = Limit)
+    /// <summary>The matches, in folder and name order. <paramref name="errorKeys"/> are the keys whose last lookup
+    /// failed this session (<c>lrclib:error</c>).</summary>
+    public static SearchResult Find(SqliteConnection conn, SearchQuery query, int limit = Limit,
+        SearchMode mode = SearchMode.Files, IReadOnlySet<string>? errorKeys = null)
     {
+        var columns = mode == SearchMode.Files ? FileColumns : LyricsColumns;
         conn.CreateFunction("md_contains", (string? text, string needle) =>
             text is not null && Folding.Fold(text).Contains(needle, StringComparison.Ordinal), isDeterministic: true);
         var parameters = new List<(string, object?)>();
@@ -39,7 +59,7 @@ public static class LibrarySearch
         }
 
         // Atoms are (columns, text); a group ORs its atoms; groups are ANDed.
-        var groups = query.Text.Select(part => new List<(string[] Cols, string Text)> { (FileColumns, part) }).ToList();
+        var groups = query.Text.Select(part => new List<(string[] Cols, string Text)> { (columns, part) }).ToList();
         foreach (var (name, cols) in SearchQuery.TextFields)
             if (query.Filters.TryGetValue(name, out var values))
                 groups.Add(values.Select(v => (cols, v)).ToList());
@@ -82,13 +102,24 @@ public static class LibrarySearch
                 "full" => $"{RgCount} = 4",
                 _ => $"{RgCount} BETWEEN 1 AND 3",
             })) + ")");
+        if (query.Filters.TryGetValue("lrclib", out var states))
+        {
+            var errors = $"t.lyrics_key IN (SELECT value FROM json_each({Param(Json(errorKeys))}))";
+            where.Add("(" + string.Join(" OR ", states.Select(v => v switch
+            {
+                "error" => $"(({LrclibState}) = 'pending' AND {errors})",
+                "pending" => $"(({LrclibState}) = 'pending' AND NOT {errors})",
+                _ => $"({LrclibState}) = {Param(v)}",
+            })) + ")");
+        }
         if (query.Filters.Keys.Any(SearchQuery.TagFilters.Contains))
             where.Add("t.entry_id IS NOT NULL");  // rg:none must not take a folder's missing tags for "none"
         where.Add(Results);
         if (match.Count > 0) where.Insert(0, $"search MATCH {Param(string.Join(" AND ", match))}");
 
         var sql = "SELECT e.id, e.parent_id, e.name FROM search JOIN entries e ON e.id = search.rowid " +
-                  "LEFT JOIN tracks t ON t.entry_id = e.id WHERE " + string.Join(" AND ", where);
+                  "LEFT JOIN tracks t ON t.entry_id = e.id LEFT JOIN lyrics l ON l.key = t.lyrics_key WHERE " +
+                  string.Join(" AND ", where);
         var rows = new List<(long Id, long Parent, string Name)>();
         using (var tx = conn.BeginTransaction(deferred: true))  // one snapshot for the matches and their folders
         {
@@ -117,15 +148,18 @@ public static class LibrarySearch
         return a.Length.CompareTo(b.Length);
     }
 
+    static string Json(IReadOnlySet<string>? keys) =>
+        System.Text.Json.JsonSerializer.Serialize((keys ?? new HashSet<string>()).ToArray(), SearchJson.Default.StringArray);
+
     static string Fts(string[] cols, string text) => "{" + string.Join(" ", cols) + "} : \"" + text.Replace("\"", "\"\"") + "\"";
     static string Escape(string text) => text.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
     static string Like(string text) => "%" + Escape(text) + "%";
 
     /// <summary>The shown results in <paramref name="ids"/> order, as file list rows with their folder and what to
-    /// highlight: the free text in Title and Artist, and the <c>artist:</c> values in Artist. Ids gone since are
-    /// dropped.</summary>
+    /// highlight. File search highlights the free text in Title and Artist; Lyrics search, in its card's extract only.
+    /// The <c>artist:</c> values are highlighted in Artist. Ids gone since are dropped.</summary>
     public static List<FileRow> Rows(SqliteConnection conn, IReadOnlyList<long> ids, SearchQuery query,
-        CancellationToken cancel = default)
+        SearchMode mode = SearchMode.Files, CancellationToken cancel = default)
     {
         if (ids.Count == 0) return [];
         using var tx = conn.BeginTransaction(deferred: true);
@@ -139,9 +173,20 @@ public static class LibrarySearch
                 var row = Queries.ReadRow(r);
                 rows[row.Id] = (row, r.GetInt64(Queries.ListingColumnCount));
             }
+        var lyrics = new Dictionary<long, string?>();
+        if (mode == SearchMode.Lyrics)
+        {
+            using var cmd = conn.Command("SELECT rowid, lrclib FROM search WHERE rowid IN (SELECT value FROM json_each($ids))",
+                tx, ("$ids", "[" + string.Join(",", ids) + "]"));
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) lyrics[r.GetInt64(0)] = r.NullableString(1);
+        }
         var folders = new FolderPaths(conn, tx);
         var free = query.Needles();
-        var artist = query.Needles("artist");
+        var titleNeedles = mode == SearchMode.Files ? free : [];
+        var artist = mode == SearchMode.Files
+            ? query.Needles("artist")
+            : query.Filters.GetValueOrDefault("artist", []).Select(Folding.Fold).Where(n => n.Length > 0).ToList();
         var results = new List<FileRow>(ids.Count);
         foreach (var id in ids)
         {
@@ -149,15 +194,30 @@ public static class LibrarySearch
             if (!rows.TryGetValue(id, out var found)) continue;
             var row = found.Row;
             if (row.IsDir) row = row with { TrackCount = null, Duration = null, Mtime = null };  // its name and parent
+            var extract = mode == SearchMode.Lyrics && free.Count > 0 ? Extract(lyrics.GetValueOrDefault(id), free) : "";
             results.Add(row with
             {
                 FolderId = found.Parent,
                 Folder = folders.Path(found.Parent),
-                TitleSpans = Folding.Spans(row.Title, free),
+                TitleSpans = Folding.Spans(row.Title, titleNeedles),
                 ArtistSpans = Folding.Spans(row.Artist, artist),
+                Extract = extract,
+                ExtractSpans = Folding.Spans(extract, free),
             });
         }
         return results;
+    }
+
+    /// <summary>A Lyrics search card's extract (SPEC §6 "Direction task 6"): the first line of the lyrics holding a
+    /// needle, with up to one line before and after it, timestamps stripped, joined by line breaks.</summary>
+    public static string Extract(string? text, IReadOnlyList<string> needles)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        var lines = Lyrics.Lrclib.StripTimestamps(text).Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+        var at = lines.FindIndex(line => needles.Any(n => Folding.Fold(line).Contains(n, StringComparison.Ordinal)));
+        if (at < 0) return "";
+        var from = Math.Max(0, at - ExtractContext);
+        return string.Join("\n", lines[from..Math.Min(lines.Count, at + ExtractContext + 1)]);
     }
 
     /// <summary>Folder paths and sort keys, built once per folder from its parent's.</summary>
@@ -191,3 +251,6 @@ public static class LibrarySearch
         public string Path(long folderId) => System.IO.Path.Combine(Key(folderId));
     }
 }
+
+[System.Text.Json.Serialization.JsonSerializable(typeof(string[]))]
+internal sealed partial class SearchJson : System.Text.Json.Serialization.JsonSerializerContext;

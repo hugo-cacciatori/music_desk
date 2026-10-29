@@ -19,7 +19,8 @@ public sealed class SearchService(Database db)
 
     /// <summary>The query's rows in result order (by folder, then name) and in <paramref name="order"/> (the same
     /// list when it is null); null when a newer query replaced this one.</summary>
-    public async Task<SearchOutcome?> Run(string text, Comparison<FileRow>? order)
+    public async Task<SearchOutcome?> Run(string text, Comparison<FileRow>? order, SearchMode mode = SearchMode.Files,
+        IReadOnlySet<string>? errorKeys = null)
     {
         var mine = Interlocked.Increment(ref generation);
         lock (gate)
@@ -34,9 +35,9 @@ public sealed class SearchService(Database db)
             try
             {
                 if (mine != Volatile.Read(ref generation)) return null;
-                var result = LibrarySearch.Find(conn, query);
+                var result = LibrarySearch.Find(conn, query, mode: mode, errorKeys: errorKeys);
                 if (mine != Volatile.Read(ref generation)) return null;
-                var rows = LibrarySearch.Rows(conn, result.Ids, query);
+                var rows = LibrarySearch.Rows(conn, result.Ids, query, mode);
                 var sorted = rows;
                 if (order is not null)
                 {

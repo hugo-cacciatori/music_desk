@@ -10,7 +10,13 @@ public static partial class LyricsKey
     [GeneratedRegex(@"^\d{1,3}[\s\-._]+")]
     private static partial Regex LeadingNumber();
 
-    public static string? Of(string? artist, string? albumArtist, string? title, string fileName)
+    public static string? Of(string? artist, string? albumArtist, string? title, string fileName) =>
+        Parts(artist, albumArtist, title, fileName) is var (a, t) && a is not null && !string.IsNullOrEmpty(t)
+            ? CaseFold(a + "\x1f" + t)
+            : null;
+
+    /// <summary>The artist (else the album artist) and title from the tags, each else from the file name.</summary>
+    public static (string? Artist, string? Title) Parts(string? artist, string? albumArtist, string? title, string fileName)
     {
         var a = FirstText(artist, albumArtist);
         var t = FirstText(title);
@@ -20,7 +26,7 @@ public static partial class LyricsKey
             a ??= fileArtist;
             t ??= fileTitle;
         }
-        return a is null || string.IsNullOrEmpty(t) ? null : CaseFold(a + "\x1f" + t);
+        return (a, t);
     }
 
     /// <summary>Best-effort "Artist - Title" from a file name, after a leading track number.</summary>

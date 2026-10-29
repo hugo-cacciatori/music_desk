@@ -44,6 +44,7 @@ public static class Queries
             Lrclib = isRead ? LrclibState(r.NullableString(16), r.NullableString(17), r.NullableString(20), r.NullableString(18)) : null,
             ReadError = r.NullableString(18),
             TrackCount = isDir ? r.NullableLong(19) ?? 0 : null,
+            LyricsKey = r.NullableString(20),
         };
     }
 

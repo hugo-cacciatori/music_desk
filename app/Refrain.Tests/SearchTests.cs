@@ -208,7 +208,7 @@ public sealed class SearchTests : IDisposable
     {
         var query = SearchQuery.Parse("homogenic artist:bjö");
         var ids = LibrarySearch.Find(lib.Conn, SearchQuery.Parse("homogenic")).Ids;
-        var rows = LibrarySearch.Rows(lib.Conn, ids, query, TestContext.Current.CancellationToken);
+        var rows = LibrarySearch.Rows(lib.Conn, ids, query, cancel: TestContext.Current.CancellationToken);
         Assert.Equal(["Björk - Homogenic", "01 Hunter.flac", "02 Jóga.flac"], rows.Select(r => r.Name));
         var folder = rows[0];
         Assert.True(folder.IsDir);
@@ -229,7 +229,7 @@ public sealed class SearchTests : IDisposable
     {
         var ids = LibrarySearch.Find(lib.Conn, SearchQuery.Parse("homogenic")).Ids;
         lib.Scalar("DELETE FROM entries WHERE id = $id", ("$id", ids[1]));
-        Assert.Equal(2, LibrarySearch.Rows(lib.Conn, ids, SearchQuery.Parse("homogenic"), TestContext.Current.CancellationToken).Count);
+        Assert.Equal(2, LibrarySearch.Rows(lib.Conn, ids, SearchQuery.Parse("homogenic"), cancel: TestContext.Current.CancellationToken).Count);
     }
 
     [Fact]

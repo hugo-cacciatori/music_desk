@@ -26,12 +26,15 @@ public sealed record FileRow
     public string? Lrclib { get; init; }  // "synced", "plain", "instrumental", "not found", "pending", "no tags", ""
     public string? ReadError { get; init; }
     public long? TrackCount { get; init; }  // a folder: tracks in its subtree
+    public string? LyricsKey { get; init; }
 
     // Search results only (SPEC §6).
     public long FolderId { get; init; }
     public string Folder { get; init; } = "";
     public IReadOnlyList<(int Start, int Length)> TitleSpans { get; init; } = [];
     public IReadOnlyList<(int Start, int Length)> ArtistSpans { get; init; } = [];
+    public string Extract { get; init; } = "";  // Lyrics search: the matching lyric line and its neighbours
+    public IReadOnlyList<(int Start, int Length)> ExtractSpans { get; init; } = [];
 }
 
 /// <summary>A folder of the tree: its name, and whether it has subfolders to expand.</summary>

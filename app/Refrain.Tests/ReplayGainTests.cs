@@ -28,7 +28,7 @@ public sealed class ReplayGainTests
     static readonly ReplayGainOptions Options = ReplayGainOptions.Default;
 
     /// <summary>The same tree twice: "py" for the Python app, "cs" for the port.</summary>
-    sealed class Twins : IDisposable
+    internal sealed class Twins : IDisposable
     {
         readonly TempFolder temp = new();
         public string Py { get; }
@@ -70,7 +70,7 @@ public sealed class ReplayGainTests
 
     /// <summary>Every file of the tree: an audio file's tags as mutagen reads them (ID3 frames with their version),
     /// a log file's exact text, other files by name.</summary>
-    static Dictionary<string, string?> Dump(string root)
+    internal static Dictionary<string, string?> Dump(string root)
     {
         var output = PythonApp.Run("""
             import hashlib, json, sys
@@ -105,7 +105,7 @@ public sealed class ReplayGainTests
         return JsonSerializer.Deserialize<Dictionary<string, string?>>(output)!;
     }
 
-    static string Mask(string text, string root)
+    internal static string Mask(string text, string root)
     {
         text = text.Replace(root, "<ROOT>");
         text = Regex.Replace(text, @"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", "<TIMESTAMP>");
@@ -114,7 +114,7 @@ public sealed class ReplayGainTests
     }
 
     /// <summary>The two trees hold the same files, tags and logs. Returns how many logs were compared.</summary>
-    static int AssertSame(Twins twins)
+    internal static int AssertSame(Twins twins)
     {
         var (py, cs) = (Dump(twins.Py), Dump(twins.Cs));
         Assert.Equal(py.Keys.Order(), cs.Keys.Order());

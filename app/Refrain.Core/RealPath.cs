@@ -37,6 +37,10 @@ public static partial class RealPath
         return result;
     }
 
+    /// <summary>Whether two paths are one file on disk (a case-only rename's target is its own source).</summary>
+    public static bool SameFile(string a, string b) =>
+        Of(a) is { } first && Of(b) is { } second && first.Equals(second, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>A path without a trailing separator (but "D:\" stays a drive root).</summary>
     public static string Normalize(string path)
     {

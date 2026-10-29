@@ -15,7 +15,7 @@ namespace Refrain.Views;
 /// <summary>A list of folders and files with columns (SPEC §5): shown, hidden, moved, resized and sorted from the
 /// header, the layout reported for saving. Folders stay first in both sort directions. Used by the file list and
 /// the search results.</summary>
-public sealed partial class FileTable : Grid
+public sealed partial class FileTable : Grid, IRowList
 {
     const double MinColumnWidth = 24;
     const string ResultOrder = "folder";  // the search results' own order (SPEC §6)

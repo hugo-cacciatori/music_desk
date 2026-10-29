@@ -15,6 +15,19 @@
                 <views:RowView />
             </DataTemplate>
 
+            <!-- A Lyrics search card; CardList fills it in ContainerContentChanging. -->
+            <DataTemplate x:Key="CardTemplate">
+                <views:CardView />
+            </DataTemplate>
+
+            <Style x:Key="CardItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
+                <Setter Property="Margin" Value="0,4,0,4" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+
             <Style x:Key="FileRowItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource DefaultListViewItemStyle}">
                 <Setter Property="MinHeight" Value="30" />
                 <Setter Property="Padding" Value="4,0,0,0" />

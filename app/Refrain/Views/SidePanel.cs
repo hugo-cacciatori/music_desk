@@ -1,42 +1,58 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Refrain.Core;
 using Refrain.Core.Index;
+using Refrain.Core.Lyrics;
 
 namespace Refrain.Views;
 
-/// <summary>The side panel on the right (SPEC §7, §33): the Metadata tab for audio files (one or several), the folder
-/// summary for a folder (or the open folder when nothing is selected), and a preview for one text or image file.
-/// The Lyrics tab comes with rebuild task 6.</summary>
+/// <summary>The side panel on the right (SPEC §7, §8, §33): for audio files, the Metadata and Lyrics tabs (plain text,
+/// the selected one underlined in the accent colour); the folder summary for a folder (or the open folder when
+/// nothing is selected); a preview for one text or image file.</summary>
 public sealed partial class SidePanel : Grid
 {
     readonly Library library;
     readonly Func<XamlRoot> xamlRoot;
-    readonly TextBlock tab = new() { Text = "Metadata", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(16, 12, 16, 0) };
+    readonly Button metadataTab = Tab("Metadata");
+    readonly Button lyricsTab = Tab("Lyrics");
+    readonly StackPanel tabs = new() { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(12, 8, 12, 0) };
+    readonly TextBlock heading = new() { FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(16, 12, 16, 0) };
     readonly MetadataPage metadata;
+    readonly LyricsPage lyrics;
     readonly FolderPage folder;
     readonly PreviewPage preview = new();
     readonly TextBlock message = Ui.Secondary();
     IReadOnlyList<long> shownIds = [];
+    IReadOnlyList<FileRow> audioRows = [];
+    (List<string> Audio, List<string> Skipped)? audioPaths;
+    bool metadataLoaded;
+    bool onLyrics;
     int generation;
 
-    public SidePanel(Library library, Func<XamlRoot> xamlRoot, Func<nint> window)
+    public SidePanel(Library library, LyricsService service, Settings settings, Func<XamlRoot> xamlRoot, Func<nint> window)
     {
         this.library = library;
         this.xamlRoot = xamlRoot;
         metadata = new MetadataPage(xamlRoot, window);
+        lyrics = new LyricsPage(library, service, settings);
         folder = new FolderPage(library);
         message.Margin = new Thickness(16);
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        Children.Add(tab);
-        foreach (var page in new FrameworkElement[] { metadata, folder, preview, message })
+        tabs.Children.Add(metadataTab);
+        tabs.Children.Add(lyricsTab);
+        Children.Add(tabs);
+        Children.Add(heading);
+        foreach (var page in Pages)
         {
             SetRow(page, 1);
             page.Visibility = Visibility.Collapsed;
             Children.Add(page);
         }
-        metadata.DirtyChanged += dirty => tab.Text = dirty ? "Metadata •" : "Metadata";
+        metadataTab.Click += async (_, _) => await ChooseTab(lyricsTab: false);
+        lyricsTab.Click += async (_, _) => await ChooseTab(lyricsTab: true);
+        metadata.DirtyChanged += _ => PaintTabs();
         metadata.Saved += paths =>
         {
             // Only the saved files' folders are re-read into the index (SPEC §7 "As built (M3 task 2)").
@@ -45,7 +61,28 @@ public sealed partial class SidePanel : Grid
         };
     }
 
-    public bool Dirty => metadata.Visibility == Visibility.Visible && metadata.Dirty;
+    FrameworkElement[] Pages => [metadata, lyrics, folder, preview, message];
+
+    static Button Tab(string text) => new()
+    {
+        Content = text,
+        Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+        BorderThickness = new Thickness(0, 0, 0, 2),
+        Padding = new Thickness(8, 4, 8, 4),
+        CornerRadius = new CornerRadius(0),
+    };
+
+    void PaintTabs()
+    {
+        metadataTab.Content = metadata.Dirty ? "Metadata •" : "Metadata";
+        foreach (var (tab, selected) in new[] { (metadataTab, !onLyrics), (lyricsTab, onLyrics) })
+        {
+            tab.BorderBrush = selected ? Ui.Brush("AccentFillColorDefaultBrush") : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            tab.Foreground = Ui.Brush(selected ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush");
+        }
+    }
+
+    public bool Dirty => metadataLoaded && metadata.Dirty;
 
     /// <summary>Unsaved edits: Save, Discard or Cancel (SPEC §7). False when the user cancels, or the save failed.</summary>
     public async Task<bool> ConfirmLeave()
@@ -73,11 +110,24 @@ public sealed partial class SidePanel : Grid
         }
     }
 
+    /// <summary>The Lyrics tab comes forward (a lyrics card was clicked, or the search opened).</summary>
+    public Task ShowLyrics() => ChooseTab(lyricsTab: true);
+
+    async Task ChooseTab(bool lyricsTab)
+    {
+        onLyrics = lyricsTab;
+        PaintTabs();
+        if (audioPaths is null) return;
+        await ShowAudio();
+    }
+
     /// <summary>Shows what the selection calls for; with nothing selected, the open folder's summary.</summary>
     public async Task Show(IReadOnlyList<FileRow> rows, long? openFolder)
     {
         var mine = ++generation;
         shownIds = rows.Select(r => r.Id).ToList();
+        audioPaths = null;
+        metadataLoaded = false;
         if (rows.Count == 0)
         {
             if (openFolder is { } id) await ShowFolder(id);
@@ -98,16 +148,22 @@ public sealed partial class SidePanel : Grid
         if (mine != generation) return;
         var audio = new List<string>();
         var skipped = new List<string>();
+        var audioRowsFound = new List<FileRow>();
         for (var i = 0; i < rows.Count; i++)
         {
             if (paths[i] is not { } path) continue;
-            if (rows[i].IsAudio && Formats.IsRead(rows[i].Ext)) audio.Add(path);
+            if (rows[i].IsAudio && Formats.IsRead(rows[i].Ext))
+            {
+                audio.Add(path);
+                audioRowsFound.Add(rows[i]);
+            }
             else skipped.Add(rows[i].Name);
         }
         if (audio.Count > 0)
         {
-            Show(metadata);
-            await metadata.Load(audio, skipped);
+            audioPaths = (audio, skipped);
+            audioRows = audioRowsFound;
+            await ShowAudio();
             return;
         }
         if (rows.Count == 1 && paths[0] is { } file)
@@ -115,7 +171,7 @@ public sealed partial class SidePanel : Grid
             var row = rows[0];
             if (Preview.Of(file) != Preview.Kind.None)
             {
-                Show(preview);
+                Show(preview, "Preview");
                 await preview.Load(file, row.Size is { } size && row.Mtime is { } mtime ? (size, mtime) : null);
                 return;
             }
@@ -127,24 +183,55 @@ public sealed partial class SidePanel : Grid
         ShowMessage($"{rows.Count} items selected, none of them an audio file with tags.");
     }
 
+    /// <summary>Audio files: the chosen tab, its content loaded when first shown.</summary>
+    async Task ShowAudio()
+    {
+        if (audioPaths is not { } chosen) return;
+        if (onLyrics)
+        {
+            Show(lyrics, null);
+            if (audioRows.Count == 1) await lyrics.Load(audioRows[0].Id);
+            else lyrics.ShowNone("Select a single track to see its lyrics.");
+            return;
+        }
+        Show(metadata, null);
+        if (metadataLoaded) return;
+        metadataLoaded = true;
+        await metadata.Load(chosen.Audio, chosen.Skipped);
+    }
+
     async Task ShowFolder(long id)
     {
-        Show(folder);
+        Show(folder, "Folder");
         await folder.Load(id);
     }
 
     void ShowMessage(string text)
     {
         message.Text = text;
-        Show(message);
+        Show(message, "");
     }
 
-    void Show(FrameworkElement page)
+    /// <summary>A page; the tabs show for audio files, a heading for the rest.</summary>
+    void Show(FrameworkElement page, string? title)
     {
-        foreach (var child in new FrameworkElement[] { metadata, folder, preview, message })
-            child.Visibility = child == page ? Visibility.Visible : Visibility.Collapsed;
-        tab.Text = page == metadata && metadata.Dirty ? "Metadata •" : page == metadata ? "Metadata"
-            : page == folder ? "Folder" : page == preview ? "Preview" : "";
+        foreach (var child in Pages) child.Visibility = child == page ? Visibility.Visible : Visibility.Collapsed;
+        tabs.Visibility = title is null ? Visibility.Visible : Visibility.Collapsed;
+        heading.Visibility = title is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+        heading.Text = title ?? "";
+        PaintTabs();
+    }
+
+    /// <summary>LRCLIB answered for a key: the Lyrics tab showing it reloads.</summary>
+    public async Task LyricsReady(string key)
+    {
+        if (lyrics.Visibility == Visibility.Visible && lyrics.ShownKey == key) await lyrics.Reload();
+    }
+
+    /// <summary>The service's state changed (a pause, Retry now): a shown Lyrics tab reloads.</summary>
+    public async Task LyricsStateChanged()
+    {
+        if (lyrics.Visibility == Visibility.Visible) await lyrics.Reload();
     }
 
     /// <summary>The indexer changed folders: a shown summary or preview reloads, and so do clean Metadata fields.</summary>
@@ -165,6 +252,11 @@ public sealed partial class SidePanel : Grid
             var row = selected[0];
             if (row.Size is { } size && row.Mtime is { } mtime && preview.Stamp != (size, mtime))
                 await Show(selected, openFolder);
+            return;
+        }
+        if (lyrics.Visibility == Visibility.Visible)
+        {
+            await lyrics.Reload();
             return;
         }
         if (metadata.Visibility == Visibility.Visible && !metadata.Dirty && shownIds.SequenceEqual(selected.Select(r => r.Id)))

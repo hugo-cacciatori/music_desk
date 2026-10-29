@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Media;
 using Refrain.Core;
 using Refrain.Core.Browser;
 using Refrain.Core.Index;
+using Refrain.Core.Lyrics;
 using Refrain.Core.Search;
 using Refrain.Views;
 using Windows.ApplicationModel.DataTransfer;
@@ -42,6 +43,12 @@ public sealed partial class MainWindow : Window
     };
     readonly TextBlock resultCount = new() { Margin = new Thickness(12, 8, 12, 4) };
     readonly TextBlock status = new() { Margin = new Thickness(16, 4, 16, 6), TextTrimming = TextTrimming.CharacterEllipsis };
+    readonly TextBlock lyricsStatus = new() { Margin = new Thickness(16, 4, 8, 6), VerticalAlignment = VerticalAlignment.Center };
+    readonly Button lyricsRetry = new() { Content = "Retry now", Visibility = Visibility.Collapsed, Margin = new Thickness(0, 2, 16, 4) };
+    readonly ToggleButton filesMode = new() { Content = "Files", CornerRadius = new CornerRadius(4, 0, 0, 4) };
+    readonly ToggleButton lyricsMode = new() { Content = "Lyrics", CornerRadius = new CornerRadius(0), Margin = new Thickness(-1, 0, 0, 0) };
+    readonly CardList cards = new();
+    SearchMode mode;
     readonly AddressBar address = new();
     readonly FolderTree tree = new();
     readonly SidePanel panel;
@@ -78,7 +85,10 @@ public sealed partial class MainWindow : Window
         library = new Library(AppPaths.Database);
         search = new SearchService(library.Db);
         files = new FileTable(Columns.FileList, settings.FileHeader);
-        panel = new SidePanel(library, () => Content.XamlRoot, () => WinRT.Interop.WindowNative.GetWindowHandle(this));
+        panel = new SidePanel(library, library.Lyrics, settings, () => Content.XamlRoot,
+            () => WinRT.Interop.WindowNative.GetWindowHandle(this));
+        // The last mode used is kept; an unknown value reads as Files (SPEC §6 "Direction task 5").
+        mode = settings.SearchMode == "lyrics" ? SearchMode.Lyrics : SearchMode.Files;
         results = new FileTable(Columns.Search, settings.SearchHeader ?? new HeaderState { SortKey = "folder" }, searchResults: true);
         searchTimer = Timer(TimeSpan.FromMilliseconds(120), () => _ = RunSearch(inPlace: false));
         liveSearchTimer = Timer(TimeSpan.FromSeconds(1), () => _ = RunSearch(inPlace: true));
@@ -95,6 +105,8 @@ public sealed partial class MainWindow : Window
         resultsPage.Children.Add(resultCount);
         Grid.SetRow(results, 1);
         resultsPage.Children.Add(results);
+        Grid.SetRow(cards, 1);
+        resultsPage.Children.Add(cards);
         treeCard = Card(tree);
         splitter = Splitter(treeColumn, 1, width => settings.TreeWidth = width);
 
@@ -110,8 +122,18 @@ public sealed partial class MainWindow : Window
         var body = Body();
         Grid.SetRow(body, 2);
         root.Children.Add(body);
-        Grid.SetRow(status, 3);
-        root.Children.Add(status);
+        var statusRow = new Grid();
+        statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        statusRow.Children.Add(status);
+        Grid.SetColumn(lyricsStatus, 1);
+        statusRow.Children.Add(lyricsStatus);
+        Grid.SetColumn(lyricsRetry, 2);
+        statusRow.Children.Add(lyricsRetry);
+        ToolTipService.SetToolTip(lyricsRetry, "Try LRCLIB again now");
+        Grid.SetRow(statusRow, 3);
+        root.Children.Add(statusRow);
         Content = root;
 
         Wire(root);
@@ -149,9 +171,26 @@ public sealed partial class MainWindow : Window
         var row = new Grid { Margin = new Thickness(0, 12, 0, 8) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var field = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, MaxWidth = 900 };
+        // Files | Lyrics, one control joined to the field (SPEC §36 "1." task 3).
+        var field = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, MaxWidth = 1040 };
+        field.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        field.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        field.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        foreach (var toggle in new[] { filesMode, lyricsMode })
+        {
+            toggle.VerticalAlignment = VerticalAlignment.Stretch;
+            toggle.Padding = new Thickness(14, 0, 14, 0);
+        }
+        ToolTipService.SetToolTip(filesMode, "Search folder and file names and tags");
+        ToolTipService.SetToolTip(lyricsMode, "Search the lyrics LRCLIB found");
+        field.Children.Add(filesMode);
+        Grid.SetColumn(lyricsMode, 1);
+        field.Children.Add(lyricsMode);
+        searchBox.CornerRadius = new CornerRadius(0, 4, 4, 0);
+        searchBox.Margin = new Thickness(-1, 0, 0, 0);
+        Grid.SetColumn(searchBox, 2);
         field.Children.Add(searchBox);
-        field.Children.Add(new FontIcon
+        var magnifier = new FontIcon
         {
             Glyph = "",
             FontSize = 16,
@@ -159,10 +198,10 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             IsHitTestVisible = false,
-        });
-        ToolTipService.SetToolTip(searchBox,
-            "Any part of a folder or file name, title, artist, album artist, album or date. Filters: artist:, album:, " +
-            "genre:, year:, ext:, rg:none|partial|full");
+        };
+        Grid.SetColumn(magnifier, 2);
+        field.Children.Add(magnifier);
+        ApplyMode();
         row.Children.Add(field);
 
         var more = Icon("", "More");
@@ -318,6 +357,37 @@ public sealed partial class MainWindow : Window
             else if (status.Text.StartsWith("Indexing", StringComparison.Ordinal)) status.Text = "";
         });
         library.RootsChanged += () => ui.TryEnqueue(() => _ = LoadRoots());
+        var lyrics = library.Lyrics;
+        lyrics.FoldersChanged += folders => ui.TryEnqueue(() =>
+        {
+            changedFolders.UnionWith(folders);
+            refreshTimer.Start();
+        });
+        lyrics.EntryReady += key => ui.TryEnqueue(() => _ = panel.LyricsReady(key));
+        lyrics.ProgressChanged += progress => ui.TryEnqueue(() => ShowLyricsProgress(progress));
+        lyrics.Unreachable += until => ui.TryEnqueue(() =>
+        {
+            Status($"LRCLIB unreachable, retrying at {until:HH:mm}.");
+            _ = panel.LyricsStateChanged();
+        });
+        lyricsRetry.Click += (_, _) =>
+        {
+            lyrics.RetryNow();
+            _ = panel.LyricsStateChanged();
+        };
+        filesMode.Click += (_, _) => SetMode(SearchMode.Files);
+        lyricsMode.Click += (_, _) => SetMode(SearchMode.Lyrics);
+        cards.Activated += row => _ = Activate(row, fromResults: true);
+        cards.MenuRequested += (rows, anchor, point) => ShowMenu(rows, anchor, point, fromResults: true);
+        cards.SelectionChanged += () => _ = SelectionChanged(cards);
+        cards.Clicked += () => _ = panel.ShowLyrics();
+        cards.List.KeyDown += (_, e) =>
+        {
+            if (e.Key != VirtualKey.Escape) return;
+            e.Handled = true;
+            ShowFiles();
+            files.List.Focus(FocusState.Keyboard);
+        };
 
         searchBox.TextChanged += (_, _) =>
         {
@@ -336,7 +406,7 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 searchTimer.Stop();
                 await RunSearch(inPlace: false);  // Enter runs the search again (SPEC §6)
-                results.FocusFirst();
+                ShownResults.FocusFirst();
             }
             else if (e.Key == VirtualKey.Escape)
             {
@@ -346,7 +416,7 @@ public sealed partial class MainWindow : Window
             else if (e.Key == VirtualKey.Down && resultsShown)
             {
                 e.Handled = true;
-                results.FocusFirst();
+                ShownResults.FocusFirst();
             }
         };
         results.List.KeyDown += (_, e) =>
@@ -589,11 +659,12 @@ public sealed partial class MainWindow : Window
         }
         current = folderId;
         currentChain = chain;
-        files.SetRows(rows, select is { } id ? [id] : null);
+        files.SetRows(Decorate(rows), select is { } id ? [id] : null);
         address.Show(chain);
         if (record) history.Open(folderId);
         settings.LastFolder = CurrentPath;
         library.FolderOpened(folderId);
+        library.Lyrics.PrioritizeFolder(folderId);
         ShowFiles();
         UpdateButtons();
         if (tree.Visibility == Visibility.Visible) await tree.Reveal(chain.Select(c => c.Id).ToList());
@@ -689,13 +760,39 @@ public sealed partial class MainWindow : Window
         else
         {
             var row = rows[0];
-            if (fromResults) Add("Go to folder", () => _ = OpenFolder(row.IsDir ? row.Id : row.FolderId, select: row.IsDir ? null : row.Id));
-            Add("Open", () => _ = Activate(row, fromResults: false), rows.Count == 1);
-            Add("Open in File Explorer", () => _ = RevealRow(row), rows.Count == 1);
+            if (fromResults)
+            {
+                Add("Go to folder", () => _ = OpenFolder(row.IsDir ? row.Id : row.FolderId, select: row.IsDir ? null : row.Id));
+                Add("Open in File Explorer", () => _ = RevealRow(row), rows.Count == 1);
+                Add("Open", () => _ = Activate(row, fromResults: false), rows.Count == 1);
+            }
+            else
+            {
+                Add("Open", () => _ = Activate(row, fromResults: false), rows.Count == 1);
+                Add("Open in File Explorer", () => _ = RevealRow(row), rows.Count == 1);
+            }
             Add(rows.Count == 1 ? "Copy path" : "Copy paths", () => _ = CopyRows(rows));
             if (row.IsDir && rows.Count == 1) Add("Rescan", () => library.Indexer.Urgent(row.Id));
+            if (fromResults && !string.IsNullOrEmpty(row.Artist))
+                Add($"Filter by {row.Artist}", () => FilterByArtist(row.Artist));
         }
         menu.ShowAt(anchor, point);
+    }
+
+    /// <summary>An <c>artist:</c> filter added to the query (the seek_lyrics page's artist checkboxes, SPEC §6).</summary>
+    void FilterByArtist(string artist)
+    {
+        searchBox.Text = $"{searchBox.Text.TrimEnd()} artist:\"{artist.Replace("\"", "")}\"".TrimStart();
+        searchBox.SelectionStart = searchBox.Text.Length;
+    }
+
+    /// <summary>A pending row whose key's last lookup failed this session shows "error" (SPEC §5).</summary>
+    List<FileRow> Decorate(List<FileRow> rows)
+    {
+        var failed = library.Lyrics.FailedKeys();
+        if (failed.Count == 0) return rows;
+        return rows.Select(r => r.Lrclib == "pending" && r.LyricsKey is { } key && failed.Contains(key) ? r with { Lrclib = "error" } : r)
+            .ToList();
     }
 
     string CurrentPath => Path.Combine(currentChain.Select(c => c.Name).ToArray());
@@ -745,7 +842,7 @@ public sealed partial class MainWindow : Window
             {
                 if (chain.Count > 0)
                 {
-                    files.UpdateRows(rows);
+                    files.UpdateRows(Decorate(rows));
                     currentChain = chain;
                     address.Show(chain);
                 }
@@ -771,11 +868,14 @@ public sealed partial class MainWindow : Window
             ShowFiles();
             return;
         }
-        var outcome = await search.Run(text, results.WorkerOrder);
-        if (outcome is null || outcome.Text != searchBox.Text) return;  // a newer query took over
-        var same = inPlace && resultsShown && shownQuery == outcome.Text;
-        results.ShowResults(outcome.Rows, outcome.Sorted, same);
-        shownQuery = outcome.Text;
+        var asked = mode;
+        var outcome = await search.Run(text, asked == SearchMode.Files ? results.WorkerOrder : null, asked,
+            library.Lyrics.FailedKeys());
+        if (outcome is null || outcome.Text != searchBox.Text || asked != mode) return;  // a newer query took over
+        var same = inPlace && resultsShown && shownQuery == outcome.Text + "\u0000" + asked;
+        if (asked == SearchMode.Lyrics) cards.SetRows(Decorate(outcome.Rows), same);
+        else results.ShowResults(Decorate(outcome.Rows), Decorate(outcome.Sorted), same);
+        shownQuery = outcome.Text + "\u0000" + asked;
         var count = outcome.Total == outcome.Rows.Count
             ? $"{outcome.Total:N0} results"
             : $"{outcome.Rows.Count:N0} of {outcome.Total:N0} results";
@@ -783,11 +883,13 @@ public sealed partial class MainWindow : Window
         ShowResults();
     }
 
-    FileTable Shown => resultsShown ? results : files;
+    IRowList ShownResults => mode == SearchMode.Lyrics ? cards : results;
+
+    IRowList Shown => resultsShown ? ShownResults : files;
 
     /// <summary>The side panel follows the shown list's selection; with unsaved edits it asks first, and Cancel keeps
     /// the selection as it was.</summary>
-    async Task SelectionChanged(FileTable table)
+    async Task SelectionChanged(IRowList table)
     {
         if (table != Shown || restoringSelection) return;
         var rows = table.SelectedRows;
@@ -806,7 +908,7 @@ public sealed partial class MainWindow : Window
         await panel.Show(rows, current);
     }
 
-    FileTable? panelTable;
+    IRowList? panelTable;
     List<long> panelSelection = [];
     long? panelFolder;
     bool restoringSelection;
@@ -814,11 +916,64 @@ public sealed partial class MainWindow : Window
 
     void ShowResults()
     {
+        results.Visibility = mode == SearchMode.Files ? Visibility.Visible : Visibility.Collapsed;
+        cards.Visibility = mode == SearchMode.Lyrics ? Visibility.Visible : Visibility.Collapsed;
         if (resultsShown) return;
         resultsShown = true;
-        _ = SelectionChanged(results);
         filesPage.Visibility = Visibility.Collapsed;
         resultsCardElement!.Visibility = Visibility.Visible;
+        _ = panel.ShowLyrics();  // opening the search brings the Lyrics tab forward once (SPEC §6)
+        _ = SelectionChanged(ShownResults);
+    }
+
+    /// <summary>The Files | Lyrics toggle (SPEC §6 "Direction task 5"): the query on screen runs again in the new mode,
+    /// the page opens when the field has text, and the focus goes back to the field.</summary>
+    void SetMode(SearchMode next)
+    {
+        mode = next;
+        settings.SearchMode = next == SearchMode.Lyrics ? "lyrics" : "files";
+        ApplyMode();
+        if (searchBox.Text.Trim().Length > 0)
+        {
+            if (resultsShown) ShowResultsFor(next);
+            _ = RunSearch(inPlace: false);
+        }
+        searchBox.Focus(FocusState.Programmatic);
+    }
+
+    void ShowResultsFor(SearchMode shown)
+    {
+        results.Visibility = shown == SearchMode.Files ? Visibility.Visible : Visibility.Collapsed;
+        cards.Visibility = shown == SearchMode.Lyrics ? Visibility.Visible : Visibility.Collapsed;
+        _ = SelectionChanged(ShownResults);
+    }
+
+    void ApplyMode()
+    {
+        filesMode.IsChecked = mode == SearchMode.Files;
+        lyricsMode.IsChecked = mode == SearchMode.Lyrics;
+        searchBox.PlaceholderText = mode == SearchMode.Files
+            ? "Search folders, files and tags (Ctrl+K)"
+            : "Search the lyrics (Ctrl+K)";
+        ToolTipService.SetToolTip(searchBox, mode == SearchMode.Files
+            ? "Any part of a folder or file name, title, artist, album artist, album or date. Filters: artist:, " +
+              "album:, genre:, year:, ext:, lrclib:, rg:none|partial|full"
+            : "Any part of the lyrics LRCLIB found. Filters still narrow it: artist:, album:, year:…");
+    }
+
+    /// <summary>The lyrics side of the status line (SPEC §9 "Controls"), with Retry now while lookups wait.</summary>
+    void ShowLyricsProgress(LyricsProgress progress)
+    {
+        var (text, retry) = progress switch
+        {
+            { PausedUntil: { } until } => ($"LRCLIB unreachable, retrying at {until:HH:mm}", true),
+            { Offline: true } => ("", false),
+            { Pending: > 0, Busy: true } => ($"Looking up lyrics: {progress.Pending:N0} to look up", false),
+            { Failed: > 0 } => ($"Lyrics: {progress.Failed:N0} to retry later", true),
+            _ => ("", false),
+        };
+        lyricsStatus.Text = text;
+        lyricsRetry.Visibility = retry ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Back to the file list as it was (Esc, or an emptied field).</summary>

@@ -10,6 +10,7 @@ public sealed class Library : IDisposable
 
     public Database Db { get; }
     public Indexer Indexer { get; }
+    public Lyrics.LyricsService Lyrics { get; }
     readonly Watcher watcher;
     readonly Timer online;
 
@@ -20,6 +21,9 @@ public sealed class Library : IDisposable
     {
         Db = new Database(databasePath);
         Indexer = new Indexer(Db);
+        Lyrics = new Lyrics.LyricsService(Db, new Lyrics.LrclibClient());
+        Indexer.ScanFinished += Lyrics.Wake;  // new tracks may need lookups
+        Lyrics.Start();
         watcher = new Watcher(Indexer);
         watcher.Unwatchable += root => Log.Info($"{root} isn't watched; folders are checked when opened.");
         online = new Timer(_ => CheckOnline(), null, TimeSpan.Zero, OnlineCheck);
@@ -85,6 +89,7 @@ public sealed class Library : IDisposable
     {
         online.Dispose();
         watcher.Dispose();
+        Lyrics.Dispose();
         Indexer.Dispose();
         Db.Dispose();
     }

@@ -35,6 +35,9 @@ public sealed record FileRow
     public IReadOnlyList<(int Start, int Length)> ArtistSpans { get; init; } = [];
     public string Extract { get; init; } = "";  // Lyrics search: the matching lyric line and its neighbours
     public IReadOnlyList<(int Start, int Length)> ExtractSpans { get; init; } = [];
+
+    /// <summary>What a screen reader says for a list item: its name, not every field.</summary>
+    public override string ToString() => Name;
 }
 
 /// <summary>A folder of the tree: its name, and whether it has subfolders to expand.</summary>

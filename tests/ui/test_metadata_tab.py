@@ -546,7 +546,7 @@ def new_cover(tmp_path, fixtures_dir):
 
 
 def pick(qtbot, tab, monkeypatch, path):
-    monkeypatch.setattr(tab, "choose_cover_file", lambda: str(path))
+    monkeypatch.setattr(tab.covers, "choose_cover_file", lambda: str(path))
     with qtbot.waitSignal(tab.io.imageRead, timeout=5000):
         tab.replace_cover_button.click()
 
@@ -637,7 +637,7 @@ def test_large_cover_warning(qtbot, panel, fixture_copy, fixtures_dir, tmp_path,
     big.write_bytes((fixtures_dir / "cover.jpg").read_bytes() + bytes(1024 * 1024 + 10))  # still decodes
     tab = load(qtbot, panel, fixture_copy("formats/tone.flac"))
     asked = []
-    monkeypatch.setattr(tab, "confirm_large_cover", lambda size: asked.append(size) or accept)
+    monkeypatch.setattr(tab.covers, "confirm_large_cover", lambda size: asked.append(size) or accept)
     pick(qtbot, tab, monkeypatch, big)
     assert asked == [big.stat().st_size]
     assert tab.dirty is accept

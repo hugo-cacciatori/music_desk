@@ -4,8 +4,12 @@ namespace RefrainMenu;
 /// selection of several items.</summary>
 public enum Clicked { Background, Folder, File, Selection }
 
-/// <summary>An entry of the Refrain submenu: its verb (also the app's <c>--entry</c>), label and help text.</summary>
-public sealed record Entry(string Verb, string Label, string Help);
+/// <summary>An entry of the Refrain submenu: its verb (also the app's <c>--entry</c>), label and help text. An empty
+/// verb is a separator.</summary>
+public sealed record Entry(string Verb, string Label, string Help)
+{
+    public bool IsSeparator => Verb.Length == 0;
+}
 
 /// <summary>The submenu's plain logic, apart from COM so tests can use it: which entries the clicked items get, and
 /// what an entry starts. It only looks at the items' kinds and extensions; it never reads a file.</summary>
@@ -14,6 +18,8 @@ public static class MenuLogic
     public const string SubmenuLabel = "Refrain";
 
     public static readonly Entry Open = new("open", "Open in Refrain", "Show this folder in Refrain, adding it to the library if needed");
+    public static readonly Entry Settings = new("settings", "Settings", "Open Refrain's Options window");
+    public static readonly Entry Separator = new("", "", "");
 
     public static Clicked Classify(bool background, IReadOnlyList<(string Path, bool IsFolder)> items) =>
         background ? Clicked.Background
@@ -21,12 +27,14 @@ public static class MenuLogic
         : items.Count == 1 && items[0].IsFolder ? Clicked.Folder
         : Clicked.File;
 
-    /// <summary>The kept functions' entries, each added with its rebuild task (SPEC §36 "7."): Open in Refrain on one
-    /// folder or empty space.</summary>
+    /// <summary>The kept functions' entries, each added with its rebuild task (SPEC §36 "7.", "8."): Open in Refrain on
+    /// one folder or empty space; a separator; Settings, always (SPEC §31 "Settings").</summary>
     public static List<Entry> Entries(Clicked clicked, IReadOnlyList<(string Path, bool IsFolder)> items)
     {
         var entries = new List<Entry>();
         if (clicked is Clicked.Background or Clicked.Folder) entries.Add(Open);
+        if (entries.Count > 0) entries.Add(Separator);
+        entries.Add(Settings);
         return entries;
     }
 

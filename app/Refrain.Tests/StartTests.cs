@@ -104,15 +104,15 @@ public sealed class StartTests : IDisposable
     }
 
     [Fact]
-    public void The_menu_offers_open_on_one_folder_or_empty_space()
+    public void The_menu_offers_open_on_one_folder_or_empty_space_and_settings_always()
     {
         (string, bool)[] folder = [(@"D:\Music", true)];
-        Assert.Equal([MenuLogic.Open], MenuLogic.Entries(MenuLogic.Classify(false, folder), folder));
-        Assert.Equal([MenuLogic.Open], MenuLogic.Entries(MenuLogic.Classify(true, folder), folder));
+        Assert.Equal([MenuLogic.Open, MenuLogic.Separator, MenuLogic.Settings], MenuLogic.Entries(MenuLogic.Classify(false, folder), folder));
+        Assert.Equal([MenuLogic.Open, MenuLogic.Separator, MenuLogic.Settings], MenuLogic.Entries(MenuLogic.Classify(true, folder), folder));
         (string, bool)[] file = [(@"D:\Music\a.flac", false)];
-        Assert.Empty(MenuLogic.Entries(MenuLogic.Classify(false, file), file));
+        Assert.Equal([MenuLogic.Settings], MenuLogic.Entries(MenuLogic.Classify(false, file), file));
         (string, bool)[] two = [(@"D:\A", true), (@"D:\B", true)];
-        Assert.Empty(MenuLogic.Entries(MenuLogic.Classify(false, two), two));
+        Assert.Equal([MenuLogic.Settings], MenuLogic.Entries(MenuLogic.Classify(false, two), two));
         Assert.Equal((@"C:\App\Refrain.exe", "\"D:\\\\\"", null), MenuLogic.Command(MenuLogic.Open, [@"D:\"], @"C:\App"));
         var (_, args, list) = MenuLogic.Command(new Entry("tidy", "Tidy", ""), [@"D:\A", @"D:\B"], @"C:\App");
         Assert.Equal("--tidy --list ", args);
@@ -140,21 +140,27 @@ public sealed class StartTests : IDisposable
             }
         }
 
+        var realMenu = MenuLogic.MenuFolder;
+        int Lists() => Directory.Exists(realMenu) ? Directory.GetFiles(realMenu).Length : 0;
+        var listsBefore = Lists();
         var music = temp.Sub("Music", "Album");
         var report = Run(music, background: false, out var added);
-        Assert.Equal(1, added);
+        Assert.Equal(3, added);  // Open in Refrain, a separator, Settings
         Assert.Contains("position=2\n", report);  // just below 7-Zip
         Assert.Contains("again=0\n", report);  // asked twice for one menu: one submenu
-        Assert.Contains("Open in Refrain|refrain.open\n", report);
+        Assert.Contains("Open in Refrain|refrain.open\n-\nSettings|refrain.settings\n", report);
         Assert.Contains($"command={Path.GetDirectoryName(Path.GetFullPath(dll))}\\Refrain.exe \"{music}\"\n", report);
         Run(music, background: true, out added);
-        Assert.Equal(1, added);
+        Assert.Equal(3, added);
         var file = Path.Combine(music, "a.flac");
         File.WriteAllText(file, "");
-        Run(file, background: false, out added);
-        Assert.Equal(0, added);
+        report = Run(file, background: false, out added);
+        Assert.Equal(1, added);
+        Assert.Contains("Settings|refrain.settings\n", report);
+        Assert.Contains($"--settings --list <list: {file}|>", report);  // described, never written
         var other = temp.Sub("Music", "Other");
         Run(music + "\n" + other, background: false, out added);
-        Assert.Equal(0, added);
+        Assert.Equal(1, added);
+        Assert.Equal(listsBefore, Lists());  // nothing written into the real data folder
     }
 }

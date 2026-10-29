@@ -63,7 +63,8 @@ public sealed partial class Handler : IShellExtInit, IContextMenu
         if (Native.FindItem(menu, MenuLogic.SubmenuLabel) >= 0) return 0;
         var popup = Native.CreatePopupMenu();
         for (var i = 0; i < entries.Count; i++)
-            Native.InsertMenuW(popup, (uint)i, Native.MF_BYPOSITION | Native.MF_STRING, firstId + (nuint)i, entries[i].Label);
+            Native.InsertMenuW(popup, (uint)i, Native.MF_BYPOSITION | (entries[i].IsSeparator ? Native.MF_SEPARATOR : Native.MF_STRING),
+                entries[i].IsSeparator ? 0 : firstId + (nuint)i, entries[i].Label);
         // Just below 7-Zip's submenu when the menu has it (Hugo, 2026-10-24), else where Explorer asks.
         var sevenZip = Native.FindItem(menu, "7-Zip");
         var at = sevenZip >= 0 ? (uint)sevenZip + 1 : index;
@@ -82,7 +83,7 @@ public sealed partial class Handler : IShellExtInit, IContextMenu
         if (verb >> 16 == 0)
         {
             var offset = (int)verb;
-            if (offset >= 0 && offset < entries.Count) entry = entries[offset];
+            if (offset >= 0 && offset < entries.Count && !entries[offset].IsSeparator) entry = entries[offset];
         }
         else
         {
@@ -90,23 +91,24 @@ public sealed partial class Handler : IShellExtInit, IContextMenu
             const uint unicode = 0x4000;  // CMIC_MASK_UNICODE: CMINVOKECOMMANDINFOEX.lpVerbW holds the verb
             if ((*(uint*)(info + 4) & unicode) != 0 && *(uint*)info >= 72 && *(nint*)(info + 64) is var wide && wide != 0)
                 name = Marshal.PtrToStringUni(wide);
-            entry = entries.FirstOrDefault(e => $"refrain.{e.Verb}" == name);
+            entry = entries.FirstOrDefault(e => !e.IsSeparator && $"refrain.{e.Verb}" == name);
         }
         if (entry is null) return InvalidArg;
         try
         {
             var (exe, arguments, list) = MenuLogic.Command(entry, items.Select(i => i.Path).ToList(), Native.ModuleFolder());
+            if (Capture)
+            {
+                // The tests: the command is described, and nothing is written into the real data folder.
+                Captured = list is null ? $"{exe} {arguments}" : $"{exe} {arguments}<list: {list.Replace("\n", "|")}>";
+                return Ok;
+            }
             if (list is not null)
             {
                 Directory.CreateDirectory(MenuLogic.MenuFolder);
                 var file = Path.Combine(MenuLogic.MenuFolder, $"{Guid.NewGuid():N}.txt");
                 File.WriteAllText(file, list, new UTF8Encoding(false));
                 arguments += MenuLogic.Quote(file);
-            }
-            if (Capture)
-            {
-                Captured = $"{exe} {arguments}";
-                return Ok;
             }
             Native.AllowSetForegroundWindow(-1);
             Process.Start(new ProcessStartInfo(exe, arguments) { UseShellExecute = false, WorkingDirectory = Native.ModuleFolder() })?.Dispose();
@@ -122,7 +124,7 @@ public sealed partial class Handler : IShellExtInit, IContextMenu
     public unsafe int GetCommandString(nuint id, uint type, nint reserved, nint name, uint max)
     {
         const uint verbW = 4, helpTextW = 5, validateW = 6;
-        if (id >= (nuint)entries.Count) return InvalidArg;
+        if (id >= (nuint)entries.Count || entries[(int)id].IsSeparator) return InvalidArg;
         var text = type switch
         {
             verbW => $"refrain.{entries[(int)id].Verb}",
@@ -229,7 +231,11 @@ public static unsafe class Exports
             var verb = stackalloc char[260];
             for (nuint id = 0; id < (nuint)added; id++)
             {
-                handler.GetCommandString(id, 4, 0, (nint)verb, 260);
+                if (handler.GetCommandString(id, 4, 0, (nint)verb, 260) != 0)
+                {
+                    report.Append("-\n");  // a separator
+                    continue;
+                }
                 var sub = Native.GetSubMenu(menu, Native.FindItem(menu, MenuLogic.SubmenuLabel));
                 Native.GetMenuStringW(sub, (uint)id, label, 260, Native.MF_BYPOSITION);
                 report.Append($"{new string(label)}|{new string(verb)}\n");
@@ -253,7 +259,7 @@ public static unsafe class Exports
 
 static unsafe partial class Native
 {
-    public const uint MF_STRING = 0, MF_POPUP = 0x10, MF_BYPOSITION = 0x400;
+    public const uint MF_STRING = 0, MF_POPUP = 0x10, MF_BYPOSITION = 0x400, MF_SEPARATOR = 0x800;
 
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]

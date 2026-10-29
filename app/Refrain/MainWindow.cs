@@ -81,11 +81,11 @@ public sealed partial class MainWindow : Window
     string shownQuery = "";
     bool resultsShown;
 
-    public MainWindow(StartRequest request)
+    public MainWindow(StartRequest request, Settings settings)
     {
         startRequest = request;
+        this.settings = settings;
         ui = DispatcherQueue.GetForCurrentThread();
-        settings = Settings.Load(AppPaths.Settings);
         library = new Library(AppPaths.Database);
         search = new SearchService(library.Db);
         files = new FileTable(Columns.FileList, settings.FileHeader);
@@ -211,6 +211,9 @@ public sealed partial class MainWindow : Window
 
         var more = Icon("", "More");
         var menu = new MenuFlyout();
+        var options = new MenuFlyoutItem { Text = "Options…" };
+        options.Click += (_, _) => App.Instance.ShowOptions(currentChain.Count > 0 ? CurrentPath : null);
+        menu.Items.Add(options);
         var about = new MenuFlyoutItem { Text = "About Refrain" };
         about.Click += async (_, _) => await ShowAbout();
         var exit = new MenuFlyoutItem { Text = "Exit" };
@@ -1136,6 +1139,8 @@ public sealed partial class MainWindow : Window
     /// <summary>An agent's window check (SPEC §36 "7."): the window stays beyond every monitor, out of the taskbar and
     /// Alt+Tab, and never takes the focus.</summary>
     public static bool Offscreen => Environment.GetEnvironmentVariable("REFRAIN_OFFSCREEN") == "1";
+
+
 
     void RestorePlacement()
     {

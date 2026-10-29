@@ -31,6 +31,8 @@
 
   <ItemGroup>
     <Content Include="Assets\refrain.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- rsgain is bundled, never configurable (Ground rule 5). -->
+    <Content Include="..\..\resources\rsgain\**" Link="rsgain\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

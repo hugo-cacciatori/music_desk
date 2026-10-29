@@ -20,14 +20,11 @@ from PySide6.QtWidgets import (
 )
 
 from refrain.core.index.album_search import NOT_SPLIT, SEARCHES, WITHOUT_REPLAYGAIN
+from refrain.core.text import plural
 from refrain.services.album_search_service import AlbumSearchService, SearchDone
 from refrain.ui import theme
 
 FOLDER_ROLE = Qt.ItemDataRole.UserRole
-
-
-def plural(count: int, noun: str) -> str:
-    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 class AdvancedSearchWindow(QWidget):

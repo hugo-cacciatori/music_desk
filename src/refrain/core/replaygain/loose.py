@@ -17,7 +17,8 @@ from refrain.core.replaygain.album import (
     update_album_gain_metadata,
 )
 from refrain.core.replaygain.options import DEFAULT_OPTIONS, ReplayGainOptions
-from refrain.core.replaygain.run_log import Clock, NullReporter, Reporter, RunLog, plural
+from refrain.core.replaygain.run_log import Clock, NullReporter, Reporter, RunLog
+from refrain.core.text import plural
 
 log = logging.getLogger(__name__)
 

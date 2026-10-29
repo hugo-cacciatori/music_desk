@@ -21,6 +21,7 @@ from refrain.core.cue import CueError
 from refrain.core.flac import FlacRunner
 from refrain.core.path_locks import PathLocks
 from refrain.core.replaygain import ReplayGainOptions
+from refrain.core.text import plural
 from refrain.core.tidy import Kind, TidyCancelled, TidyPlan
 from refrain.services.job_runner import BatchedLines, JobRunner
 
@@ -59,10 +60,6 @@ class TidyFinished:
     @property
     def failed_albums(self) -> int:
         return sum(album.failed for album in self.albums)
-
-
-def plural(count: int, noun: str) -> str:
-    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 class TidyRunner(JobRunner):

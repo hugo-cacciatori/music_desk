@@ -20,7 +20,7 @@ from refrain.ui import theme
 from refrain.ui.controllers.tools import ENTRY_KINDS, entry_problem, entry_title
 from refrain.ui.qt_util import bring_to_front
 from refrain.ui.shell import Shell
-from refrain.ui.tools.rg_report import ReplayGainView
+from refrain.ui.tools.replaygain_report import ReplayGainView
 from refrain.ui.tools.tool_cards import REPLAYGAIN, ToolCards
 
 TITLE = "Refrain · ReplayGain"

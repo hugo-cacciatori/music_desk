@@ -20,13 +20,10 @@ from PySide6.QtWidgets import (
 )
 
 from refrain.core import cleanup, rename
+from refrain.core.text import plural
 from refrain.core.tidy import AlbumTidy, FolderPlan, Kind, TidyPlan
 from refrain.ui import theme
 from refrain.ui.task_header import TaskHeader
-
-
-def plural(count: int, noun: str) -> str:
-    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 def folder_actions(plan: FolderPlan) -> list[str]:

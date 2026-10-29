@@ -28,6 +28,7 @@ from refrain.core.cue_edit import (
     validate,
 )
 from refrain.core.path_locks import busy_text
+from refrain.core.text import plural
 from refrain.services.split_job import Loaded, Planned, SplitFinished, SplitRunner
 from refrain.ui import track_lengths
 from refrain.ui.controllers import NO_CUE_PLAYER
@@ -36,10 +37,6 @@ from refrain.ui.split_page import SplitPage
 log = logging.getLogger(__name__)
 
 PLAN_DELAY_MS = 150  # after an edit, the plan follows once typing pauses
-
-
-def plural(count: int, noun: str) -> str:
-    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 def report_text(result: SplitFinished) -> str:
@@ -444,7 +441,7 @@ class SplitController(QObject):
         self.doc.fill_from_lengths(result)
         self._refresh()
 
-    def close(self) -> None:
+    def shutdown(self) -> None:
         self.runner.close()  # a running flac is killed; this run's .partial files are deleted
 
     # -- dialogs (tests replace these) --

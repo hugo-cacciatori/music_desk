@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QMenu
 
 from refrain.context_menu import request as menu
 from refrain.context_menu.entries import MenuEntry, Selection, menu_entries
-from refrain.core.replaygain import plural
+from refrain.core.text import plural
 from refrain.services.replaygain_job import ALBUM, ALBUMS, DISCOGRAPHY, LOOSE, TRACKS
 from refrain.ui.controllers import STATUS_MS
 from refrain.ui.tools.tool_cards import CLEANUP, RENAME, REPLAYGAIN, TIDY, ToolCards

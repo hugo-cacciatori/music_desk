@@ -193,5 +193,5 @@ class TrimController(QObject):
         if result.trimmed:
             self.window.statusBar().showMessage(f"Trimmed {result.plan.source.name}.", 8000)
 
-    def close(self) -> None:
+    def shutdown(self) -> None:
         self.runner.close()  # a running flac is killed; this run's .partial is deleted

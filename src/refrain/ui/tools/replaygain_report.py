@@ -26,8 +26,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from refrain.core.replaygain import format_gain, plural
+from refrain.core.replaygain import format_gain
 from refrain.core.replaygain.discography import SUMMARY_COLUMNS
+from refrain.core.text import plural
 from refrain.services.replaygain_job import Finished
 from refrain.ui import theme
 from refrain.ui.qt_util import cell_text

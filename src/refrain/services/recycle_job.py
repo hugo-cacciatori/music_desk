@@ -18,6 +18,7 @@ from refrain.core import cleanup, fsops
 from refrain.core.cancel import CancelToken
 from refrain.core.cleanup import Item
 from refrain.core.path_locks import PathLocks
+from refrain.core.text import plural
 
 log = logging.getLogger(__name__)
 
@@ -98,8 +99,6 @@ class RecycleRunner(QObject):
 
 def report_text(report: RecycleReport) -> str:
     """The window's report: what went to the Recycle Bin, what was kept or skipped, and why."""
-    def plural(count: int, noun: str) -> str:
-        return f"{count} {noun}{'' if count == 1 else 's'}"
 
     head = f"Sent {plural(len(report.recycled), 'item')} to the Recycle Bin"
     head += " (stopped)." if report.cancelled else "."

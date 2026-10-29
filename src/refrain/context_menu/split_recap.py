@@ -32,9 +32,10 @@ from refrain.context_menu.entries import OPTIONS_WHERE
 from refrain.core.cue import CueError
 from refrain.core.cue_edit import CueDocument, validate
 from refrain.core.path_locks import LockedError, PathLocks
+from refrain.core.text import plural
 from refrain.services.split_job import Loaded, Planned, SplitFinished, SplitRunner
 from refrain.ui import theme
-from refrain.ui.controllers.split import plural, report_text
+from refrain.ui.controllers.split import report_text
 from refrain.ui.qt_util import bring_to_front
 from refrain.ui.task_header import TaskHeader
 from refrain.ui.tools.tool_cards import ToolCards

@@ -57,7 +57,6 @@ from refrain.core.replaygain.run_log import (
     format_gain,
     format_peak_db,
     indent,
-    plural,
 )
 
 __all__ = [
@@ -92,7 +91,6 @@ __all__ = [
     "options_from_json",
     "options_to_json",
     "parse_replaygain",
-    "plural",
     "process_album",
     "process_discography",
     "process_loose_tracks",

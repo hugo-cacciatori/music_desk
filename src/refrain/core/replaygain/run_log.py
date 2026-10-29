@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Protocol
 
 from refrain.core.replaygain.options import ReplayGainOptions
+from refrain.core.text import plural
 
 Clock = Callable[[], datetime]
 
@@ -38,10 +39,6 @@ class NullReporter:
 
 def indent(text: str, prefix: str = "    ") -> str:
     return "\n".join((prefix + line).rstrip() for line in text.splitlines())
-
-
-def plural(count: int, word: str, plural_word: str | None = None) -> str:
-    return f"{count} {word if count == 1 else plural_word or word + 's'}"
 
 
 def format_gain(gain: float | None) -> str:

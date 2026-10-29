@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from refrain.core.formats import format_for
-from refrain.core.replaygain import plural
+from refrain.core.text import plural
 from refrain.services.tag_writer import ReplayGainRemoved
 from refrain.ui import theme
 from refrain.ui.task_header import TaskHeader

@@ -19,8 +19,9 @@ from refrain.core.replaygain.album import (
     process_album,
 )
 from refrain.core.replaygain.options import DEFAULT_OPTIONS, ReplayGainOptions
-from refrain.core.replaygain.run_log import Clock, NullReporter, Reporter, RunLog, format_gain, plural
+from refrain.core.replaygain.run_log import Clock, NullReporter, Reporter, RunLog, format_gain
 from refrain.core.tags import TaggedFile
+from refrain.core.text import plural
 
 SUMMARY_COLUMNS = ("Album", "Result", "Album gain", "Leveled to", "Files changed")  # the summary's table
 

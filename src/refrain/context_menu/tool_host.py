@@ -96,7 +96,7 @@ class ToolHost(QMainWindow):
 
     def shutdown(self) -> None:
         if self.controller is not None:
-            self.controller.close()  # a running trim's flac is killed and its .partial file deleted
+            self.controller.shutdown()  # a running trim's flac is killed and its .partial file deleted
         self.shell.shutdown()
 
 

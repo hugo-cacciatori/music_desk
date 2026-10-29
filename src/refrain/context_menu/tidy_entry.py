@@ -17,7 +17,7 @@ from shiboken6 import isValid
 from refrain.context_menu.entries import OPTIONS_WHERE
 from refrain.core import cleanup, fsops
 from refrain.core.path_locks import LockedError, PathLocks
-from refrain.core.replaygain import plural
+from refrain.core.text import plural
 from refrain.services.tidy_job import OWNER, TidyFinished, TidyPlanned, TidyRunner, report_text
 from refrain.ui import theme
 from refrain.ui.qt_util import bring_to_front

@@ -32,7 +32,10 @@ class Area:
 
 AREAS: dict[str, Area] = {
     "tags": Area(
-        ("core/formats.py", "core/tags.py", "core/metadata.py", "services/tag_io.py", "services/tag_writer.py",
+        ("core/formats.py", "core/tags/__init__.py", "core/tags/fields.py", "core/tags/legacy_text.py",
+         "core/tags/adapter.py", "core/tags/vorbis.py", "core/tags/id3.py", "core/tags/mp4.py", "core/tags/apev2.py",
+         "core/tags/asf.py", "core/tags/tagged_file.py", "core/metadata.py", "services/tag_io.py",
+         "services/tag_writer.py",
          "ui/side_panel/metadata_tab.py"),
         ("core/test_formats.py", "core/test_tags.py", "core/test_metadata.py", "core/test_tags_parity.py",
          "core/test_tag_encodings.py", "core/test_ape_ignored.py", "ui/test_metadata_tab.py")),

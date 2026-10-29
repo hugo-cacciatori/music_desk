@@ -26,6 +26,10 @@ public sealed partial class CueSheet
 
     public string? Path { get; init; }
     public string Encoding { get; init; } = "UTF-8";
+    /// <summary>Auto used Windows-1252 (no BOM, not UTF-8): what EAC writes on a Western Windows.</summary>
+    public bool FellBack { get; set; }
+    /// <summary>... but the bytes can't be Windows-1252 (code points it lacks): the titles are garbled.</summary>
+    public bool NotCp1252 { get; set; }
     public string Title { get; set; } = "";
     public string Performer { get; set; } = "";
     public string Date { get; set; } = "";
@@ -173,8 +177,12 @@ public sealed partial class CueSheet
     /// CueException.</summary>
     public static CueSheet Read(string path)
     {
-        var (text, name) = Preview.Decode(System.IO.File.ReadAllBytes(path));
-        return Parse(text, name, path);
+        var data = System.IO.File.ReadAllBytes(path);
+        var (text, name) = Preview.Decode(data);
+        var sheet = Parse(text, name, path);
+        sheet.FellBack = name == "Windows-1252";
+        sheet.NotCp1252 = sheet.FellBack && data.Any(b => b is 0x81 or 0x8D or 0x8F or 0x90 or 0x9D);
+        return sheet;
     }
 
     /// <summary>The folder's .cue files in name order, each read (null when it can't be: Tidy and ReplayGain skip

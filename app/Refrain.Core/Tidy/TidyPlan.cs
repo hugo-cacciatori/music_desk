@@ -12,8 +12,9 @@ public sealed class FolderPlan(string folder, FolderKind kind)
 {
     public string Folder { get; } = folder;
     public FolderKind Kind { get; } = kind;
+    public AlbumPlan? Split { get; init; }  // not split: the split to run
     public RenamePlan? Renames { get; init; }  // split and half-split: the renames to run (maybe none)
-    public List<string> Offer { get; } = [];  // a half-split folder's image and its .cue(s), offered after the run
+    public List<string> Offer { get; } = [];  // the image and its .cue(s), offered after the run
     public string? Skip { get; init; }  // why nothing is done here
     public string? Image { get; init; }  // an image waiting to be split: never measured as a track
     public List<string> Notes { get; } = [];  // what the plan shows besides (missing tags, a warning…)
@@ -95,7 +96,6 @@ public sealed class TidyPlan(string root)
 public static class Tidying
 {
     public const string SplitByHand = "open its .cue to split it by hand";
-    public const string NotSplitYet = "split it from its .cue";
     static readonly HashSet<string> SplitReads = new(StringComparer.OrdinalIgnoreCase) { ".flac", ".wav", ".aif", ".aiff" };
 
     /// <summary>A keyword subfolder holding a disc of its album (cd2, disc 2…): any album-data keyword but the
@@ -175,7 +175,8 @@ public static class Tidying
     }
 
     /// <summary>What Tidy does in one folder (its subfolders aside).</summary>
-    public static FolderPlan PlanFolder(string folder, FileNamesOptions names, TidyOptions tidy, CancellationToken cancel = default)
+    public static FolderPlan PlanFolder(string folder, FileNamesOptions names, TidyOptions tidy, CancellationToken cancel = default,
+        Func<string, long, long, bool>? isSilent = null)
     {
         var audio = new Dictionary<string, string>();
         foreach (var name in AudioNames(folder)) audio[LyricsKeyFold(name)] = name;
@@ -204,9 +205,23 @@ public static class Tidying
             var (image, cues) = images.First();
             if (cues.Count > 1)
                 return new FolderPlan(folder, FolderKind.Skipped) { Skip = $"{cues.Count} sheets name {image}: {SplitByHand}", Image = image };
-            // Not split: the split comes with rebuild task 9; until then the album is left as it is.
-            return new FolderPlan(folder, FolderKind.Skipped)
-                { Skip = $"{Path.GetFileName(cues[0])} plays {image}, not split yet: {NotSplitYet}", Image = image };
+            var sheet = sheets.First(s => s.Path == cues[0]).Sheet!;
+            AlbumPlan split;
+            try
+            {
+                split = SplitPlanner.Plan(sheet, cues[0], names.Masks, names.Replacement, isSilent: isSilent);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // an album that can't be planned is skipped, not the whole tree
+                return new FolderPlan(folder, FolderKind.Skipped)
+                    { Skip = $"{Path.GetFileName(cues[0])} can't be planned ({e.GetType().Name}: {e.Message}): {SplitByHand}", Image = image };
+            }
+            if (SplitProblem(split) is { } problem)
+                return new FolderPlan(folder, FolderKind.Skipped) { Split = split, Skip = $"{problem.TrimEnd('.')}: {SplitByHand}", Image = image };
+            var notSplit = new FolderPlan(folder, FolderKind.NotSplit) { Split = split, Image = image };
+            notSplit.Offer.AddRange([Path.Combine(folder, image), cues[0]]);
+            return notSplit;
         }
 
         var musicTypes = tidy.MusicTypes.Select(e => e.ToLowerInvariant()).ToHashSet();
@@ -224,6 +239,17 @@ public static class Tidying
         }
         plan.Notes.AddRange(renames.Warnings);
         return plan;
+    }
+
+    /// <summary>Why a sheet needs a human (SPEC §28): anything the split would warn about or refuse.</summary>
+    static string? SplitProblem(AlbumPlan plan)
+    {
+        if (plan.Refusal is not null) return plan.Refusal;
+        if (plan.Warnings.Count > 0) return plan.Warnings[0];
+        if (plan.Tracks.Any(t => t.Number == 0)) return "it has a hidden track before track 1";
+        if (plan.Problems.Count > 0) return plan.Problems[0].Why;
+        if (plan.Notes.Count > 0) return $"track {plan.Notes[0].Track}: {plan.Notes[0].Why}";
+        return null;
     }
 
     /// <summary>The target in the ReplayGain step's comment line: a number; NaN when the template has no {target}
@@ -293,7 +319,7 @@ public static class Tidying
     /// <summary>Tidy's dry run over root and every subfolder (SPEC §28). Throws OperationCanceledException on a
     /// cancel.</summary>
     public static TidyPlan Plan(string root, FileNamesOptions names, ReplayGainOptions replayGain, TidyOptions tidy,
-        CancellationToken cancel = default, Action<int, int, string>? progress = null)
+        CancellationToken cancel = default, Action<int, int, string>? progress = null, Func<string, long, long, bool>? isSilent = null)
     {
         var plan = new TidyPlan(root);
         var found = FindAlbums(root, replayGain);
@@ -303,7 +329,7 @@ public static class Tidying
             var (folder, discs) = found[n];
             progress?.Invoke(n, found.Count, folder);
             var album = new AlbumTidy(folder);
-            foreach (var each in new[] { folder }.Concat(discs)) album.Folders.Add(PlanFolder(each, names, tidy, cancel));
+            foreach (var each in new[] { folder }.Concat(discs)) album.Folders.Add(PlanFolder(each, names, tidy, cancel, isSilent));
             var own = album.Own;
             album.ReplayGainExclude = own.Images;
             var scanned = Album.ListAudio(folder).Supported;
@@ -328,14 +354,15 @@ public static class Tidying
 
     /// <summary>Several folders as one plan (the right-click menu, SPEC §31): each planned as Tidy on it.</summary>
     public static TidyPlan Plan(IReadOnlyList<string> roots, FileNamesOptions names, ReplayGainOptions replayGain,
-        TidyOptions tidy, CancellationToken cancel = default, Action<int, int, string>? progress = null)
+        TidyOptions tidy, CancellationToken cancel = default, Action<int, int, string>? progress = null,
+        Func<string, long, long, bool>? isSilent = null)
     {
         var folders = roots.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (folders.Count == 1) return Plan(folders[0], names, replayGain, tidy, cancel, progress);
+        if (folders.Count == 1) return Plan(folders[0], names, replayGain, tidy, cancel, progress, isSilent);
         var merged = new TidyPlan(CommonFolder(folders)) { Roots = folders };
         foreach (var root in folders)
         {
-            var part = Plan(root, names, replayGain, tidy, cancel, progress);
+            var part = Plan(root, names, replayGain, tidy, cancel, progress, isSilent);
             merged.Albums.AddRange(part.Albums);
             merged.Loose.AddRange(part.Loose);
         }
@@ -378,12 +405,15 @@ public static class Tidying
         }
     }
 
-    /// <summary>A half-split folder's image and sheets, as rows of the Redundant files window.</summary>
+    /// <summary>A split or half-split folder's image and sheets, as rows of the Redundant files window.</summary>
     public static List<OfferItem> OfferItems(FolderPlan folder)
     {
         var image = folder.Offer.Select(p => Path.GetFileName(p)!).FirstOrDefault(n => !n.EndsWith(".cue", StringComparison.OrdinalIgnoreCase)) ?? "the image";
+        var imageWhy = folder.Kind == FolderKind.NotSplit && folder.Split is { } split
+            ? $"image split into {split.Written.Count} tracks"
+            : "image whose tracks are already split";
         return folder.Offer.Select(p => new OfferItem(p, Path.GetExtension(p).Equals(".cue", StringComparison.OrdinalIgnoreCase)
-            ? $"cue sheet of {image}" : "image whose tracks are already split")).ToList();
+            ? $"cue sheet of {image}" : imageWhy)).ToList();
     }
 }
 
@@ -394,7 +424,11 @@ public static class TidyText
     public static List<string> FolderActions(FolderPlan plan)
     {
         if (plan.Kind == FolderKind.Skipped) return [$"Skipped: {plan.Skip}"];
-        return plan.RenameCount > 0 ? [$"Rename {ReplayGain.Report.Plural(plan.RenameCount, "file")}"] : [];
+        var actions = new List<string>();
+        if (plan.Kind == FolderKind.NotSplit && plan.Split is { } split)
+            actions.Add($"Split {Path.GetFileName(split.Cue)} into {ReplayGain.Report.Plural(split.Written.Count, "track")}");
+        if (plan.RenameCount > 0) actions.Add($"Rename {ReplayGain.Report.Plural(plan.RenameCount, "file")}");
+        return actions;
     }
 
     /// <summary>"Offer 3 pictures, 1 video, 1 folder".</summary>
@@ -430,12 +464,11 @@ public static class TidyText
         : $"Offer folder {Path.GetFileName(item.Path)} ({(item.Why.StartsWith("folder of ", StringComparison.Ordinal) ? item.Why["folder of ".Length..] : item.Why)})";
 
     /// <summary>The line under the summary, once the plan is read.</summary>
-    public const string RunNote = "Run Tidy does all of this, album by album. The files offered are kept; you choose " +
-                                  "which to recycle at the end.";
+    public const string RunNote = "Run Tidy does all of this, album by album. Files made redundant by a split (the " +
+                                  "image and its cue sheet) and the files offered are kept; you choose which to recycle at the end.";
 
     /// <summary>What the Redundant files window says first, for Tidy.</summary>
-    public const string OfferIntro = "Tidy made these files redundant (images whose tracks are split, and their cue " +
-        "sheets), or found them beside the music (pictures, videos, folders holding nothing else). Every box is " +
+    public const string OfferIntro = "Tidy made these files redundant (split images and their cue sheets), or found them beside the music (pictures, videos, folders holding nothing else). Every box is " +
         "checked: uncheck what to keep, then click Delete selected to send the rest to the Recycle Bin. Closing this " +
         "window keeps them all.";
 }

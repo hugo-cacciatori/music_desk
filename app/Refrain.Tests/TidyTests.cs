@@ -17,7 +17,8 @@ public sealed class TidyTests
     static readonly TidyOptions Tidy = TidyOptions.Default;
 
     /// <summary>The tree: the album fixture, Album B (with its Scans folder), .lrc sidecars, a multi-file cue, a
-    /// half-split album (its image, its sheet and a track split from it), an empty folder and a folder of artwork.</summary>
+    /// half-split album (its image, its sheet and a track split from it), an unsplit album, one whose hidden track needs
+    /// a human, an empty folder and a folder of artwork.</summary>
     static void Compose(string root)
     {
         var fixtures = Setup.Fixtures;
@@ -27,6 +28,8 @@ public sealed class TidyTests
         var half = Path.Combine(root, "Half split");
         Setup.Copy(Path.Combine(fixtures, "cleanup", "single_file_album"), half);
         File.Copy(Path.Combine(fixtures, "album", "Fixture Artist - Fixture Album", "01 First.flac"), Path.Combine(half, "01 First.flac"));
+        Setup.Copy(Path.Combine(fixtures, "cleanup", "single_file_album"), Path.Combine(root, "Not split"));
+        Setup.Copy(Path.Combine(fixtures, "split", "hidden_track"), Path.Combine(root, "Hidden track"));
         Directory.CreateDirectory(Path.Combine(root, "Empty", "Nothing"));
         Directory.CreateDirectory(Path.Combine(root, "Artwork"));
         File.Copy(Path.Combine(fixtures, "cover.jpg"), Path.Combine(root, "Artwork", "front.jpg"));
@@ -116,7 +119,8 @@ public sealed class TidyTests
                     def warn(self, text): pass
                     def error(self, text): pass
                     def progress(self, done, total, label): pass
-                job = SimpleNamespace(scanner=rsgain.scan, exe=Path(args["exe"]))
+                job = SimpleNamespace(scanner=rsgain.scan, exe=Path(args["exe"]), flac=Path(args["flac"]))
+                job._split = lambda *a: TidyRunner._split(job, *a)
                 result = TidyFinished(0, root)
                 for album in [a for a in plan.albums if not a.tidy]:
                     result.albums.append(TidyRunner._album(job, album, DEFAULT_OPTIONS, CancelToken(), Lines(), result))
@@ -124,7 +128,7 @@ public sealed class TidyTests
                 out["report"] = report_text(result)
                 out["offers"] = [f"{rel(i.path)} | {i.why}" for i in result.offers]
             print(json.dumps(out))
-            """, JsonSerializer.Serialize(new { root, run, exe = ReplayGainTests.Rsgain }));
+            """, JsonSerializer.Serialize(new { root, run, exe = ReplayGainTests.Rsgain, flac = SplitTests.FlacExe }));
         using var json = JsonDocument.Parse(output);
         List<string> Strings(string key) => json.RootElement.GetProperty(key).EnumerateArray().Select(e => e.GetString()!).ToList();
         return (Strings("plan"), json.RootElement.GetProperty("report").GetString()!, Strings("offers"));
@@ -139,7 +143,8 @@ public sealed class TidyTests
         Assert.Equal(expected, PlanLines(plan, twins.Cs));
         // The tree holds the hard cases, so the comparison means something.
         foreach (var part in new[] { "| name taken |", "| missing tags |", "| rename |", "| kept |", "fallback=track", "lrc=01 With Lyrics.lrc",
-                     "rg=missing tags", "| half-split |", "(empty folder)", "picture beside music" })
+                     "rg=missing tags", "| half-split |", "(empty folder)", "picture beside music", "| not split |", "rg=after the split",
+                     "it has a hidden track before track 1" })
             Assert.True(expected.Any(line => line.Contains(part)), part + Environment.NewLine + string.Join(Environment.NewLine, expected));
         Assert.Contains(plan.AllFolders, f => f.Kind == FolderKind.HalfSplit);
         Assert.Contains(plan.AllFolders, f => f.RenameCount > 0);
@@ -152,7 +157,8 @@ public sealed class TidyTests
         using var twins = new ReplayGainTests.Twins("album", Compose);
         var (_, pyReport, pyOffers) = RunPython(twins.Py, run: true);
         var plan = Tidying.Plan(twins.Cs, Names, Gain, Tidy, TestContext.Current.CancellationToken);
-        var outcome = TidyTask.Run(plan, Gain, TestContext.Current.CancellationToken, exe: ReplayGainTests.Rsgain);
+        var outcome = TidyTask.Run(plan, Gain, TestContext.Current.CancellationToken, exe: ReplayGainTests.Rsgain,
+            flac: new Refrain.Core.Cue.Flac(SplitTests.FlacExe));
 
         Assert.Equal(pyReport.Replace(twins.Py, "<ROOT>"), outcome.Text().Replace(twins.Cs, "<ROOT>"));
         Assert.Equal(pyOffers, outcome.Offers.Select(i => $"{Rel(twins.Cs, i.Path)} | {i.Why}"));
@@ -165,23 +171,26 @@ public sealed class TidyTests
     }
 
     [Fact]
-    public void An_unsplit_album_is_skipped_and_left_untouched_until_the_split_comes()
+    public void An_unsplit_album_is_split_then_replaygained_and_its_image_offered()
     {
         using var temp = new TempFolder();
         var album = Path.Combine(temp.Path, "Single file");
         Setup.Copy(Path.Combine(Setup.Fixtures, "cleanup", "single_file_album"), album);
-        var before = Directory.GetFiles(album).Select(f => (f, File.GetLastWriteTimeUtc(f))).ToList();
 
         var plan = Tidying.Plan(temp.Path, Names, Gain, Tidy, TestContext.Current.CancellationToken);
         var own = Assert.Single(plan.Albums).Own;
-        Assert.Equal(FolderKind.Skipped, own.Kind);
-        Assert.Equal("Fixture Album.cue plays Fixture Album.flac, not split yet: split it from its .cue", own.Skip);
-        Assert.Null(plan.Albums[0].ReplayGain);  // the image is never measured
-        var outcome = TidyTask.Run(plan, Gain, TestContext.Current.CancellationToken, exe: ReplayGainTests.Rsgain);
+        Assert.Equal(FolderKind.NotSplit, own.Kind);
+        Assert.Equal("after the split", plan.Albums[0].ReplayGain);
+        Assert.Equal("Split Fixture Album.cue into 3 tracks, then ReplayGain (after the split); offer 1 picture",
+            TidyText.AlbumText(plan.Albums[0]));
+        var outcome = TidyTask.Run(plan, Gain, TestContext.Current.CancellationToken, exe: ReplayGainTests.Rsgain,
+            flac: new Refrain.Core.Cue.Flac(SplitTests.FlacExe));
 
-        Assert.Contains("    skipped: Fixture Album.cue plays Fixture Album.flac, not split yet: split it from its .cue", outcome.Text());
-        Assert.Equal(before, Directory.GetFiles(album).Select(f => (f, File.GetLastWriteTimeUtc(f))));
-        Assert.Contains(outcome.Offers, i => i.Why == Clutter.PictureBesideMusic);  // folder.jpg beside the image
+        Assert.Contains("    split into 3 tracks, each identical to its part of the original", outcome.Text());
+        Assert.Contains("    ReplayGain: OK (see replaygain.log)", outcome.Text());
+        Assert.Equal(["image split into 3 tracks", "cue sheet of Fixture Album.flac", Clutter.PictureBesideMusic],
+            outcome.Offers.Select(i => i.Why));
+        Assert.True(File.Exists(Path.Combine(album, "Fixture Album.flac")));  // offered, never deleted by Tidy
     }
 
     [Fact]

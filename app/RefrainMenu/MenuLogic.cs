@@ -48,7 +48,7 @@ public static class MenuLogic
         [ReplayGainTracks] = "Runs ReplayGain on the selected tracks as one album; the folder's other tracks are left as they are",
         [ReplayGainLoose] = "Runs ReplayGain on each selected track alone, as its own album, with no log",
         [RemoveReplayGain] = "Removes the selected tracks' ReplayGain tags, after a question",
-        [Tidy] = "Plans Tidy on every album here (rename, ReplayGain, files to offer); nothing changes until you run it",
+        [Tidy] = "Plans Tidy (split, rename, ReplayGain) on every album here; nothing changes until you run it",
     };
 
     public static Clicked Classify(bool background, IReadOnlyList<(string Path, bool IsFolder)> items) =>

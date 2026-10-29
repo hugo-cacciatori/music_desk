@@ -1,3 +1,4 @@
+using Refrain.Core.Cue;
 using Refrain.Core.Options;
 using Refrain.Core.ReplayGain;
 
@@ -45,17 +46,18 @@ public sealed class TidyOutcome(string root)
     }
 }
 
-/// <summary>Tidy's run (SPEC §28), ported from the Python app's <c>services/tidy_job.py</c> without the split (rebuild
-/// task 9): album by album, the renames, then ReplayGain when the plan says so. The caller holds a lock on the plan's
-/// trees (owner "Tidy") for the whole run. A failed rename or ReplayGain doesn't stop the run; Stop ends the current
-/// step and no further album starts.</summary>
+/// <summary>Tidy's run (SPEC §28), ported from the Python app's <c>services/tidy_job.py</c>: album by album, the split
+/// of an unsplit image, the renames, then ReplayGain when the plan says so. The caller holds a lock on the plan's
+/// trees (owner "Tidy") for the whole run. A failed or stopped split ends its album (no ReplayGain, nothing offered); a
+/// failed rename or ReplayGain doesn't stop the run; Stop ends the current step and no further album starts.</summary>
 public static class TidyTask
 {
     public const string Owner = "Tidy";
 
     public static TidyOutcome Run(TidyPlan plan, ReplayGainOptions options, CancellationToken cancel,
-        IReporter? reporter = null, Scanner? scanner = null, string? exe = null)
+        IReporter? reporter = null, Scanner? scanner = null, string? exe = null, Flac? flac = null)
     {
+        flac ??= new Flac(Flac.Exe);
         reporter ??= NullReporter.Instance;
         var outcome = new TidyOutcome(plan.Root);
         var work = plan.Albums.Where(a => !a.IsTidy).ToList();
@@ -70,7 +72,7 @@ public static class TidyTask
                 }
                 reporter.Progress(n, work.Count, work[n].Folder);
                 reporter.Info($"== {work[n].Folder}");
-                outcome.Albums.Add(RunAlbum(work[n], options, cancel, reporter, outcome, scanner, exe));
+                outcome.Albums.Add(RunAlbum(work[n], options, cancel, reporter, outcome, scanner, exe, flac));
                 if (cancel.IsCancellationRequested)
                 {
                     outcome.Cancelled = true;
@@ -91,7 +93,7 @@ public static class TidyTask
     }
 
     static AlbumDone RunAlbum(AlbumTidy album, ReplayGainOptions options, CancellationToken cancel, IReporter reporter,
-        TidyOutcome outcome, Scanner? scanner, string? exe)
+        TidyOutcome outcome, Scanner? scanner, string? exe, Flac flac)
     {
         var done = new AlbumDone(album.Folder);
         var offers = new List<OfferItem>();
@@ -103,7 +105,16 @@ public static class TidyTask
                 done.Lines.Add($"{where}skipped: {folder.Skip}");
                 continue;
             }
-            if (folder.Renames is not null && folder.RenameCount > 0)
+            if (folder.Kind == FolderKind.NotSplit)
+            {
+                if (!SplitFolder(folder, flac, cancel, reporter, done, where))
+                {
+                    done.Failed = true;
+                    return done;  // no ReplayGain, nothing offered
+                }
+                offers.AddRange(Tidying.OfferItems(folder));
+            }
+            else if (folder.Renames is not null && folder.RenameCount > 0)
             {
                 var report = Rename.Apply(folder.Renames, cancel);
                 var text = $"{where}renamed {Report.Plural(report.Renamed.Count, "file")}";
@@ -135,5 +146,43 @@ public static class TidyTask
             done.Lines.Add("nothing to change: its files to offer are listed at the end");
         outcome.Offers.AddRange(offers);
         return done;
+    }
+
+    static bool SplitFolder(FolderPlan folder, Flac flac, CancellationToken cancel, IReporter reporter, AlbumDone done, string where)
+    {
+        var plan = folder.Split!;
+        reporter.Info($"{where}splitting {Path.GetFileName(plan.Cue)} into {Report.Plural(plan.Written.Count, "track")}");
+        CutResult cut;
+        SplitFinished finished;
+        try
+        {
+            cut = Split.Cut(plan, flac, cancel, onTrack: (_, _, track) => reporter.Info($"  {track.Name}"));
+            if (cut.Cancelled)
+            {
+                done.Lines.Add($"{where}split stopped: nothing left half-written");
+                return false;
+            }
+            if (!cut.Ok)
+            {
+                done.Lines.Add($"{where}split failed: {cut.Error}");
+                return false;
+            }
+            finished = Split.Finish(plan, cut);
+        }
+        catch (CueException e)
+        {
+            done.Lines.Add($"{where}split failed: {e.Message}");
+            return false;
+        }
+        if (finished.Error is not null)
+        {
+            done.Lines.Add($"{where}split failed: {finished.Error}");
+            return false;
+        }
+        done.Lines.Add($"{where}split into {Report.Plural(finished.Tracks.Count, "track")}, each identical to its part of the original");
+        done.Lines.AddRange(finished.Warnings.Select(w => where + w));
+        if (plan.Sheet is { FellBack: true })
+            done.Lines.Add($"{where}{Path.GetFileName(plan.Cue)} read as Windows-1252 (no BOM, not UTF-8): if a title looks wrong, fix its tags");
+        return true;
     }
 }

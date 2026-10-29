@@ -35,6 +35,8 @@
     <Content Include="Assets\refrain.ico" CopyToOutputDirectory="PreserveNewest" />
     <!-- rsgain is bundled, never configurable (Ground rule 5). -->
     <Content Include="..\..\resources\rsgain\**" Link="rsgain\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- flac too: the cue split and Trim cut and prove with it. -->
+    <Content Include="..\..\resources\flac\**" Link="flac\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

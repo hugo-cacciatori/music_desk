@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Refrain.Core;
 using Refrain.Core.Options;
+using Refrain.Core.Cue;
 using Refrain.Core.ReplayGain;
 using Refrain.Core.Tidy;
 
@@ -50,7 +51,7 @@ public sealed partial class TidyWindow : Window
         where.IsTextSelectionEnabled = true;
         heading.Children.Add(where);
         planScroll.Content = albums;
-        ToolTipService.SetToolTip(run, "Do everything listed: rename, then ReplayGain, album by album");
+        ToolTipService.SetToolTip(run, "Do everything listed: split, rename, then ReplayGain, album by album");
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
         foreach (var element in new FrameworkElement[] { busy, run, stop, close, done }) buttons.Children.Add(element);
@@ -103,12 +104,15 @@ public sealed partial class TidyWindow : Window
             Error($"The options need fixing first ({ReplayGainWindow.OptionsWhere}): {string.Join("; ", problems)}.");
             return;
         }
-        if (!File.Exists(Rsgain.Exe))
-        {
-            Error($"rsgain isn't where Refrain expects it ({Rsgain.Exe}). Reinstall Refrain.");
-            return;
-        }
+        foreach (var (tool, exe) in new[] { ("rsgain", Rsgain.Exe), ("flac", Flac.Exe) })
+            if (!File.Exists(exe))
+            {
+                Error($"{tool} isn't where Refrain expects it ({exe}). Reinstall Refrain.");
+                return;
+            }
         summary.Text = "Reading the albums…";
+        // A pregap before track 1 is a hidden track only when flac hears something in it (SPEC §22).
+        var silent = Split.IsSilent(new Flac(Flac.Exe), cancel.Token);
         Task.Run(() => Tidying.Plan(folders, names, replayGain, tidy, cancel.Token,
                 (n, total, folder) => ui.TryEnqueue(() =>
                 {
@@ -117,7 +121,7 @@ public sealed partial class TidyWindow : Window
                     busy.Maximum = total;
                     busy.Value = n;
                     message.Text = folder.Length > 0 ? $"Reading {folder}" : "";
-                })))
+                }), silent))
             .ContinueWith(task => ui.TryEnqueue(() =>
             {
                 if (task.IsCanceled || task.Exception?.InnerException is OperationCanceledException) return;

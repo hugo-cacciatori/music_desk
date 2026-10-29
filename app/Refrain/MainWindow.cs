@@ -448,6 +448,9 @@ public sealed partial class MainWindow : Window
             action();
         };
         target.KeyboardAccelerators.Add(accelerator);
+        // WinUI would float the shortcut as a tooltip over the whole window each time it is used (Hugo, 2026-10-29:
+        // unwanted); the buttons' hover texts already name their shortcuts.
+        target.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
     }
 
     // -- reading the index off the UI thread --

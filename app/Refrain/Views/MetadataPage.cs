@@ -93,13 +93,26 @@ public sealed partial class MetadataPage : UserControl
         stack.Children.Add(formatLine);
         stack.Children.Add(note);
         stack.Children.Add(Fields());
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        stack.Children.Add(details);
+        // Save, Revert and the saved mark stay in view at the bottom, however far the fields scroll (the main
+        // action at the bottom right, SPEC §36 "1." task 4).
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Padding = new Thickness(16, 8, 16, 12),
+        };
         actions.Children.Add(savedMark);
         actions.Children.Add(revert);
         actions.Children.Add(save);
-        stack.Children.Add(actions);
-        stack.Children.Add(details);
-        Content = new ScrollViewer { Content = stack, HorizontalScrollMode = ScrollMode.Disabled };
+        var page = new Grid();
+        page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        page.Children.Add(new ScrollViewer { Content = stack, HorizontalScrollMode = ScrollMode.Disabled });
+        Grid.SetRow(actions, 1);
+        page.Children.Add(actions);
+        Content = page;
 
         replace.Click += async (_, _) => await PickCover();
         remove.Click += (_, _) =>
@@ -124,6 +137,7 @@ public sealed partial class MetadataPage : UserControl
             await Save();
         };
         KeyboardAccelerators.Add(saveKey);
+        KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;  // no floating "Ctrl+S" tip
     }
 
     /// <summary>A row per field: its label, its box, and the clear button several files show.</summary>

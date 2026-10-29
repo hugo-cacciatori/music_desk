@@ -14,21 +14,16 @@ from PySide6.QtGui import (
     QDropEvent,
     QKeySequence,
     QMouseEvent,
-    QPalette,
     QShowEvent,
 )
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
-    QHBoxLayout,
     QLabel,
     QMainWindow,
-    QMenu,
     QMessageBox,
     QSplitter,
     QStackedWidget,
-    QToolBar,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -37,19 +32,17 @@ from refrain.context_menu.request import EDIT_CUE, NEW_CUE, SPLIT, TRIM
 from refrain.core import playlists
 from refrain.core.index import queries
 from refrain.core.index.roots import AddResult, AddStatus, Root
-from refrain.core.index.scanner import ScanProgress, ScanReport, find_folder
+from refrain.core.index.scanner import ScanReport, find_folder
 from refrain.core.index.store import path_of
 from refrain.core.path_locks import PathLocks
 from refrain.licenses import licenses_dir
 from refrain.services.album_search_service import AlbumSearchService
 from refrain.services.library import LibraryService
-from refrain.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
 from refrain.services.tag_io import TagIO
 from refrain.services.tag_writer import TagWriter
 from refrain.settings import Settings
 from refrain.ui import theme
 from refrain.ui.about_dialog import AboutDialog
-from refrain.ui.address_bar import AddressBar
 from refrain.ui.advanced_search import AdvancedSearchWindow
 from refrain.ui.controllers import STATUS_MS
 from refrain.ui.controllers.delete import DeleteController
@@ -59,24 +52,22 @@ from refrain.ui.controllers.rename import RenameController
 from refrain.ui.controllers.search import SearchController
 from refrain.ui.controllers.tools import ToolsController
 from refrain.ui.file_view import FileView
-from refrain.ui.hover import with_status_tips
+from refrain.ui.main_toolbars import Toolbars
 from refrain.ui.no_wheel import install_no_wheel
-from refrain.ui.qt_util import app, shortcut
+from refrain.ui.qt_util import app
 from refrain.ui.shell import Shell
 from refrain.ui.side_panel.panel import SelectedItem, SidePanel
 from refrain.ui.sidebar import Sidebar
+from refrain.ui.status_line import StatusLine
 from refrain.ui.toast import Toast
-from refrain.ui.toolbar_icons import tool_icon
-from refrain.ui.tools.tool_cards import CLEANUP, RENAME, REPLAYGAIN, TIDY, ToolCards
+from refrain.ui.tools.tool_cards import ToolCards
 
 log = logging.getLogger(__name__)
 
 APP_TITLE = "Refrain"
-PAUSED_NOTE = " (paused while a task reads albums)"
 WAIT_FOR_INDEX_S = 120  # a folder from outside the app opens once indexed, within this (SPEC §29)
 
 
-LYRICS_RETRY_TIP = "Try reaching LRCLIB again now instead of waiting."  # the status bar's Retry now
 
 class DropOverlay(QLabel):
     """Covers the window while folders are dragged over it."""
@@ -116,25 +107,11 @@ class MainWindow(QMainWindow):
         self.history_forward: list[int] = []
         self.rsgain_version: str | None = None  # from the startup self-check (About)
         self.flac_version: str | None = None  # likewise; the cue split needs it (SPEC §22)
-        self._indexing_paused = False  # while a task reads whole albums (the library says so)
         self._waiting_folder: tuple[str, float] | None = None  # (path, deadline): opens once indexed (SPEC §29)
         self.shell = Shell("shell", self)  # handing files to Windows, off the UI thread
         self.setWindowTitle(APP_TITLE)
         self.resize(1200, 760)
-        self.index_label = QLabel()
-        self.index_label.hide()
-        self.statusBar().addPermanentWidget(self.index_label)
-        self.lyrics_label = QLabel()
-        self.lyrics_label.hide()
-        self.lyrics_button = QToolButton()  # Retry now, while LRCLIB is unreachable (no Pause since 0.8.3)
-        self.lyrics_button.setText("Retry now")
-        self.lyrics_button.setToolTip(LYRICS_RETRY_TIP)
-        self.lyrics_button.setAutoRaise(True)
-        self.lyrics_button.clicked.connect(self._lyrics_button_clicked)
-        self.lyrics_button.hide()
-        self.statusBar().addPermanentWidget(self.lyrics_label)
-        self.statusBar().addPermanentWidget(self.lyrics_button)
-        self._lyrics_state = ""
+        self.status_line = StatusLine(self, self)  # indexing and lyrics progress
 
         conn = lambda: self.open_library.conn if self._library_open() else None  # noqa: E731
         self.sidebar = Sidebar(conn, self.settings.expanded_folders)
@@ -200,7 +177,10 @@ class MainWindow(QMainWindow):
         body_layout.addWidget(self.splitter)
         self.setObjectName("mainWindow")  # the window's background: theme.style_sheet
         self.setCentralWidget(body)
-        self._build_navigation(conn)
+        self.advanced_search: AdvancedSearchWindow | None = None  # made on first use (SPEC §26)
+        self.toolbars = Toolbars(self, conn, self)  # the search, navigation and tools rows (SPEC §30, §33)
+        self.address_bar = self.toolbars.address_bar
+        self._update_navigation()
         self._restore_state()
         self.playlist.restore()
         self._apply_tree()  # hidden by default; refresh_roots applies it again once the folders are known
@@ -208,21 +188,6 @@ class MainWindow(QMainWindow):
         self.add_folder_action = QAction("&Add folder…", self, shortcut=QKeySequence("Ctrl+O"))
         self.add_folder_action.triggered.connect(self.add_folder)
         self.addAction(self.add_folder_action)  # Ctrl+O; the sidebar's Add folder… is the visible way (0.8.4)
-        # No menu bar (SPEC §36 task 3): the … button at the search row's right end holds Options…, About and Exit.
-        # No Add folder… or Rescan library since 0.8.4 (SPEC §30); every option in one window, the Options… window.
-        self.options_action = QAction("&Options…", self)
-        self.options_action.triggered.connect(lambda: self.tools.open_options())
-        self.about_action = QAction("&About Refrain", self)
-        self.about_action.triggered.connect(self.open_about)
-        self.exit_action = QAction("E&xit", self)
-        self.exit_action.triggered.connect(self.close)
-        more = QMenu(self)
-        more.addAction(self.options_action)
-        more.addAction(self.about_action)
-        more.addSeparator()
-        more.addAction(self.exit_action)
-        self.more_button.setMenu(with_status_tips(more))
-
         self.overlay = DropOverlay(self)
         self.toast = Toast(self)
         self.setAcceptDrops(library is not None)
@@ -257,9 +222,9 @@ class MainWindow(QMainWindow):
             library.addFinished.connect(self.show_add_results)
             library.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
             library.notice.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
-            library.indexingPaused.connect(self._show_indexing_paused)
-            library.indexer.progress.connect(self.show_index_progress)
-            library.indexer.idle.connect(self.index_label.hide)
+            library.indexingPaused.connect(self.status_line.set_indexing_paused)
+            library.indexer.progress.connect(self.status_line.show_index_progress)
+            library.indexer.idle.connect(self.status_line.index_label.hide)
             library.indexer.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
             library.indexer.folderUpdated.connect(self.folder_updated)
             library.indexer.scanFinished.connect(self.scan_finished)
@@ -268,9 +233,9 @@ class MainWindow(QMainWindow):
                            library.rootsChanged):
                 signal.connect(self._open_waiting_folder)
             library.lyrics.foldersChanged.connect(self.lyrics_updated)
-            library.lyrics.unreachable.connect(self.lrclib_unreachable)
-            library.lyrics.progress.connect(self.show_lyrics_progress)
-            library.lyrics.entryReady.connect(self._lyrics_entry)
+            library.lyrics.unreachable.connect(self.status_line.lrclib_unreachable)
+            library.lyrics.progress.connect(self.status_line.show_lyrics_progress)
+            library.lyrics.entryReady.connect(self.status_line.lyrics_entry)
             self.file_view.model.lrclib_status = library.lyrics.status_for
             self.refresh_roots()
             self._reopen_last_folder()
@@ -409,187 +374,14 @@ class MainWindow(QMainWindow):
 
     # -- history and navigation --
 
-    def _build_navigation(self, conn) -> None:
-        self.back_action = QAction("Back", self)
-        # Explicit keys: Qt's standard Back also binds Backspace, which goes up here (SPEC §5), and a key bound
-        # twice is ambiguous and fires nothing.
-        self.back_action.setShortcut(QKeySequence("Alt+Left"))
-        self.back_action.triggered.connect(self.go_back)
-        self.back_action.setToolTip("Go back to the folder you were in before (Alt+Left)")
-        self.forward_action = QAction("Forward", self)
-        self.forward_action.setShortcut(QKeySequence("Alt+Right"))
-        self.forward_action.triggered.connect(self.go_forward)
-        self.forward_action.setToolTip("Go forward again to the folder you went back from (Alt+Right)")
-        self.up_action = QAction("Up", self)
-        self.up_action.setShortcut(QKeySequence("Alt+Up"))
-        self.up_action.triggered.connect(self.go_up)
-        self.up_action.setToolTip("Open the folder that contains this one (Alt+Up)")
-        self.refresh_action = QAction("Rescan folder", self)
-        self.refresh_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Refresh))
-        self.refresh_action.triggered.connect(self.rescan_folder)
-        self.refresh_action.setToolTip("Read this folder from the disk again now, to show changes made outside "
-                                       "Refrain (F5)")
-        # The folder tree is a side function (SPEC §33): hidden by default, one click shows it.
-        self.folders_action = QAction("Folders", self, checkable=True, shortcut=QKeySequence("Ctrl+Shift+F"))
-        self.folders_action.setToolTip("Show or hide the folder tree (Ctrl+Shift+F)")
-        self.folders_action.toggled.connect(self.set_tree_visible)
-        self.explorer_action = QAction("Open in File Explorer", self)
-        self.explorer_action.setToolTip("Open this folder in File Explorer")
-        self.explorer_action.triggered.connect(
-            lambda: self.reveal(self.folder_id) if self.folder_id is not None else None)
-        self.address_action = QAction("Edit address", self, shortcut=QKeySequence("Ctrl+L"))
-        self.address_action.triggered.connect(lambda: self.address_bar.edit())
-        self.addAction(self.address_action)
-
-        self.address_bar = AddressBar(
-            lambda entry_id: [(f.id, f.name) for f in queries.child_folders(
-                conn(), entry_id, only_music=self.settings.hide_folders_without_music)] if conn() else [])
-        self.address_bar.folderRequested.connect(self.open_folder)
-        self.address_bar.pathEntered.connect(self.go_to_path)
-
-        # The search first, on a row of its own, big and centred (SPEC §33); the address bar below, alone.
-        search_bar = QToolBar("Search")
-        search_bar.setMovable(False)
-        search_bar.setObjectName("search")
-        row = QWidget()
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(0, 2, 0, 2)
-        layout.setSpacing(0)  # the toggle joined to the field
-        layout.addStretch(1)
-        layout.addWidget(self.search.modes)
-        layout.addWidget(self.search_field, 6)  # most of the row, up to its widest
-        layout.addStretch(1)
-        self.more_button = QToolButton()  # its menu: __init__, once the actions exist
-        self.more_button.setObjectName("moreButton")
-        self.more_button.setAutoRaise(True)
-        self.more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.more_button.setToolTip("Options…, About and Exit")
-        layout.addWidget(self.more_button)
-        search_bar.addWidget(row)
-        self.search_row = row
-        self.search_bar = search_bar
-        self.search_action = QAction("Search library", self, shortcut=QKeySequence("Ctrl+K"))
-        self.search_action.triggered.connect(self.search.open)
-        self.addAction(self.search_action)
-        self.addToolBar(search_bar)
-        self.addToolBarBreak()
-
-        toolbar = QToolBar("Navigation")
-        toolbar.setMovable(False)
-        toolbar.setObjectName("navigation")
-        toolbar.addAction(self.folders_action)
-        toolbar.addSeparator()
-        for action in (self.back_action, self.forward_action, self.up_action, self.refresh_action):
-            toolbar.addAction(action)
-        toolbar.addWidget(self.address_bar)
-        toolbar.addAction(self.explorer_action)
-        for action in (self.folders_action, self.explorer_action):  # labelled: clear at a glance
-            button = toolbar.widgetForAction(action)
-            if isinstance(button, QToolButton):
-                button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.addToolBar(toolbar)
-        self.navigation_bar = toolbar
-        self.addToolBarBreak()
-        self._build_advanced_search()
-        self._build_tools_bar()
-
-        # Backspace goes up, but only from the lists (it edits text everywhere else).
-        for view in (self.file_view.view, self.sidebar.tree):
-            shortcut(QKeySequence(Qt.Key.Key_Backspace), view, self.go_up, Qt.ShortcutContext.WidgetShortcut)
-        # Del sends the focused view's selection to the Recycle Bin. Shift+Del does the same: the app never
-        # deletes permanently (SPEC §19). The playlist's own Del only removes tracks from the playlist.
-        for view, selected in ((self.file_view.view, self.file_view.selected_ids),
-                               (self.sidebar.tree, self.sidebar.tree.selected_ids),
-                               (self.search_view.view, self.search_view.selected_ids)):
-            for key in ("Del", "Shift+Del"):
-                shortcut(QKeySequence(key), view,
-                         lambda view=view, selected=selected: self.delete.delete_entries(selected(), view),
-                         Qt.ShortcutContext.WidgetShortcut)
-        self._update_navigation()
-
-    def _build_tools_bar(self) -> None:
-        """The second row (SPEC §30), always visible: Tidy, Rename, ReplayGain and Clean up, then the playlist
-        builder and Advanced search. Tidy, Rename and Clean up are plain buttons starting their right-click entry on
-        the selection or the open folder; ReplayGain lists its entries (SPEC §35). The options are in File >
-        Options… only. Icons with a short label; Tidy first and in evidence (SPEC §33)."""
-        bar = QToolBar("Tools")
-        bar.setMovable(False)
-        bar.setObjectName("tools")
-        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.tools_bar = bar
-        self.tool_actions: dict[str, QAction] = {}
-        for tool, label in ((TIDY, "Tidy"), (RENAME, "Rename"), (REPLAYGAIN, "ReplayGain"), (CLEANUP, "Clean up")):
-            action = QAction(label, self)
-            if tool == REPLAYGAIN:  # its entries, as the right-click menu lists them (Hugo, 2026-10-25)
-                entries = QMenu(self)
-                entries.aboutToShow.connect(lambda entries=entries: self.tools.fill_replaygain_menu(entries))
-                action.setMenu(entries)
-            else:
-                action.triggered.connect(lambda _=False, tool=tool: self.tools.start(tool))
-            action.hovered.connect(lambda tool=tool: self._update_tool_tip(tool))
-            bar.addAction(action)
-            if tool == REPLAYGAIN and isinstance(button := bar.widgetForAction(action), QToolButton):
-                button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)  # a click opens the list
-            self.tool_actions[tool] = action
-            self._update_tool_tip(tool)
-        self.tidy_action = self.tool_actions[TIDY]
-        self._set_tidy_in_evidence(bar)
-        bar.addSeparator()
-        self.playlist_action.setText("Playlist")
-        bar.addAction(self.playlist_action)
-        bar.addAction(self.advanced_search_action)
-        self.addToolBar(bar)
-        self._tint_tool_icons()
-        if (current := theme.current()) is not None:
-            current.changed.connect(self._tint_tool_icons)  # light and dark, or a new accent colour
-
-    def _tint_tool_icons(self) -> None:
-        """The toolbars' line drawings in the text colour, Tidy's in the colour that reads on the accent."""
-        color = self.palette().color(QPalette.ColorRole.ButtonText)
-        for tool, action in self.tool_actions.items():
-            action.setIcon(tool_icon(tool, theme.on_accent() if tool == TIDY else color))
-        for name, action in (("playlist", self.playlist_action), ("advanced_search", self.advanced_search_action),
-                             ("folders", self.folders_action), ("back", self.back_action),
-                             ("forward", self.forward_action), ("up", self.up_action),
-                             ("rescan", self.refresh_action), ("explorer", self.explorer_action)):
-            action.setIcon(tool_icon(name, color))
-        self.more_button.setIcon(tool_icon("more", color))
-        self.search.search_icon.setIcon(tool_icon("search", color))
-
-    def _set_tidy_in_evidence(self, bar: QToolBar) -> None:
-        """Tidy, the tool the app is built around (SPEC §33, Hugo 2026-10-24): larger than the other buttons and
-        filled with Windows' accent colour (theme.style_sheet), its icon and label in white or black, whichever
-        reads on it."""
-        button = bar.widgetForAction(self.tidy_action)
-        if not isinstance(button, QToolButton):
-            return
-        button.setObjectName("tidyButton")
-        button.setIconSize(bar.iconSize() * 1.5)
-        font = theme.scaled(button.font(), theme.SCALE_TIDY)
-        font.setBold(True)
-        button.setFont(font)
-
-    def _update_tool_tip(self, tool: str) -> None:
-        """The hover text names the target, or says why a click can't start, read as the mouse comes over the
-        button (SPEC §30). The button stays enabled: a click says the same in the status bar."""
-        self.tool_actions[tool].setToolTip(self.tools.hover_text(tool))
-
-    def _build_advanced_search(self) -> None:
-        self.advanced_search_action = QAction("Advanced search", self)
-        self.advanced_search_action.setToolTip("Open a window listing the albums to fix by hand, like those without "
-                                               "ReplayGain tags or not split yet")
-        self.advanced_search_action.triggered.connect(self.open_advanced_search)
-        self.advanced_search_action.setEnabled(self._library_open())
-        self.advanced_search: AdvancedSearchWindow | None = None  # made on first use (SPEC §26)
-
     def _update_navigation(self) -> None:
         open_ = self._library_open() and self.folder_id is not None
-        self.back_action.setEnabled(bool(self.history_back))
-        self.forward_action.setEnabled(bool(self.history_forward))
-        self.up_action.setEnabled(open_ and self.folder_id is not None
+        self.toolbars.back_action.setEnabled(bool(self.history_back))
+        self.toolbars.forward_action.setEnabled(bool(self.history_forward))
+        self.toolbars.up_action.setEnabled(open_ and self.folder_id is not None
                                   and queries.parent_folder(self.open_library.conn, self.folder_id) is not None)
-        self.refresh_action.setEnabled(open_)
-        self.explorer_action.setEnabled(open_)
+        self.toolbars.refresh_action.setEnabled(open_)
+        self.toolbars.explorer_action.setEnabled(open_)
 
     def go_back(self) -> None:
         self._step(self.history_back, self.history_forward)
@@ -747,14 +539,6 @@ class MainWindow(QMainWindow):
         Metadata edits on one of them ask Save, Discard or Cancel first, as the tools always did. False on Cancel."""
         return not any(self._unsaved_edits_under(Path(path)) for path in paths)
 
-    def _show_indexing_paused(self, paused: bool) -> None:
-        """The library pauses indexing while a task reads whole albums (`LibraryService.DRIVE_OWNERS`), whichever
-        window started it (SPEC §35); the status line says so."""
-        self._indexing_paused = paused
-        if self.index_label.isVisible():
-            text = self.index_label.text().removesuffix(PAUSED_NOTE)
-            self.index_label.setText(text + PAUSED_NOTE if paused else text)
-
     def lyrics_updated(self, folder_ids: list[int]) -> None:
         """LRCLIB results: the open folder's LRCLIB column follows, and the search results (their text too)."""
         if not self._library_open():
@@ -764,46 +548,6 @@ class MainWindow(QMainWindow):
             return
         self.file_view.refresh()
         self.side_panel.refresh_folder()
-
-    def show_lyrics_progress(self, progress: LyricsProgress) -> None:
-        """The status bar's lyrics label, and Retry now while LRCLIB is unreachable (SPEC §9 Controls)."""
-        if not self._library_open():
-            return
-        if progress.state != self._lyrics_state:  # offline on or off: the LRCLIB column's pending rows change
-            self._lyrics_state = progress.state
-            self.file_view.model.refresh_column("lrclib")
-            self.search_view.model.refresh_column("lrclib")
-        left = f"{progress.pending:,} to look up" if progress.pending is not None else "starting"
-        if progress.state == OFFLINE:
-            text = "Lyrics: lookups off"
-        elif progress.state == PAUSED:  # the service can still pause (tests); the app no longer asks it to
-            text = f"Lyrics paused: {left}"
-        elif progress.state == UNREACHABLE:
-            resume = time.strftime("%H:%M", time.localtime(self.open_library.lyrics.resume_at))
-            text = f"LRCLIB unreachable, retrying at {resume}"
-        elif progress.state == RUNNING:
-            text = f"Looking up lyrics: {left}"
-        elif progress.pending:
-            text = f"Lyrics: {progress.pending:,} to retry later"
-        else:
-            text = ""
-        self.lyrics_label.setText(text)
-        self.lyrics_label.setVisible(bool(text))
-        self.lyrics_button.setVisible(progress.state == UNREACHABLE)
-
-    def _lyrics_button_clicked(self) -> None:
-        if self._library_open():
-            self.open_library.lyrics.retry_now()
-
-    def _lyrics_entry(self, _key: str, entry: dict) -> None:
-        if entry.get("status") == "error" and self._library_open():
-            self.file_view.model.refresh_column("lrclib")  # the failed key's rows show "error"
-            self.search_view.model.refresh_column("lrclib")
-
-    def lrclib_unreachable(self, resume_at: float) -> None:
-        minutes = max(1, round((resume_at - time.time()) / 60))
-        self.toast.show_message(f"LRCLIB unreachable, retrying in {minutes} min.", "Retry now",
-                                self.open_library.lyrics.retry_now)
 
     def _refresh_location(self) -> None:
         """The open folder (or a folder above it) may have been renamed: its path and breadcrumb follow."""
@@ -933,13 +677,13 @@ class MainWindow(QMainWindow):
     def _apply_tree(self) -> None:
         shown = self.settings.tree_visible or self.sidebar.empty
         empty = self.sidebar.empty
-        self.folders_action.setEnabled(not empty)
-        self.folders_action.setToolTip("The folder tree shows until a folder is added" if empty
+        self.toolbars.folders_action.setEnabled(not empty)
+        self.toolbars.folders_action.setToolTip("The folder tree shows until a folder is added" if empty
                                        else "Show or hide the folder tree (Ctrl+Shift+F)")
-        if self.folders_action.isChecked() != shown:
-            self.folders_action.blockSignals(True)
-            self.folders_action.setChecked(shown)
-            self.folders_action.blockSignals(False)
+        if self.toolbars.folders_action.isChecked() != shown:
+            self.toolbars.folders_action.blockSignals(True)
+            self.toolbars.folders_action.setChecked(shown)
+            self.toolbars.folders_action.blockSignals(False)
         if shown == (not self.sidebar.isHidden()):
             return
         # As the playlist panel: the tree takes its width from the centre only, and gives it back when hidden.
@@ -1041,22 +785,6 @@ class MainWindow(QMainWindow):
                 lambda: self.shell.show_in_explorer(fallback, fallback_is_dir)))
         else:
             self.toast.show_message(message)
-
-    # -- indexing --
-
-    def show_index_progress(self, progress: ScanProgress) -> None:
-        root = next((r for r in self.library.roots() if r.id == progress.root_id), None) if self.library else None
-        name = (os.path.basename(root.path) or root.path) if root else "library"  # a drive root has no basename
-        if progress.phase == "structure":
-            text = f"Indexing {name}: {progress.folders:,} folders, {progress.files:,} files"
-        elif progress.phase == "tags":
-            text = f"Reading tags in {name}: {progress.tags_done:,} / {progress.tags_total:,}"
-        elif progress.phase == "stats":
-            text = f"Indexing {name}: totals"
-        else:
-            text = f"Indexed {name}: {progress.files:,} files"
-        self.index_label.setText(text + (PAUSED_NOTE if self._indexing_paused else ""))
-        self.index_label.show()
 
     # -- roots --
 

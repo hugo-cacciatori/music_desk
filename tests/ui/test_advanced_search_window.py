@@ -35,7 +35,7 @@ def tag_replaygain(path):
 
 
 def open_window(window):
-    window.advanced_search_action.trigger()
+    window.toolbars.advanced_search_action.trigger()
     return window.advanced_search
 
 
@@ -52,7 +52,7 @@ def test_the_menus_and_the_toolbar(window):
     assert window.menuBar().actions() == []
     toolbar = [a.text() for a in window.findChild(QToolBar, "tools").actions() if a.text()]
     assert toolbar[-2:] == ["Playlist", "Advanced search"]
-    assert window.advanced_search_action.isEnabled()
+    assert window.toolbars.advanced_search_action.isEnabled()
 
 
 def test_hide_folders_without_music_left_the_tree_menu(window):
@@ -177,4 +177,4 @@ def test_disabled_without_a_library(qtbot):
 
     window = MainWindow(None)
     qtbot.addWidget(window)
-    assert not window.advanced_search_action.isEnabled()
+    assert not window.toolbars.advanced_search_action.isEnabled()

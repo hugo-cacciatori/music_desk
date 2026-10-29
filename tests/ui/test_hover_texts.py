@@ -122,7 +122,7 @@ def test_menu_entries_show_a_status_bar_tip(window, service):
     menus = [window.menus.list_menu([entry(service, "Artist", "Album", "track 1.flac")]), window.menus.list_menu([]),
              window.sidebar.context_menu_for(window.sidebar.model.index(0, 0)), window.file_view.header_menu(),
              window.playlist_panel.header_menu()]
-    menus.append(window.more_button.menu())  # the … button's, in place of the menu bar (SPEC §36 task 3)
+    menus.append(window.toolbars.more_button.menu())  # the … button's, in place of the menu bar (SPEC §36 task 3)
     tipped = set()
     for menu in menus:
         for action in menu.actions():

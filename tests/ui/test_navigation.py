@@ -84,16 +84,16 @@ def test_back_and_forward(window, service):
     window.history_back.clear()  # the window may have opened the root at start
     for folder in (b, c):
         window.open_folder(folder)
-    assert not window.forward_action.isEnabled()
-    window.back_action.trigger()
+    assert not window.toolbars.forward_action.isEnabled()
+    window.toolbars.back_action.trigger()
     assert window.folder_id == b
-    window.back_action.trigger()
-    assert window.folder_id == a and not window.back_action.isEnabled()
-    window.forward_action.trigger()
+    window.toolbars.back_action.trigger()
+    assert window.folder_id == a and not window.toolbars.back_action.isEnabled()
+    window.toolbars.forward_action.trigger()
     assert window.folder_id == b
     window.open_folder(entry(service, "Artist", "Scans"))  # a new step clears the forward history
-    assert not window.forward_action.isEnabled()
-    window.back_action.trigger()
+    assert not window.toolbars.forward_action.isEnabled()
+    window.toolbars.back_action.trigger()
     assert window.folder_id == b
 
 
@@ -128,13 +128,13 @@ def test_keyboard_and_mouse_shortcuts(qtbot, window, service):
 def test_up_selects_the_folder_you_came_from(qtbot, window, service):
     album = entry(service, "Artist", "Album")
     window.open_folder(album)
-    window.up_action.trigger()
+    window.toolbars.up_action.trigger()
     assert window.folder_id == entry(service, "Artist")
     assert window.file_view.selected_ids() == [album]
     window.go_up()
     window.go_up()  # at the root: nothing above
     assert window.folder_id == service.roots()[0].top_entry_id
-    assert not window.up_action.isEnabled()
+    assert not window.toolbars.up_action.isEnabled()
 
 
 def test_every_way_up_selects_the_folder_you_came_from(window, service):
@@ -230,8 +230,8 @@ def test_the_tree_is_hidden_by_default_and_kept(qtbot, service):
     qtbot.addWidget(window)
     window.show()
     centre = window.splitter.sizes()[1]
-    assert not window.sidebar.isVisibleTo(window) and not window.folders_action.isChecked()
-    window.folders_action.trigger()  # one click shows it
+    assert not window.sidebar.isVisibleTo(window) and not window.toolbars.folders_action.isChecked()
+    window.toolbars.folders_action.trigger()  # one click shows it
     assert window.sidebar.isVisibleTo(window) and settings.tree_visible
     sizes = window.splitter.sizes()
     handle = window.splitter.handleWidth()  # shows and hides with the tree
@@ -247,8 +247,8 @@ def test_open_in_file_explorer(qtbot, window, service, library_dir):
     shown = []
     window.shell.show_in_explorer = lambda path, is_dir: shown.append((path, is_dir))
     open_path(window, service, "Artist", "Album")
-    assert window.explorer_action.isEnabled()
-    window.explorer_action.trigger()
+    assert window.toolbars.explorer_action.isEnabled()
+    window.toolbars.explorer_action.trigger()
     qtbot.waitUntil(lambda: bool(shown))
     assert shown == [(str(library_dir / "Artist" / "Album"), True)]
 

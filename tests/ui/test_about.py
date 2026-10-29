@@ -19,7 +19,7 @@ class Recorder:
 def open_about(window) -> list:
     shown = []
     window.show_about = shown.append  # never a real modal dialog in tests
-    menu = window.more_button.menu()  # the … button (SPEC §36 task 3)
+    menu = window.toolbars.more_button.menu()  # the … button (SPEC §36 task 3)
     next(a for a in menu.actions() if a.text() == "&About Refrain").trigger()
     return shown
 

@@ -67,10 +67,10 @@ def test_window_shows_progress(qtbot, db, library_dir):
     qtbot.addWidget(window)
     try:
         texts = []
-        service.indexer.progress.connect(lambda _p: texts.append(window.index_label.text()))
+        service.indexer.progress.connect(lambda _p: texts.append(window.status_line.index_label.text()))
         add_and_index(qtbot, service, library_dir)
         assert texts and texts[-1].startswith("Indexed lib:")
-        assert not window.index_label.isVisible()  # hidden once the indexer is idle
+        assert not window.status_line.index_label.isVisible()  # hidden once the indexer is idle
     finally:
         service.close()
 

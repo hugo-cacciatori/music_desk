@@ -80,8 +80,9 @@ def test_the_button_lists_the_right_click_entries(qtbot, open_app, service, libr
     [none] = entries(open_app, service, artist / "Album A", ["lite", "01 Tone.flac"])  # folders and files together
     assert not none.isEnabled() and none.text() == (
         "ReplayGain: select folders, or tracks it measures, or nothing for the open folder.")
-    button = open_app.window.tools_bar.widgetForAction(open_app.window.tool_actions["replaygain"])
-    assert button.popupMode().name == "InstantPopup" and not open_app.window.tool_actions["replaygain"].isCheckable()
+    toolbars = open_app.window.toolbars
+    button = toolbars.tools_bar.widgetForAction(toolbars.tool_actions["replaygain"])
+    assert button.popupMode().name == "InstantPopup" and not toolbars.tool_actions["replaygain"].isCheckable()
 
 
 def test_album_run(qtbot, open_app, service, library_dir, fake):

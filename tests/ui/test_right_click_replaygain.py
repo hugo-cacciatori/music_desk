@@ -71,11 +71,11 @@ def test_indexing_waits_while_rsgain_runs(qtbot, open_app, service, artist, monk
     window = entry_window(qtbot, open_app, menu.REPLAYGAIN_ALBUM, [artist / "Album A"])
     qtbot.waitUntil(lambda: bool(paused), timeout=20000)
     assert paused == [True]
-    qtbot.waitUntil(lambda: open_app.window._indexing_paused)  # the status line says so
+    qtbot.waitUntil(lambda: open_app.window.status_line.indexing_paused)  # the status line says so
     event.set()
     qtbot.waitUntil(lambda: window.view.state == "result", timeout=20000)
     assert not service.indexer.paused
-    qtbot.waitUntil(lambda: not open_app.window._indexing_paused)
+    qtbot.waitUntil(lambda: not open_app.window.status_line.indexing_paused)
 
 
 def test_a_folder_as_a_discography(qtbot, open_app, artist, fake):

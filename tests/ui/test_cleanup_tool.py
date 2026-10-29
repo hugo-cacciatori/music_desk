@@ -33,8 +33,8 @@ def click(qtbot, open_app, service, folder, names=()) -> CleanupEntry | None:
     ids = {r.name: r.id for r in main.file_view.model.rows}
     main.file_view.select_ids([ids[name] for name in names])
     before = list(open_app.entry_windows)
-    main.tool_actions[CLEANUP].hovered.emit()
-    main.tool_actions[CLEANUP].trigger()
+    main.toolbars.tool_actions[CLEANUP].hovered.emit()
+    main.toolbars.tool_actions[CLEANUP].trigger()
     started = [w for w in open_app.entry_windows if w not in before]
     if not started:
         return None
@@ -54,7 +54,8 @@ def test_the_button_opens_the_window_with_every_box_checked(qtbot, open_app, ser
     folder = library_dir / "Cleanup"
     entry = click(qtbot, open_app, service, folder)
     main = open_app.window
-    assert main.tool_actions[CLEANUP].toolTip().startswith("Clean up this folder… (Cleanup). Lists the redundant")
+    tip = main.toolbars.tool_actions[CLEANUP].toolTip()
+    assert tip.startswith("Clean up this folder… (Cleanup). Lists the redundant")
     assert entry is not None and entry.offer is not None
     offer = entry.offer
     assert offer.parent() is None and main.center.currentWidget() is main.file_view  # its own window (SPEC §35)
@@ -81,7 +82,7 @@ def test_files_are_refused_with_what_to_select(qtbot, open_app, service, library
     main = open_app.window
     assert click(qtbot, open_app, service, library_dir / "Artist" / ALBUM, ["track2.flac"]) is None
     why = "Clean up: it works on folders: select folders, or nothing for the open folder."
-    assert main.statusBar().currentMessage() == why and main.tool_actions[CLEANUP].toolTip() == why
+    assert main.statusBar().currentMessage() == why and main.toolbars.tool_actions[CLEANUP].toolTip() == why
 
 
 def test_nothing_found_says_so(qtbot, open_app, service, library_dir):

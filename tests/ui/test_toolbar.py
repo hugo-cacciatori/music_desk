@@ -209,9 +209,9 @@ def bar_texts(bar: QToolBar) -> list[str]:
 
 def test_tidy_comes_first_and_in_evidence(window):
     """SPEC §33 (Hugo, 2026-10-24): Tidy first, larger than the others, filled with Windows' accent colour."""
-    tools = window.tools_bar
-    tidy = tools.widgetForAction(window.tool_actions[TIDY])
-    rename = tools.widgetForAction(window.tool_actions[RENAME])
+    tools = window.toolbars.tools_bar
+    tidy = tools.widgetForAction(window.toolbars.tool_actions[TIDY])
+    rename = tools.widgetForAction(window.toolbars.tool_actions[RENAME])
     assert tools.widgetForAction(tools.actions()[0]) is tidy and tidy.objectName() == "tidyButton"
     assert tidy.iconSize().width() > rename.iconSize().width() and tidy.font().bold()
     accent = window.palette().color(QPalette.ColorRole.Accent).name()  # the theme's rule for its object name
@@ -220,20 +220,20 @@ def test_tidy_comes_first_and_in_evidence(window):
 
 
 def test_three_rows_search_address_then_the_tools(window):
-    search, top, tools = window.search_bar, window.navigation_bar, window.tools_bar
+    search, top, tools = window.toolbars.search_bar, window.toolbars.navigation_bar, window.toolbars.tools_bar
     # The search first, on its own row: its toggle joined to its field, centred, the field taking most of it
     # (SPEC §33), and the … button at the row's end, in place of the menu bar (SPEC §36 task 3).
-    assert [search.widgetForAction(a) for a in search.actions()] == [window.search_row]
-    layout = window.search_row.layout()
+    assert [search.widgetForAction(a) for a in search.actions()] == [window.toolbars.search_row]
+    layout = window.toolbars.search_row.layout()
     assert [layout.itemAt(i).widget() for i in range(layout.count())] == [
-        None, window.search.modes, window.search_field, None, window.more_button]
+        None, window.search.modes, window.search_field, None, window.toolbars.more_button]
     assert layout.spacing() == 0
     assert window.toolBarArea(search) == window.toolBarArea(top) and window.toolBarBreak(top)
     assert search.geometry().top() < top.geometry().top() < tools.geometry().top()
     assert window.search_field.height() > window.address_bar.height() // 2
     assert window.search_field.font().pointSizeF() > window.font().pointSizeF()
     # Folders, then the navigation, the address bar and Open in File Explorer (SPEC §33).
-    assert top.actions()[0] is window.folders_action and top.actions()[-1] is window.explorer_action
+    assert top.actions()[0] is window.toolbars.folders_action and top.actions()[-1] is window.toolbars.explorer_action
     assert top.widgetForAction(top.actions()[-2]) is window.address_bar
     assert not any(isinstance(top.widgetForAction(a), QToolButton) and top.widgetForAction(a).text() in
                    ("Tools", "Playlist builder", "Advanced search") for a in top.actions())
@@ -241,16 +241,16 @@ def test_three_rows_search_address_then_the_tools(window):
     assert bar_texts(tools) == ["Tidy", "Rename", "ReplayGain", "Clean up", "|", "Playlist", "Advanced search"]
     assert tools.toolButtonStyle().name == "ToolButtonTextBesideIcon"
     for tool in (RENAME, TIDY, CLEANUP):  # plain buttons: no dropdown (Hugo, 2026-10-22)
-        action = window.tool_actions[tool]
+        action = window.toolbars.tool_actions[tool]
         assert not action.icon().isNull() and action.menu() is None
         button = tools.widgetForAction(action)
         assert isinstance(button, QToolButton)
         assert button.popupMode() is not QToolButton.ToolButtonPopupMode.InstantPopup
     # ReplayGain lists its entries (Hugo, 2026-10-25, SPEC §35): a click opens the list.
-    replaygain = tools.widgetForAction(window.tool_actions[REPLAYGAIN])
-    assert isinstance(replaygain, QToolButton) and window.tool_actions[REPLAYGAIN].menu() is not None
+    replaygain = tools.widgetForAction(window.toolbars.tool_actions[REPLAYGAIN])
+    assert isinstance(replaygain, QToolButton) and window.toolbars.tool_actions[REPLAYGAIN].menu() is not None
     assert replaygain.popupMode() is QToolButton.ToolButtonPopupMode.InstantPopup
-    assert not window.playlist_action.icon().isNull() and not window.advanced_search_action.icon().isNull()
+    assert not window.playlist_action.icon().isNull() and not window.toolbars.advanced_search_action.icon().isNull()
 
 
 def test_hover_text_names_the_entry_and_the_target(window, service, library_dir):
@@ -260,8 +260,8 @@ def test_hover_text_names_the_entry_and_the_target(window, service, library_dir)
     assert window.tools.hover_text(RENAME) == "Rename: open a folder first."
     window.open_folder(folder_id(service, album))
     window.file_view.select_ids([])
-    window.tool_actions[RENAME].hovered.emit()  # the mouse comes over the button
-    assert window.tool_actions[RENAME].toolTip() == (
+    window.toolbars.tool_actions[RENAME].hovered.emit()  # the mouse comes over the button
+    assert window.toolbars.tool_actions[RENAME].toolTip() == (
         f"Rename from tags… ({ALBUM}). Previews renaming the music files from their tags; nothing changes until you "
         "apply.")
     assert window.tools.hover_text(TIDY).startswith(f"Tidy this folder… ({ALBUM}). Plans Tidy")
@@ -270,7 +270,7 @@ def test_hover_text_names_the_entry_and_the_target(window, service, library_dir)
     window.file_view.select_ids([ids["track2.flac"], ids["notes.txt"]])
     assert window.tools.hover_text(RENAME).startswith("Rename from tags… (2 selected items)")
     assert window.tools.hover_text(TIDY) == "Tidy: it works on folders: select folders, or nothing for the open folder."
-    window.tool_actions[TIDY].trigger()  # a click that can't start says why and starts nothing
+    window.toolbars.tool_actions[TIDY].trigger()  # a click that can't start says why and starts nothing
     assert window.statusBar().currentMessage() == window.tools.hover_text(TIDY)
     assert window.center.currentWidget() is window.file_view
 
@@ -289,7 +289,7 @@ def test_a_click_starts_the_entry(qtbot, open_app, service, library_dir):
     main.open_folder(folder_id(service, library_dir / "Artist" / ALBUM))
     main.file_view.select_ids([])
     with qtbot.waitSignal(main.entryRequested) as blocker:
-        main.tool_actions[TIDY].trigger()
+        main.toolbars.tool_actions[TIDY].trigger()
     assert blocker.args == ["tidy", [str(library_dir / "Artist" / ALBUM)]]
     tidy = open_app.entry_windows[-1]
     qtbot.addWidget(tidy)
@@ -297,7 +297,7 @@ def test_a_click_starts_the_entry(qtbot, open_app, service, library_dir):
 
 
 def test_start_without_a_folder_says_so(window):
-    window.tool_actions[TIDY].trigger()
+    window.toolbars.tool_actions[TIDY].trigger()
     assert window.statusBar().currentMessage() == "Tidy: open a folder first."
     assert window.center.currentWidget() is window.file_view
 
@@ -323,7 +323,7 @@ def test_options_open_the_window_on_the_tools_page(qtbot, window, service, libra
 
 def test_file_options_holds_every_option(qtbot, window, service, library_dir):
     assert window.menuBar().actions() == []  # the … button instead (SPEC §36 task 3)
-    file_menu = window.more_button.menu()
+    file_menu = window.toolbars.more_button.menu()
     # No Add folder… or Rescan library since 0.8.4: the sidebar adds folders (Ctrl+O still works).
     assert [a.text() for a in file_menu.actions() if not a.isSeparator()] == ["&Options…", "&About Refrain",
                                                                               "E&xit"]

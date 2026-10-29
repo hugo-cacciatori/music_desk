@@ -244,7 +244,7 @@ def test_the_window_prioritizes_and_offers_retry(qtbot, service, library_dir, mo
     window.file_view.select_ids([track])
     qtbot.waitUntil(lambda: ("track", track) in calls)
 
-    window.lrclib_unreachable(time.time() + 600)
+    window.status_line.lrclib_unreachable(time.time() + 600)
     assert window.toast.label.text() == "LRCLIB unreachable, retrying in 10 min."
     window.toast.button.click()
     assert ("retry",) in calls

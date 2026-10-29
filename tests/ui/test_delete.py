@@ -187,9 +187,9 @@ def test_menus_offer_delete_except_for_roots_and_the_background(window, service)
         return [a.text() for a in menu.actions()]
 
     window.open_folder(entry(service, "Artist", "Album"))
-    assert "Delete\tDel" in texts(window.list_menu([entry(service, "Artist", "Album", "Track 2.flac")]))
-    assert "Delete\tDel" in texts(window.list_menu([entry(service, "Artist", "Album", "CD 2")]))
-    assert "Delete\tDel" not in texts(window.list_menu([]))  # the background: not the open folder
+    assert "Delete\tDel" in texts(window.menus.list_menu([entry(service, "Artist", "Album", "Track 2.flac")]))
+    assert "Delete\tDel" in texts(window.menus.list_menu([entry(service, "Artist", "Album", "CD 2")]))
+    assert "Delete\tDel" not in texts(window.menus.list_menu([]))  # the background: not the open folder
     sidebar = window.sidebar
     root_index = sidebar.tree.model().index(0, 0)
     assert "Delete\tDel" not in texts(sidebar.context_menu_for(root_index))

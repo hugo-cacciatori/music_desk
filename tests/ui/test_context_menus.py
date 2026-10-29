@@ -104,26 +104,26 @@ def test_file_menu(window, service):
     """Explorer's entries first, as items of the menu (SPEC §35: no Refrain submenu in the app), then the file's
     own actions."""
     window.open_folder(entry(service, "Artist", "Album"))
-    one = window.list_menu([entry(service, "Artist", "Album", "Track 2.flac")])
+    one = window.menus.list_menu([entry(service, "Artist", "Album", "Track 2.flac")])
     assert texts(one) == [*TRACK_ENTRIES, "Open", "Play selection", "Open in File Explorer", "Copy path",
                           "Rename	F2", "Delete	Del"]
     assert not any(a.menu() for a in one.actions())  # no submenu
-    two = window.list_menu([entry(service, "Artist", "Album", "Track 2.flac"),
+    two = window.menus.list_menu([entry(service, "Artist", "Album", "Track 2.flac"),
                             entry(service, "Artist", "Album", "cover.jpg")])
     assert texts(two)[:2] == ["ReplayGain this track (−15 LUFS)", "Rename from tags…"]  # Remove: tracks only
     assert texts(two)[-2:] == ["Copy paths", "Delete	Del"]  # no Rename
     assert not action(two, "Open").isEnabled() and action(two, "Play selection").isEnabled()
-    images = window.list_menu([entry(service, "Artist", "Album", "cover.jpg")])
+    images = window.menus.list_menu([entry(service, "Artist", "Album", "cover.jpg")])
     assert texts(images)[0] == "Open"  # no entry for a picture (Settings is Explorer's only)
     assert not action(images, "Play selection").isEnabled()
 
 
 def test_folder_menus(window, service):
     window.open_folder(entry(service, "Artist"))
-    folder = window.list_menu([entry(service, "Artist", "Album")])
+    folder = window.menus.list_menu([entry(service, "Artist", "Album")])
     assert texts(folder) == [*FOLDER_ENTRIES, "Open", "Play folder", "Play folder and subfolders",
                              "Open in File Explorer", "Copy path", "Rename	F2", "Rescan", "Delete	Del"]
-    background = window.list_menu([])  # the open folder, as Explorer's empty space
+    background = window.menus.list_menu([])  # the open folder, as Explorer's empty space
     assert texts(background) == [*FOLDER_ENTRIES, "Play folder", "Play folder and subfolders",
                                  "Open in File Explorer", "Copy path", "Rescan"]
     tree = window.sidebar.context_menu_for(window.sidebar.tree.currentIndex())
@@ -166,8 +166,9 @@ def test_double_click_on_a_file_opens_it(qtbot, window, service, library_dir, la
 
 def test_open_in_explorer(qtbot, window, service, library_dir, explorer):
     window.open_folder(entry(service, "Artist", "Album"))
-    action(window.list_menu([entry(service, "Artist", "Album", "Track 2.flac")]), "Open in File Explorer").trigger()
-    action(window.list_menu([entry(service, "Artist", "Album", "CD 2")]), "Open in File Explorer").trigger()
+    track = entry(service, "Artist", "Album", "Track 2.flac")
+    action(window.menus.list_menu([track]), "Open in File Explorer").trigger()
+    action(window.menus.list_menu([entry(service, "Artist", "Album", "CD 2")]), "Open in File Explorer").trigger()
     album = library_dir / "Artist" / "Album"
     qtbot.waitUntil(lambda: explorer.calls == [(str(album / "Track 2.flac"), False), (str(album / "CD 2"), True)],
                     timeout=3000)
@@ -176,7 +177,7 @@ def test_open_in_explorer(qtbot, window, service, library_dir, explorer):
 def test_copy_paths(window, service, library_dir):
     window.open_folder(entry(service, "Artist", "Album"))
     ids = [entry(service, "Artist", "Album", "Track 2.flac"), entry(service, "Artist", "Album", "Track 3.mp3")]
-    action(window.list_menu(ids), "Copy paths").trigger()
+    action(window.menus.list_menu(ids), "Copy paths").trigger()
     album = library_dir / "Artist" / "Album"
     assert QApplication.clipboard().text() == f"{album / 'Track 2.flac'}\n{album / 'Track 3.mp3'}"
     assert "2 paths copied" in window.statusBar().currentMessage()
@@ -184,7 +185,7 @@ def test_copy_paths(window, service, library_dir):
 
 def test_play_folder_writes_a_playlist_and_opens_it(qtbot, window, service, library_dir, launched, tmp_path):
     window.open_folder(entry(service, "Artist"))
-    action(window.list_menu([entry(service, "Artist", "Album")]), "Play folder").trigger()
+    action(window.menus.list_menu([entry(service, "Artist", "Album")]), "Play folder").trigger()
     qtbot.waitUntil(lambda: len(launched.calls) == 1, timeout=3000)
     playlist = launched.calls[0][0]
     assert playlist.startswith(str(tmp_path / "playlists")) and playlist.endswith(".m3u8")
@@ -199,7 +200,7 @@ def test_play_selection_follows_the_view(qtbot, window, service, launched):
     window.open_folder(entry(service, "Artist", "Album"))
     window.file_view.view.sortByColumn(0, Qt.SortOrder.DescendingOrder)
     select(window, "Track 2.flac", "Track 10.flac", "cover.jpg")
-    action(window.list_menu(window.file_view.selected_ids()), "Play selection").trigger()
+    action(window.menus.list_menu(window.file_view.selected_ids()), "Play selection").trigger()
     qtbot.waitUntil(lambda: len(launched.calls) == 1, timeout=3000)
     lines = open(launched.calls[0][0], encoding="utf-8").read().splitlines()
     assert [line.rsplit("\\", 1)[-1] for line in lines[2::2]] == ["Track 10.flac", "Track 2.flac"]
@@ -225,7 +226,7 @@ def test_rescan_from_the_menu(window, service, monkeypatch):
     scanned = []
     window.open_folder(entry(service, "Artist"))
     monkeypatch.setattr(service.indexer, "request_folder", scanned.append)  # first in the queue
-    action(window.list_menu([entry(service, "Artist", "Album")]), "Rescan").trigger()
+    action(window.menus.list_menu([entry(service, "Artist", "Album")]), "Rescan").trigger()
     assert scanned == [entry(service, "Artist", "Album")]
 
 
@@ -254,13 +255,13 @@ def test_an_entry_opens_its_window_as_from_explorer(qtbot, open_app, service, li
     album = entry(service, "Artist", "Album")
     main.open_folder(album)
     track = entry(service, "Artist", "Album", "Track 2.flac")
-    menu = main.list_menu([track])
+    menu = main.menus.list_menu([track])
     with qtbot.waitSignal(main.entryRequested) as blocker:
         action(menu, "Rename from tags…").trigger()
     assert blocker.args == ["rename", [str(library_dir / "Artist" / "Album" / "Track 2.flac")]]
     window = open_app.entry_windows[-1]
     qtbot.addWidget(window)
     assert isinstance(window, RenameWindow) and window.parent() is None
-    tidy = action(main.list_menu([]), "Tidy this folder…")
+    tidy = action(main.menus.list_menu([]), "Tidy this folder…")
     assert tidy.statusTip().startswith("Plans Tidy")  # the handler's help text
 

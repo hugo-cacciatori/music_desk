@@ -90,7 +90,7 @@ class ToolsController(QObject):
             if window.folder_id is None:
                 return None
             ids = [window.folder_id]
-        paths, folders = window.entry_paths(ids)
+        paths, folders = window.menus.entry_paths(ids)
         if not paths:
             return None
         return Selection.of(paths, background, is_dir=folders.__contains__), paths

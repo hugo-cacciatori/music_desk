@@ -253,13 +253,13 @@ class SearchController(QObject):
             return with_status_tips(menu)
         cards = self.view.showing_cards  # a card's menu starts with its two ways to the folder (SPEC §33)
         if not cards:
-            window.add_entries(menu, ids)  # Explorer's entries first (SPEC §35)
+            window.menus.add_entries(menu, ids)  # Explorer's entries first (SPEC §35)
         go = menu.addAction("Go to folder", lambda: self.go_to_result(ids[0]))
         go.setEnabled(len(ids) == 1)
         if cards:
             menu.addAction("Open in File Explorer", lambda: window.reveal(ids[0]))
             menu.addSeparator()
-            window.add_entries(menu, ids)  # then Explorer's entries (SPEC §35)
+            window.menus.add_entries(menu, ids)  # then Explorer's entries (SPEC §35)
         open_action = menu.addAction("Open", lambda: window.open_files(ids))
         open_action.setEnabled(len(ids) == 1)
         menu.addAction("Play selection", lambda: window.play_selection(ids))

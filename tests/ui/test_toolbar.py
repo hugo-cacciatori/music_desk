@@ -354,7 +354,7 @@ def test_no_tools_entries_left(window, service, library_dir):
     window.open_folder(artist)
     window.side_panel.show_folder(artist)
     assert not hasattr(window.side_panel.summary, "tools_button")
-    assert "Tools…" not in [a.text() for a in window.list_menu([]).actions()]
+    assert "Tools…" not in [a.text() for a in window.menus.list_menu([]).actions()]
 
 
 def test_every_page_restores_its_defaults_and_restore_all_asks(qtbot, window):

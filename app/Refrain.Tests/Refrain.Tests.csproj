@@ -5,10 +5,12 @@
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Refrain.Core\Refrain.Core.csproj" />
+    <ProjectReference Include="..\RefrainMenu\RefrainMenu.csproj" />
   </ItemGroup>
 
   <ItemGroup>

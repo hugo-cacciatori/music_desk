@@ -22,6 +22,11 @@ public sealed partial class FolderPage : UserControl
 
     public long? FolderId { get; private set; }
 
+    /// <summary>Play folder (its own tracks) or Play with subfolders (SPEC §7 "As built (M3 task 5)").</summary>
+    public event Action<long, bool>? PlayRequested;
+    readonly Button play = Ui.Primary("Play folder");
+    readonly Button playAll = Ui.Button("Play with subfolders", "Play this folder's tracks, then its subfolders'");
+
     public FolderPage(Library library)
     {
         this.library = library;
@@ -37,6 +42,19 @@ public sealed partial class FolderPage : UserControl
         });
         stack.Children.Add(coverSource);
         stack.Children.Add(name);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        buttons.Children.Add(play);
+        buttons.Children.Add(playAll);
+        ToolTipService.SetToolTip(play, "Play this folder's tracks in your default player");
+        play.Click += (_, _) =>
+        {
+            if (FolderId is { } id) PlayRequested?.Invoke(id, false);
+        };
+        playAll.Click += (_, _) =>
+        {
+            if (FolderId is { } id) PlayRequested?.Invoke(id, true);
+        };
+        stack.Children.Add(buttons);
         stack.Children.Add(details);
         Content = new ScrollViewer { Content = stack, HorizontalScrollMode = ScrollMode.Disabled };
     }
@@ -53,6 +71,8 @@ public sealed partial class FolderPage : UserControl
         });
         if (mine != generation || summary is null) return;
         name.Text = summary.Name;
+        play.IsEnabled = summary.OwnTracks > 0;  // enabled when the folder has tracks of its own
+        playAll.IsEnabled = summary.Tracks > 0;
         details.Children.Clear();
         details.RowDefinitions.Clear();
         Ui.Detail(details, "Tracks", summary.Tracks == 0 ? "None" : $"{summary.Tracks:N0} · {Columns.Duration(summary.Duration)}");

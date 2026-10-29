@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The File Explorer right-click handler (SPEC §31 "How it is reached", §36 "7."): a classic IContextMenu DLL,
+       built with Native AOT (dotnet publish) so Explorer loads no .NET runtime. A plain build is a managed library:
+       the tests use its logic. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>RefrainMenu</AssemblyName>
+    <RootNamespace>RefrainMenu</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Refrain.Tests" />
+  </ItemGroup>
+
+</Project>

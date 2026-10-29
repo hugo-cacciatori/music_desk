@@ -24,6 +24,9 @@ public sealed partial class SidePanel : Grid
     readonly PreviewPage preview = new();
     readonly TextBlock message = Ui.Secondary();
     IReadOnlyList<long> shownIds = [];
+
+    /// <summary>The folder summary's Play buttons: a folder, with or without its subfolders.</summary>
+    public event Action<long, bool>? PlayRequested;
     IReadOnlyList<FileRow> audioRows = [];
     (List<string> Audio, List<string> Skipped)? audioPaths;
     bool metadataLoaded;
@@ -37,6 +40,7 @@ public sealed partial class SidePanel : Grid
         metadata = new MetadataPage(xamlRoot, window);
         lyrics = new LyricsPage(library, service, settings);
         folder = new FolderPage(library);
+        folder.PlayRequested += (id, subfolders) => PlayRequested?.Invoke(id, subfolders);
         message.Margin = new Thickness(16);
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });

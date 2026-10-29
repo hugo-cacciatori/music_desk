@@ -5,7 +5,7 @@ namespace Refrain.Core.Index;
 /// <summary>The side panel's folder summary (SPEC §7 "As built (M3 task 5)"): its whole subtree's tracks, duration,
 /// formats and ReplayGain coverage, and what it holds directly.</summary>
 public sealed record FolderSummary(string Name, string Path, long Tracks, double Duration, IReadOnlyList<string> Formats,
-    long WithReplayGain, long Subfolders, long Files)
+    long WithReplayGain, long Subfolders, long Files, long OwnTracks)
 {
     static readonly string[] CoverNames = ["folder.jpg", "cover.jpg", "front.jpg", "folder.png", "cover.png", "front.png"];
 
@@ -27,12 +27,15 @@ public sealed record FolderSummary(string Name, string Path, long Tracks, double
         r.Read();
         var formats = (r.NullableString(2) ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
             .Order(StringComparer.Ordinal).ToList();
-        using var counts = conn.Command("SELECT sum(is_dir), sum(1 - is_dir) FROM entries WHERE parent_id = $id", null,
-            ("$id", folderId));
+        using var counts = conn.Command($"""
+            SELECT sum(is_dir), sum(1 - is_dir), sum(is_dir = 0 AND ext IN ({string.Join(", ", Refrain.Core.Formats.Audio.Select(e => $"'{e}'"))}))
+            FROM entries WHERE parent_id = $id
+            """, null, ("$id", folderId));
         using var c = counts.ExecuteReader();
         c.Read();
         return new FolderSummary(System.IO.Path.GetFileName(path.TrimEnd('\\')) is { Length: > 0 } name ? name : path, path,
-            r.GetInt64(0), r.GetDouble(1), formats, r.NullableLong(3) ?? 0, c.NullableLong(0) ?? 0, c.NullableLong(1) ?? 0);
+            r.GetInt64(0), r.GetDouble(1), formats, r.NullableLong(3) ?? 0, c.NullableLong(0) ?? 0, c.NullableLong(1) ?? 0,
+            c.NullableLong(2) ?? 0);
     }
 
     /// <summary>Where the folder's cover comes from: its folder image, else the first track with an embedded cover,

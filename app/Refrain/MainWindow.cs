@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.Data.Sqlite;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
@@ -41,7 +42,10 @@ public sealed partial class MainWindow : Window
         MaxWidth = 900,
         HorizontalAlignment = HorizontalAlignment.Stretch,
     };
-    readonly TextBlock resultCount = new() { Margin = new Thickness(12, 8, 12, 4) };
+    readonly TextBlock resultCount = new() { Margin = new Thickness(12, 8, 12, 4), VerticalAlignment = VerticalAlignment.Center };
+    readonly Button playResults = new() { Content = "Play results", Margin = new Thickness(0, 6, 12, 2) };
+    readonly StartRequest startRequest;
+    (string Path, DateTime Until)? waitingFolder;
     readonly TextBlock status = new() { Margin = new Thickness(16, 4, 16, 6), TextTrimming = TextTrimming.CharacterEllipsis };
     readonly TextBlock lyricsStatus = new() { Margin = new Thickness(16, 4, 8, 6), VerticalAlignment = VerticalAlignment.Center };
     readonly Button lyricsRetry = new() { Content = "Retry now", Visibility = Visibility.Collapsed, Margin = new Thickness(0, 2, 16, 4) };
@@ -78,8 +82,9 @@ public sealed partial class MainWindow : Window
     string shownQuery = "";
     bool resultsShown;
 
-    public MainWindow()
+    public MainWindow(StartRequest request)
     {
+        startRequest = request;
         ui = DispatcherQueue.GetForCurrentThread();
         settings = Settings.Load(AppPaths.Settings);
         library = new Library(AppPaths.Database);
@@ -102,7 +107,14 @@ public sealed partial class MainWindow : Window
         filesPage = Card(files);
         resultsPage.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         resultsPage.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        resultsPage.Children.Add(resultCount);
+        var countRow = new Grid();
+        countRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        countRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        countRow.Children.Add(resultCount);
+        Grid.SetColumn(playResults, 1);
+        countRow.Children.Add(playResults);
+        ToolTipService.SetToolTip(playResults, "Play the results' audio files in your default player, in this order");
+        resultsPage.Children.Add(countRow);
         Grid.SetRow(results, 1);
         resultsPage.Children.Add(results);
         Grid.SetRow(cards, 1);
@@ -152,6 +164,7 @@ public sealed partial class MainWindow : Window
             await LoadRoots();
             await OpenStartFolder();
             searchBox.Focus(FocusState.Programmatic);  // the search has the focus at start (SPEC §33)
+            if (!startRequest.IsEmpty) await OpenFromOutside(startRequest);
         };
     }
 
@@ -370,6 +383,8 @@ public sealed partial class MainWindow : Window
             Status($"LRCLIB unreachable, retrying at {until:HH:mm}.");
             _ = panel.LyricsStateChanged();
         });
+        playResults.Click += (_, _) => Play(conn => Playlists.ForIds(conn, ShownResultsRows().Select(r => r.Id).ToList()), null);
+        panel.PlayRequested += (id, subfolders) => Play(conn => Playlists.ForFolder(conn, id, subfolders), id);
         lyricsRetry.Click += (_, _) =>
         {
             lyrics.RetryNow();
@@ -753,6 +768,9 @@ public sealed partial class MainWindow : Window
         {
             // The list's background: the open folder's menu, without Open (SPEC §5 "As built (M2 task 7)").
             if (fromResults || current is null) return;
+            var open = current.Value;
+            Add("Play folder", () => Play(conn => Playlists.ForFolder(conn, open, false), open));
+            Add("Play folder and subfolders", () => Play(conn => Playlists.ForFolder(conn, open, true), open));
             Add("Open in File Explorer", RevealCurrent);
             Add("Copy path", () => Copy([CurrentPath]));
             Add("Rescan", Rescan);
@@ -771,12 +789,126 @@ public sealed partial class MainWindow : Window
                 Add("Open", () => _ = Activate(row, fromResults: false), rows.Count == 1);
                 Add("Open in File Explorer", () => _ = RevealRow(row), rows.Count == 1);
             }
+            if (row.IsDir && rows.Count == 1)
+            {
+                Add("Play folder", () => Play(conn => Playlists.ForFolder(conn, row.Id, false), row.Id));
+                Add("Play folder and subfolders", () => Play(conn => Playlists.ForFolder(conn, row.Id, true), row.Id));
+            }
+            else if (rows.Any(r => r.IsAudio))
+            {
+                var ids = rows.Select(r => r.Id).ToList();
+                Add("Play selection", () => Play(conn => Playlists.ForIds(conn, ids), null));
+            }
             Add(rows.Count == 1 ? "Copy path" : "Copy paths", () => _ = CopyRows(rows));
             if (row.IsDir && rows.Count == 1) Add("Rescan", () => library.Indexer.Urgent(row.Id));
             if (fromResults && !string.IsNullOrEmpty(row.Artist))
                 Add($"Filter by {row.Artist}", () => FilterByArtist(row.Artist));
         }
         menu.ShowAt(anchor, point);
+    }
+
+    List<FileRow> ShownResultsRows() => mode == SearchMode.Lyrics ? cards.Rows : results.Rows.ToList();
+
+    /// <summary>Plays through the default app (SPEC §14): the entries come from the index and the playlist is written
+    /// off the UI thread; with nothing to play, or no player for .m3u8, the status line or a message says so.</summary>
+    void Play(Func<SqliteConnection, List<PlayEntry>> entries, long? folder)
+    {
+        _ = Task.Run(() =>
+        {
+            List<PlayEntry> list;
+            using (var conn = library.Db.Read()) list = entries(conn);
+            return list.Count == 0 ? null : Playlists.Write(list);
+        }).ContinueWith(task => ui.TryEnqueue(async () =>
+        {
+            if (task.Exception is { } error)
+            {
+                Log.Error("Writing a playlist failed", error);
+                Status("The playlist couldn't be written; see the log.");
+                return;
+            }
+            if (task.Result is not { } playlist)
+            {
+                Status("There are no audio files to play here.");
+                return;
+            }
+            if (Shell.TryOpen(playlist)) return;
+            var dialog = new ContentDialog
+            {
+                Title = "No player for playlists",
+                Content = "Windows has no app set to open .m3u8 playlists. Choose one in Settings > Apps > Default " +
+                          "apps (search for .m3u8), or play the files from File Explorer.",
+                PrimaryButtonText = "Open in File Explorer",
+                CloseButtonText = "Close",
+                XamlRoot = Content.XamlRoot,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            if (folder is { } id && await Read(conn => Queries.PathOf(conn, id)) is { } path) Shell.Reveal(path, select: false);
+            else if (Shown.SelectedRows.FirstOrDefault() is { } first) await RevealRow(first);
+        }), TaskScheduler.Default);
+    }
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetForegroundWindow(nint window);
+
+    /// <summary>The window comes to the front, restored if minimized.</summary>
+    void BringToFront()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter) presenter.Restore();
+        AppWindow.Show();
+        SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
+    }
+
+    /// <summary>A start from outside (SPEC §29, §31): the <c>refrain</c> keyword or a folder argument, or a right-click
+    /// entry. An indexed folder opens; one inside the library but not indexed is rescanned first; one outside is
+    /// added. The wait for the index lasts at most 2 minutes, and a newer request replaces it.</summary>
+    public async Task OpenFromOutside(StartRequest request)
+    {
+        BringToFront();
+        var folder = request.Entry switch
+        {
+            null => request.Folder,
+            "open" => request.Paths.FirstOrDefault(),
+            _ => null,
+        };
+        if (request.Entry is not null and not "open")
+        {
+            Status($"This version of Refrain has no \"{request.Entry}\" entry yet.");
+            return;
+        }
+        if (folder is null) return;
+        var path = RealPath.Normalize(folder);
+        if (!await Task.Run(() => Directory.Exists(path)))
+        {
+            Status($"{path} isn't a folder that can be opened.");
+            return;
+        }
+        waitingFolder = null;
+        var found = await Read(conn => Queries.Find(conn, path));
+        if (found is { Exact: true } hit)
+        {
+            await OpenFolder(hit.Id);
+            return;
+        }
+        waitingFolder = (path, DateTime.Now.AddMinutes(2));
+        if (found is null) await AddFolder(path);
+        else library.Indexer.ScanPath(path, recursive: true);
+        await OpenWaitingFolder();
+    }
+
+    /// <summary>Opens the folder a start from outside waits for, once the index has it.</summary>
+    async Task OpenWaitingFolder()
+    {
+        if (waitingFolder is not { } waiting) return;
+        if (DateTime.Now > waiting.Until)
+        {
+            waitingFolder = null;
+            Status($"{waiting.Path} isn't indexed yet; it opens from the folder tree once it is.");
+            return;
+        }
+        if (await Read(conn => Queries.Find(conn, waiting.Path)) is not { Exact: true } hit) return;
+        waitingFolder = null;
+        await OpenFolder(hit.Id);
     }
 
     /// <summary>An <c>artist:</c> filter added to the query (the seek_lyrics page's artist checkboxes, SPEC §6).</summary>
@@ -854,6 +986,7 @@ public sealed partial class MainWindow : Window
             }
         }
         foreach (var folder in changed) await tree.Refresh(folder);
+        await OpenWaitingFolder();
         await panel.Refresh(changed, Shown.SelectedRows, current);
         if (resultsShown) liveSearchTimer.Start();
     }

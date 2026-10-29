@@ -81,6 +81,8 @@ public sealed partial class CardList : Grid, IRowList
 
     public List<FileRow> SelectedRows => List.SelectedItems.OfType<FileRow>().ToList();
 
+    public List<FileRow> Rows => [.. items];
+
     /// <summary>A new query replaces the cards; its live re-run updates them in place, keeping the selection.</summary>
     public void SetRows(List<FileRow> rows, bool inPlace)
     {

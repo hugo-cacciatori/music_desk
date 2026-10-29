@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The `refrain` keyword in File Explorer's address bar (SPEC §29): Explorer runs it with the shown folder as the
+       working directory, and it starts Refrain.exe beside it on that folder. Small, no window. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>RefrainHere</AssemblyName>
+    <RootNamespace>RefrainHere</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ApplicationIcon>..\Refrain\Assets\refrain.ico</ApplicationIcon>
+  </PropertyGroup>
+
+</Project>

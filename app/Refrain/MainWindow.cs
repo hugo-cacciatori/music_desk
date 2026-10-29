@@ -43,7 +43,6 @@ public sealed partial class MainWindow : Window
         HorizontalAlignment = HorizontalAlignment.Stretch,
     };
     readonly TextBlock resultCount = new() { Margin = new Thickness(12, 8, 12, 4), VerticalAlignment = VerticalAlignment.Center };
-    readonly Button playResults = new() { Content = "Play results", Margin = new Thickness(0, 6, 12, 2) };
     readonly StartRequest startRequest;
     (string Path, DateTime Until)? waitingFolder;
     readonly TextBlock status = new() { Margin = new Thickness(16, 4, 16, 6), TextTrimming = TextTrimming.CharacterEllipsis };
@@ -107,14 +106,7 @@ public sealed partial class MainWindow : Window
         filesPage = Card(files);
         resultsPage.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         resultsPage.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var countRow = new Grid();
-        countRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        countRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        countRow.Children.Add(resultCount);
-        Grid.SetColumn(playResults, 1);
-        countRow.Children.Add(playResults);
-        ToolTipService.SetToolTip(playResults, "Play the results' audio files in your default player, in this order");
-        resultsPage.Children.Add(countRow);
+        resultsPage.Children.Add(resultCount);
         Grid.SetRow(results, 1);
         resultsPage.Children.Add(results);
         Grid.SetRow(cards, 1);
@@ -163,7 +155,7 @@ public sealed partial class MainWindow : Window
         {
             await LoadRoots();
             await OpenStartFolder();
-            searchBox.Focus(FocusState.Programmatic);  // the search has the focus at start (SPEC §33)
+            if (!Offscreen) searchBox.Focus(FocusState.Programmatic);  // the search has the focus at start (SPEC §33)
             if (!startRequest.IsEmpty) await OpenFromOutside(startRequest);
         };
     }
@@ -383,7 +375,6 @@ public sealed partial class MainWindow : Window
             Status($"LRCLIB unreachable, retrying at {until:HH:mm}.");
             _ = panel.LyricsStateChanged();
         });
-        playResults.Click += (_, _) => Play(conn => Playlists.ForIds(conn, ShownResultsRows().Select(r => r.Id).ToList()), null);
         panel.PlayRequested += (id, subfolders) => Play(conn => Playlists.ForFolder(conn, id, subfolders), id);
         lyricsRetry.Click += (_, _) =>
         {
@@ -807,8 +798,6 @@ public sealed partial class MainWindow : Window
         menu.ShowAt(anchor, point);
     }
 
-    List<FileRow> ShownResultsRows() => mode == SearchMode.Lyrics ? cards.Rows : results.Rows.ToList();
-
     /// <summary>Plays through the default app (SPEC §14): the entries come from the index and the playlist is written
     /// off the UI thread; with nothing to play, or no player for .m3u8, the status line or a message says so.</summary>
     void Play(Func<SqliteConnection, List<PlayEntry>> entries, long? folder)
@@ -854,6 +843,7 @@ public sealed partial class MainWindow : Window
     /// <summary>The window comes to the front, restored if minimized.</summary>
     void BringToFront()
     {
+        if (Offscreen) return;
         if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter) presenter.Restore();
         AppWindow.Show();
         SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
@@ -1143,8 +1133,22 @@ public sealed partial class MainWindow : Window
         await dialog.ShowAsync();
     }
 
+    /// <summary>An agent's window check (SPEC §36 "7."): the window stays beyond every monitor, out of the taskbar and
+    /// Alt+Tab, and never takes the focus.</summary>
+    public static bool Offscreen => Environment.GetEnvironmentVariable("REFRAIN_OFFSCREEN") == "1";
+
     void RestorePlacement()
     {
+        if (Offscreen)
+        {
+            // The monitor list can only be indexed: enumerating it throws (a WinRT projection limit).
+            var areas = DisplayArea.FindAll();
+            var right = 0;
+            for (var i = 0; i < areas.Count; i++) right = Math.Max(right, areas[i].OuterBounds.X + areas[i].OuterBounds.Width);
+            AppWindow.MoveAndResize(new RectInt32(right + 200, 0, 1280, 800));
+            AppWindow.IsShownInSwitchers = false;
+            return;
+        }
         if (settings is { WindowX: { } x, WindowY: { } y, WindowWidth: { } w, WindowHeight: { } h } && w > 200 && h > 200)
         {
             var area = DisplayArea.GetFromRect(new RectInt32(x, y, w, h), DisplayAreaFallback.None);
@@ -1159,7 +1163,7 @@ public sealed partial class MainWindow : Window
 
     void Shutdown()
     {
-        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        if (AppWindow.Presenter is OverlappedPresenter presenter && !Offscreen)
         {
             settings.Maximized = presenter.State == OverlappedPresenterState.Maximized;
             if (presenter.State == OverlappedPresenterState.Restored)

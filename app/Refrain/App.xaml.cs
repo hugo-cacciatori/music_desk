@@ -56,6 +56,7 @@ public partial class App : Application
         window = new MainWindow(request);
         if (instance is not null)
             instance.Received += later => window.DispatcherQueue.TryEnqueue(() => _ = window.OpenFromOutside(later));
-        window.Activate();
+        if (MainWindow.Offscreen) window.AppWindow.Show(activateWindow: false);  // an agent's check: never the focus
+        else window.Activate();
     }
 }

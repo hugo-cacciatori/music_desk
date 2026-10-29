@@ -57,7 +57,7 @@ public sealed partial class CardList : Grid, IRowList
         List.Tapped += (_, _) => Clicked?.Invoke();
         List.DoubleTapped += (_, e) =>
         {
-            if ((e.OriginalSource as FrameworkElement)?.DataContext is FileRow row) Activated?.Invoke(row);
+            if (FileTable.RowAt(List, e.OriginalSource) is { } row) Activated?.Invoke(row);
         };
         List.KeyDown += (_, e) =>
         {
@@ -67,7 +67,7 @@ public sealed partial class CardList : Grid, IRowList
         };
         List.ContextRequested += (_, e) =>
         {
-            var row = (e.OriginalSource as FrameworkElement)?.DataContext as FileRow;
+            var row = FileTable.RowAt(List, e.OriginalSource);
             if (row is not null && !List.SelectedItems.Contains(row))
             {
                 List.SelectedItems.Clear();
@@ -80,8 +80,6 @@ public sealed partial class CardList : Grid, IRowList
     }
 
     public List<FileRow> SelectedRows => List.SelectedItems.OfType<FileRow>().ToList();
-
-    public List<FileRow> Rows => [.. items];
 
     /// <summary>A new query replaces the cards; its live re-run updates them in place, keeping the selection.</summary>
     public void SetRows(List<FileRow> rows, bool inPlace)

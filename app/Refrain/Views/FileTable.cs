@@ -84,7 +84,7 @@ public sealed partial class FileTable : Grid, IRowList
         };
         List.DoubleTapped += (_, e) =>
         {
-            if (RowAt(e.OriginalSource) is { } row) Activated?.Invoke(row);
+            if (RowAt(List, e.OriginalSource) is { } row) Activated?.Invoke(row);
         };
         List.KeyDown += OnKeyDown;
         List.SelectionChanged += (_, _) =>
@@ -219,8 +219,14 @@ public sealed partial class FileTable : Grid, IRowList
         List.Focus(FocusState.Keyboard);
     }
 
-    static FileRow? RowAt(object source) =>
-        source is FrameworkElement element ? element.DataContext as FileRow : null;
+    /// <summary>The row under the pointer, through its list item: the rows' data binding is skipped (they are filled
+    /// in ContainerContentChanging), so their DataContext can't be relied on.</summary>
+    internal static FileRow? RowAt(ListView list, object source)
+    {
+        var element = source as DependencyObject;
+        while (element is not null and not ListViewItem) element = VisualTreeHelper.GetParent(element);
+        return element is ListViewItem item ? list.ItemFromContainer(item) as FileRow : null;
+    }
 
     void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -259,7 +265,7 @@ public sealed partial class FileTable : Grid, IRowList
 
     void OnContextRequested(UIElement sender, ContextRequestedEventArgs e)
     {
-        var row = RowAt(e.OriginalSource);
+        var row = RowAt(List, e.OriginalSource);
         if (row is not null && !List.SelectedItems.Contains(row))
         {
             List.SelectedItems.Clear();

@@ -61,7 +61,18 @@ internal sealed partial class InstanceJson : JsonSerializerContext;
 /// its request over and exits. The preview's pipe has its own name, so it never talks to the Python app.</summary>
 public sealed class Instance : IDisposable
 {
-    public static string DefaultPipe => $"RefrainNext-{Environment.UserName}";
+    /// <summary>A pipe per user; another data folder (REFRAIN_DATA: tests, an agent's checks) gets a pipe of its own,
+    /// so such a copy never hands over to the user's running Refrain.</summary>
+    public static string DefaultPipe
+    {
+        get
+        {
+            var data = Environment.GetEnvironmentVariable("REFRAIN_DATA");
+            if (string.IsNullOrEmpty(data)) return $"RefrainNext-{Environment.UserName}";
+            var hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(data).ToUpperInvariant()));
+            return $"RefrainNext-{Environment.UserName}-{Convert.ToHexString(hash)[..12]}";
+        }
+    }
 
     readonly string pipe;
     readonly NamedPipeServerStream first;

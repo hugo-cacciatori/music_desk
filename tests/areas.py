@@ -72,7 +72,9 @@ AREAS: dict[str, Area] = {
          "core/test_inline_rename.py", "ui/test_rename_tool.py", "ui/test_inline_rename_ui.py",
          "ui/test_right_click_rename.py")),
     "replaygain": Area(
-        ("core/replaygain.py", "core/rsgain.py", "services/replaygain_job.py", "ui/tools/replaygain_card.py",
+        ("core/replaygain/__init__.py", "core/replaygain/options.py", "core/replaygain/run_log.py",
+         "core/replaygain/album.py", "core/replaygain/loose.py", "core/replaygain/discography.py",
+         "core/replaygain/remove.py", "core/rsgain.py", "services/replaygain_job.py", "ui/tools/replaygain_card.py",
          "ui/tools/rg_report.py", "ui/controllers/tools.py"),
         ("core/test_replaygain.py", "core/test_replaygain_parity.py", "core/test_replaygain_remove.py",
          "core/test_replaygain_loose.py", "ui/test_right_click_replaygain.py",

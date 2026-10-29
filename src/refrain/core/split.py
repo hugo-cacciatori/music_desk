@@ -172,7 +172,7 @@ def write_tags(track: PlannedTrack, cover: bytes | None) -> None:
     flac carries a FLAC image's tags and pictures into each cut; they described the whole file, so they go first."""
     from mutagen.flac import FLAC
 
-    from refrain.core.tags import TaggedFile
+    from refrain.core.tags import NUMBER_FIELDS, TaggedFile
 
     audio = FLAC(str(track.out_path))
     if audio.tags is not None:
@@ -180,8 +180,7 @@ def write_tags(track: PlannedTrack, cover: bytes | None) -> None:
     audio.clear_pictures()
     audio.save()
     tagged = TaggedFile(track.out_path)
-    numbers = ("track", "track_total", "disc", "disc_total")
-    tagged.set_fields({name: track.fields[name] if name in numbers else str(track.fields[name])
+    tagged.set_fields({name: track.fields[name] if name in NUMBER_FIELDS else str(track.fields[name])
                        for name in track.fields})
     if cover:
         tagged.set_cover(cover)

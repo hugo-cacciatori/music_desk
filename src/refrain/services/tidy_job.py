@@ -8,10 +8,7 @@ do (a split leaves nothing half-written; rsgain is killed) and no further album 
 """
 
 import logging
-import threading
-import time
 from collections.abc import Iterable
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -25,11 +22,11 @@ from refrain.core.flac import FlacRunner
 from refrain.core.path_locks import PathLocks
 from refrain.core.replaygain import ReplayGainOptions
 from refrain.core.tidy import Kind, TidyCancelled, TidyPlan
+from refrain.services.job_runner import BatchedLines, JobRunner
 
 log = logging.getLogger(__name__)
 
 OWNER = "Tidy"
-LINE_INTERVAL = 0.1  # seconds between batches of log lines
 
 
 @dataclass
@@ -64,48 +61,11 @@ class TidyFinished:
         return sum(album.failed for album in self.albums)
 
 
-class _Lines:
-    """Log lines to the runner's signal, batched (rsgain's reader thread reports too)."""
-
-    def __init__(self, runner: "TidyRunner") -> None:
-        self._runner = runner
-        self._lines: list[str] = []
-        self._last = 0.0
-        self._lock = threading.Lock()
-
-    def line(self, text: str) -> None:
-        with self._lock:
-            self._lines.append(text)
-            if time.monotonic() - self._last < LINE_INTERVAL:
-                return
-            lines, self._lines, self._last = self._lines, [], time.monotonic()
-        self._runner.lines.emit(lines)
-
-    def flush(self) -> None:
-        with self._lock:
-            lines, self._lines = self._lines, []
-        if lines:
-            self._runner.lines.emit(lines)
-
-    # core.replaygain.Reporter
-    def info(self, message: str) -> None:
-        self.line(message)
-
-    def warn(self, message: str) -> None:
-        self.line(f"WARNING  {message}")
-
-    def error(self, message: str) -> None:
-        self.line(f"ERROR  {message}")
-
-    def progress(self, done: int, total: int, label: str) -> None:
-        pass  # Tidy reports progress per album, not per rsgain run
-
-
 def plural(count: int, noun: str) -> str:
     return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
-class TidyRunner(QObject):
+class TidyRunner(JobRunner):
     planned = Signal(object)  # TidyPlanned
     planProgress = Signal(int, int, str)  # albums read, albums found, the folder being read
     lines = Signal(object)  # list[str]: log lines, batched
@@ -114,15 +74,10 @@ class TidyRunner(QObject):
 
     def __init__(self, locks: PathLocks, parent: QObject | None = None, *, flac: Path | None = None,
                  scanner=rsgain.scan, exe: Path | None = None) -> None:
-        super().__init__(parent)
-        self.locks = locks
+        super().__init__(locks, "tidy-tool", parent)
         self.flac = flac or paths.flac_path()
         self.scanner = scanner  # replaced in tests by a fake that tags as rsgain would
         self.exe = exe
-        self._pool = ThreadPoolExecutor(1, thread_name_prefix="tidy-tool")
-        self._token = 0
-        self._cancel = CancelToken()
-        self._closed = False
         self.running = False
 
     # -- the plan --
@@ -166,7 +121,7 @@ class TidyRunner(QObject):
         self.running = True
 
         def job() -> None:
-            out = _Lines(self)
+            out = BatchedLines(self.lines)
             result = TidyFinished(token, plan.root)
             work = [album for album in plan.albums if not album.tidy]
             try:
@@ -200,7 +155,7 @@ class TidyRunner(QObject):
             self.running = False
         return token
 
-    def _album(self, album: tidy.AlbumTidy, options: ReplayGainOptions, cancel: CancelToken, out: _Lines,
+    def _album(self, album: tidy.AlbumTidy, options: ReplayGainOptions, cancel: CancelToken, out: BatchedLines,
                result: TidyFinished) -> AlbumDone:
         done = AlbumDone(album.folder)
         offers: list[cleanup.Item] = []
@@ -244,7 +199,7 @@ class TidyRunner(QObject):
         result.offers += offers
         return done
 
-    def _split(self, folder: tidy.FolderPlan, cancel: CancelToken, out: _Lines, done: AlbumDone,
+    def _split(self, folder: tidy.FolderPlan, cancel: CancelToken, out: BatchedLines, done: AlbumDone,
                where: str) -> bool:
         plan = folder.split
         assert plan is not None
@@ -276,20 +231,6 @@ class TidyRunner(QObject):
     def cancel(self) -> None:
         self._cancel.cancel()
 
-    def close(self) -> None:
-        if not self._closed:
-            self._closed = True
-            self._cancel.cancel()
-            self._pool.shutdown(wait=True)
-
-    def _submit(self, fn) -> bool:
-        if self._closed:
-            return False
-        try:
-            self._pool.submit(fn)
-        except RuntimeError:
-            return False
-        return True
 
 
 def report_text(result: TidyFinished) -> str:

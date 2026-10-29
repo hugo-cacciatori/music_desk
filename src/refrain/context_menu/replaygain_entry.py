@@ -18,6 +18,7 @@ from refrain.core.path_locks import LockedError, PathLocks
 from refrain.services.replaygain_job import DISCOGRAPHY, LOOSE, TRACKS, Finished, ReplayGainRunner
 from refrain.ui import theme
 from refrain.ui.controllers.tools import ENTRY_KINDS, entry_problem, entry_title
+from refrain.ui.qt_util import bring_to_front
 from refrain.ui.shell import Shell
 from refrain.ui.tools.rg_report import ReplayGainView
 from refrain.ui.tools.tool_cards import REPLAYGAIN, ToolCards
@@ -86,11 +87,7 @@ class ReplayGainWindow(QWidget):
         return True
 
     def bring_to_front(self) -> None:
-        if self.isMinimized():
-            self.showNormal()
-        self.show()
-        self.raise_()
-        self.activateWindow()
+        bring_to_front(self)
 
     def _finished(self, finished: Finished) -> None:
         self.view.show_result(finished)

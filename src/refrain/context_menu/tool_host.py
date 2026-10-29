@@ -21,6 +21,7 @@ from refrain.core.path_locks import PathLocks
 from refrain.ui import theme
 from refrain.ui.controllers.split import SplitController
 from refrain.ui.controllers.trim import TrimController
+from refrain.ui.qt_util import bring_to_front
 from refrain.ui.shell import Shell
 from refrain.ui.toast import Toast
 from refrain.ui.tools.tool_cards import ToolCards
@@ -66,11 +67,7 @@ class ToolHost(QMainWindow):
         return tuple(self.settings.name_masks), self.settings.name_replacement
 
     def bring_to_front(self) -> None:
-        if self.isMinimized():
-            self.showNormal()
-        self.show()
-        self.raise_()
-        self.activateWindow()
+        bring_to_front(self)
 
     # -- the window --
 

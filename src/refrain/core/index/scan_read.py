@@ -8,11 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from refrain.core.lyrics import cache_key, track_from_fields
-from refrain.core.tags import TaggedFile
+from refrain.core.tags import REPLAYGAIN_KEYS, TaggedFile
 
 log = logging.getLogger(__name__)
 
-RG_KEYS = ("replaygain_track_gain", "replaygain_track_peak", "replaygain_album_gain", "replaygain_album_peak")
 TRACK_COLUMNS = (
     "format", "tag_family", "title", "artist", "albumartist", "album", "track", "track_total", "disc", "disc_total",
     "date", "genre", "composer", "comment", "has_lyrics_tag", "has_cover", "duration", "bitrate", "sample_rate",
@@ -69,7 +68,7 @@ def read_file(path: Path, size: int | None, mtime: float | None) -> tuple[dict, 
             sample_rate=stream.sample_rate, bit_depth=stream.bits_per_sample, channels=stream.channels,
             lyrics_key=cache_key(track.artist, track.title) if track.artist and track.title else None,
         )
-        for key in RG_KEYS:
+        for key in REPLAYGAIN_KEYS:
             row["rg_" + key.removeprefix("replaygain_")] = tagged.get_replaygain(key)
         return row, None
     except Exception as e:  # noqa: BLE001 - a broken file is indexed with its error, the scan goes on

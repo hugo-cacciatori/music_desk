@@ -22,6 +22,8 @@ from refrain.core.replaygain.options import DEFAULT_OPTIONS, ReplayGainOptions
 from refrain.core.replaygain.run_log import Clock, NullReporter, Reporter, RunLog, format_gain, plural
 from refrain.core.tags import TaggedFile
 
+SUMMARY_COLUMNS = ("Album", "Result", "Album gain", "Leveled to", "Files changed")  # the summary's table
+
 
 def find_album_folders(root: Path, options: ReplayGainOptions) -> list[Path]:
     """The folders under root (root included) that directly hold audio files rsgain can scan.
@@ -150,7 +152,7 @@ def process_discography(root: str | Path, options: ReplayGainOptions = DEFAULT_O
 
 def discography_summary_text(root: Path, options: ReplayGainOptions, start: datetime, duration: float,
                              albums: list[AlbumOutcome], target: float | None, cancelled: bool = False) -> str:
-    header = ("Album", "Result", "Album gain", "Leveled to", "Files changed")
+    header = SUMMARY_COLUMNS
     rows = []
     for album in albums:
         is_leveled = album.changed is not None

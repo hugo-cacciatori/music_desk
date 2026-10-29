@@ -11,9 +11,6 @@ a second. Cancel stops the running rsgain and the albums after it; nothing is le
 
 import logging
 import os
-import threading
-import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,6 +20,7 @@ from refrain.core import replaygain, rsgain
 from refrain.core.cancel import CancelToken
 from refrain.core.path_locks import PathLocks
 from refrain.core.replaygain import DiscographyResult, LooseResult, ReplayGainOptions, RunLog
+from refrain.services.job_runner import BatchedLines, JobRunner
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +29,6 @@ ALBUM, DISCOGRAPHY = "album", "discography"  # one folder
 ALBUMS = "albums"  # several folders, each as an album, in turn
 TRACKS = "tracks"  # tracks of one folder, as an album: the folder's other files aren't measured nor tagged
 LOOSE = "loose"  # tracks, each on its own, with no log (core.replaygain.process_loose_tracks)
-LINE_INTERVAL = 0.1  # seconds between batches of log lines
 
 
 @dataclass
@@ -67,58 +64,16 @@ class Finished:
         return sorted(set(self.paths)) or [self.folder]
 
 
-class _SignalReporter:
-    """core.replaygain.Reporter → the runner's signals, with log lines batched."""
-
-    def __init__(self, runner: "ReplayGainRunner") -> None:
-        self._runner = runner
-        self._lines: list[str] = []
-        self._last = 0.0
-        self._lock = threading.Lock()  # rsgain's reader thread and the job thread both report
-
-    def _line(self, text: str) -> None:
-        with self._lock:
-            self._lines.append(text)
-            if time.monotonic() - self._last < LINE_INTERVAL:
-                return
-            lines, self._lines, self._last = self._lines, [], time.monotonic()
-        self._runner.lines.emit(lines)
-
-    def flush(self) -> None:
-        with self._lock:
-            lines, self._lines = self._lines, []
-        if lines:
-            self._runner.lines.emit(lines)
-
-    def info(self, message: str) -> None:
-        self._line(message)
-
-    def warn(self, message: str) -> None:
-        self._line(f"WARNING  {message}")
-
-    def error(self, message: str) -> None:
-        self._line(f"ERROR  {message}")
-
-    def progress(self, done: int, total: int, label: str) -> None:
-        self.flush()
-        self._runner.progress.emit(done, total, label)
-
-
-class ReplayGainRunner(QObject):
+class ReplayGainRunner(JobRunner):
     lines = Signal(object)  # list[str]: log lines, batched
     progress = Signal(int, int, str)  # albums done, albums in all, the album now running
     finished = Signal(object)  # Finished
 
     def __init__(self, locks: PathLocks, parent: QObject | None = None, *, scanner=rsgain.scan,
                  exe: Path | None = None) -> None:
-        super().__init__(parent)
-        self.locks = locks
+        super().__init__(locks, "replaygain-tool", parent)
         self.scanner = scanner  # replaced in tests by a fake that tags as rsgain would
         self.exe = exe
-        self._pool = ThreadPoolExecutor(1, thread_name_prefix="replaygain-tool")
-        self._token = 0
-        self._cancel = CancelToken()
-        self._closed = False
         self.running = False
 
     def start(self, kind: str, paths: list[Path], options: ReplayGainOptions) -> int:
@@ -133,7 +88,7 @@ class ReplayGainRunner(QObject):
         folder = paths[0].parent if tracks else paths[0]
 
         def job() -> None:
-            reporter = _SignalReporter(self)
+            reporter = BatchedLines(self.lines, self.progress.emit)
             finished = Finished(token, folder, options, kind == DISCOGRAPHY, kind, list(paths))
             try:
                 self._job(finished, cancel, reporter)
@@ -153,7 +108,7 @@ class ReplayGainRunner(QObject):
             self.running = False
         return token
 
-    def _job(self, finished: Finished, cancel: CancelToken, reporter: "_SignalReporter") -> None:
+    def _job(self, finished: Finished, cancel: CancelToken, reporter: BatchedLines) -> None:
         options, kind = finished.options, finished.kind
         if kind == DISCOGRAPHY:
             result = replaygain.process_discography(
@@ -195,17 +150,3 @@ class ReplayGainRunner(QObject):
         """Stop the job: the running rsgain is killed, and the albums after it aren't processed."""
         self._cancel.cancel()
 
-    def close(self) -> None:
-        if not self._closed:
-            self._closed = True
-            self._cancel.cancel()
-            self._pool.shutdown(wait=True)
-
-    def _submit(self, fn) -> bool:
-        if self._closed:
-            return False
-        try:
-            self._pool.submit(fn)
-        except RuntimeError:
-            return False
-        return True

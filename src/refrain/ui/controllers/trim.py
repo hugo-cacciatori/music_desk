@@ -15,13 +15,12 @@ from refrain.core import playlists, trim
 from refrain.core.cue import SourceInfo
 from refrain.core.path_locks import LockedError
 from refrain.services.trim_job import Loaded, PeaksRead, Planned, TrimFinished, TrimRunner
+from refrain.ui.controllers import NO_CUE_PLAYER
 from refrain.ui.trim_page import TrimPage
 
 log = logging.getLogger(__name__)
 
 PLAN_DELAY_MS = 80  # after an edit (a handle dragged, a key typed), the plan follows once it pauses
-NO_CUE_PLAYER = ("No app is set to open .cue sheets. To choose one, open Windows Settings > Apps > Default apps "
-                 "and search for .cue.")
 
 
 def format_line(info: SourceInfo) -> str:

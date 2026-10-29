@@ -22,8 +22,9 @@ WRAP_FROM = 300  # a longer line turns word wrap on
 BREAK_AT = 2000  # longer lines are cut into pieces of this length
 IMAGE_LIMIT = 50 * 1024 * 1024  # larger images aren't decoded
 
-_BOMS = ((b"\xef\xbb\xbf", "utf-8", "UTF-8 (BOM)"), (b"\xff\xfe", "utf-16-le", "UTF-16 LE"),
-         (b"\xfe\xff", "utf-16-be", "UTF-16 BE"))
+# The byte order marks a text file may start with: mark, codec, name.
+BOMS = ((b"\xef\xbb\xbf", "utf-8", "UTF-8 (BOM)"), (b"\xff\xfe", "utf-16-le", "UTF-16 LE"),
+        (b"\xfe\xff", "utf-16-be", "UTF-16 BE"))
 
 
 # The five bytes Windows-1252 assigns no character to: text holding one was written in another code page (Shift-JIS
@@ -45,7 +46,7 @@ def decode(data: bytes, legacy: str = "cp1252", cut: bool = False) -> tuple[str,
     """(text, encoding name) for bytes of unknown encoding: a BOM first, then UTF-8 if the bytes are valid, else
     the `legacy` code page. When the bytes were `cut` from a longer file, a UTF-8 character split at the end still
     counts as UTF-8 (a whole cp1252 file can end with a byte that looks like such a start, so only then)."""
-    for bom, codec, name in _BOMS:
+    for bom, codec, name in BOMS:
         if data.startswith(bom):
             return data[len(bom):].decode(codec, errors="replace"), name
     try:

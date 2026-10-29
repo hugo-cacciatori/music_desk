@@ -10,10 +10,9 @@ from pathlib import Path
 from refrain.core import masks
 from refrain.core.formats import format_for
 from refrain.core.fsops import open_shared
-from refrain.core.tags import Fields, TaggedFile
+from refrain.core.tags import REPLAYGAIN_KEYS, Fields, TaggedFile
 
 FOLDER_COVERS = ("folder.jpg", "cover.jpg", "front.jpg")  # the folder images used when no cover is embedded
-RG_KEYS = ("replaygain_track_gain", "replaygain_track_peak", "replaygain_album_gain", "replaygain_album_peak")
 LUFS_PREFIX = "LUFS Target"
 LOSSLESS_EXTENSIONS = frozenset({".flac", ".wav", ".aif", ".aiff", ".aifc", ".wv", ".tta", ".tak", ".ofr", ".ofs",
                                  ".dsf", ".dff"})  # the ReplayGain tool's comment (SPEC §10B)
@@ -128,7 +127,7 @@ def read_snapshot(path: str | Path, name_masks: Sequence[str] = masks.DEFAULT_MA
         family=tagged.info.family.value, container=tagged.info.container, fields=tagged.fields(),
         codec=stream.codec, duration=stream.duration, bitrate=stream.bitrate, sample_rate=stream.sample_rate,
         bits_per_sample=stream.bits_per_sample, channels=stream.channels,
-        replaygain={key: tagged.get_replaygain(key) for key in RG_KEYS},
+        replaygain={key: tagged.get_replaygain(key) for key in REPLAYGAIN_KEYS},
         cover=cover, cover_source=source, id3_version=id3_version,
         suggested_name=suggestion,
     )

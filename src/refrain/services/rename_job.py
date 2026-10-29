@@ -9,7 +9,6 @@ changed since the preview is skipped, never renamed blindly.
 
 import dataclasses
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +18,7 @@ from refrain.core import rename
 from refrain.core.cancel import CancelToken
 from refrain.core.path_locks import PathLocks
 from refrain.core.rename import RenameOptions, RenamePlan, RenameReport
+from refrain.services.job_runner import JobRunner
 
 log = logging.getLogger(__name__)
 
@@ -40,17 +40,12 @@ class Applied:
     error: str | None = None
 
 
-class RenameRunner(QObject):
+class RenameRunner(JobRunner):
     planned = Signal(object)  # Planned
     applied = Signal(object)  # Applied
 
     def __init__(self, locks: PathLocks, parent: QObject | None = None) -> None:
-        super().__init__(parent)
-        self.locks = locks
-        self._pool = ThreadPoolExecutor(1, thread_name_prefix="rename-tool")
-        self._token = 0
-        self._cancel = CancelToken()
-        self._closed = False
+        super().__init__(locks, "rename-tool", parent)
         self.running = False  # applying (a preview isn't a job: it changes nothing)
 
     def plan(self, folder: str | Path, options: RenameOptions, selection: list[Path] | None = None) -> int:
@@ -116,17 +111,3 @@ class RenameRunner(QObject):
         """Stop the preview or the run in progress (a run stops between two files)."""
         self._cancel.cancel()
 
-    def close(self) -> None:
-        if not self._closed:
-            self._closed = True
-            self._cancel.cancel()
-            self._pool.shutdown(wait=True)
-
-    def _submit(self, fn) -> bool:
-        if self._closed:
-            return False
-        try:
-            self._pool.submit(fn)
-        except RuntimeError:
-            return False
-        return True

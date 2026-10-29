@@ -40,3 +40,12 @@ def cell_text(table: QTableWidget, row: int, column: int) -> str:
     """A table cell's text ("" for a cell without an item)."""
     item = table.item(row, column)
     return item.text() if item is not None else ""
+
+
+def bring_to_front(window: QWidget) -> None:
+    """Show a window in front, restored if it was minimized."""
+    if window.isMinimized():
+        window.showNormal()
+    window.show()
+    window.raise_()
+    window.activateWindow()

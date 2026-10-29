@@ -53,7 +53,7 @@ from refrain.ui.controllers.tools import ToolsController
 from refrain.ui.file_view import FileView
 from refrain.ui.main_toolbars import Toolbars
 from refrain.ui.no_wheel import install_no_wheel
-from refrain.ui.qt_util import app
+from refrain.ui.qt_util import app, bring_to_front
 from refrain.ui.shell import Shell
 from refrain.ui.side_panel.panel import SelectedItem, SidePanel
 from refrain.ui.sidebar import Sidebar
@@ -284,11 +284,7 @@ class MainWindow(QMainWindow):
     # -- a folder from outside the app (SPEC §29) --
 
     def bring_to_front(self) -> None:
-        if self.isMinimized():
-            self.showNormal()
-        self.show()
-        self.raise_()
-        self.activateWindow()
+        bring_to_front(self)
 
     def open_from_outside(self, path: str | None) -> None:
         """A folder from File Explorer's `refrain` keyword, the command line or a later start: the window comes to

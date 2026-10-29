@@ -12,7 +12,6 @@ after them.
 import logging
 import os
 from collections.abc import Callable, Iterable, Sequence
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +26,7 @@ from refrain.core.flac import FlacRunner
 from refrain.core.path_locks import PathLocks
 from refrain.core.split import CutResult, Finished
 from refrain.core.tags import TaggedFile
+from refrain.services.job_runner import JobRunner
 
 log = logging.getLogger(__name__)
 
@@ -78,21 +78,16 @@ def audio_files(folder: Path) -> tuple[str, ...]:
     return tuple(sorted(names, key=fsops.natural_key))
 
 
-class SplitRunner(QObject):
+class SplitRunner(JobRunner):
     loaded = Signal(object)  # Loaded
     planned = Signal(object)  # Planned, for the latest request only
     progress = Signal(int, int, str)  # tracks done, tracks to write, the track now written
     finished = Signal(object)  # SplitFinished
 
     def __init__(self, locks: PathLocks, parent: QObject | None = None, *, flac: Path | None = None) -> None:
-        super().__init__(parent)
-        self.locks = locks
+        super().__init__(locks, "split-tool", parent)
         self.flac = flac or paths.flac_path()
-        self._pool = ThreadPoolExecutor(1, thread_name_prefix="split-tool")
-        self._token = 0
         self._plan_token = 0
-        self._cancel = CancelToken()
-        self._closed = False
         self._sources: dict[tuple[Path, float, int], SourceInfo] = {}  # read once per file version
         self._silence: dict[tuple[Path, float, int, int], bool] = {}
         self.running = False
@@ -222,17 +217,3 @@ class SplitRunner(QObject):
     def cancel(self) -> None:
         self._cancel.cancel()
 
-    def close(self) -> None:
-        if not self._closed:
-            self._closed = True
-            self._cancel.cancel()
-            self._pool.shutdown(wait=True)
-
-    def _submit(self, fn) -> bool:
-        if self._closed:
-            return False
-        try:
-            self._pool.submit(fn)
-        except RuntimeError:
-            return False
-        return True

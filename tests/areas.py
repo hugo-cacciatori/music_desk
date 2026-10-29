@@ -147,8 +147,9 @@ AREAS: dict[str, Area] = {
 }
 
 # Sources every desktop test goes through (the window and what all of it uses): a change runs the whole layer.
-WHOLE_DESKTOP = ("ui/main_window.py", "ui/main_toolbars.py", "ui/status_line.py", "ui/shell.py", "ui/qt_util.py",
-                 "ui/theme.py", "ui/task_header.py", "ui/toast.py", "ui/controllers/__init__.py")
+WHOLE_DESKTOP = ("services/job_runner.py", "ui/main_window.py", "ui/main_toolbars.py", "ui/status_line.py",
+                 "ui/shell.py", "ui/qt_util.py", "ui/theme.py", "ui/task_header.py", "ui/toast.py",
+                 "ui/controllers/__init__.py")
 # Package markers and the entry point: nothing to test on their own.
 NO_TESTS = ("__main__.py", "context_menu/__init__.py", "core/__init__.py", "core/index/__init__.py",
             "services/__init__.py", "ui/__init__.py", "ui/side_panel/__init__.py", "ui/tools/__init__.py")

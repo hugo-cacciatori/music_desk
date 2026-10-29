@@ -14,15 +14,11 @@ from refrain.core.cancel import CancelToken
 from refrain.core.formats import AUDIO_EXTENSIONS, REPLAYGAIN_EXTENSIONS
 from refrain.core.replaygain.options import DEFAULT_OPTIONS, ReplayGainOptions
 from refrain.core.replaygain.run_log import Clock, NullReporter, Reporter, RunLog
-from refrain.core.tags import TaggedFile
+from refrain.core.tags import ALBUM_GAIN, ALBUM_PEAK, TRACK_GAIN, TRACK_PEAK, TaggedFile
 
 log = logging.getLogger(__name__)
 
 
-TRACK_GAIN = "replaygain_track_gain"
-TRACK_PEAK = "replaygain_track_peak"
-ALBUM_GAIN = "replaygain_album_gain"
-ALBUM_PEAK = "replaygain_album_peak"
 
 
 Scanner = Callable[..., rsgain.ScanResult]

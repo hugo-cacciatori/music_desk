@@ -17,6 +17,7 @@ from refrain.core.path_locks import LockedError, PathLocks
 from refrain.services.rename_job import Applied, Planned, RenameRunner
 from refrain.ui import theme
 from refrain.ui.controllers.tools import rename_target_text
+from refrain.ui.qt_util import bring_to_front
 from refrain.ui.tools.rename_preview import RenamePreview
 from refrain.ui.tools.tool_cards import RENAME, ToolCards
 
@@ -77,11 +78,7 @@ class RenameWindow(QWidget):
         self.view.show_applying()
 
     def bring_to_front(self) -> None:
-        if self.isMinimized():
-            self.showNormal()
-        self.show()
-        self.raise_()
-        self.activateWindow()
+        bring_to_front(self)
 
     def _planned(self, result: Planned) -> None:
         if result.token != self._token or result.cancelled:

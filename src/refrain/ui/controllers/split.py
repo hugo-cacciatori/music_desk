@@ -30,13 +30,12 @@ from refrain.core.cue_edit import (
 from refrain.core.path_locks import busy_text
 from refrain.services.split_job import Loaded, Planned, SplitFinished, SplitRunner
 from refrain.ui import track_lengths
+from refrain.ui.controllers import NO_CUE_PLAYER
 from refrain.ui.split_page import SplitPage
 
 log = logging.getLogger(__name__)
 
 PLAN_DELAY_MS = 150  # after an edit, the plan follows once typing pauses
-NO_CUE_PLAYER = ("No app is set to open .cue sheets. To choose one, open Windows Settings > Apps > Default apps "
-                 "and search for .cue.")
 
 
 def plural(count: int, noun: str) -> str:

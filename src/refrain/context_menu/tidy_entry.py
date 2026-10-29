@@ -20,6 +20,7 @@ from refrain.core.path_locks import LockedError, PathLocks
 from refrain.core.replaygain import plural
 from refrain.services.tidy_job import OWNER, TidyFinished, TidyPlanned, TidyRunner, report_text
 from refrain.ui import theme
+from refrain.ui.qt_util import bring_to_front
 from refrain.ui.recycle_window import RecycleWindow
 from refrain.ui.tools.tidy_page import TidyPage
 from refrain.ui.tools.tool_cards import TIDY, ToolCards
@@ -126,11 +127,7 @@ class TidyWindow(QWidget):
         self.offer.raise_()
 
     def bring_to_front(self) -> None:
-        if self.isMinimized():
-            self.showNormal()
-        self.show()
-        self.raise_()
-        self.activateWindow()
+        bring_to_front(self)
 
     def confirm_stop(self) -> bool:
         answer = QMessageBox.question(

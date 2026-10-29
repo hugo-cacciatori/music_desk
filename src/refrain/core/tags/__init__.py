@@ -12,12 +12,17 @@ from refrain.core.tags.asf import (
     unpack_asf_picture,
 )
 from refrain.core.tags.fields import (
+    ALBUM_GAIN,
+    ALBUM_PEAK,
     FIELD_NAMES,
     FRONT_COVER,
     NUMBER_FIELDS,
     RENAME_TEXT_FIELDS,
+    REPLAYGAIN_KEYS,
     REPLAYGAIN_PREFIX,
     TEXT_FIELDS,
+    TRACK_GAIN,
+    TRACK_PEAK,
     Cover,
     Fields,
     StreamInfo,
@@ -37,6 +42,11 @@ from refrain.core.tags.tagged_file import (
 )
 
 __all__ = [
+    "ALBUM_GAIN",
+    "ALBUM_PEAK",
+    "REPLAYGAIN_KEYS",
+    "TRACK_GAIN",
+    "TRACK_PEAK",
     "ADAPTERS",
     "Cover",
     "FIELD_NAMES",

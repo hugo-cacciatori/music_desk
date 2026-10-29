@@ -10,6 +10,11 @@ TEXT_FIELDS = ("title", "artist", "albumartist", "album", "year", "genre", "comp
 RENAME_TEXT_FIELDS = ("title", "artist", "albumartist", "album", "year", "genre", "composer")
 
 FRONT_COVER = 3
+TRACK_GAIN = "replaygain_track_gain"
+TRACK_PEAK = "replaygain_track_peak"
+ALBUM_GAIN = "replaygain_album_gain"
+ALBUM_PEAK = "replaygain_album_peak"
+REPLAYGAIN_KEYS = (TRACK_GAIN, TRACK_PEAK, ALBUM_GAIN, ALBUM_PEAK)  # what rsgain writes
 REPLAYGAIN_PREFIX = "replaygain_"  # every ReplayGain tag name starts so (ignoring case), in every family
 
 

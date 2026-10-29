@@ -31,8 +31,6 @@ from refrain.core.cue import (
 
 _NEWLINE = re.compile(r"\r\n|\r|\n")
 _UNDECODED = re.compile("[\udc80-\udcff]")
-_BOMS = ((b"\xef\xbb\xbf", "utf-8", "UTF-8 (BOM)"), (b"\xff\xfe", "utf-16-le", "UTF-16 LE"),
-         (b"\xfe\xff", "utf-16-be", "UTF-16 BE"))
 UTF8_BOM = b"\xef\xbb\xbf"
 
 # field -> (tag, quoted). A tag is a line's keyword, with REM's second word and INDEX's number.
@@ -405,7 +403,7 @@ class CueDocument:
 def parse_document(data: bytes, encoding: str | None = None, path: Path | None = None) -> CueDocument:
     """`encoding` None is Auto: a BOM, then UTF-8, then Windows-1252 (as the file preview)."""
     bom, codec, label, fell_back = b"", None, None, False
-    for mark, bom_codec, name in _BOMS:
+    for mark, bom_codec, name in preview.BOMS:
         if data.startswith(mark) and (encoding is None or (encoding == "utf-8" and mark == UTF8_BOM)):
             bom, codec, label = mark, bom_codec, name
             break

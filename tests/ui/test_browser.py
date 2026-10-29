@@ -169,9 +169,9 @@ def test_deleted_open_folder_opens_its_parent(qtbot, window, service, library_di
 
 def test_removing_the_root_closes_the_folder(qtbot, window, service, monkeypatch):
     window.open_folder(entry(service, "Artist", "Album"))
-    monkeypatch.setattr(window, "confirm_remove", lambda _root: True)
+    monkeypatch.setattr(window.roots, "confirm_remove", lambda _root: True)
     with qtbot.waitSignal(service.rootsChanged, timeout=5000):
-        window.remove_root(service.roots()[0])
+        window.roots.remove_root(service.roots()[0])
     qtbot.waitUntil(lambda: window.folder_id is None, timeout=5000)
     assert column(window, "name") == [] and window.sidebar.root_texts() == []
 

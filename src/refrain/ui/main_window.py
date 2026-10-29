@@ -18,10 +18,8 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
-    QFileDialog,
     QLabel,
     QMainWindow,
-    QMessageBox,
     QSplitter,
     QStackedWidget,
     QVBoxLayout,
@@ -31,7 +29,6 @@ from PySide6.QtWidgets import (
 from refrain.context_menu.request import EDIT_CUE, NEW_CUE, SPLIT, TRIM
 from refrain.core import playlists
 from refrain.core.index import queries
-from refrain.core.index.roots import AddResult, AddStatus, Root
 from refrain.core.index.scanner import ScanReport, find_folder
 from refrain.core.index.store import path_of
 from refrain.core.path_locks import PathLocks
@@ -49,6 +46,7 @@ from refrain.ui.controllers.delete import DeleteController
 from refrain.ui.controllers.menus import MenuController
 from refrain.ui.controllers.playlist import PlaylistController
 from refrain.ui.controllers.rename import RenameController
+from refrain.ui.controllers.roots import RootsController
 from refrain.ui.controllers.search import SearchController
 from refrain.ui.controllers.tools import ToolsController
 from refrain.ui.file_view import FileView
@@ -146,6 +144,7 @@ class MainWindow(QMainWindow):
         self.tools.cards.hideFoldersChanged.connect(self.set_hide_folders_without_music)  # the Browser page
         self.delete = DeleteController(self, self)  # Delete to the Recycle Bin (SPEC §19)
         self.renamer = RenameController(self, self)  # inline rename (SPEC §11)
+        self.roots = RootsController(self, self)  # the library's folders (SPEC §3)
         self.menus = MenuController(self, self)  # the file list's and the tree's menus (SPEC §5)
         # Library search (SPEC §6): the query is typed in the toolbar, the results replace the file list.
         self.search = SearchController(self, library, self)
@@ -186,13 +185,13 @@ class MainWindow(QMainWindow):
         self._apply_tree()  # hidden by default; refresh_roots applies it again once the folders are known
 
         self.add_folder_action = QAction("&Add folder…", self, shortcut=QKeySequence("Ctrl+O"))
-        self.add_folder_action.triggered.connect(self.add_folder)
+        self.add_folder_action.triggered.connect(self.roots.add_folder)
         self.addAction(self.add_folder_action)  # Ctrl+O; the sidebar's Add folder… is the visible way (0.8.4)
         self.overlay = DropOverlay(self)
         self.toast = Toast(self)
         self.setAcceptDrops(library is not None)
-        self.sidebar.addFolderRequested.connect(self.add_folder)
-        self.sidebar.removeRequested.connect(self.remove_root)
+        self.sidebar.addFolderRequested.connect(self.roots.add_folder)
+        self.sidebar.removeRequested.connect(self.roots.remove_root)
         self.sidebar.folderSelected.connect(self.open_folder)
         self.file_view.folderActivated.connect(self.open_folder)
         self.file_view.fileActivated.connect(lambda entry_id: self.open_files([entry_id]))
@@ -219,7 +218,7 @@ class MainWindow(QMainWindow):
             self.sidebar.setEnabled(False)
         else:
             library.rootsChanged.connect(self.refresh_roots)
-            library.addFinished.connect(self.show_add_results)
+            library.addFinished.connect(self.roots.show_add_results)
             library.failed.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
             library.notice.connect(lambda message: self.statusBar().showMessage(message, STATUS_MS))
             library.indexingPaused.connect(self.status_line.set_indexing_paused)
@@ -794,59 +793,6 @@ class MainWindow(QMainWindow):
         self._keep_open_folder()  # its root may have been removed, or merged into a new one
         self.sidebar.set_roots(self.open_library.roots())
         self._apply_tree()
-
-    def choose_folder(self) -> str:
-        return QFileDialog.getExistingDirectory(self, "Add a music folder to the library")
-
-    def add_folder(self) -> None:
-        if self.library is None:
-            return
-        folder = self.choose_folder()
-        if folder:
-            self.library.add_folders([folder])
-
-    def confirm_remove(self, root: Root) -> bool:
-        answer = QMessageBox.question(
-            self, "Remove from library",
-            f"Remove {root.path} from the library?\n\nNothing on disk changes: only the app's index of this folder "
-            "is deleted. Adding it again rescans it.")
-        return answer == QMessageBox.StandardButton.Yes
-
-    def remove_root(self, root: Root) -> None:
-        if self.library is not None and self.confirm_remove(root):
-            self.library.remove_root(root.id)
-            self.statusBar().showMessage(f"Removed {root.path} from the library. Nothing on disk changed.",
-                                         STATUS_MS)
-
-    def show_add_results(self, results: list[AddResult]) -> None:
-        messages, files = [], []
-        for result in results:
-            match result.status:
-                case AddStatus.ADDED:
-                    messages.append(f"Added {result.path} to the library.")
-                case AddStatus.MERGED:
-                    count = len(result.merged)
-                    messages.append(f"Added {result.path} to the library. {count} library folder"
-                                    f"{'s' if count > 1 else ''} inside it became its subfolders.")
-                case AddStatus.ALREADY_ROOT:
-                    messages.append(f"{result.path} is already in the library.")
-                case AddStatus.INSIDE_ROOT:
-                    messages.append(f"{result.path} is already in the library.")
-                case AddStatus.IS_A_FILE:
-                    files.append(result.path)
-                case AddStatus.NOT_A_FOLDER:
-                    messages.append(f"{result.path} can't be added: the folder doesn't exist or can't be reached.")
-        if messages:
-            self.statusBar().showMessage(" ".join(messages), STATUS_MS)
-        last = next((r for r in reversed(results) if r.root_id is not None), None)
-        if last is not None and last.root_id is not None:
-            self.sidebar.select_root(last.root_id)
-        if files:
-            folders = list(dict.fromkeys(os.path.dirname(path) for path in files))
-            what = "its folder" if len(folders) == 1 else "their folders"
-            self.toast.show_message(
-                "Only folders can be added to the library, not files.", f"Add {what}",
-                lambda: self.open_library.add_folders(folders))
 
     # -- drag and drop (folders in; dragging out is disabled elsewhere) --
 

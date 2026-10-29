@@ -112,7 +112,7 @@ def test_service_keeps_roots_across_restarts(qtbot, tmp_path, library_dir):
 # -- window --
 
 def test_add_folder_through_the_picker(qtbot, window, service, library_dir, monkeypatch):
-    monkeypatch.setattr(window, "choose_folder", lambda: str(library_dir / "Music"))
+    monkeypatch.setattr(window.roots, "choose_folder", lambda: str(library_dir / "Music"))
     with qtbot.waitSignal(service.addFinished, timeout=5000):
         window.add_folder_action.trigger()
     qtbot.waitUntil(lambda: sidebar_texts(window) == [str(library_dir / "Music")])
@@ -131,8 +131,8 @@ def test_the_tree_shows_while_the_library_is_empty(qtbot, window, service, libra
 
 
 def test_cancelled_picker_adds_nothing(window, monkeypatch):
-    monkeypatch.setattr(window, "choose_folder", lambda: "")
-    window.add_folder()
+    monkeypatch.setattr(window.roots, "choose_folder", lambda: "")
+    window.roots.add_folder()
     assert sidebar_texts(window) == []
     assert window.sidebar.empty_hint.isVisibleTo(window)
 
@@ -151,13 +151,13 @@ def test_remove_asks_first(qtbot, window, service, library_dir, monkeypatch):
     qtbot.waitUntil(lambda: len(sidebar_texts(window)) == 1)
     root = service.roots()[0]
 
-    monkeypatch.setattr(window, "confirm_remove", lambda _root: False)
-    window.remove_root(root)
+    monkeypatch.setattr(window.roots, "confirm_remove", lambda _root: False)
+    window.roots.remove_root(root)
     assert len(service.roots()) == 1
 
-    monkeypatch.setattr(window, "confirm_remove", lambda _root: True)
+    monkeypatch.setattr(window.roots, "confirm_remove", lambda _root: True)
     with qtbot.waitSignal(service.rootsChanged, timeout=5000):
-        window.remove_root(root)
+        window.roots.remove_root(root)
     qtbot.waitUntil(lambda: sidebar_texts(window) == [])
     assert "Nothing on disk changed" in window.statusBar().currentMessage()
 

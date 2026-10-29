@@ -111,6 +111,7 @@ public sealed partial class AddressBar : Grid
             menu.Items.Add(item);
         }
         if (menu.Items.Count == 0) menu.Items.Add(new MenuFlyoutItem { Text = "No subfolders", IsEnabled = false });
+        menu.Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft;
         menu.ShowAt(anchor);
     }
 
@@ -139,6 +140,7 @@ public sealed partial class AddressBar : Grid
             item.Click += (_, _) => FolderChosen?.Invoke(id);
             menu.Items.Add(item);
         }
+        menu.Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft;
         overflow.Flyout = menu;
     }
 

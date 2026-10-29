@@ -190,6 +190,7 @@ public sealed partial class OptionsWindow : Window
             };
             fields.Items.Add(item);
         }
+        fields.Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft;
         insert.Flyout = fields;
         ToolTipService.SetToolTip(insert, "Insert a field at the cursor");
         page.Children.Add(insert);

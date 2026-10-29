@@ -221,6 +221,7 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(about);
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(exit);
+        menu.Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedRight;  // down from the button, never up (Hugo, 2026-10-29)
         more.Flyout = menu;
         more.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetColumn(more, 1);

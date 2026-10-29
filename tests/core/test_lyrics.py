@@ -54,7 +54,7 @@ def test_request_shape():
     fake = FakeUrlopen({"id": 1})
     assert client(fake).get("get", artist_name="A B", track_name="T&U", duration=3) == {"id": 1}
     assert fake.urls == ["https://lrclib.net/api/get?artist_name=A+B&track_name=T%26U&duration=3"]
-    assert fake.user_agents[0].startswith("MusicDesk/") and fake.user_agents[0].endswith("(personal music library app)")
+    assert fake.user_agents[0].startswith("Refrain/") and fake.user_agents[0].endswith("(personal music library app)")
     assert fake.timeouts == [30]
 
 

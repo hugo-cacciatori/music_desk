@@ -1,6 +1,6 @@
 """Windows alone (`ToolHost`, SPEC §31), driven by the app's controllers, with the real bundled flac on copied
-fixtures: the track's Trim page ("Trim this track…" with MusicDesk closed), and the cue editor ("Edit this cue
-sheet…", MusicDesk open or closed). The process ends when the last window closes without a main window. The Split
+fixtures: the track's Trim page ("Trim this track…" with Refrain closed), and the cue editor ("Edit this cue
+sheet…", Refrain open or closed). The process ends when the last window closes without a main window. The Split
 entry: test_right_click_split.py."""
 
 import shutil
@@ -52,7 +52,7 @@ def alone(qtbot, starter, entry, paths, kind):
     return window
 
 
-# -- "Edit this cue sheet…": the cue editor alone, MusicDesk open or closed --
+# -- "Edit this cue sheet…": the cue editor alone, Refrain open or closed --
 
 def editor(qtbot, starter, paths) -> CueEditorWindow:
     starter.run_entry(menu.EDIT_CUE, [str(p) for p in paths])
@@ -72,7 +72,7 @@ def test_the_editor_alone_edits_and_saves(qtbot, starter, albums, quits):
     split = window.controller
     split.recycle = lambda _path: None  # the old version would go to the Recycle Bin: a recorder here
     split.check_recycle = lambda _path: None
-    assert starter.window is None and window.windowTitle() == "MusicDesk · Edit cue sheet"
+    assert starter.window is None and window.windowTitle() == "Refrain · Edit cue sheet"
     qtbot.waitUntil(lambda: split.page.state == "editing" and not split._planning, timeout=20000)
     # An editor: Save, Save as and Preview in player; no Split (the Split entry does that), no Back to a list.
     assert on_screen(split.page) == ["Save", "Save as…", "Preview in player"]
@@ -104,7 +104,7 @@ def test_the_editor_refuses_anything_but_one_cue(qtbot, starter, albums, quits):
     assert page.state == "error" and on_screen(page) == ["Close"]
 
 
-def test_with_musicdesk_open_the_editor_is_its_own_window(qtbot, starter, service, albums, quits):
+def test_with_refrain_open_the_editor_is_its_own_window(qtbot, starter, service, albums, quits):
     starter.open_folder(None)
     main = starter.window
     qtbot.addWidget(main)
@@ -120,7 +120,7 @@ def test_with_musicdesk_open_the_editor_is_its_own_window(qtbot, starter, servic
 def test_trim_alone_trims(qtbot, starter, albums, quits):
     window = alone(qtbot, starter, menu.TRIM, [albums / "tone.wav"], TrimWindow)
     trim = window.controller
-    assert window.windowTitle() == "MusicDesk · Trim"
+    assert window.windowTitle() == "Refrain · Trim"
     qtbot.waitUntil(lambda: trim.page.state == "editing" and trim.plan is not None and not trim._planning,
                     timeout=10000)
     trim.page.start_edit.setText("0:00.500")

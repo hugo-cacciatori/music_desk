@@ -1,8 +1,8 @@
-"""One MusicDesk at a time (SPEC §29): a second start hands its folder, or its right-click entry and paths (SPEC
+"""One Refrain at a time (SPEC §29): a second start hands its folder, or its right-click entry and paths (SPEC
 §31), to the running one and exits.
 
 The running app listens on a local socket (a named pipe on Windows) named per Windows user; a run from source uses
-its own name, so it never hands over to an installed MusicDesk. A message is one JSON line:
+its own name, so it never hands over to an installed Refrain. A message is one JSON line:
 {"folder": str | null, "entry": str | null, "paths": [str]}; a message without "entry" is a folder's.
 """
 
@@ -28,13 +28,13 @@ def server_name() -> str:
     except Exception:  # noqa: BLE001 - no user name: one name for all
         user = "user"
     suffix = "" if getattr(sys, "frozen", False) else "-dev"
-    return f"MusicDesk-{user}{suffix}"
+    return f"Refrain-{user}{suffix}"
 
 
 def hand_over(folder: str | None, name: str | None = None, entry: str | None = None,
               paths: Sequence[str] = ()) -> bool:
     """Send `folder` (or None: just come to the front), or a right-click `entry` and its `paths`, to a running
-    MusicDesk. False when none is running."""
+    Refrain. False when none is running."""
     socket = QLocalSocket()
     socket.connectToServer(name or server_name())
     if not socket.waitForConnected(CONNECT_MS):
@@ -45,7 +45,7 @@ def hand_over(folder: str | None, name: str | None = None, entry: str | None = N
     socket.flush()
     socket.waitForBytesWritten(CONNECT_MS)
     socket.disconnectFromServer()
-    log.info("handed %s over to the running MusicDesk", entry or folder or "nothing")
+    log.info("handed %s over to the running Refrain", entry or folder or "nothing")
     return True
 
 

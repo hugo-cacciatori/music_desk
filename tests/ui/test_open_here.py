@@ -1,5 +1,5 @@
-"""Opening MusicDesk on a folder from outside (SPEC §29): the folder argument, one instance at a time, and
-MusicDeskHere.exe."""
+"""Opening Refrain on a folder from outside (SPEC §29): the folder argument, one instance at a time, and
+RefrainHere.exe."""
 
 import os
 import shutil
@@ -73,7 +73,7 @@ def start_later(name: str, folder: str | None) -> subprocess.Popen:
 
 
 def test_a_later_start_hands_its_folder_over(qtbot):
-    name = f"MusicDesk-test-{uuid.uuid4().hex}"
+    name = f"Refrain-test-{uuid.uuid4().hex}"
     server = InstanceServer(name)
     assert server.listening
     received = []
@@ -87,7 +87,7 @@ def test_a_later_start_hands_its_folder_over(qtbot):
 
 
 def test_no_running_app_means_no_hand_over():
-    assert not hand_over("D:/Music", f"MusicDesk-test-{uuid.uuid4().hex}")
+    assert not hand_over("D:/Music", f"Refrain-test-{uuid.uuid4().hex}")
 
 
 def test_folder_argument():
@@ -95,12 +95,12 @@ def test_folder_argument():
     assert folder_argument(["--verbose", r"D:\Music"]) == r"D:\Music"
 
 
-# -- MusicDeskHere.exe --
+# -- RefrainHere.exe --
 
-def test_here_starts_musicdesk_on_its_working_directory():
+def test_here_starts_refrain_on_its_working_directory():
     calls = []
-    assert here.main(cwd=r"D:\Music\Album", executable=r"C:\Program Files\MusicDesk\MusicDeskHere.exe",
+    assert here.main(cwd=r"D:\Music\Album", executable=r"C:\Program Files\Refrain\RefrainHere.exe",
                      launch=lambda args, **kwargs: calls.append((args, kwargs)), allow_foreground=lambda: None) == 0
     [(args, kwargs)] = calls
-    assert args == [r"C:\Program Files\MusicDesk\MusicDesk.exe", r"D:\Music\Album"]
-    assert kwargs["cwd"] == r"C:\Program Files\MusicDesk"
+    assert args == [r"C:\Program Files\Refrain\Refrain.exe", r"D:\Music\Album"]
+    assert kwargs["cwd"] == r"C:\Program Files\Refrain"

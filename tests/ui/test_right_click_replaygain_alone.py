@@ -1,4 +1,4 @@
-"""The right-click ReplayGain entries with MusicDesk not open (SPEC §31): the ReplayGain page alone in a window of
+"""The right-click ReplayGain entries with Refrain not open (SPEC §31): the ReplayGain page alone in a window of
 its own, no main window; the process ends when the last entry's window closes. A fake scanner tags files as rsgain
 would."""
 

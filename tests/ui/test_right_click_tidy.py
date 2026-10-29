@@ -1,4 +1,4 @@
-"""The right-click Tidy with MusicDesk open (SPEC §31, §35): one or several folders make one plan in the Tidy
+"""The right-click Tidy with Refrain open (SPEC §31, §35): one or several folders make one plan in the Tidy
 window, beside the main window, one run (the split with the real bundled flac, ReplayGain with a fake scanner), one
 report and one Redundant files window; the main window's index re-reads every tree."""
 

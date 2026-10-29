@@ -2,7 +2,7 @@
 their selection into the playlist builder.
 
 The drag carries entry ids in an app-only format, never file URLs or text, and offers only a copy. File Explorer
-(and any other app) understands neither, so a drop outside MusicDesk does nothing (Ground rule 1).
+(and any other app) understands neither, so a drop outside Refrain does nothing (Ground rule 1).
 """
 
 import json
@@ -12,7 +12,7 @@ from PySide6.QtCore import QMimeData, Qt
 from PySide6.QtGui import QDrag
 from PySide6.QtWidgets import QTreeView
 
-ENTRY_IDS_MIME = "application/x-musicdesk-entry-ids"
+ENTRY_IDS_MIME = "application/x-refrain-entry-ids"
 
 
 def entry_mime(ids: list[int]) -> QMimeData:

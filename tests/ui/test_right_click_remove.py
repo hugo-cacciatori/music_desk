@@ -1,4 +1,4 @@
-"""The right-click Remove ReplayGain tags with MusicDesk open (SPEC §31, §35): the clicked tracks only, after the
+"""The right-click Remove ReplayGain tags with Refrain open (SPEC §31, §35): the clicked tracks only, after the
 app's question; a report window of its own says what was done and stays until it is closed."""
 
 import shutil

@@ -1,4 +1,4 @@
-"""The right-click ReplayGain entries with MusicDesk open (SPEC §31, §35): each opens the ReplayGain page in its own
+"""The right-click ReplayGain entries with Refrain open (SPEC §31, §35): each opens the ReplayGain page in its own
 window beside the main window, and starts at once (no recap) with the Options window's target; the page shows the
 report. The main window's index re-reads the folders, and indexing waits while rsgain runs. A fake scanner tags
 files as rsgain would."""

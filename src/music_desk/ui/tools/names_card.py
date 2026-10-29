@@ -23,7 +23,7 @@ from music_desk.core import masks
 from music_desk.ui.tools.rename_card import Card
 
 DESCRIPTION = (
-    "How MusicDesk names music files from their tags: the first mask whose fields are all present is used. "
+    "How Refrain names music files from their tags: the first mask whose fields are all present is used. "
     "Rename, Split albums and the rename suggestion after you save tags all use these masks.")
 MASK_FIELDS = ("track:02", "track", "track_total", "disc", "disc_total", "title", "artist", "albumartist", "album",
                "year", "genre", "composer")

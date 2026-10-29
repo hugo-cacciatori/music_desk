@@ -1,4 +1,4 @@
-"""The right-click Rename with MusicDesk not open (SPEC §31): the app's Rename preview page alone, in a window of its
+"""The right-click Rename with Refrain not open (SPEC §31): the app's Rename preview page alone, in a window of its
 own: the preview list, Apply, then the summary, which is the recap. No main window.
 
 The plan and the run are the app's own (`RenameRunner.plan_paths`, `apply`), with the Options window's File names
@@ -19,7 +19,7 @@ from music_desk.ui.controllers.tools import rename_target_text
 from music_desk.ui.tools.rename_preview import RenamePreview
 from music_desk.ui.tools.tool_cards import RENAME, ToolCards
 
-TITLE = "MusicDesk · Rename from tags"
+TITLE = "Refrain · Rename from tags"
 
 
 class RenameWindow(QWidget):

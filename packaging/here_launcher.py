@@ -1,4 +1,4 @@
-"""PyInstaller entry point of MusicDeskHere.exe (SPEC §29): the `musicdesk` keyword in File Explorer runs it."""
+"""PyInstaller entry point of RefrainHere.exe (SPEC §29): the `refrain` keyword in File Explorer runs it."""
 
 import sys
 

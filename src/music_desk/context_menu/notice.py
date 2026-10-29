@@ -12,7 +12,7 @@ class NoticeWindow(QWidget):
 
     def __init__(self, title: str, text: str, parent: QWidget | None = None) -> None:
         super().__init__(parent, Qt.WindowType.Window)
-        self.setWindowTitle(f"MusicDesk · {title}")
+        self.setWindowTitle(f"Refrain · {title}")
         self.message = QLabel(text)
         self.message.setWordWrap(True)
         self.message.setMinimumWidth(360)

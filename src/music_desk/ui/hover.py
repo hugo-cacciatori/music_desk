@@ -29,7 +29,7 @@ MENU_TIPS = {
     "Play selection": "Play the selected audio files in your default player, as a temporary playlist",
     "Play folder": "Play this folder's tracks in your default player, as a temporary playlist",
     "Play folder and subfolders": "Play the tracks of this folder and of all its subfolders in your default player",
-    "Rescan": "Read this folder from the disk again, to show changes made outside MusicDesk",
+    "Rescan": "Read this folder from the disk again, to show changes made outside Refrain",
     "Options": "Every setting of the app, in one window: file names, Rename, ReplayGain, Clean up, Split, Trim, "
                "Browser",
     "Delete": "Send to the Recycle Bin, at once (restore it from there)",

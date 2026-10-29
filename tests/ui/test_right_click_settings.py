@@ -55,7 +55,7 @@ def test_first_track(library_dir, tmp_path):
 # -- a running copy --
 
 def test_a_later_start_hands_its_entry_over(qtbot):
-    name = f"MusicDesk-test-{uuid.uuid4().hex}"
+    name = f"Refrain-test-{uuid.uuid4().hex}"
     server = InstanceServer(name)
     entries, folders = [], []
     server.entryRequested.connect(lambda entry, paths: entries.append((entry, paths)))

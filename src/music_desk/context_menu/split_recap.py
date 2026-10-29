@@ -5,7 +5,7 @@ until the window is closed.
 
 The defaults are the cue preview's Split's: every track, the sheet's folder, the File names masks, the sheet's
 encoding as read. A sheet that can't be split as it is says why, with Split greyed: "Edit this cue sheet…" in the
-right-click menu fixes it. The same window shows with MusicDesk open (its index then re-reads the folder) or
+right-click menu fixes it. The same window shows with Refrain open (its index then re-reads the folder) or
 closed.
 """
 
@@ -36,8 +36,8 @@ from music_desk.services.split_job import Loaded, Planned, SplitFinished, SplitR
 from music_desk.ui.controllers.split import plural, report_text
 from music_desk.ui.tools.tool_cards import ToolCards
 
-TITLE = "MusicDesk · Split"
-FIX_IT = 'To fix it, use "Edit this cue sheet…" in the right-click menu, or Edit… on its preview in MusicDesk.'
+TITLE = "Refrain · Split"
+FIX_IT = 'To fix it, use "Edit this cue sheet…" in the right-click menu, or Edit… on its preview in Refrain.'
 
 
 def clock(samples: int, rate: int) -> str:

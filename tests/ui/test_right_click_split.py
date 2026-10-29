@@ -1,6 +1,6 @@
 """The right-click "Split this cue sheet…" (SPEC §31, Hugo 2026-10-24): a recap of what the split will do, then
 Split or Cancel only; the split runs in the same window (the real bundled flac, on copied fixtures), then its report.
-The same window with MusicDesk open (beside the main window, whose index re-reads the folder) or closed. 0.9.0
+The same window with Refrain open (beside the main window, whose index re-reads the folder) or closed. 0.9.0
 opened the cue editor instead, whose Split button is hidden: these tests check the button is on screen, not only
 clickable in code."""
 
@@ -89,7 +89,7 @@ def test_a_sheet_that_needs_a_look_says_why(qtbot, starter, albums, quits):
     assert "data track" in window.message.text()
 
 
-def test_with_musicdesk_open_the_same_window(qtbot, starter, service, albums, quits, monkeypatch):
+def test_with_refrain_open_the_same_window(qtbot, starter, service, albums, quits, monkeypatch):
     starter.open_folder(None)
     main = starter.window
     qtbot.addWidget(main)

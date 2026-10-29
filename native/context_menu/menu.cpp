@@ -1,13 +1,13 @@
-// MusicDeskMenu.dll: the MusicDesk submenu in File Explorer's classic right-click menu (SPEC §31).
+// RefrainMenu.dll: the Refrain submenu in File Explorer's classic right-click menu (SPEC §31).
 //
 // A classic in-process IContextMenu handler, as 7-Zip's. It stays small: it looks only at what was right-clicked
 // (empty space, folders, files: their kinds, never their contents), builds the submenu, and on a click starts
-// MusicDesk.exe (beside this DLL) once, with the entry and every path. Every action stays in the Python app.
+// Refrain.exe (beside this DLL) once, with the entry and every path. Every action stays in the Python app.
 // The paths go through a list file in %LOCALAPPDATA%\MusicDesk\menu\ (one per line, UTF-8), so a large selection
-// isn't cut by the command line's length limit; MusicDesk reads and deletes it.
+// isn't cut by the command line's length limit; Refrain reads and deletes it.
 //
 // Built by packaging/build_menu.py; registered by the installer (SPEC §31). Two exports beside COM's,
-// MusicDeskMenu_Entries and MusicDeskMenu_Command, run the same code for tests/test_menu_handler.py.
+// RefrainMenu_Entries and RefrainMenu_Command, run the same code for tests/test_menu_handler.py.
 
 #include <windows.h>
 #include <shlobj.h>
@@ -20,7 +20,7 @@
 #include <vector>
 
 // {366C8DAE-145F-40D0-B273-8AFE153DD3F5}: never change it, the installer registers it.
-static const CLSID CLSID_MusicDeskMenu = {0x366c8dae, 0x145f, 0x40d0, {0xb2, 0x73, 0x8a, 0xfe, 0x15, 0x3d, 0xd3, 0xf5}};
+static const CLSID CLSID_RefrainMenu = {0x366c8dae, 0x145f, 0x40d0, {0xb2, 0x73, 0x8a, 0xfe, 0x15, 0x3d, 0xd3, 0xf5}};
 
 static HINSTANCE g_module = nullptr;
 static LONG g_objects = 0;
@@ -88,39 +88,39 @@ static void count_kinds(Selection& selection) {
 }
 
 struct Entry {
-    const wchar_t* verb;  // also what MusicDesk is asked: "--" + the verb's part after "musicdesk."
+    const wchar_t* verb;  // also what Refrain is asked: "--" + the verb's part after "refrain."
     const wchar_t* help;
 };
 
-static const Entry OPEN = {L"musicdesk.open", L"Opens this folder in MusicDesk"};
-static const Entry RG_ALBUM = {L"musicdesk.replaygain-album",
-                               L"Runs ReplayGain on this folder as one album, with the target set in MusicDesk"};
-static const Entry RG_DISCOGRAPHY = {L"musicdesk.replaygain-discography",
+static const Entry OPEN = {L"refrain.open", L"Opens this folder in Refrain"};
+static const Entry RG_ALBUM = {L"refrain.replaygain-album",
+                               L"Runs ReplayGain on this folder as one album, with the target set in Refrain"};
+static const Entry RG_DISCOGRAPHY = {L"refrain.replaygain-discography",
                                      L"Runs ReplayGain on each album in this folder, then levels them together"};
-static const Entry RG_ALBUMS = {L"musicdesk.replaygain-albums",
+static const Entry RG_ALBUMS = {L"refrain.replaygain-albums",
                                 L"Runs ReplayGain on each folder as its own album, one after another"};
-static const Entry RG_TRACKS = {L"musicdesk.replaygain-tracks",
+static const Entry RG_TRACKS = {L"refrain.replaygain-tracks",
                                 L"Runs ReplayGain on the selected tracks as one album; the folder's other tracks "
                                 L"are left as they are"};
-static const Entry RG_LOOSE = {L"musicdesk.replaygain-loose",
+static const Entry RG_LOOSE = {L"refrain.replaygain-loose",
                                L"Runs ReplayGain on each selected track alone, as its own album, with no log"};
-static const Entry RENAME = {L"musicdesk.rename",
+static const Entry RENAME = {L"refrain.rename",
                              L"Previews renaming the music files from their tags; nothing changes until you apply"};
-static const Entry REMOVE_RG = {L"musicdesk.remove-replaygain",
+static const Entry REMOVE_RG = {L"refrain.remove-replaygain",
                                 L"Removes the selected tracks' ReplayGain tags, after a question"};
-static const Entry TIDY = {L"musicdesk.tidy",
+static const Entry TIDY = {L"refrain.tidy",
                            L"Plans Tidy (split, rename, ReplayGain) on every album here; nothing changes until you run "
                            L"it"};
-static const Entry CLEANUP = {L"musicdesk.cleanup",
+static const Entry CLEANUP = {L"refrain.cleanup",
                               L"Lists the redundant files here; you choose what goes to the Recycle Bin"};
-static const Entry SPLIT = {L"musicdesk.split",
+static const Entry SPLIT = {L"refrain.split",
                             L"Shows what splitting this cue sheet writes; nothing is split until you click Split"};
-static const Entry EDIT_CUE = {L"musicdesk.edit-cue", L"Opens this cue sheet in MusicDesk's cue sheet editor"};
-static const Entry TRIM = {L"musicdesk.trim",
+static const Entry EDIT_CUE = {L"refrain.edit-cue", L"Opens this cue sheet in Refrain's cue sheet editor"};
+static const Entry TRIM = {L"refrain.trim",
                            L"Opens the track's Trim page; the trimmed copy is made only when you click Trim"};
-static const Entry SETTINGS = {L"musicdesk.settings", L"Opens MusicDesk's Options window"};
+static const Entry SETTINGS = {L"refrain.settings", L"Opens Refrain's Options window"};
 
-// The submenu's entries, in order (SPEC §31): Open in MusicDesk on one folder or empty space; the ReplayGain entries
+// The submenu's entries, in order (SPEC §31): Open in Refrain on one folder or empty space; the ReplayGain entries
 // on folders only or on files with tracks rsgain scans (no folder); Rename on any selection with a folder or a
 // music file (empty space too); Remove ReplayGain tags when every item is a track rsgain scans; Tidy and Clean up
 // on folders only (empty space too); Split and Edit on one .cue; Trim on one FLAC, WAV or AIFF file; Settings
@@ -219,7 +219,7 @@ static std::wstring target_text() {
     double target = -15.0;
     std::wstring base = local_app_data();
     if (!base.empty()) {
-        std::wstring file = base + L"\\MusicDesk\\settings.json";
+        std::wstring file = base + L"\\Refrain\\settings.json";
         HANDLE handle = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                     nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (handle != INVALID_HANDLE_VALUE) {
@@ -246,7 +246,7 @@ static std::wstring target_text() {
 static std::wstring label_for(const Entry& entry, const Selection& selection, const std::wstring& target) {
     std::wstring suffix = L" (" + target + L")";
     if (&entry == &OPEN)
-        return L"Open in MusicDesk";
+        return L"Open in Refrain";
     if (&entry == &SETTINGS)
         return L"Settings";
     if (&entry == &RENAME)
@@ -277,7 +277,7 @@ static std::wstring label_for(const Entry& entry, const Selection& selection, co
     return L"ReplayGain: each of these " + std::to_wstring(selection.audio) + L" tracks on its own" + suffix;
 }
 
-// -- starting MusicDesk --
+// -- starting Refrain --
 
 static std::wstring module_folder() {
     wchar_t path[MAX_PATH * 4];
@@ -315,7 +315,7 @@ static std::wstring write_list(const std::vector<std::wstring>& paths) {
     std::wstring base = local_app_data();
     if (base.empty())
         return L"";
-    std::wstring folder = base + L"\\MusicDesk\\menu";
+    std::wstring folder = base + L"\\Refrain\\menu";
     int made = SHCreateDirectoryExW(nullptr, folder.c_str(), nullptr);  // with any missing parent, as the app's
     if (made != ERROR_SUCCESS && made != ERROR_ALREADY_EXISTS && made != ERROR_FILE_EXISTS)
         return L"";
@@ -346,14 +346,14 @@ static std::wstring write_list(const std::vector<std::wstring>& paths) {
     return file;
 }
 
-// The command line an entry starts, writing its list file; "" when it can't. `exe`: MusicDesk.exe's path.
+// The command line an entry starts, writing its list file; "" when it can't. `exe`: Refrain.exe's path.
 static std::wstring command_for(const Entry& entry, const Selection& selection, const std::wstring& exe) {
-    if (&entry == &OPEN)  // as the `musicdesk` keyword (SPEC §29): the folder as the one argument
+    if (&entry == &OPEN)  // as the `refrain` keyword (SPEC §29): the folder as the one argument
         return selection.paths.empty() ? L"" : quoted(exe) + L" " + quoted(selection.paths[0]);
     std::wstring list = write_list(selection.paths);
     if (list.empty())
         return L"";
-    std::wstring option = std::wstring(L"--") + (entry.verb + wcslen(L"musicdesk."));
+    std::wstring option = std::wstring(L"--") + (entry.verb + wcslen(L"refrain."));
     return quoted(exe) + L" " + option + L" --list " + quoted(list);
 }
 
@@ -382,7 +382,7 @@ static std::wstring item_text(HMENU menu, int position) {
     return plain;
 }
 
-// Where the MusicDesk submenu goes (SPEC §31): -1 when the menu already has one (Explorer's navigation pane asked
+// Where the Refrain submenu goes (SPEC §31): -1 when the menu already has one (Explorer's navigation pane asked
 // this handler twice for one folder: two submenus, measured by Hugo 2026-10-24); just below 7-Zip's submenu when it
 // is there (Hugo: "just below 7-Zip"), else where Explorer asks.
 static int place_in(HMENU menu, UINT index) {
@@ -390,7 +390,7 @@ static int place_in(HMENU menu, UINT index) {
     int below_seven_zip = -1;
     for (int i = 0; i < count; ++i) {
         std::wstring text = item_text(menu, i);
-        if (text == L"MusicDesk")
+        if (text == L"Refrain")
             return -1;
         if (text == L"7-Zip")
             below_seven_zip = i + 1;
@@ -400,15 +400,15 @@ static int place_in(HMENU menu, UINT index) {
 
 // -- the COM object --
 
-class MusicDeskMenu : public IShellExtInit, public IContextMenu {
+class RefrainMenu : public IShellExtInit, public IContextMenu {
 public:
-    MusicDeskMenu() { InterlockedIncrement(&g_objects); }
+    RefrainMenu() { InterlockedIncrement(&g_objects); }
 
     // IUnknown
     IFACEMETHODIMP QueryInterface(REFIID riid, void** object) override {
         static const QITAB table[] = {
-            QITABENT(MusicDeskMenu, IShellExtInit),
-            QITABENT(MusicDeskMenu, IContextMenu),
+            QITABENT(RefrainMenu, IShellExtInit),
+            QITABENT(RefrainMenu, IContextMenu),
             {nullptr, 0},
         };
         return QISearch(this, table, riid, object);
@@ -478,7 +478,7 @@ public:
         item.fMask = MIIM_SUBMENU | MIIM_STRING | MIIM_ID;
         item.wID = first + static_cast<UINT>(entries_.size());
         item.hSubMenu = submenu;
-        item.dwTypeData = const_cast<LPWSTR>(L"MusicDesk");
+        item.dwTypeData = const_cast<LPWSTR>(L"Refrain");
         if (!InsertMenuItemW(menu, static_cast<UINT>(position), TRUE, &item)) {
             DestroyMenu(submenu);
             return HRESULT_FROM_WIN32(GetLastError());
@@ -491,9 +491,9 @@ public:
         if (entry == nullptr)
             return E_FAIL;
         std::wstring folder = module_folder();
-        std::wstring command = command_for(*entry, selection_, folder + L"\\MusicDesk.exe");
+        std::wstring command = command_for(*entry, selection_, folder + L"\\Refrain.exe");
         if (command.empty() || !start(command, folder)) {
-            MessageBoxW(info->hwnd, L"MusicDesk couldn't be started. Reinstalling it may help.", L"MusicDesk",
+            MessageBoxW(info->hwnd, L"Refrain couldn't be started. Reinstalling it may help.", L"Refrain",
                         MB_OK | MB_ICONWARNING);
             return E_FAIL;
         }
@@ -517,7 +517,7 @@ public:
     const Selection& selection() const { return selection_; }  // for the tests' exports
 
 private:
-    ~MusicDeskMenu() { InterlockedDecrement(&g_objects); }
+    ~RefrainMenu() { InterlockedDecrement(&g_objects); }
 
     // The entry a click names: an offset, or a verb (ANSI or, with CMIC_MASK_UNICODE, wide).
     const Entry* find(CMINVOKECOMMANDINFO* info) const {
@@ -562,7 +562,7 @@ public:
         *object = nullptr;
         if (outer != nullptr)
             return CLASS_E_NOAGGREGATION;
-        MusicDeskMenu* menu = new (std::nothrow) MusicDeskMenu();
+        RefrainMenu* menu = new (std::nothrow) RefrainMenu();
         if (menu == nullptr)
             return E_OUTOFMEMORY;
         HRESULT result = menu->QueryInterface(riid, object);
@@ -590,7 +590,7 @@ BOOL APIENTRY DllMain(HINSTANCE module, DWORD reason, LPVOID) {
 
 STDAPI DllGetClassObject(REFCLSID clsid, REFIID riid, void** object) {
     *object = nullptr;
-    if (!IsEqualCLSID(clsid, CLSID_MusicDeskMenu))
+    if (!IsEqualCLSID(clsid, CLSID_RefrainMenu))
         return CLASS_E_CLASSNOTAVAILABLE;
     return g_factory.QueryInterface(riid, object);
 }
@@ -643,9 +643,9 @@ static IContextMenu* make_menu(const wchar_t* const* paths, int count, BOOL back
     return menu;
 }
 
-// The submenu Explorer would show, written to `out` as "MusicDesk:" then each entry's verb, a tab and its label,
+// The submenu Explorer would show, written to `out` as "Refrain:" then each entry's verb, a tab and its label,
 // one per line; "" when there is none. Returns the HRESULT of the first step that failed, else S_OK.
-extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Entries(const wchar_t* const* paths, int count,
+extern "C" __declspec(dllexport) HRESULT __stdcall RefrainMenu_Entries(const wchar_t* const* paths, int count,
                                                                         BOOL background, wchar_t* out, int size) {
     out[0] = L'\0';
     IContextMenu* menu = make_menu(paths, count, background);
@@ -677,8 +677,8 @@ extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Entries(const w
 }
 
 // Explorer's menu as labels, one per line, after the handler adds to a menu already holding `existing` (labels,
-// one per line; "MusicDesk" as a submenu, as the handler's own). For the placement tests.
-extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Place(const wchar_t* const* paths, int count,
+// one per line; "Refrain" as a submenu, as the handler's own). For the placement tests.
+extern "C" __declspec(dllexport) HRESULT __stdcall RefrainMenu_Place(const wchar_t* const* paths, int count,
                                                                       BOOL background, const wchar_t* existing,
                                                                       wchar_t* out, int size) {
     out[0] = L'\0';
@@ -691,7 +691,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Place(const wch
     while (start < labels.size()) {
         size_t end = labels.find(L'\n', start);
         std::wstring label = labels.substr(start, end == std::wstring::npos ? std::wstring::npos : end - start);
-        if (label == L"MusicDesk")
+        if (label == L"Refrain")
             AppendMenuW(host, MF_POPUP, reinterpret_cast<UINT_PTR>(CreatePopupMenu()), label.c_str());
         else if (!label.empty())
             AppendMenuW(host, MF_STRING, 1, label.c_str());
@@ -708,9 +708,9 @@ extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Place(const wch
     return SUCCEEDED(result) ? StringCchCopyW(out, size, text.c_str()) : result;
 }
 
-// The command line a click on `verb` would start (with `exe` as MusicDesk.exe), written to `out`; its list file is
+// The command line a click on `verb` would start (with `exe` as Refrain.exe), written to `out`; its list file is
 // written as for real, nothing is started.
-extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Command(const wchar_t* const* paths, int count,
+extern "C" __declspec(dllexport) HRESULT __stdcall RefrainMenu_Command(const wchar_t* const* paths, int count,
                                                                         BOOL background, const wchar_t* verb,
                                                                         const wchar_t* exe, wchar_t* out, int size) {
     out[0] = L'\0';
@@ -720,7 +720,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall MusicDeskMenu_Command(const w
     HMENU host = CreatePopupMenu();
     menu->QueryContextMenu(host, 0, 100, 0x7FFF, CMF_NORMAL);
     DestroyMenu(host);
-    const Selection& selection = static_cast<MusicDeskMenu*>(menu)->selection();
+    const Selection& selection = static_cast<RefrainMenu*>(menu)->selection();
     const Entry* entry = nullptr;
     for (const Entry* candidate : entries_for(selection))
         if (wcscmp(candidate->verb, verb) == 0)

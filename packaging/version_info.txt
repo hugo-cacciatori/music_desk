@@ -1,4 +1,4 @@
-# Windows version resource for MusicDesk.exe (PyInstaller's VSVersionInfo format). Keep the version in step with
+# Windows version resource for Refrain.exe (PyInstaller's VSVersionInfo format). Keep the version in step with
 # music_desk.__version__ (tests/test_packaging.py checks it).
 VSVersionInfo(
   ffi=FixedFileInfo(
@@ -14,11 +14,11 @@ VSVersionInfo(
   kids=[
     StringFileInfo([
       StringTable('040904B0', [
-        StringStruct('FileDescription', 'MusicDesk'),
+        StringStruct('FileDescription', 'Refrain'),
         StringStruct('FileVersion', '0.11.0'),
-        StringStruct('InternalName', 'MusicDesk'),
-        StringStruct('OriginalFilename', 'MusicDesk.exe'),
-        StringStruct('ProductName', 'MusicDesk'),
+        StringStruct('InternalName', 'Refrain'),
+        StringStruct('OriginalFilename', 'Refrain.exe'),
+        StringStruct('ProductName', 'Refrain'),
         StringStruct('ProductVersion', '0.11.0'),
       ])
     ]),

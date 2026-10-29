@@ -1,9 +1,9 @@
-"""`MusicDesk.exe --self-test [report]`: the release gate (AGENTS.md rule 9, SPEC §13 "Release gate").
+"""`Refrain.exe --self-test [report]`: the release gate (AGENTS.md rule 9, SPEC §13 "Release gate").
 
-The built app checks itself before an installer is made from it: run from a copy of dist/MusicDesk/ outside the
+The built app checks itself before an installer is made from it: run from a copy of dist/Refrain/ outside the
 repository, it proves the bundle stands alone. Its resources are found next to the executable, every bundled file is
 there, rsgain and flac run, every module imports, SQLite has the trigram FTS5 the index needs, and Qt builds the main
-window. No window is shown, no other MusicDesk is contacted and no app data is read; the exit code is 0 when every
+window. No window is shown, no other Refrain is contacted and no app data is read; the exit code is 0 when every
 check passes, else 1. The report (one line per check) goes to the `report` file, or to stdout when there is one
 (the frozen app is windowed and has none).
 """
@@ -23,7 +23,7 @@ from music_desk.core.rsgain import rsgain_version
 from music_desk.licenses import COMPONENTS
 
 FLAG = "--self-test"
-COMPANIONS = ("MusicDeskHere.exe", "MusicDeskMenu*.dll")  # beside MusicDesk.exe (SPEC §29, §31)
+COMPANIONS = ("RefrainHere.exe", "RefrainMenu*.dll")  # beside Refrain.exe (SPEC §29, §31)
 
 
 class CheckFailed(Exception):
@@ -39,7 +39,7 @@ def _bundle() -> str:
         raise CheckFailed(f"resources at {root}, outside the program's folder {folder}")
     missing = [pattern for pattern in COMPANIONS if not any(folder.glob(pattern))]
     if missing:
-        raise CheckFailed(f"missing beside MusicDesk.exe: {', '.join(missing)}")
+        raise CheckFailed(f"missing beside Refrain.exe: {', '.join(missing)}")
     return f"resources in {root}"
 
 
@@ -105,7 +105,7 @@ def checks() -> list[tuple[str, Callable[[], str]]]:
 
 
 def run(report: Path | None = None) -> int:
-    lines, failed = [f"MusicDesk {__version__} self-test"], False
+    lines, failed = [f"Refrain {__version__} self-test"], False
     for name, check in checks():
         try:
             lines.append(f"OK    {name}: {check()}")

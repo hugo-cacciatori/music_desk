@@ -83,7 +83,7 @@ def window(qtbot, service):
 
 @pytest.fixture
 def open_app(qtbot, service):
-    """MusicDesk open (SPEC §35): the Starter with its main window. A right-click entry opens its own window beside
+    """Refrain open (SPEC §35): the Starter with its main window. A right-click entry opens its own window beside
     it, on the same locks and cards (`entry_helpers.entry_window`)."""
     starter = Starter(Settings(tree_visible=True), lambda: service, check_tools=False)
     starter.open_folder(None)

@@ -1,6 +1,6 @@
 """Pages of the app alone in a window of their own (SPEC §31, §35), driven by the app's own controller: the cue
 editor ("Edit this cue sheet…", the cue preview's Edit…, New cue sheet…) and the Trim page ("Trim this track…", the
-Metadata tab's Trim…), MusicDesk open or closed.
+Metadata tab's Trim…), Refrain open or closed.
 
 `ToolHost` is the part of the main window those controllers use, and nothing else: the page area, the status bar,
 the toast, the Options window's settings, the shell, and Preview in player. There is no index here:
@@ -36,7 +36,7 @@ class ToolHost(QMainWindow):
 
     def __init__(self, cards: ToolCards, locks: PathLocks, title: str) -> None:
         super().__init__()
-        self.setWindowTitle(f"MusicDesk · {title}")
+        self.setWindowTitle(f"Refrain · {title}")
         self.resize(980, 680)
         self.settings = cards.settings
         self.tools = SimpleNamespace(cards=cards)  # what the controllers read: the Options window's cards

@@ -325,7 +325,7 @@ def test_file_options_holds_every_option(qtbot, window, service, library_dir):
     assert window.menuBar().actions() == []  # the … button instead (SPEC §36 task 3)
     file_menu = window.more_button.menu()
     # No Add folder… or Rescan library since 0.8.4: the sidebar adds folders (Ctrl+O still works).
-    assert [a.text() for a in file_menu.actions() if not a.isSeparator()] == ["&Options…", "&About MusicDesk",
+    assert [a.text() for a in file_menu.actions() if not a.isSeparator()] == ["&Options…", "&About Refrain",
                                                                               "E&xit"]
     assert window.add_folder_action in window.actions()
     options = next(a for a in file_menu.actions() if a.text() == "&Options…")

@@ -101,7 +101,7 @@ FOLDER_ENTRIES = ["ReplayGain as an album (−15 LUFS)", "ReplayGain as a discog
 
 
 def test_file_menu(window, service):
-    """Explorer's entries first, as items of the menu (SPEC §35: no MusicDesk submenu in the app), then the file's
+    """Explorer's entries first, as items of the menu (SPEC §35: no Refrain submenu in the app), then the file's
     own actions."""
     window.open_folder(entry(service, "Artist", "Album"))
     one = window.list_menu([entry(service, "Artist", "Album", "Track 2.flac")])

@@ -1,4 +1,4 @@
-"""The right-click Clean up with MusicDesk open (SPEC §31, §35): every clicked folder read as the app's Clean up does,
+"""The right-click Clean up with Refrain open (SPEC §31, §35): every clicked folder read as the app's Clean up does,
 one Redundant files window for them all, beside the main window, whose index re-reads the folders. The Recycle Bin
 is a recorder."""
 

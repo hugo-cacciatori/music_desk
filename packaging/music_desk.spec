@@ -29,7 +29,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="MusicDesk",
+    name="Refrain",
     debug=False,
     strip=False,
     upx=False,
@@ -37,8 +37,8 @@ exe = EXE(
     icon=str(ROOT / "resources" / "icons" / "music_desk.ico"),
     version=str(ROOT / "packaging" / "version_info.txt"),
 )
-# MusicDeskHere.exe (SPEC §29): what the `musicdesk` keyword in File Explorer's address bar runs. Plain Python, no
-# Qt, so it starts at once; it starts MusicDesk.exe on its working directory.
+# RefrainHere.exe (SPEC §29): what the `refrain` keyword in File Explorer's address bar runs. Plain Python, no
+# Qt, so it starts at once; it starts Refrain.exe on its working directory.
 here = Analysis(
     [str(ROOT / "packaging" / "here_launcher.py")],
     pathex=[str(ROOT / "src")],
@@ -55,7 +55,7 @@ here_exe = EXE(
     here.scripts,
     [],
     exclude_binaries=True,
-    name="MusicDeskHere",
+    name="RefrainHere",
     debug=False,
     strip=False,
     upx=False,
@@ -73,5 +73,5 @@ coll = COLLECT(
     here.datas,
     strip=False,
     upx=False,
-    name="MusicDesk",
+    name="Refrain",
 )

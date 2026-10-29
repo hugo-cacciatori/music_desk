@@ -1,4 +1,4 @@
-LIBRARY MusicDeskMenu
+LIBRARY RefrainMenu
 EXPORTS
     DllGetClassObject PRIVATE
     DllCanUnloadNow PRIVATE

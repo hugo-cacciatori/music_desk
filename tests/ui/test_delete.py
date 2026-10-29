@@ -119,7 +119,7 @@ def test_a_place_without_a_recycle_bin_is_refused(qtbot, window, service, librar
     window.delete.delete_entries([entry(service, "Artist", "Album", "Track 2.flac")], window.file_view.view)
     qtbot.waitUntil(window.toast.isVisible, timeout=5000)
     assert window.toast.label.text() == (
-        "MusicDesk only deletes to the Recycle Bin, and X: is a network location, which has no Recycle Bin, so "
+        "Refrain only deletes to the Recycle Bin, and X: is a network location, which has no Recycle Bin, so "
         "nothing was deleted. You can delete it in File Explorer.")
     assert window.toast.button.text() == "Open in File Explorer"
     window.toast.button.click()

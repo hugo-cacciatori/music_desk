@@ -46,7 +46,7 @@ from music_desk.ui.hover import with_status_tips
 from music_desk.ui.qt_util import shortcut
 
 PLACEHOLDER = "Drag folders or songs here to build a playlist"
-PLAYLIST_ROWS_MIME = "application/x-musicdesk-playlist-rows"  # a drag of the playlist's own rows
+PLAYLIST_ROWS_MIME = "application/x-refrain-playlist-rows"  # a drag of the playlist's own rows
 _NO_PARENT = QModelIndex()
 
 

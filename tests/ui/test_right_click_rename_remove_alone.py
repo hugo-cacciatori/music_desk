@@ -1,4 +1,4 @@
-"""The right-click Rename and Remove ReplayGain tags with MusicDesk not open (SPEC §31): the Rename preview page
+"""The right-click Rename and Remove ReplayGain tags with Refrain not open (SPEC §31): the Rename preview page
 alone in its own window; Remove's question then its report window alone. No main window; the process ends when
 the last entry window closes. Files are copies."""
 
@@ -103,7 +103,7 @@ def test_rename_alone_close_changes_nothing(qtbot, starter, artist, quits):
 def test_rename_alone_refuses_options_needing_a_fix(qtbot, starter, artist, quits, monkeypatch):
     monkeypatch.setattr(starter.cards(), "problems", lambda tool: ["a mask is empty"])
     window = rename_window(qtbot, starter, [artist / ALBUM])
-    assert window.view.state == "error" and "MusicDesk > Settings" in window.view.message.text()
+    assert window.view.state == "error" and "Refrain > Settings" in window.view.message.text()
 
 
 def test_rename_alone_respects_the_locks(qtbot, starter, artist, quits):

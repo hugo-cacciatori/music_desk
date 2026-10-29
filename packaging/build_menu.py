@@ -1,8 +1,8 @@
-"""Builds MusicDeskMenu.dll, File Explorer's MusicDesk submenu (SPEC §31), from native/context_menu/.
+"""Builds RefrainMenu.dll, File Explorer's Refrain submenu (SPEC §31), from native/context_menu/.
 
 Needs Visual Studio Build Tools with "Desktop development with C++" (on the development PC only), found through
 vswhere. The C runtime is linked in (/MT), so the DLL needs no Visual C++ runtime on the user's PC.
-Run from the project root:  uv run python packaging/build_menu.py [<output folder>]   (default: dist/MusicDesk)
+Run from the project root:  uv run python packaging/build_menu.py [<output folder>]   (default: dist/Refrain)
 """
 
 import os
@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "native" / "context_menu"
-DLL_NAME = "MusicDeskMenu.dll"
+DLL_NAME = "RefrainMenu.dll"
 
 
 def find_vcvars() -> Path | None:
@@ -42,7 +42,7 @@ def build(output: Path) -> Path:
             "cl", "/nologo", "/utf-8", "/O2", "/W4", "/WX", "/EHsc", "/MT", "/std:c++17", "/DUNICODE", "/D_UNICODE",
             "/LD",
             str(SOURCE / "menu.cpp"), f"/Fo{work}\\", "/link", f"/DEF:{SOURCE / 'menu.def'}",
-            f"/OUT:{output / DLL_NAME}", f"/IMPLIB:{Path(work) / 'MusicDeskMenu.lib'}",
+            f"/OUT:{output / DLL_NAME}", f"/IMPLIB:{Path(work) / 'RefrainMenu.lib'}",
             "shell32.lib", "shlwapi.lib", "ole32.lib", "user32.lib", "uuid.lib"])
         script = Path(work) / "build.cmd"
         script.write_text(f'@call "{vcvars}" >nul\r\n@{compile_line}\r\n', encoding="mbcs")
@@ -53,7 +53,7 @@ def build(output: Path) -> Path:
 
 
 def main(argv: list[str]) -> int:
-    dll = build(Path(argv[0]) if argv else ROOT / "dist" / "MusicDesk")
+    dll = build(Path(argv[0]) if argv else ROOT / "dist" / "Refrain")
     print(f"Built {dll}")
     return 0
 

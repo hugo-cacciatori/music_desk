@@ -74,13 +74,13 @@ def set_app_user_model_id() -> None:
     try:
         import ctypes
 
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(f"MusicDesk.MusicDesk.{__version__}")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(f"Refrain.Refrain.{__version__}")
     except (AttributeError, OSError):
         pass  # not Windows, or an older shell: only the taskbar grouping differs
 
 
 def folder_argument(arguments: list[str]) -> str | None:
-    """The folder to open (SPEC §29): the first argument that isn't an option, as MusicDeskHere.exe passes it."""
+    """The folder to open (SPEC §29): the first argument that isn't an option, as RefrainHere.exe passes it."""
     return parse_arguments(arguments).folder
 
 
@@ -174,7 +174,7 @@ class Starter(QObject):
             recap.start(paths)
             return
         if entry in (EDIT_CUE, NEW_CUE):
-            # The cue editor alone, with MusicDesk open or closed, as Split's recap (SPEC §31); New cue sheet… on
+            # The cue editor alone, with Refrain open or closed, as Split's recap (SPEC §31); New cue sheet… on
             # the Metadata tab opens it on a new sheet (SPEC §35).
             editor = CueEditorWindow(self.cards(), self.locks)
             self._own(editor)
@@ -270,7 +270,7 @@ def open_library() -> LibraryService | None:
 
 
 def main() -> int:
-    if self_test.FLAG in sys.argv[1:]:  # the release gate: no log, no other MusicDesk, no window (AGENTS.md rule 9)
+    if self_test.FLAG in sys.argv[1:]:  # the release gate: no log, no other Refrain, no window (AGENTS.md rule 9)
         return self_test.main(sys.argv[1:])
     setup_logging()
     log.info("%s %s starting (Python %s, frozen=%s)", APP_TITLE, __version__, sys.version.split()[0],
@@ -284,11 +284,11 @@ def main() -> int:
     app.setWindowIcon(QIcon(str(icon_path())))
     theme.apply(app)  # the font, and the style sheet that follows Windows' colours (SPEC §36)
 
-    # One MusicDesk at a time (SPEC §29): a running one gets this start's folder, or its right-click entry (§31),
+    # One Refrain at a time (SPEC §29): a running one gets this start's folder, or its right-click entry (§31),
     # and comes to the front.
     request = parse_arguments(app.arguments()[1:], app_data_dir() / "menu")
     if hand_over(request.folder, entry=request.entry, paths=request.paths):
-        log.info("Another MusicDesk is running: handed over, exiting")
+        log.info("Another Refrain is running: handed over, exiting")
         return 0
     instance = InstanceServer(parent=app)
 

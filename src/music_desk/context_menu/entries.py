@@ -1,4 +1,4 @@
-"""The MusicDesk submenu's entries for a selection (SPEC §31, §35): which entries show, in which order, with which
+"""The Refrain submenu's entries for a selection (SPEC §31, §35): which entries show, in which order, with which
 labels and help texts. One list for the app: its own right-click submenu and the toolbar's ReplayGain list take
 their entries from here. File Explorer's handler (native/context_menu/menu.cpp) keeps the same rules in C++;
 tests/test_menu_handler.py checks the two agree, selection by selection. Plain Python, no Qt.
@@ -28,9 +28,9 @@ from music_desk.context_menu.request import (
 from music_desk.core import cue
 from music_desk.core.formats import FORMATS
 
-OPEN = "open"  # Open in MusicDesk: a start on the folder (SPEC §29), not an entry option
+OPEN = "open"  # Open in Refrain: a start on the folder (SPEC §29), not an entry option
 # Where an entry's window says the options are: it may come from Explorer or from the app (SPEC §35).
-OPTIONS_WHERE = "… > Options… in MusicDesk, or MusicDesk > Settings in the right-click menu"
+OPTIONS_WHERE = "… > Options… in Refrain, or Refrain > Settings in the right-click menu"
 
 REPLAYGAIN_EXTENSIONS = frozenset(e for f in FORMATS if f.replaygain for e in f.extensions)  # what rsgain scans
 MUSIC_EXTENSIONS = frozenset(e for f in FORMATS for e in f.extensions)  # Rename's music files
@@ -38,8 +38,8 @@ TRIM_EXTENSIONS = frozenset(cue.SUPPORTED)  # what Trim cuts (the bundled flac)
 
 # Explorer's status bar shows these for the handler's entries; the app shows them as hover texts.
 HELP = {
-    OPEN: "Opens this folder in MusicDesk",
-    REPLAYGAIN_ALBUM: "Runs ReplayGain on this folder as one album, with the target set in MusicDesk",
+    OPEN: "Opens this folder in Refrain",
+    REPLAYGAIN_ALBUM: "Runs ReplayGain on this folder as one album, with the target set in Refrain",
     REPLAYGAIN_DISCOGRAPHY: "Runs ReplayGain on each album in this folder, then levels them together",
     REPLAYGAIN_ALBUMS: "Runs ReplayGain on each folder as its own album, one after another",
     REPLAYGAIN_TRACKS: "Runs ReplayGain on the selected tracks as one album; the folder's other tracks are left as "
@@ -50,9 +50,9 @@ HELP = {
     TIDY: "Plans Tidy (split, rename, ReplayGain) on every album here; nothing changes until you run it",
     CLEANUP: "Lists the redundant files here; you choose what goes to the Recycle Bin",
     SPLIT: "Shows what splitting this cue sheet writes; nothing is split until you click Split",
-    EDIT_CUE: "Opens this cue sheet in MusicDesk's cue sheet editor",
+    EDIT_CUE: "Opens this cue sheet in Refrain's cue sheet editor",
     TRIM: "Opens the track's Trim page; the trimmed copy is made only when you click Trim",
-    SETTINGS: "Opens MusicDesk's Options window",
+    SETTINGS: "Opens Refrain's Options window",
 }
 
 
@@ -104,7 +104,7 @@ def target_text(target: float) -> str:
 
 
 def entry_names(selection: Selection) -> list[str]:
-    """The submenu's entries, in order (SPEC §31): Open in MusicDesk on one folder or empty space; the ReplayGain
+    """The submenu's entries, in order (SPEC §31): Open in Refrain on one folder or empty space; the ReplayGain
     entries on folders only or on files with tracks rsgain scans (no folder); Rename on any selection with a folder
     or a music file (empty space too); Remove ReplayGain tags when every item is a track rsgain scans; Tidy and
     Clean up on folders only (empty space too); Split and Edit on one .cue; Trim on one FLAC, WAV or AIFF file;
@@ -140,7 +140,7 @@ def entry_names(selection: Selection) -> list[str]:
 def label(entry: str, selection: Selection, target: float) -> str:
     """An entry's label (Hugo, 2026-10-24): with what it acts on, and ReplayGain's with the target."""
     s = selection
-    fixed = {OPEN: "Open in MusicDesk", SETTINGS: "Settings", RENAME: "Rename from tags…",
+    fixed = {OPEN: "Open in Refrain", SETTINGS: "Settings", RENAME: "Rename from tags…",
              REMOVE_REPLAYGAIN: "Remove ReplayGain tags…", SPLIT: "Split this cue sheet…",
              EDIT_CUE: "Edit this cue sheet…", TRIM: "Trim this track…"}
     if entry in fixed:

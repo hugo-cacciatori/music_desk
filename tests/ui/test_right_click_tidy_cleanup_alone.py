@@ -1,4 +1,4 @@
-"""The right-click Tidy and Clean up with MusicDesk not open (SPEC §31): the Tidy page alone in its own window, then
+"""The right-click Tidy and Clean up with Refrain not open (SPEC §31): the Tidy page alone in its own window, then
 the Redundant files window; Clean up's Redundant files window, or a small "nothing found" one, alone. No main
 window; the process ends when the last entry window closes. The Recycle Bin is a recorder."""
 
@@ -107,7 +107,7 @@ def test_tidy_alone_close_from_the_plan_changes_nothing(qtbot, starter, rips, fa
 def test_tidy_alone_refuses_options_needing_a_fix(qtbot, starter, rips, fake, quits, monkeypatch):
     monkeypatch.setattr(starter.cards(), "problems", lambda tool: ["a mask is empty"])
     window = tidy_window(qtbot, starter, [rips])
-    assert window.page.state == "error" and "MusicDesk > Settings" in window.page.message.text()
+    assert window.page.state == "error" and "Refrain > Settings" in window.page.message.text()
 
 
 def test_tidy_alone_closing_while_running_asks(qtbot, starter, rips, quits, monkeypatch):
@@ -171,7 +171,7 @@ def test_clean_up_alone_nothing_found(qtbot, starter, library_dir, quits):
 def test_clean_up_alone_refuses_options_needing_a_fix(qtbot, starter, library_dir, quits, monkeypatch):
     monkeypatch.setattr(starter.cards(), "problems", lambda tool: ["an extension is wrong"])
     entry = cleanup_entry(qtbot, starter, [library_dir / "Cleanup"])
-    assert entry.notice is not None and "MusicDesk > Settings" in entry.notice.message.text()
+    assert entry.notice is not None and "Refrain > Settings" in entry.notice.message.text()
 
 
 def test_a_main_window_meanwhile_leaves_entries_their_own_windows(qtbot, starter, service, library_dir, quits):

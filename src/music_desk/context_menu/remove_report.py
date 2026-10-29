@@ -1,5 +1,5 @@
 """The right-click Remove ReplayGain tags' report (SPEC §31): a small window that stays until it is closed, the same
-whether MusicDesk was open or not. It says how many tracks were cleared, how many had no ReplayGain tags, and each
+whether Refrain was open or not. It says how many tracks were cleared, how many had no ReplayGain tags, and each
 file that couldn't be changed, with why.
 """
 
@@ -21,7 +21,7 @@ from music_desk.core.formats import format_for
 from music_desk.core.replaygain import plural
 from music_desk.services.tag_writer import ReplayGainRemoved
 
-TITLE = "MusicDesk · Remove ReplayGain tags"
+TITLE = "Refrain · Remove ReplayGain tags"
 
 
 def ask_remove(parent: QWidget | None, count: int, where: str, comment: str) -> bool:

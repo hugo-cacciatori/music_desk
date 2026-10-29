@@ -1,4 +1,4 @@
-"""`MusicDesk.exe --self-test`, the release gate (AGENTS.md rule 9, SPEC §13): every check from source, a failing
+"""`Refrain.exe --self-test`, the release gate (AGENTS.md rule 9, SPEC §13): every check from source, a failing
 one, the report file, and the start that runs it instead of the app."""
 
 import sys
@@ -28,7 +28,7 @@ def test_a_missing_tool_fails_the_gate(qapp, tmp_path, monkeypatch):
 
 def test_the_start_runs_the_gate_instead_of_the_app(monkeypatch):
     calls = []
-    monkeypatch.setattr(sys, "argv", ["MusicDesk.exe", "--self-test", "out.txt"])
+    monkeypatch.setattr(sys, "argv", ["Refrain.exe", "--self-test", "out.txt"])
     monkeypatch.setattr(self_test, "run", lambda report=None: calls.append(report) or 7)
     monkeypatch.setattr(app, "setup_logging", lambda: calls.append("logging"))
     assert app.main() == 7 and calls == [Path("out.txt")]  # no log, no hand-over, no window

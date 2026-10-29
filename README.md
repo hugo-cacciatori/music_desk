@@ -1,10 +1,10 @@
-# MusicDesk
+# Refrain
 
 A Windows desktop app for looking after a local music library: browse it like File Explorer, edit tags, read
 lyrics, tidy albums (rename files from their tags, apply ReplayGain), split single-file albums into tracks
 from their cue sheet, and trim a track's start or end into a copy.
 
-MusicDesk works on your files where they are. It never copies or moves music, and never deletes anything for
+Refrain works on your files where they are. It never copies or moves music, and never deletes anything for
 good. Its only changes are the ones you ask for: tag edits, renames, ReplayGain tags, a `replaygain.log` per
 album, the playlists you export, the tracks of a split, trimmed copies and the cue sheets you save. What you
 delete, a cue sheet you save over, and what you leave checked in the Redundant files window (Clean up, Tidy), go
@@ -20,18 +20,18 @@ to the Recycle Bin.
   included. ID3 versions are kept as they were.
 - **Lyrics from [LRCLIB](https://lrclib.net)**, looked up in the background for every track. Synced and plain
   lyrics are shown beside the file, with links to search Genius or Google when LRCLIB has none. Without an
-  internet connection, lookups pause and resume by themselves. MusicDesk never writes lyrics into your files.
+  internet connection, lookups pause and resume by themselves. Refrain never writes lyrics into your files.
 - **Library search (Ctrl+K).** Type any part of a folder or file name, a title, artist, album or lyric line.
   Names are found as soon as a folder is listed, before its tags are read. Accents and case are ignored, and
   filters such as `artist:`, `year:`, `ext:`, `lrclib:notfound` or `rg:none` narrow it. The matching lyric line
   is shown in the results.
-- **Right-click in File Explorer**: a **MusicDesk** submenu offers the tools for what you clicked: ReplayGain (an
+- **Right-click in File Explorer**: a **Refrain** submenu offers the tools for what you clicked: ReplayGain (an
   album, a discography, several albums, selected tracks as an album or each on its own), Rename from tags, Remove
   ReplayGain tags, Tidy, Clean up, Split or Edit a cue sheet, Trim a track, and Settings. Each opens a small window
-  of its own, whether MusicDesk is open or not. MusicDesk's own right-click menus (file list, folder tree, search
+  of its own, whether Refrain is open or not. Refrain's own right-click menus (file list, folder tree, search
   results) offer the same entries, directly in the menu.
-- **Open a folder from File Explorer**: type `musicdesk` in Explorer's address bar (as you would `cmd`).
-  MusicDesk opens, or comes to the front, on that folder, and adds it to the library first if it isn't in it.
+- **Open a folder from File Explorer**: type `refrain` in Explorer's address bar (as you would `cmd`).
+  Refrain opens, or comes to the front, on that folder, and adds it to the library first if it isn't in it.
 - **Advanced search** (the toolbar's Advanced search button), a window of its own beside the app: lists of albums to go
   through and fix by hand, such as the albums missing ReplayGain tags or the EAC rips not split yet. Double-click
   an album to open its folder; Refresh search updates the list as you fix them.
@@ -41,7 +41,7 @@ to the Recycle Bin.
   ask for it, and **Open in File Explorer** opens the folder you are in.
 - **Delete** files and folders (Del) from the file list, the folder tree or search results. They go straight to
   the Recycle Bin (no question: restore them from there), never deleted for good, and where Windows has no Recycle Bin (a network
-  share, a removable drive) MusicDesk refuses and offers File Explorer instead.
+  share, a removable drive) Refrain refuses and offers File Explorer instead.
 - **Tools**, always one click away on the toolbar's second row. Each does what the right-click menu does on the
   selection (or, with nothing selected, the open folder), in a small window of its own: you can keep browsing, and
   start another tool on other folders meanwhile; only files a tool is working on are refused until it ends. The
@@ -96,16 +96,16 @@ to the Recycle Bin.
 
 ## Install
 
-Download `MusicDesk-Setup-<version>.exe` from the
+Download `Refrain-Setup-<version>.exe` from the
 [latest release](https://github.com/hugo-cacciatori/music_desk/releases/latest) and run it (64-bit Windows 10 or
 11). It installs for all users in Program Files, or only for you if you choose that on its first page. The setup
 isn't signed, so Windows SmartScreen may warn about it: choose "More info", then "Run anyway".
 
-To uninstall, open the MusicDesk folder in the Start menu and choose "Uninstall MusicDesk" (or type "uninstall
-musicdesk" in Start), or use Settings › Apps › Installed apps. Start's own Uninstall button on MusicDesk only opens
+To uninstall, open the Refrain folder in the Start menu and choose "Uninstall Refrain" (or type "uninstall
+refrain" in Start), or use Settings › Apps › Installed apps. Start's own Uninstall button on Refrain only opens
 that Settings page.
 
-MusicDesk keeps its own data (the library index, settings and logs) in `%LOCALAPPDATA%\MusicDesk`. Uninstalling
+Refrain keeps its own data (the library index, settings and logs) in `%LOCALAPPDATA%\MusicDesk`. Uninstalling
 asks whether to delete it too. Your music folders are never touched.
 
 ## Build from source
@@ -118,14 +118,14 @@ uv sync
 uv run python -m music_desk                    # run from source
 uv run pytest                                  # the tests the changes need (--all: every test)
 uv run ruff check .
-uv run python packaging/build_installer.py     # dist/MusicDesk/ and dist/installer/MusicDesk-Setup-<version>.exe
+uv run python packaging/build_installer.py     # dist/Refrain/ and dist/installer/Refrain-Setup-<version>.exe
 ```
 
 The tests run on generated sample files, never on a real library.
 
 ## Licence
 
-MusicDesk is free software under the [GNU General Public License, version 3 or later](LICENSE). It bundles
+Refrain is free software under the [GNU General Public License, version 3 or later](LICENSE). It bundles
 rsgain (BSD-2-Clause) with FFmpeg (LGPL-2.1-or-later) and Fraunhofer FDK AAC, and flac (GPL-2.0-or-later, with
 libFLAC under Xiph's BSD-style licence), and uses Qt for Python
 (LGPL-3.0), mutagen (GPL-2.0-or-later), watchdog, natsort and Send2Trash. Their licence texts are in

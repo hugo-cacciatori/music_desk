@@ -1,4 +1,4 @@
-"""The right-click "Trim this track…" with MusicDesk open (SPEC §31, §35): the Trim page of that track in a window of
+"""The right-click "Trim this track…" with Refrain open (SPEC §31, §35): the Trim page of that track in a window of
 its own, beside the main window; a format Trim can't cut is refused by the page; Trim runs the app's trim (the real
 bundled flac, on copied fixtures), and the main window's index re-reads the folder."""
 

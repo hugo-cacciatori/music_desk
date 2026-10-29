@@ -1,4 +1,4 @@
-"""The right-click Clean up with MusicDesk not open (SPEC §31): the folders are read on a worker, then the Redundant
+"""The right-click Clean up with Refrain not open (SPEC §31): the folders are read on a worker, then the Redundant
 files window opens alone, as in the app; nothing found says so in a small window. The entry ends (`closed`) when
 that window closes.
 """

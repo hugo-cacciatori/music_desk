@@ -1,4 +1,4 @@
-"""The right-click Remove ReplayGain tags with MusicDesk not open (SPEC §31): the app's question, then the report
+"""The right-click Remove ReplayGain tags with Refrain not open (SPEC §31): the app's question, then the report
 window alone; the process ends when it closes. The removal is the app's own (`TagWriter.remove_replaygain`), under
 the process's locks.
 """

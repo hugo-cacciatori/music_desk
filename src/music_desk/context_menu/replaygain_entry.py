@@ -25,7 +25,7 @@ from music_desk.ui.tools.tool_cards import REPLAYGAIN, ToolCards
 
 log = logging.getLogger(__name__)
 
-TITLE = "MusicDesk · ReplayGain"
+TITLE = "Refrain · ReplayGain"
 
 
 class ReplayGainWindow(QWidget):

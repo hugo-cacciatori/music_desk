@@ -1,7 +1,7 @@
-MusicDesk is free software under the GNU General Public License, version 3 or later (GPL-3.0-or-later); its
+Refrain is free software under the GNU General Public License, version 3 or later (GPL-3.0-or-later); its
 licence text is GPL-3.0.txt.
 
-MusicDesk ships with these third-party components. Their licence texts are in this folder.
+Refrain ships with these third-party components. Their licence texts are in this folder.
 
   Python                          PSF License 2.0       python-PSF.txt
   Qt for Python (PySide6,         LGPL-3.0              LGPL-3.0.txt, and GPL-3.0.txt, which the
@@ -26,4 +26,4 @@ LGPL. Its source code is at https://ffmpeg.org/, and rsgain's at https://github.
 The FDK AAC library's source code is at https://github.com/mstorsjo/fdk-aac.
 
 flac 1.5.0 is the official Xiph.Org Win64 build (flac-1.5.0-win.zip from https://github.com/xiph/flac/releases);
-MusicDesk runs flac.exe to cut single-file albums into tracks. Its source code is at https://github.com/xiph/flac.
+Refrain runs flac.exe to cut single-file albums into tracks. Its source code is at https://github.com/xiph/flac.

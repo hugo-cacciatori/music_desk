@@ -1,4 +1,4 @@
-"""The right-click Rename with MusicDesk open (SPEC §31, §35): any mix of folders and files makes one preview in the
+"""The right-click Rename with Refrain open (SPEC §31, §35): any mix of folders and files makes one preview in the
 Rename window, beside the main window, and Apply runs it; the main window's index re-reads the folders. Files are
 copies."""
 

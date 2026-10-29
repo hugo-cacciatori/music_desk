@@ -1,9 +1,9 @@
-; Inno Setup script for MusicDesk (SPEC §13). Built by packaging/build_installer.py, which passes /DAppVersion
-; from music_desk.__version__ after the PyInstaller build has filled dist\MusicDesk.
+; Inno Setup script for Refrain (SPEC §13). Built by packaging/build_installer.py, which passes /DAppVersion
+; from music_desk.__version__ after the PyInstaller build has filled dist\Refrain.
 ;
 ; Installs for all users in Program Files by default (admin); the setup's first page also offers "only for me"
-; (no admin, in %LOCALAPPDATA%\Programs). The Start menu gets a MusicDesk folder with the app and "Uninstall
-; MusicDesk". The uninstaller keeps the app's own data (%LOCALAPPDATA%\MusicDesk:
+; (no admin, in %LOCALAPPDATA%\Programs). The Start menu gets a Refrain folder with the app and "Uninstall
+; Refrain". The uninstaller keeps the app's own data (%LOCALAPPDATA%\MusicDesk:
 ; the library index, settings, logs) unless the user asks to delete it. Music folders are never touched.
 ;
 ; The right-click menu's handler (SPEC §31) is installed under a name of its own per version, so an update never
@@ -15,13 +15,13 @@
   #error AppVersion must be defined (run packaging/build_installer.py)
 #endif
 
-#define AppName "MusicDesk"
-#define AppExe "MusicDesk.exe"
-#define MenuDll "MusicDeskMenu-" + AppVersion + ".dll"
+#define AppName "Refrain"
+#define AppExe "Refrain.exe"
+#define MenuDll "RefrainMenu-" + AppVersion + ".dll"
 ; The handler's CLSID, as in native\context_menu\menu.cpp ("{{" is one brace for Inno): never change it.
 #define MenuClsid "{{366C8DAE-145F-40D0-B273-8AFE153DD3F5}"
 ; The handler's ContextMenuHandlers key: it sorts right after 7-Zip's ([Registry] below).
-#define MenuKey "8MusicDesk"
+#define MenuKey "8Refrain"
 
 [Setup]
 ; The AppId identifies the app for upgrades and the uninstaller: never change it.
@@ -63,40 +63,46 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\dist\MusicDesk\*"; DestDir: "{app}"; Excludes: "MusicDeskMenu.dll"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Refrain\*"; DestDir: "{app}"; Excludes: "RefrainMenu.dll"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Only if missing: this version, already installed, may be loaded by Explorer (and it is the same file).
-Source: "..\dist\MusicDesk\MusicDeskMenu.dll"; DestDir: "{app}"; DestName: "{#MenuDll}"; Flags: ignoreversion onlyifdoesntexist
+Source: "..\dist\Refrain\RefrainMenu.dll"; DestDir: "{app}"; DestName: "{#MenuDll}"; Flags: ignoreversion onlyifdoesntexist
 
 [InstallDelete]
-; 0.1.0-0.2.x put a loose shortcut at the top of the Start menu's Programs; it moved into the MusicDesk folder.
+; 0.1.0-0.2.x put a loose shortcut at the top of the Start menu's Programs; it moved into the Refrain folder.
 Type: files; Name: "{autoprograms}\{#AppName}.lnk"
 
 [Icons]
 ; A Start menu folder with the uninstaller beside the app: Start's own Uninstall button only opens Settings for
 ; classic apps (SPEC §13).
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
-Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"; Comment: "Removes MusicDesk. Your music folders are not touched."
+Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"; Comment: "Removes Refrain. Your music folders are not touched."
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
-; The `musicdesk` keyword in File Explorer's address bar (SPEC §29): App Paths finds MusicDeskHere.exe, which opens
-; MusicDesk on the folder shown. HKA: all users on an admin install, this user on a per-user one.
-Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\musicdesk.exe"; ValueType: string; ValueName: ""; ValueData: "{app}\MusicDeskHere.exe"; Flags: uninsdeletekey
-; The MusicDesk submenu in File Explorer's right-click menu (SPEC §31): the handler's COM class, where it shows
+; The `refrain` keyword in File Explorer's address bar (SPEC §29): App Paths finds RefrainHere.exe, which opens
+; Refrain on the folder shown. HKA: all users on an admin install, this user on a per-user one.
+Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\refrain.exe"; ValueType: string; ValueName: ""; ValueData: "{app}\RefrainHere.exe"; Flags: uninsdeletekey
+; The Refrain submenu in File Explorer's right-click menu (SPEC §31): the handler's COM class, where it shows
 ; (files, folders, a folder's empty space), and the approved list some policies require. HKA, as above.
-Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}"; ValueType: string; ValueName: ""; ValueData: "MusicDesk menu"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}"; ValueType: string; ValueName: ""; ValueData: "Refrain menu"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}\InprocServer32"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MenuDll}"
 Root: HKA; Subkey: "Software\Classes\CLSID\{#MenuClsid}\InprocServer32"; ValueType: string; ValueName: "ThreadingModel"; ValueData: "Apartment"
-; Explorer calls the handlers in the order of their key names (inferred, SPEC §31): "8MusicDesk" sorts right after
+; Explorer calls the handlers in the order of their key names (inferred, SPEC §31): "8Refrain" sorts right after
 ; 7-Zip's "7-Zip", so the submenu shows just below 7-Zip's (Hugo, 2026-10-24). The name shows nowhere else.
 ; 0.8.17 registered "MusicDesk": its keys are deleted, or the submenu would show twice.
 Root: HKA; Subkey: "Software\Classes\*\shellex\ContextMenuHandlers\MusicDesk"; ValueType: none; Flags: deletekey
 Root: HKA; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\MusicDesk"; ValueType: none; Flags: deletekey
 Root: HKA; Subkey: "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\MusicDesk"; ValueType: none; Flags: deletekey
+; Up to 0.11.x the app was MusicDesk (SPEC §36): its "8MusicDesk" keys would show the submenu twice, and its
+; `musicdesk` keyword would start a program that is gone. Both are deleted.
+Root: HKA; Subkey: "Software\Classes\*\shellex\ContextMenuHandlers\8MusicDesk"; ValueType: none; Flags: deletekey
+Root: HKA; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\8MusicDesk"; ValueType: none; Flags: deletekey
+Root: HKA; Subkey: "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\8MusicDesk"; ValueType: none; Flags: deletekey
+Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\musicdesk.exe"; ValueType: none; Flags: deletekey
 Root: HKA; Subkey: "Software\Classes\*\shellex\ContextMenuHandlers\{#MenuKey}"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\{#MenuKey}"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\{#MenuKey}"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"; ValueType: string; ValueName: "{#MenuClsid}"; ValueData: "MusicDesk menu"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"; ValueType: string; ValueName: "{#MenuClsid}"; ValueData: "Refrain menu"; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
@@ -110,12 +116,12 @@ var
   Found: TFindRec;
 begin
   App := ExpandConstant('{app}');
-  if FindFirst(App + '\MusicDeskMenu-*.dll', Found) then
+  if FindFirst(App + '\RefrainMenu-*.dll', Found) then
   try
     repeat
       Name := Found.Name;
       if (CompareText(Name, Keep) <> 0) and not DeleteFile(App + '\' + Name) then
-        RenameFile(App + '\' + Name, AddBackslash(GetTempDir) + 'MusicDesk-' +
+        RenameFile(App + '\' + Name, AddBackslash(GetTempDir) + 'Refrain-' +
                    GetDateTimeString('yyyymmddhhnnss', #0, #0) + '-' + Name);
     until not FindNext(Found);
   finally
@@ -141,7 +147,7 @@ begin
     RemoveDir(ExpandConstant('{app}'));
     DataDir := ExpandConstant('{localappdata}\{#AppName}');
     if DirExists(DataDir) and not UninstallSilent then
-      if MsgBox('Also delete MusicDesk''s own data in ' + DataDir + '?' + #13#10#13#10 +
+      if MsgBox('Also delete Refrain''s own data in ' + DataDir + '?' + #13#10#13#10 +
                 'It holds the library index, the settings and the logs. Your music folders are not touched.',
                 mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
         DelTree(DataDir, True, True, True);

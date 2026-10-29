@@ -71,7 +71,7 @@ from music_desk.ui.tools.tool_cards import CLEANUP, RENAME, REPLAYGAIN, TIDY, To
 
 log = logging.getLogger(__name__)
 
-APP_TITLE = "MusicDesk"
+APP_TITLE = "Refrain"
 PAUSED_NOTE = " (paused while a task reads albums)"
 WAIT_FOR_INDEX_S = 120  # a folder from outside the app opens once indexed, within this (SPEC §29)
 
@@ -232,7 +232,7 @@ class MainWindow(QMainWindow):
         # No Add folder… or Rescan library since 0.8.4 (SPEC §30); every option in one window, the Options… window.
         self.options_action = QAction("&Options…", self)
         self.options_action.triggered.connect(lambda: self.tools.open_options())
-        self.about_action = QAction("&About MusicDesk", self)
+        self.about_action = QAction("&About Refrain", self)
         self.about_action.triggered.connect(self.open_about)
         self.exit_action = QAction("E&xit", self)
         self.exit_action.triggered.connect(self.close)
@@ -348,7 +348,7 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def open_from_outside(self, path: str | None) -> None:
-        """A folder from File Explorer's `musicdesk` keyword, the command line or a later start: the window comes to
+        """A folder from File Explorer's `refrain` keyword, the command line or a later start: the window comes to
         the front and shows it, adding it to the library first when it isn't in it. None: only to the front."""
         self.bring_to_front()
         if not path or not self._library_open():
@@ -450,7 +450,7 @@ class MainWindow(QMainWindow):
         self.refresh_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Refresh))
         self.refresh_action.triggered.connect(self.rescan_folder)
         self.refresh_action.setToolTip("Read this folder from the disk again now, to show changes made outside "
-                                       "MusicDesk (F5)")
+                                       "Refrain (F5)")
         # The folder tree is a side function (SPEC §33): hidden by default, one click shows it.
         self.folders_action = QAction("Folders", self, checkable=True, shortcut=QKeySequence("Ctrl+Shift+F"))
         self.folders_action.setToolTip("Show or hide the folder tree (Ctrl+Shift+F)")
@@ -1126,8 +1126,8 @@ class MainWindow(QMainWindow):
 
     def add_entries(self, menu: QMenu, ids: list[int], background: bool = False) -> None:
         """Explorer's right-click entries for these items (SPEC §31, §35: the same rules, labels and windows), as
-        items of this menu itself, one group then a separator: no MusicDesk submenu in the app (Hugo, 2026-10-25).
-        `background`: the open folder, as empty space. Open in MusicDesk and Settings are Explorer's only."""
+        items of this menu itself, one group then a separator: no Refrain submenu in the app (Hugo, 2026-10-25).
+        `background`: the open folder, as empty space. Open in Refrain and Settings are Explorer's only."""
         paths, folders = self.entry_paths(ids)
         if not paths:
             return

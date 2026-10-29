@@ -1,4 +1,4 @@
-"""Help › About MusicDesk (SPEC §12): versions, the components and their licences, the licences folder."""
+"""Help › About Refrain (SPEC §12): versions, the components and their licences, the licences folder."""
 
 import threading
 
@@ -20,7 +20,7 @@ def open_about(window) -> list:
     shown = []
     window.show_about = shown.append  # never a real modal dialog in tests
     menu = window.more_button.menu()  # the … button (SPEC §36 task 3)
-    next(a for a in menu.actions() if a.text() == "&About MusicDesk").trigger()
+    next(a for a in menu.actions() if a.text() == "&About Refrain").trigger()
     return shown
 
 
@@ -29,7 +29,7 @@ def test_about_shows_versions_and_components(window):
     [dialog] = open_about(window)
     assert "rsgain 3.6" in dialog.versions.text()
     assert any("version 3 or later" in label.text() for label in dialog.findChildren(type(dialog.versions)))
-    assert dialog.findChildren(type(dialog.versions))[0].text() == f"<b>MusicDesk {__version__}</b>"
+    assert dialog.findChildren(type(dialog.versions))[0].text() == f"<b>Refrain {__version__}</b>"
     rows = dialog.rows()
     assert [r[0] for r in rows] == [c.name for c in COMPONENTS]
     assert ("mutagen", rows[2][1], "GPL-2.0-or-later") == rows[2] and rows[2][1]

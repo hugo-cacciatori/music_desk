@@ -72,7 +72,7 @@ class AdvancedSearchWindow(QWidget):
         buttons.addWidget(self.status, 1)
 
         self.results = QListWidget()
-        self.results.setToolTip("Double-click an album to show its folder in MusicDesk.")
+        self.results.setToolTip("Double-click an album to show its folder in Refrain.")
         self.results.itemActivated.connect(self._activated)
 
         layout = QVBoxLayout(self)

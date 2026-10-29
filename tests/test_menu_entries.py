@@ -52,7 +52,7 @@ def test_the_entries_by_what_was_clicked(items):
 
 def test_the_labels_carry_what_they_act_on_and_the_target(items):
     album, other = items
-    assert labels([album]) == ["Open in MusicDesk", "ReplayGain as an album (−15 LUFS)",
+    assert labels([album]) == ["Open in Refrain", "ReplayGain as an album (−15 LUFS)",
                                "ReplayGain as a discography (−15 LUFS)", "Rename from tags…", "Tidy this folder…",
                                "Clean up this folder…", "Settings"]
     assert labels([album, other])[2:4] == ["Tidy 2 folders…", "Clean up 2 folders…"]
@@ -75,7 +75,7 @@ def test_every_entry_has_the_handlers_help_text():
     """menu.cpp's Entry help texts (adjacent literals joined) are these, verb by verb."""
     source = MENU_CPP.read_text(encoding="utf-8")
     found = {}
-    for verb, body in re.findall(r'static const Entry \w+ = \{L"musicdesk\.([\w-]+)",\s*((?:L"[^"]*"\s*)+)\};',
+    for verb, body in re.findall(r'static const Entry \w+ = \{L"refrain\.([\w-]+)",\s*((?:L"[^"]*"\s*)+)\};',
                                  source):
         found[verb] = "".join(re.findall(r'L"([^"]*)"', body))
     assert found == HELP and OPEN in found

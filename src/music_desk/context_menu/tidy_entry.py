@@ -1,4 +1,4 @@
-"""The right-click Tidy with MusicDesk not open (SPEC §31): the app's Tidy page alone, in a window of its own (the
+"""The right-click Tidy with Refrain not open (SPEC §31): the app's Tidy page alone, in a window of its own (the
 plan, Run Tidy, the album-by-album progress, the report), then the Redundant files window, as in the app. No main
 window.
 
@@ -23,7 +23,7 @@ from music_desk.ui.recycle_window import RecycleWindow
 from music_desk.ui.tools.tidy_page import TidyPage
 from music_desk.ui.tools.tool_cards import TIDY, ToolCards
 
-TITLE = "MusicDesk · Tidy"
+TITLE = "Refrain · Tidy"
 INTRO = ("Tidy made these files redundant (split images and their cue sheets), or found them beside the music "
          "(pictures, videos, folders holding nothing else). Every box is checked: uncheck what to keep, then click "
          "Delete selected to send the rest to the Recycle Bin. Closing this window keeps them all.")

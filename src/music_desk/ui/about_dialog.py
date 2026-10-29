@@ -1,4 +1,4 @@
-"""Help › About MusicDesk (SPEC §12): the versions, and the third-party components with their licences."""
+"""Help › About Refrain (SPEC §12): the versions, and the third-party components with their licences."""
 
 import platform
 
@@ -31,8 +31,8 @@ class AboutDialog(QDialog):
     def __init__(self, rsgain_version: str | None, parent: QWidget | None = None, *,
                  flac_version: str | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("About MusicDesk")
-        title = QLabel(f"<b>MusicDesk {__version__}</b>")
+        self.setWindowTitle("About Refrain")
+        title = QLabel(f"<b>Refrain {__version__}</b>")
         font = title.font()
         font.setPixelSize(theme.ABOUT_TITLE_PX)
         title.setFont(font)
@@ -52,14 +52,14 @@ class AboutDialog(QDialog):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for column in (1, 2):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        note = QLabel("MusicDesk is free software, under the GNU General Public License, version 3 or later. "
-                      "It comes with no warranty. The licence texts of MusicDesk and of the components above are in "
+        note = QLabel("Refrain is free software, under the GNU General Public License, version 3 or later. "
+                      "It comes with no warranty. The licence texts of Refrain and of the components above are in "
                       "the app's licences folder.")
         note.setWordWrap(True)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         self.licenses_button = QPushButton("Open licences folder")
         buttons.addButton(self.licenses_button, QDialogButtonBox.ButtonRole.ActionRole)
-        self.licenses_button.setToolTip("Show the licence texts of MusicDesk and the components it bundles, in File "
+        self.licenses_button.setToolTip("Show the licence texts of Refrain and the components it bundles, in File "
                                         "Explorer")
         self.licenses_button.clicked.connect(self.licensesRequested)
         buttons.rejected.connect(self.reject)

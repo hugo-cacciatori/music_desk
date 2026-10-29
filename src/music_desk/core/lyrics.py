@@ -38,7 +38,7 @@ class LyricsOptions:
     """The script's constants, with its defaults (the User-Agent names the app instead)."""
 
     api: str = "https://lrclib.net/api"
-    user_agent: str = f"MusicDesk/{music_desk.__version__} (personal music library app)"
+    user_agent: str = f"Refrain/{music_desk.__version__} (personal music library app)"
     not_found_retry_days: int = 30
     duration_tolerance: int = 3  # seconds between a file and an LRCLIB search result
     request_timeout: int = 30  # seconds

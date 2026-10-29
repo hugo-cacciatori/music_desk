@@ -1,4 +1,4 @@
-"""The right-click Settings entry with MusicDesk not open (SPEC §31): only the Options window, no main window.
+"""The right-click Settings entry with Refrain not open (SPEC §31): only the Options window, no main window.
 
 The window is the app's own (`ToolCards.open_options`, made without a main window), on the settings the app loads.
 Its File names example is the clicked items' first track, read off the UI thread.

@@ -35,7 +35,7 @@ def test_the_readme_names_every_file():
 
 
 def test_the_app_licence():
-    """MusicDesk is GPL-3.0-or-later: the repo's LICENSE is the GPL-3.0 text, also shipped in the licences folder."""
+    """Refrain is GPL-3.0-or-later: the repo's LICENSE is the GPL-3.0 text, also shipped in the licences folder."""
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert project["license"] == "GPL-3.0-or-later"
     licence = (ROOT / "LICENSE").read_text(encoding="utf-8")

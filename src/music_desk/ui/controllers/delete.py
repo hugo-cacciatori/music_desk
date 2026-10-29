@@ -120,7 +120,7 @@ class DeleteController(QObject):
             path, reason = reasons[0]
             is_dir = any(str(item.path) == path and item.is_dir for item in request.items)
             window.toast.show_message(
-                f"MusicDesk only deletes to the Recycle Bin, and {reason}, so nothing was deleted. You can delete it "
+                f"Refrain only deletes to the Recycle Bin, and {reason}, so nothing was deleted. You can delete it "
                 "in File Explorer.", "Open in File Explorer",
                 lambda: window._shell.submit(lambda: window.show_in_explorer(path, is_dir)))
             return

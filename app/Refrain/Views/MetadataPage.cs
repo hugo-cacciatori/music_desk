@@ -29,6 +29,14 @@ public sealed partial class MetadataPage : UserControl
     readonly TextBlock note = Ui.Secondary();
     readonly Button revert = Ui.Button("Revert", "Drop the edits (Esc)");
     readonly Button save = Ui.Primary("Save");
+    readonly TextBlock savedMark = new()
+    {
+        VerticalAlignment = VerticalAlignment.Center,
+        Foreground = Ui.Brush("SystemFillColorSuccessBrush"),
+        Visibility = Visibility.Collapsed,
+    };
+    readonly Microsoft.UI.Dispatching.DispatcherQueueTimer savedTimer =
+        Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
     readonly Grid details = Ui.DetailsGrid();
     readonly Dictionary<Field, (TextBox Box, Button Clear)> boxes = [];
 
@@ -86,6 +94,7 @@ public sealed partial class MetadataPage : UserControl
         stack.Children.Add(note);
         stack.Children.Add(Fields());
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        actions.Children.Add(savedMark);
         actions.Children.Add(revert);
         actions.Children.Add(save);
         stack.Children.Add(actions);
@@ -99,6 +108,7 @@ public sealed partial class MetadataPage : UserControl
             _ = ShowCover();
             Changed();
         };
+        savedTimer.Tick += (_, _) => savedMark.Visibility = Visibility.Collapsed;
         save.Click += async (_, _) => await Save();
         revert.Click += (_, _) => Revert();
         KeyDown += (_, e) =>
@@ -188,6 +198,7 @@ public sealed partial class MetadataPage : UserControl
     {
         var dirty = Dirty;
         save.IsEnabled = revert.IsEnabled = dirty;
+        if (dirty) savedMark.Visibility = Visibility.Collapsed;  // never beside edits that aren't saved
         DirtyChanged?.Invoke(dirty);
     }
 
@@ -434,8 +445,22 @@ public sealed partial class MetadataPage : UserControl
             Changed();
             return false;
         }
+        var count = files.Count;
         await Load(files.Select(f => f.Path).ToList(), []);
+        ShowSaved(count == 1 ? "✓ Saved" : $"✓ Saved {count} files");
         return true;
+    }
+
+    /// <summary>A save went through: said beside the buttons for a few seconds, however it was started (the
+    /// button or Ctrl+S).</summary>
+    void ShowSaved(string text)
+    {
+        savedMark.Text = text;
+        savedMark.Visibility = Visibility.Visible;
+        savedTimer.Stop();
+        savedTimer.Interval = TimeSpan.FromSeconds(4);
+        savedTimer.IsRepeating = false;
+        savedTimer.Start();
     }
 
     sealed class ByteArrays : IEqualityComparer<byte[]?>

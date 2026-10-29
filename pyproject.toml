@@ -1,6 +1,6 @@
 [project]
 name = "refrain"
-version = "0.12.0"
+version = "0.13.0"
 description = "Windows desktop app for browsing a music library, editing tags, tidying albums and finding lyrics."
 requires-python = ">=3.13,<3.14"
 license = "GPL-3.0-or-later"

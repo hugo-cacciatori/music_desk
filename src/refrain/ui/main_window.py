@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QByteArray, QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QByteArray, QEvent, QObject, Qt, Signal
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -41,7 +41,6 @@ from refrain.core.index.roots import AddResult, AddStatus, Root
 from refrain.core.index.scanner import ScanProgress, ScanReport, find_folder
 from refrain.core.index.store import path_of
 from refrain.core.path_locks import PathLocks
-from refrain.core.playlist_builder import Builder
 from refrain.licenses import licenses_dir
 from refrain.services.album_search_service import AlbumSearchService
 from refrain.services.library import LibraryService
@@ -55,12 +54,12 @@ from refrain.ui.address_bar import AddressBar
 from refrain.ui.advanced_search import AdvancedSearchWindow
 from refrain.ui.controllers import STATUS_MS
 from refrain.ui.controllers.delete import DeleteController
+from refrain.ui.controllers.playlist import PlaylistController
 from refrain.ui.controllers.search import SearchController
 from refrain.ui.controllers.tools import ToolsController
 from refrain.ui.file_view import FileView
 from refrain.ui.hover import with_status_tips
 from refrain.ui.no_wheel import install_no_wheel
-from refrain.ui.playlist_panel import PlaylistPanel
 from refrain.ui.qt_util import app, shortcut
 from refrain.ui.shell import Shell
 from refrain.ui.side_panel.panel import SelectedItem, SidePanel
@@ -103,7 +102,6 @@ class DropOverlay(QLabel):
 class MainWindow(QMainWindow):
     renameDone = Signal(object, bool)  # RenameResult, whether it was an Undo
     renameFailed = Signal(str)
-    playlistExported = Signal(str, int)  # the saved file, its track count (emitted from the shell thread)
     closed = Signal()  # closed for good: the process goes on while a task's window is open (SPEC §35)
     entryRequested = Signal(str, list)  # a right-click entry and its paths: app.Starter opens its window (SPEC §35)
 
@@ -177,21 +175,8 @@ class MainWindow(QMainWindow):
         self.center = QStackedWidget()  # the file list, the search results, or a tool's page
         self.center.addWidget(self.file_view)
         self.center.addWidget(self.search_view)
-        # The playlist builder (SPEC §15): a narrow column between the centre and the side panel, hidden until asked.
-        self.playlist_panel = PlaylistPanel(conn)
-        self.playlist_file: Path | None = (self.settings.path.with_name("playlist.json")
-                                           if self.settings.path is not None else None)  # None: not kept (tests)
-        self._playlist_save = QTimer(self, singleShot=True, interval=500)
-        self._playlist_save.timeout.connect(self.save_playlist)
-        self.playlist_panel.model.changed.connect(self._playlist_save.start)
-        self._playlist_refresh = QTimer(self, singleShot=True, interval=1000)  # the index changed: rows follow
-        self._playlist_refresh.timeout.connect(self.playlist_panel.model.refresh)
-        self.playlist_panel.model.added.connect(self.show_playlist_added)
-        self.playlist_panel.playRequested.connect(self.play_playlist)
-        self.playlist_panel.exportRequested.connect(self.export_playlist)
-        self.playlist_panel.relative_paths.setChecked(self.settings.playlist_relative)
-        self.playlist_panel.relative_paths.toggled.connect(lambda on: setattr(self.settings, "playlist_relative", on))
-        self.playlistExported.connect(self._playlist_exported)
+        self.playlist = PlaylistController(self, conn, self)  # the playlist builder (SPEC §15)
+        self.playlist_panel, self.playlist_action = self.playlist.panel, self.playlist.action
         self.splitter = QSplitter()
         self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.center)
@@ -216,7 +201,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(body)
         self._build_navigation(conn)
         self._restore_state()
-        self._restore_playlist()
+        self.playlist.restore()
         self._apply_tree()  # hidden by default; refresh_roots applies it again once the folders are known
 
         self.add_folder_action = QAction("&Add folder…", self, shortcut=QKeySequence("Ctrl+O"))
@@ -506,7 +491,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
         self.navigation_bar = toolbar
         self.addToolBarBreak()
-        self._build_playlist_and_advanced_search()
+        self._build_advanced_search()
         self._build_tools_bar()
 
         # Backspace goes up, but only from the lists (it edits text everywhere else).
@@ -590,11 +575,7 @@ class MainWindow(QMainWindow):
         button (SPEC §30). The button stays enabled: a click says the same in the status bar."""
         self.tool_actions[tool].setToolTip(self.tools.hover_text(tool))
 
-    def _build_playlist_and_advanced_search(self) -> None:
-        self.playlist_action = QAction("Playlist builder", self, checkable=True,
-                                       shortcut=QKeySequence("Ctrl+Shift+P"))
-        self.playlist_action.setToolTip("Show or hide the playlist builder (Ctrl+Shift+P)")
-        self.playlist_action.toggled.connect(self.set_playlist_visible)
+    def _build_advanced_search(self) -> None:
         self.advanced_search_action = QAction("Advanced search", self)
         self.advanced_search_action.setToolTip("Open a window listing the albums to fix by hand, like those without "
                                                "ReplayGain tags or not split yet")
@@ -732,7 +713,7 @@ class MainWindow(QMainWindow):
     def folder_updated(self, entry_id: int) -> None:
         if not self._library_open():
             return
-        self._refresh_playlist_later()
+        self.playlist.refresh_later()
         self._keep_open_folder()
         self.sidebar.model.refresh(entry_id)
         if entry_id == self.folder_id:
@@ -840,7 +821,7 @@ class MainWindow(QMainWindow):
     def scan_finished(self, _report: ScanReport) -> None:
         if not self._library_open():
             return
-        self._refresh_playlist_later()
+        self.playlist.refresh_later()
         self._keep_open_folder()
         self.sidebar.model.refresh_loaded()
         if self.folder_id is not None:
@@ -906,7 +887,41 @@ class MainWindow(QMainWindow):
         if found and found[1]:
             self.open_folder(found[0])
 
-    # -- the playlist builder (SPEC §15) --
+    def save_state(self) -> None:
+        self.playlist.save_state()
+        if not self.sidebar.isHidden() and self.splitter.sizes()[0] > 0:
+            self.settings.tree_width = self.splitter.sizes()[0]
+        self.settings.window_geometry = base64.b64encode(self.saveGeometry().data()).decode("ascii")
+        self.settings.splitter_state = base64.b64encode(self.splitter.saveState().data()).decode("ascii")
+        self.settings.file_list_header = self.file_view.save_layout()
+        self.settings.expanded_folders = self.sidebar.tree.expanded_paths()
+        self.settings.last_folder = ""
+        if self._library_open() and self.folder_id is not None and self._folder_exists(self.folder_id):
+            self.settings.last_folder = str(path_of(self.open_library.conn, self.folder_id))
+        self.settings.save()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        if not self._shown_once:
+            self._shown_once = True
+            self.search_field.setFocus()  # the app opens on its search (SPEC §33), ready to type into
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if not self.side_panel.can_leave():
+            event.ignore()
+            return
+        self.tag_writer.close()  # the queued saves finish first
+        self.tag_io.close()
+        self.playlist.shutdown()
+        self.search.shutdown()
+        if self.advanced_search is not None:
+            self.advanced_search.close()
+            self.advanced_search.service.close()
+        self.save_state()
+        app().removeEventFilter(self)
+        self.shell.shutdown()
+        super().closeEvent(event)
+        self.closed.emit()
 
     # -- the folder tree (SPEC §33) --
 
@@ -942,133 +957,6 @@ class MainWindow(QMainWindow):
             sizes[0] = 0
             self.sidebar.hide()
         self.splitter.setSizes(sizes)
-
-    def set_playlist_visible(self, visible: bool) -> None:
-        """Show or hide the panel. It takes its width from the centre only, so the tree and the side panel keep
-        theirs (the list scrolls sideways if its columns no longer fit), and gives it back when hidden."""
-        if visible == self.playlist_panel.isVisible():
-            return
-        sizes = self.splitter.sizes()
-        if visible:
-            width = min(max(self.settings.playlist_width, 200), max(0, sizes[1] - 200))
-            sizes[1] -= width
-            sizes[2] = width
-            self.playlist_panel.show()
-        else:
-            if sizes[2] > 0:
-                self.settings.playlist_width = sizes[2]
-            sizes[1] += sizes[2]
-            sizes[2] = 0
-            self.playlist_panel.hide()
-        self.splitter.setSizes(sizes)
-        self.settings.playlist_visible = visible
-        if self.playlist_action.isChecked() != visible:
-            self.playlist_action.setChecked(visible)
-
-    def show_playlist_added(self, added: int, skipped: int) -> None:
-        if not added and not skipped:
-            text = "Nothing to add: there is no music in what was dropped."
-        else:
-            text = f"Added {added:,} track{'s' if added != 1 else ''} to the playlist."
-            if skipped:
-                text += f" {skipped:,} already in it {'were' if skipped != 1 else 'was'} skipped."
-        self.statusBar().showMessage(text, STATUS_MS)
-
-    def play_playlist(self) -> None:
-        """Through a temporary playlist, as Play selection (SPEC §14); tracks gone from the library are left out."""
-        entries = self.playlist_panel.entries()
-        self._play(entries, str(entries[0].path) if entries else "", False)
-
-    def choose_export_file(self, suggested: str) -> str:
-        """Replaced in tests. The dialog asks before replacing a file."""
-        target, _filter = QFileDialog.getSaveFileName(self, "Export the playlist", suggested,
-                                                      "M3U8 playlist (*.m3u8)")
-        return target
-
-    def export_playlist(self) -> None:
-        """Save the playlist as a .m3u8 where the user chooses (a Ground rule 1 exception), off the UI thread."""
-        entries = self.playlist_panel.entries()
-        if not entries:
-            self.statusBar().showMessage("The playlist has no tracks to export.", STATUS_MS)
-            return
-        folder = Path(self.settings.playlist_export_dir or Path.home() / "Music")
-        chosen = self.choose_export_file(str(folder / "Playlist.m3u8"))
-        if not chosen:
-            return
-        target = Path(chosen)
-        if target.suffix.lower() != ".m3u8":
-            target = target.with_name(target.name + ".m3u8")
-        self.settings.playlist_export_dir = str(target.parent)
-        relative = self.playlist_panel.relative_paths.isChecked()
-
-        def run() -> None:
-            playlists.export_playlist(entries, target, relative)
-            self.playlistExported.emit(str(target), len(entries))
-
-        self.shell.run(run, f"The playlist couldn't be saved as {target}.", str(target.parent), True)
-
-    def _playlist_exported(self, target: str, count: int) -> None:
-        text = f"Exported {count:,} track{'s' if count != 1 else ''} to {target}."
-        missing = self.playlist_panel.model.rowCount() - count
-        if missing > 0:
-            text += f" {missing} not in the library {'were' if missing != 1 else 'was'} left out."
-        self.statusBar().showMessage(text, STATUS_MS)
-
-    def _restore_playlist(self) -> None:
-        self.playlist_panel.restore_layout(self.settings.playlist_header)
-        if self.playlist_file is not None:
-            self.playlist_panel.model.set_builder(Builder.load(self.playlist_file))
-        if self.settings.playlist_visible:
-            self.set_playlist_visible(True)
-
-    def save_playlist(self) -> None:
-        if self.playlist_file is not None:
-            self.playlist_panel.model.builder.save(self.playlist_file)
-
-    def _refresh_playlist_later(self) -> None:
-        if self.playlist_panel.model.rowCount():
-            self._playlist_refresh.start()
-
-    def save_state(self) -> None:
-        visible = self.playlist_panel.isVisible()
-        if visible:  # the splitter's state is saved without the panel; its width and visibility are kept apart
-            self.set_playlist_visible(False)
-            self.settings.playlist_visible = True
-        self.settings.playlist_header = self.playlist_panel.save_layout()
-        if not self.sidebar.isHidden() and self.splitter.sizes()[0] > 0:
-            self.settings.tree_width = self.splitter.sizes()[0]
-        self.settings.window_geometry = base64.b64encode(self.saveGeometry().data()).decode("ascii")
-        self.settings.splitter_state = base64.b64encode(self.splitter.saveState().data()).decode("ascii")
-        self.settings.file_list_header = self.file_view.save_layout()
-        self.settings.expanded_folders = self.sidebar.tree.expanded_paths()
-        self.settings.last_folder = ""
-        if self._library_open() and self.folder_id is not None and self._folder_exists(self.folder_id):
-            self.settings.last_folder = str(path_of(self.open_library.conn, self.folder_id))
-        self.settings.save()
-
-    def showEvent(self, event: QShowEvent) -> None:
-        super().showEvent(event)
-        if not self._shown_once:
-            self._shown_once = True
-            self.search_field.setFocus()  # the app opens on its search (SPEC §33), ready to type into
-
-    def closeEvent(self, event: QCloseEvent) -> None:
-        if not self.side_panel.can_leave():
-            event.ignore()
-            return
-        self.tag_writer.close()  # the queued saves finish first
-        self.tag_io.close()
-        self._playlist_save.stop()
-        self.save_playlist()
-        self.search.shutdown()
-        if self.advanced_search is not None:
-            self.advanced_search.close()
-            self.advanced_search.service.close()
-        self.save_state()
-        app().removeEventFilter(self)
-        self.shell.shutdown()
-        super().closeEvent(event)
-        self.closed.emit()
 
     # -- context menus (SPEC §5): only what exists so far; Rename, Tidy and ReplayGain come with their milestones
 
@@ -1296,15 +1184,15 @@ class MainWindow(QMainWindow):
         if not self._library_open() or not self._folder_exists(entry_id):
             return
         entries = queries.playlist_for_folder(self.open_library.conn, entry_id, recursive)
-        self._play(entries, str(path_of(self.open_library.conn, entry_id)), True)
+        self.play(entries, str(path_of(self.open_library.conn, entry_id)), True)
 
     def play_selection(self, ids: list[int]) -> None:
         if not self._library_open():
             return
         entries = queries.playlist_for_ids(self.open_library.conn, ids)
-        self._play(entries, str(entries[0].path) if entries else "", False)
+        self.play(entries, str(entries[0].path) if entries else "", False)
 
-    def _play(self, entries: list[playlists.PlaylistEntry], fallback: str, fallback_is_dir: bool) -> None:
+    def play(self, entries: list[playlists.PlaylistEntry], fallback: str, fallback_is_dir: bool) -> None:
         """Write a temporary playlist (the app's own file) and hand it to the default player (SPEC §14)."""
         if not entries:
             self.statusBar().showMessage("There are no audio files to play here.", STATUS_MS)

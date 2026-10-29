@@ -35,7 +35,7 @@ def test_showing_takes_only_the_centres_width(qtbot, window):
     shown = window.splitter.sizes()
     assert shown[0] == before[0] and shown[3] == before[3]  # the tree and the side panel keep their widths
     assert shown[2] >= 200 and shown[1] == before[1] - shown[2]
-    window.set_playlist_visible(False)
+    window.playlist.set_visible(False)
     assert window.splitter.sizes() == before and not window.playlist_action.isChecked()
 
 
@@ -123,7 +123,7 @@ def test_the_playlist_and_the_panel_survive_a_restart(qtbot, service, settings):
     first = MainWindow(service, settings)
     qtbot.addWidget(first)
     first.show()
-    first.set_playlist_visible(True)
+    first.playlist.set_visible(True)
     add_folder(first, service, "Artist", "Album")
     first.playlist_panel.view.header().setSectionHidden(COLUMN_INDEX["artist"], True)
     first.close()

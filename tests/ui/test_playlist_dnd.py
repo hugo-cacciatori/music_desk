@@ -47,7 +47,7 @@ def select_tree(window, service, *folders: tuple[str, ...]) -> None:
 
 
 def test_a_tree_multi_selection_lands_in_natural_order(window, service):
-    window.set_playlist_visible(True)
+    window.playlist.set_visible(True)
     select_tree(window, service, ("Other", ALBUM), ("Artist", "Album"))  # picked in the reverse order
     ids = window.sidebar.tree.drag_ids()
     assert ids == [entry(service, "Artist", "Album"), entry(service, "Other", ALBUM)]  # the tree's order
@@ -123,7 +123,7 @@ def test_drags_carry_entry_ids_only(window, service):
 
 
 def test_a_real_drop_on_the_view(qtbot, window, service):
-    window.set_playlist_visible(True)
+    window.playlist.set_visible(True)
     view = window.playlist_panel.view
     qtbot.waitUntil(view.isVisible)
     mime = entry_mime([entry(service, "Artist", "Album")])
@@ -138,7 +138,7 @@ def test_a_real_drop_on_the_view(qtbot, window, service):
 
 
 def focus_list(qtbot, window) -> None:
-    window.set_playlist_visible(True)
+    window.playlist.set_visible(True)
     window.activateWindow()
     window.playlist_panel.view.setFocus()
     qtbot.waitUntil(window.playlist_panel.view.hasFocus, timeout=3000)

@@ -39,8 +39,8 @@ def export(qtbot, window, target: Path | str, asked: list | None = None) -> Path
         if asked is not None:
             asked.append(suggested)
         return str(target)
-    window.choose_export_file = choose
-    with qtbot.waitSignal(window.playlistExported, timeout=5000) as blocker:
+    window.playlist.choose_export_file = choose
+    with qtbot.waitSignal(window.playlist.exported, timeout=5000) as blocker:
         window.playlist_panel.export_button.click()
     return Path(blocker.args[0])
 
@@ -96,15 +96,15 @@ def test_missing_tracks_are_left_out(qtbot, window, service, tmp_path):
 
 def test_cancelling_the_dialog_writes_nothing(window, service, tmp_path):
     fill(window, service)
-    window.choose_export_file = lambda suggested: ""
-    window.export_playlist()
+    window.playlist.choose_export_file = lambda suggested: ""
+    window.playlist.export()
     assert not list(tmp_path.glob("*.m3u8"))
 
 
 def test_a_failed_export_says_so(qtbot, window, service, tmp_path):
     fill(window, service)
-    window.choose_export_file = lambda suggested: str(tmp_path / "no such folder" / "out.m3u8")
-    window.export_playlist()
+    window.playlist.choose_export_file = lambda suggested: str(tmp_path / "no such folder" / "out.m3u8")
+    window.playlist.export()
     qtbot.waitUntil(window.toast.isVisible, timeout=3000)
     assert "couldn't be saved" in window.toast.label.text()
 

@@ -159,4 +159,44 @@ public sealed class SplitTests
         Assert.StartsWith("Not enough free space: the tracks need about ", short_.Error);
         Assert.Equal(before, Directory.GetFiles(twins.Cs).Order());
     }
+
+    [Fact]
+    public void The_recap_says_what_the_split_writes_or_why_it_cant()
+    {
+        var silent = Split.IsSilent(new Flac(FlacExe), TestContext.Current.CancellationToken);
+        var hidden = SplitPlanner.Plan(Path.Combine(Setup.Fixtures, "split", "hidden_track", "Split Album.cue"), Names.Masks, Names.Replacement, silent);
+        Assert.Empty(SplitRecap.Reasons(hidden, masksValid: true, "the Options"));
+        Assert.Equal("Split writes 4 tracks as FLAC files, each proven identical to its part of the original. The image and its cue sheet stay as they are.",
+            SplitRecap.Message(hidden, []));
+        Assert.Equal(("hidden", "00 Hidden track.flac", "0:03"), SplitRecap.Rows(hidden)[0]);
+        Assert.Equal("Source: Fixture Artist - Split Album.flac: FLAC, 44.1 kHz, 0:12", SplitRecap.Details(hidden)[0]);
+        Assert.Equal("Cue sheet read as UTF-8", SplitRecap.Details(hidden)[2]);
+
+        var data = SplitPlanner.Plan(Path.Combine(Setup.Fixtures, "split", "data_track", "image.cue"), Names.Masks, Names.Replacement, silent);
+        var reasons = SplitRecap.Reasons(data, masksValid: false, "the Options");
+        Assert.Equal(["The File names masks need fixing: the Options.", "1 data track skipped."], reasons);
+        Assert.StartsWith("This cue sheet can't be split as it is: The File names masks need fixing", SplitRecap.Message(data, reasons));
+        Assert.EndsWith(SplitRecap.FixIt, SplitRecap.Message(data, reasons));
+    }
+
+    [Fact]
+    public void The_split_task_reports_what_it_wrote()
+    {
+        using var twins = new ReplayGainTests.Twins(@"split\hidden_track");
+        var flac = new Flac(FlacExe);
+        var cancel = TestContext.Current.CancellationToken;
+        var plan = SplitPlanner.Plan(Path.Combine(twins.Cs, "Split Album.cue"), Names.Masks, Names.Replacement, Split.IsSilent(flac, cancel));
+        Assert.Equal([twins.Cs], SplitTask.LockPaths(plan));
+        var progress = new List<string>();
+        var outcome = SplitTask.Run(plan, flac, cancel, (done, total, name) => progress.Add($"{done}/{total} {name}"));
+
+        Assert.True(outcome.Split);
+        Assert.Equal(5, progress.Count);
+        Assert.StartsWith("0/4 00 Hidden track.flac", progress[0]);
+        Assert.Equal("4/4 done", progress[4]);
+        var text = outcome.Text();
+        Assert.StartsWith("Done: 4 tracks split, all identical to the original.\n\nWritten to " + twins.Cs + ":\n    00 Hidden track.flac", text);
+        Assert.Contains("Together, the tracks have the original's MD5 (", text);
+        Assert.EndsWith("The image and its cue sheet are as they were.", text);
+    }
 }

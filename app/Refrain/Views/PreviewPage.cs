@@ -7,7 +7,8 @@ using Refrain.Core.Browser;
 namespace Refrain.Views;
 
 /// <summary>A read-only look at a selected text or image file (SPEC §20, §36 "5."): rip logs, cue sheets, notes,
-/// scans. Nothing on it writes; Open hands the file to its default app.</summary>
+/// scans. Nothing on it writes; Open hands the file to its default app. A cue sheet's Open reads Play (its default app
+/// is the player), and Split opens the "Split this cue sheet…" window (SPEC §22, §35 decision 7).</summary>
 public sealed partial class PreviewPage : Grid
 {
     const int ImageWidth = 1200;
@@ -16,6 +17,7 @@ public sealed partial class PreviewPage : Grid
     readonly TextBlock info = Ui.Secondary();
     readonly TextBlock note = Ui.Secondary();
     readonly Button open = Ui.Button("Open", "Open it with its default app");
+    readonly Button split = Ui.Button("Split", "Split this cue sheet: a recap of what it writes, then Split or Cancel");
     readonly TextBox text = new()
     {
         IsReadOnly = true,
@@ -30,6 +32,9 @@ public sealed partial class PreviewPage : Grid
 
     public (long Size, double Mtime)? Stamp { get; private set; }
 
+    /// <summary>A cue sheet's Split was clicked.</summary>
+    public event Action<string>? SplitRequested;
+
     public PreviewPage()
     {
         Padding = new Thickness(16);
@@ -42,8 +47,11 @@ public sealed partial class PreviewPage : Grid
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.Children.Add(name);
-        SetColumn(open, 1);
-        head.Children.Add(open);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        buttons.Children.Add(open);
+        buttons.Children.Add(split);
+        SetColumn(buttons, 1);
+        head.Children.Add(buttons);
         Children.Add(head);
         SetRow(info, 1);
         Children.Add(info);
@@ -60,6 +68,10 @@ public sealed partial class PreviewPage : Grid
         {
             if (path is not null) Shell.Open(path);
         };
+        split.Click += (_, _) =>
+        {
+            if (path is not null) SplitRequested?.Invoke(path);
+        };
     }
 
     /// <summary>Reads the file off the UI thread; <paramref name="stamp"/> (size, mtime) lets a change reload it.</summary>
@@ -70,6 +82,10 @@ public sealed partial class PreviewPage : Grid
         path = file;
         Stamp = stamp;
         name.Text = Path.GetFileName(file);
+        var cue = Path.GetExtension(file).Equals(".cue", StringComparison.OrdinalIgnoreCase);
+        open.Content = cue ? "Play" : "Open";
+        ToolTipService.SetToolTip(open, cue ? "Play the album: the cue sheet opens in its default app, your player" : "Open it with its default app");
+        split.Visibility = cue ? Visibility.Visible : Visibility.Collapsed;
         var modified = stamp is { } s ? DateTime.UnixEpoch.AddSeconds(s.Item2).ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "";
         if (Preview.Of(file) == Preview.Kind.Text)
         {

@@ -24,7 +24,7 @@ public static class MenuLogic
     // The verbs: the app's --entry names, as the Python app's (SPEC §31 "As built").
     public const string ReplayGainAlbum = "replaygain-album", ReplayGainDiscography = "replaygain-discography",
         ReplayGainAlbums = "replaygain-albums", ReplayGainTracks = "replaygain-tracks", ReplayGainLoose = "replaygain-loose",
-        RemoveReplayGain = "remove-replaygain", Tidy = "tidy";
+        RemoveReplayGain = "remove-replaygain", Tidy = "tidy", Split = "split";
 
     public static readonly IReadOnlyList<string> ReplayGainVerbs =
         [ReplayGainAlbum, ReplayGainDiscography, ReplayGainAlbums, ReplayGainTracks, ReplayGainLoose];
@@ -49,6 +49,7 @@ public static class MenuLogic
         [ReplayGainLoose] = "Runs ReplayGain on each selected track alone, as its own album, with no log",
         [RemoveReplayGain] = "Removes the selected tracks' ReplayGain tags, after a question",
         [Tidy] = "Plans Tidy (split, rename, ReplayGain) on every album here; nothing changes until you run it",
+        [Split] = "Shows what splitting this cue sheet writes; nothing is split until you click Split",
     };
 
     public static Clicked Classify(bool background, IReadOnlyList<(string Path, bool IsFolder)> items) =>
@@ -64,7 +65,7 @@ public static class MenuLogic
     /// <summary>The entries, in order (SPEC §31; each kept function's are added with its rebuild task, §36 "7.", "8."):
     /// Open in Refrain on one folder or empty space; the ReplayGain entries on folders only, or on files with tracks
     /// rsgain scans (no folder); Remove ReplayGain tags when every item is such a track; Tidy on empty space or folders
-    /// only (never files); a separator; Settings, always.
+    /// only (never files); Split this cue sheet… on one .cue alone; a separator; Settings, always.
     /// <paramref name="target"/>: the ReplayGain options' target, shown in the labels.</summary>
     public static List<Entry> Entries(Clicked clicked, IReadOnlyList<(string Path, bool IsFolder)> items, double target = -15)
     {
@@ -97,6 +98,8 @@ public static class MenuLogic
             entries.Add(new Entry(RemoveReplayGain, "Remove ReplayGain tags…", Help[RemoveReplayGain]));
         if (background || (folders > 0 && files == 0))
             entries.Add(new Entry(Tidy, background || folders == 1 ? "Tidy this folder…" : $"Tidy {folders} folders…", Help[Tidy]));
+        if (!background && folders == 0 && files == 1 && Path.GetExtension(items[0].Path).Equals(".cue", StringComparison.OrdinalIgnoreCase))
+            entries.Add(new Entry(Split, "Split this cue sheet…", Help[Split]));
         if (entries.Count > 0) entries.Add(Separator);
         entries.Add(Settings);
         return entries;

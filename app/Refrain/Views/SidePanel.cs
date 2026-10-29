@@ -41,6 +41,7 @@ public sealed partial class SidePanel : Grid
         lyrics = new LyricsPage(library, service, settings);
         folder = new FolderPage(library);
         folder.PlayRequested += (id, subfolders) => PlayRequested?.Invoke(id, subfolders);
+        preview.SplitRequested += path => _ = App.Instance.RunEntry(RefrainMenu.MenuLogic.Split, [path]);
         message.Margin = new Thickness(16);
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });

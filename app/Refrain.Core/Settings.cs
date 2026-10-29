@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Refrain.Core.Options;
 
 namespace Refrain.Core;
 
@@ -33,6 +34,27 @@ public sealed class Settings
     public double PanelWidth { get; set; } = 380;
     public double LyricsTextSize { get; set; } = 14;
     public string SearchMode { get; set; } = "files";
+
+    // The Options window's pages (SPEC §12, §36 "8."), kept as JSON so a mistyped value falls back alone.
+    public JsonElement? FileNames { get; set; }
+    public JsonElement? ReplayGain { get; set; }
+    public JsonElement? Tidy { get; set; }
+    public string OptionsPage { get; set; } = "";
+
+    public FileNamesOptions GetFileNames() => FileNamesOptions.From(FileNames);
+    public void Set(FileNamesOptions options) => FileNames = Element(options.Write);
+    public ReplayGainOptions GetReplayGain() => ReplayGainOptions.From(ReplayGain);
+    public void Set(ReplayGainOptions options) => ReplayGain = Element(options.Write);
+    public TidyOptions GetTidy() => TidyOptions.From(Tidy);
+    public void Set(TidyOptions options) => Tidy = Element(options.Write);
+
+    static JsonElement Element(Action<Utf8JsonWriter> write)
+    {
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var json = new Utf8JsonWriter(buffer)) write(json);
+        using var document = JsonDocument.Parse(buffer.WrittenMemory);
+        return document.RootElement.Clone();
+    }
     public string? LastFolder { get; set; }
     public List<string> ExpandedFolders { get; set; } = [];
     public HeaderState? FileHeader { get; set; }

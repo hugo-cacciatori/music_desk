@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
-from PySide6.QtWidgets import QApplication, QStyle, QTableWidget, QTreeWidget, QWidget
+from PySide6.QtWidgets import QApplication, QStyle, QTableWidget, QWidget
 
 
 def shortcut(key: QKeySequence | QKeySequence.StandardKey, parent: QWidget, slot: Callable[[], object],
@@ -40,9 +40,3 @@ def cell_text(table: QTableWidget, row: int, column: int) -> str:
     """A table cell's text ("" for a cell without an item)."""
     item = table.item(row, column)
     return item.text() if item is not None else ""
-
-
-def top_level_text(tree: QTreeWidget, row: int, column: int) -> str:
-    """A top-level tree row's text in one column ("" past the last row)."""
-    item = tree.topLevelItem(row)
-    return item.text(column) if item is not None else ""

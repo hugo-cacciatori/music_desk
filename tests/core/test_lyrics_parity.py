@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 from lrclib_fake import FakeUrlopen, SleepRecorder, http_error, no_jitter
+from lyrics_helpers import read_track
 
 from refrain.core.lyrics import (
     LrclibClient,
@@ -17,7 +18,6 @@ from refrain.core.lyrics import (
     matches,
     normalize,
     parse_from_filename,
-    read_track,
     strip_timestamps,
 )
 

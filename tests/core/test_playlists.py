@@ -7,7 +7,6 @@ from refrain.core.playlists import (
     PlaylistEntry,
     PreviewSheet,
     PreviewTrack,
-    entry_for,
     folder_tracks,
     frames_from_samples,
     prune,
@@ -78,20 +77,6 @@ def test_folder_tracks_natural_order(tmp_path):
     assert [p.name for p in folder_tracks(tmp_path)] == ["track 1.FLAC", "Track 2.mp3", "Track 10.flac"]
     assert [p.relative_to(tmp_path).as_posix() for p in folder_tracks(tmp_path, recursive=True)] == [
         "track 1.FLAC", "Track 2.mp3", "Track 10.flac", "CD 2/01.flac", "CD 2/sub/01.flac", "CD 10/01.flac"]
-
-
-def test_entry_for_reads_tags(fixtures_dir):
-    entry = entry_for(fixtures_dir / "formats/tone.flac")
-    assert (entry.artist, entry.title, entry.label) == ("Fixture Artist", "Tone tone.flac",
-                                                        "Fixture Artist - Tone tone.flac")
-    assert 0.5 < entry.duration < 1.5
-
-
-def test_entry_for_unreadable_file(tmp_path):
-    path = tmp_path / "broken.flac"
-    path.write_bytes(b"not audio")
-    assert entry_for(path) == PlaylistEntry(path)
-    assert entry_for(path).label == "broken"
 
 
 # -- Preview in player: temporary cue sheets (SPEC §23) --

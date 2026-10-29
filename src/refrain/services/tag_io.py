@@ -124,13 +124,6 @@ class TagIO(QObject):
         self._submit(run)
         return token
 
-    def read_rename_fields(self, path: str | Path) -> int:
-        """The fields rename masks use, of one file (the File names card's live example)."""
-        token = self.next_token()
-
-        self._submit(lambda: self._emit_rename_fields(token, Path(path)))
-        return token
-
     def read_first_track_fields(self, paths: Sequence[str]) -> int:
         """The rename fields of the clicked items' first track (SPEC §31), found off the UI thread; None (and no
         extension) when they hold no track."""

@@ -11,7 +11,7 @@ from pathlib import Path
 from browser_helpers import entry
 
 from refrain import here
-from refrain.app import folder_argument
+from refrain.context_menu.request import parse_arguments
 from refrain.instance import InstanceServer, hand_over
 
 
@@ -91,8 +91,8 @@ def test_no_running_app_means_no_hand_over():
 
 
 def test_folder_argument():
-    assert folder_argument([]) is None
-    assert folder_argument(["--verbose", r"D:\Music"]) == r"D:\Music"
+    assert parse_arguments([]).folder is None
+    assert parse_arguments(["--verbose", r"D:\Music"]).folder == r"D:\Music"
 
 
 # -- RefrainHere.exe --

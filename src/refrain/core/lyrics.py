@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Protocol
 
 import refrain
-from refrain.core.tags import Fields, TaggedFile
+from refrain.core.tags import Fields
 
 FOUND = "found"
 INSTRUMENTAL = "instrumental"
@@ -79,11 +79,6 @@ def parse_from_filename(name):
         artist, title = stem.split(" - ", 1)
         return artist.strip() or None, title.strip()
     return None, stem.strip()
-
-
-def read_track(path: str | Path) -> Track:
-    tagged = TaggedFile(path)
-    return track_from_fields(tagged.fields(), tagged.path.name, tagged.stream_info().duration)
 
 
 def track_from_fields(fields: Fields, file_name: str, duration: float | None) -> Track:
@@ -223,19 +218,6 @@ def cache_key(artist: str | None, title: str | None) -> str:
 class LyricsCache(Protocol):
     def get(self, key: str) -> dict | None: ...
     def put(self, key: str, entry: dict) -> None: ...
-
-
-class DictCache:
-    """In-memory cache with the script's entry shape (the SQLite store replaces it in M4)."""
-
-    def __init__(self, entries: dict[str, dict] | None = None) -> None:
-        self.entries = dict(entries or {})
-
-    def get(self, key: str) -> dict | None:
-        return self.entries.get(key)
-
-    def put(self, key: str, entry: dict) -> None:
-        self.entries[key] = entry
 
 
 def is_fresh(entry: dict | None, today: date, options: LyricsOptions | None = None) -> bool:

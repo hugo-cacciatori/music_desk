@@ -16,7 +16,6 @@ from pathlib import Path
 from refrain import paths
 from refrain.core.formats import AUDIO_EXTENSIONS
 from refrain.core.fsops import natural_key
-from refrain.core.tags import TaggedFile
 
 log = logging.getLogger(__name__)
 
@@ -41,18 +40,6 @@ class PlaylistEntry:
         if artist and title:
             return f"{artist} - {title}"
         return title or self.path.stem
-
-
-def entry_for(path: str | Path) -> PlaylistEntry:
-    """An entry read from the file's tags; a file whose tags can't be read still plays, labelled by its name."""
-    path = Path(path)
-    try:
-        tagged = TaggedFile(path)
-        fields = tagged.fields()
-        return PlaylistEntry(path, tagged.stream_info().duration, fields.artist, fields.title)
-    except Exception as e:  # noqa: BLE001 - a bad file must not stop the playlist
-        log.warning("playlist: could not read tags of %s: %s", path, e)
-        return PlaylistEntry(path)
 
 
 def is_audio(path: Path) -> bool:

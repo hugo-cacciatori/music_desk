@@ -105,12 +105,12 @@ def test_nothing_happens_before_start(qtbot, make, read):
 def test_selected_track_then_open_folder_then_the_rest(qtbot, make, read, library):
     lrclib = Lrclib()
     service = make(lrclib, workers=1)
-    service.pause()
+    service.set_offline(True)
     service.prioritize_folder(folder(read, library, f"Fixture Artist/{ALBUM}/lite"))
     service.prioritize_track(entry(read, library, f"Fixture Artist/{ALBUM}/track6.FLAC"))
     qtbot.waitUntil(lambda: not service._requests and len(service._tiers[0]) == 1 and len(service._tiers[1]) == 2)
     service.start()
-    service.resume()
+    service.set_offline(False)
     qtbot.waitUntil(lambda: not pending(read) and service.state == IDLE, timeout=10000)
     titles = lrclib.titles()
     assert titles[0] == "Sixth"
@@ -121,7 +121,7 @@ def test_selected_track_then_open_folder_then_the_rest(qtbot, make, read, librar
 def test_a_folder_request_replaces_the_previous_folder(qtbot, make, read, library):
     lrclib = Lrclib()
     service = make(lrclib, workers=1)
-    service.pause()
+    service.set_offline(True)
     service.prioritize_folder(folder(read, library, f"Fixture Artist/{ALBUM}/lite"))
     service.prioritize_folder(folder(read, library, f"Fixture Artist/{ALBUM}/bonus"))
     qtbot.waitUntil(lambda: not service._requests)

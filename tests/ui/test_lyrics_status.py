@@ -3,7 +3,7 @@
 import time
 
 from refrain.core.index.store import path_of
-from refrain.services.lyrics_service import IDLE, OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
+from refrain.services.lyrics_service import IDLE, OFFLINE, RUNNING, UNREACHABLE, LyricsProgress
 from refrain.ui.file_view import COLUMN_INDEX
 
 
@@ -13,14 +13,12 @@ def progress(state, pending=12):
 
 def test_status_bar_label_and_retry_button(window, service, monkeypatch):
     calls = []
-    for name in ("pause", "resume", "retry_now"):
+    for name in ("retry_now",):
         monkeypatch.setattr(service.lyrics, name, lambda n=name: calls.append(n))
     label, button = window.status_line.lyrics_label, window.status_line.lyrics_button
 
     window.status_line.show_lyrics_progress(progress(RUNNING, 1234))
     assert label.text() == "Looking up lyrics: 1,234 to look up" and not button.isVisible()  # no Pause
-    window.status_line.show_lyrics_progress(progress(PAUSED))
-    assert label.text() == "Lyrics paused: 12 to look up" and not button.isVisible()  # no Resume
     monkeypatch.setattr(type(service.lyrics), "resume_at", property(lambda _self: time.time() + 600))
     window.status_line.show_lyrics_progress(progress(UNREACHABLE))
     assert label.text().startswith("LRCLIB unreachable, retrying at ") and button.text() == "Retry now"

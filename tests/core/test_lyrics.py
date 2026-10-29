@@ -6,6 +6,7 @@ from datetime import date
 
 import pytest
 from lrclib_fake import FakeUrlopen, SleepRecorder, http_error, no_jitter
+from lyrics_helpers import DictCache, read_track
 
 from refrain.core.lyrics import (
     ERROR,
@@ -15,7 +16,6 @@ from refrain.core.lyrics import (
     NOT_FOUND,
     NOT_LOOKED_UP,
     CircuitBreaker,
-    DictCache,
     LrclibClient,
     LyricsOptions,
     Track,
@@ -23,7 +23,6 @@ from refrain.core.lyrics import (
     fetch_lyrics,
     is_fresh,
     lookup,
-    read_track,
     search_urls,
     strip_timestamps,
 )

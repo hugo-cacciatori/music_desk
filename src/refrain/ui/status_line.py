@@ -8,7 +8,7 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QLabel, QToolButton
 
 from refrain.core.index.scanner import ScanProgress
-from refrain.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
+from refrain.services.lyrics_service import OFFLINE, RUNNING, UNREACHABLE, LyricsProgress
 
 PAUSED_NOTE = " (paused while a task reads albums)"
 LYRICS_RETRY_TIP = "Try reaching LRCLIB again now instead of waiting."  # the status bar's Retry now
@@ -73,8 +73,6 @@ class StatusLine(QObject):
         left = f"{progress.pending:,} to look up" if progress.pending is not None else "starting"
         if progress.state == OFFLINE:
             text = "Lyrics: lookups off"
-        elif progress.state == PAUSED:  # the service can still pause (tests); the app no longer asks it to
-            text = f"Lyrics paused: {left}"
         elif progress.state == UNREACHABLE:
             resume = time.strftime("%H:%M", time.localtime(window.open_library.lyrics.resume_at))
             text = f"LRCLIB unreachable, retrying at {resume}"

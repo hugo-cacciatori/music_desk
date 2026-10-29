@@ -43,7 +43,6 @@ SELECTED, OPEN_FOLDER, BACKGROUND = range(3)
 # states
 RUNNING = "running"
 IDLE = "idle"  # nothing pending
-PAUSED = "paused"  # by the user
 UNREACHABLE = "unreachable"  # the circuit breaker's pause
 OFFLINE = "offline"
 
@@ -104,7 +103,6 @@ class LyricsService(QObject):
         self._paused_until: float | None = None  # monotonic
         self._resume_at = 0.0  # time.time() at which the breaker's pause ends
         self._offline = offline
-        self._user_paused = False
         self._started = False
         self._refilling = False
         self._exhausted = False  # the background has nothing left until wake()
@@ -152,12 +150,6 @@ class LyricsService(QObject):
         with self._cond:
             return self._last_error.get(key)
 
-    def is_pending(self, key: str) -> bool:
-        """Queued or being looked up."""
-        with self._cond:
-            return key in self._in_flight or key in self._forced or any(
-                item.key == key for queue in self._tiers for item in queue)
-
     @property
     def resume_at(self) -> float:
         """time.time() at which the circuit breaker's pause ends (meaningful in the unreachable state)."""
@@ -180,17 +172,6 @@ class LyricsService(QObject):
     def set_offline(self, offline: bool) -> None:
         with self._cond:
             self._offline = offline
-            self._cond.notify_all()
-        self._emit_progress(force=True)
-
-    def pause(self) -> None:
-        with self._cond:
-            self._user_paused = True
-        self._emit_progress(force=True)
-
-    def resume(self) -> None:
-        with self._cond:
-            self._user_paused = False
             self._cond.notify_all()
         self._emit_progress(force=True)
 
@@ -286,7 +267,7 @@ class LyricsService(QObject):
                 self._refill(conn)
 
     def _can_work_locked(self) -> bool:
-        return not (self._offline or self._user_paused or self._paused_until is not None)
+        return not (self._offline or self._paused_until is not None)
 
     def _check_pause_locked(self) -> float | None:
         """End the breaker's pause when its time is up; otherwise the seconds left (None: not paused)."""
@@ -408,8 +389,6 @@ class LyricsService(QObject):
     def _state_locked(self) -> str:
         if self._offline:
             return OFFLINE
-        if self._user_paused:
-            return PAUSED
         if self._paused_until is not None:
             return UNREACHABLE
         if self._in_flight or any(self._tiers) or self._requests or (self._started and not self._exhausted):

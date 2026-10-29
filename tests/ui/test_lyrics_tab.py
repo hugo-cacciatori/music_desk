@@ -255,15 +255,6 @@ def test_unreachable_and_retry_now(qtbot, make, read, library):
     assert service.state != "unreachable"
 
 
-def test_paused(qtbot, make, read, library):
-    service, tab = make()
-    service.pause()
-    select(service, tab, track(read, library, "01 First.flac"))
-    assert tab.state == tab_module.PAUSED_STATE
-    service.resume()
-    qtbot.waitUntil(lambda: tab.state == tab_module.FOUND_STATE, timeout=5000)
-
-
 def test_results_for_other_keys_leave_the_tab_alone(qtbot, make, read, library):
     service, tab = make(offline=True)
     tab.show_track(track(read, library, "01 First.flac"))

@@ -2,7 +2,7 @@
 (M12, SPEC §26: no function relies on it).
 
 Everything comes from the index on the UI's read connection, so showing a track reads no file. The tab follows the
-lyrics service: a result for the shown key, a change of state (offline, paused, unreachable) or a retry re-renders
+lyrics service: a result for the shown key, a change of state (offline, unreachable) or a retry re-renders
 it. Opening the Genius and Google searches is left to the window, which launches off the UI thread.
 
 The lyrics are for reading while listening (SPEC §33): large text, generous line spacing, and a text size the user
@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 
 from refrain.core.index.lyrics_index import LyricsInfo, lyrics_info
 from refrain.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND, is_fresh, search_urls
-from refrain.services.lyrics_service import OFFLINE, PAUSED, UNREACHABLE, LyricsProgress, LyricsService
+from refrain.services.lyrics_service import OFFLINE, UNREACHABLE, LyricsProgress, LyricsService
 
 # states (also what tests check)
 MESSAGE = "message"  # nothing to show for one track: none or several selected, a folder, not indexed
@@ -44,7 +44,6 @@ UNREADABLE = "unreadable"
 ERROR = "error"
 OFFLINE_STATE = "offline"
 UNREACHABLE_STATE = "unreachable"
-PAUSED_STATE = "paused"
 
 
 TIMESTAMPS_TIP = "Show the time of each line in front of it, as LRCLIB's synced lyrics give it"
@@ -257,8 +256,6 @@ class LyricsTab(QWidget):
         elif state == UNREACHABLE:
             resume = datetime.fromtimestamp(self.service.resume_at).strftime("%H:%M")
             self._render(UNREACHABLE_STATE, f"LRCLIB is unreachable. Lookups resume at {resume}.")
-        elif state == PAUSED:
-            self._render(PAUSED_STATE, "Lyrics lookups are paused.")
         else:
             self._render(LOOKING_UP, "Looking up on LRCLIB…")
 

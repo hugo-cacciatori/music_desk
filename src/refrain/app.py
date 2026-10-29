@@ -87,11 +87,6 @@ def set_app_user_model_id() -> None:
         pass  # not Windows, or an older shell: only the taskbar grouping differs
 
 
-def folder_argument(arguments: list[str]) -> str | None:
-    """The folder to open (SPEC §29): the first argument that isn't an option, as RefrainHere.exe passes it."""
-    return parse_arguments(arguments).folder
-
-
 EntryWindow = (ReplayGainWindow | RenameWindow | RemoveEntry | TidyWindow | CleanupEntry | TrimWindow
                | SplitRecapWindow | CueEditorWindow)
 # The entries' own windows, and what runs them (ReplayGain has its own rules: run_replaygain).

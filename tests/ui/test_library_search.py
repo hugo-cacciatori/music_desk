@@ -168,8 +168,8 @@ def test_a_folder_result(qtbot, window, service, tmp_path):
     assert panel.stack.currentWidget() is panel.summary and panel.summary.summary.id == album  # its summary
 
     recorder = Recorder()
-    window.launch = recorder
-    window.playlist_dir = tmp_path / "playlists"
+    window.shell.launch = recorder
+    window.shell.playlist_dir = tmp_path / "playlists"
     view.play_button.click()  # the audio files among the results, not the folder
     qtbot.waitUntil(lambda: len(recorder.calls) == 1, timeout=10000)
     text = next((tmp_path / "playlists").glob("play-*.m3u8")).read_text(encoding="utf-8")
@@ -270,8 +270,8 @@ def test_unsaved_edits_keep_the_result(qtbot, window, service, monkeypatch):
 
 def test_play_results_in_view_order(qtbot, window, service, tmp_path):
     recorder = Recorder()
-    window.launch = recorder
-    window.playlist_dir = tmp_path / "playlists"
+    window.shell.launch = recorder
+    window.shell.playlist_dir = tmp_path / "playlists"
     search(qtbot, window, "tone")
     window.search_view.play_button.click()
     qtbot.waitUntil(lambda: len(recorder.calls) == 1, timeout=10000)

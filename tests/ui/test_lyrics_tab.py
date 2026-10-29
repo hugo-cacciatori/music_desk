@@ -278,7 +278,7 @@ def test_window_shows_the_selected_track_and_opens_searches(qtbot, service, libr
     qtbot.addWidget(window)
     window.show()
     launched = []
-    window.launch = launched.append
+    window.shell.launch = launched.append
     conn = service.conn
     album = next(i for (i,) in conn.execute("SELECT id FROM entries WHERE is_dir = 1")
                  if path_of(conn, i) == library_dir / "Artist" / "Album")

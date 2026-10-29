@@ -130,7 +130,7 @@ def test_a_place_without_a_recycle_bin_is_refused(qtbot, window, service, librar
 @pytest.fixture
 def explorer_calls(window):
     calls = []
-    window.show_in_explorer = lambda path, is_dir: calls.append((path, is_dir))
+    window.shell.show_in_explorer = lambda path, is_dir: calls.append((path, is_dir))
     return calls
 
 

@@ -230,8 +230,8 @@ def test_a_file_named_like_the_subfolder_is_refused(qtbot, host, album):
 
 def test_preview_opens_a_temporary_sheet(qtbot, host, album, tmp_path):
     launched = []
-    host.launch = launched.append
-    host.playlist_dir = tmp_path / "playlists"
+    host.shell.launch = launched.append
+    host.shell.playlist_dir = tmp_path / "playlists"
     page = open_page(qtbot, host, album / HIDDEN)
     type_time(qtbot, host, page.start_edit, "0:03.000")
     type_time(qtbot, host, page.end_edit, "0:09.000")
@@ -254,8 +254,8 @@ def test_preview_without_a_player_says_how_to_set_one(qtbot, host, album, tmp_pa
     def no_player(_path):
         raise OSError(1155, "No application is associated with the specified file")
 
-    host.launch = no_player
-    host.playlist_dir = tmp_path / "playlists"
+    host.shell.launch = no_player
+    host.shell.playlist_dir = tmp_path / "playlists"
     page = open_page(qtbot, host, album / HIDDEN)
     page.preview_button.click()
     qtbot.waitUntil(lambda: "No app is set to open .cue sheets" in host.toast.label.text(), timeout=5000)

@@ -245,7 +245,7 @@ def test_the_tree_is_hidden_by_default_and_kept(qtbot, service):
 
 def test_open_in_file_explorer(qtbot, window, service, library_dir):
     shown = []
-    window.show_in_explorer = lambda path, is_dir: shown.append((path, is_dir))
+    window.shell.show_in_explorer = lambda path, is_dir: shown.append((path, is_dir))
     open_path(window, service, "Artist", "Album")
     assert window.explorer_action.isEnabled()
     window.explorer_action.trigger()

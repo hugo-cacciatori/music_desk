@@ -96,8 +96,8 @@ def test_cover_from_the_first_track(qtbot, window, service, library_dir, fixture
 
 def test_play_buttons(qtbot, window, service, tmp_path):
     played = []
-    window.launch = played.append
-    window.playlist_dir = tmp_path / "playlists"
+    window.shell.launch = played.append
+    window.shell.playlist_dir = tmp_path / "playlists"
     window.open_folder(entry(service, "Artist"))
     window.side_panel.summary.play_all_button.click()
     qtbot.waitUntil(lambda: len(played) == 1, timeout=3000)

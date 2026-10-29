@@ -413,9 +413,9 @@ class SplitController(QObject):
         window = self.window
 
         def run() -> None:
-            window.launch(playlists.write_preview(sheet, window.playlist_dir))
+            window.shell.launch(playlists.write_preview(sheet, window.shell.playlist_dir))
 
-        window._in_shell(run, NO_CUE_PLAYER, str(sheet.audio), False)
+        window.shell.run(run, NO_CUE_PLAYER, str(sheet.audio), False)
         window.statusBar().showMessage(f"Previewing {self.cue_path.name} in the player…", 8000)
 
     # -- Fill from track lengths… --

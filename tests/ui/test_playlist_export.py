@@ -111,8 +111,8 @@ def test_a_failed_export_says_so(qtbot, window, service, tmp_path):
 
 def test_play_uses_a_temporary_playlist(qtbot, window, service, tmp_path):
     launched = []
-    window.launch = launched.append
-    window.playlist_dir = tmp_path / "playlists"
+    window.shell.launch = launched.append
+    window.shell.playlist_dir = tmp_path / "playlists"
     fill(window, service)
     window.playlist_panel.model.move_rows([3], -1)
     window.playlist_panel.play_button.click()

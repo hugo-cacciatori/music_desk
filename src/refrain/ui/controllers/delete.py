@@ -92,7 +92,7 @@ class DeleteController(QObject):
                     reasons.append((str(item.path), reason))
             self.checked.emit(request, reasons)
 
-        window._shell.submit(run)
+        window.shell.submit(run)
 
     def _row_after(self, ids: list[int], view: QWidget | None) -> int | None:
         """The row to select once these are gone: the first one after them, else the last one before (Explorer)."""
@@ -122,7 +122,7 @@ class DeleteController(QObject):
             window.toast.show_message(
                 f"Refrain only deletes to the Recycle Bin, and {reason}, so nothing was deleted. You can delete it "
                 "in File Explorer.", "Open in File Explorer",
-                lambda: window._shell.submit(lambda: window.show_in_explorer(path, is_dir)))
+                lambda: window.shell.submit(lambda: window.shell.show_in_explorer(path, is_dir)))
             return
         # No question (Hugo, 2026-10-17): the Recycle Bin is the undo. Unsaved tag edits on a deleted file go with it.
         if self._unsaved_edits_in(request.items):
@@ -140,7 +140,7 @@ class DeleteController(QObject):
                     sent.append(item)
             self.done.emit(request, sent, failed)
 
-        window._shell.submit(run)
+        window.shell.submit(run)
 
     def _unsaved_edits_in(self, items: list[DeleteItem]) -> bool:
         metadata = self.window.side_panel.metadata

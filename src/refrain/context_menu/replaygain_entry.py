@@ -6,9 +6,7 @@ process's folder locks, so a main window opened meanwhile can't start another to
 gets its own window, and a finished report stays until the user closes it.
 """
 
-import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from PySide6.QtCore import Signal
@@ -16,15 +14,13 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from refrain.context_menu.entries import OPTIONS_WHERE
-from refrain.core import fsops
 from refrain.core.path_locks import LockedError, PathLocks
 from refrain.services.replaygain_job import DISCOGRAPHY, LOOSE, TRACKS, Finished, ReplayGainRunner
 from refrain.ui import theme
 from refrain.ui.controllers.tools import ENTRY_KINDS, entry_problem, entry_title
+from refrain.ui.shell import Shell
 from refrain.ui.tools.rg_report import ReplayGainView
 from refrain.ui.tools.tool_cards import REPLAYGAIN, ToolCards
-
-log = logging.getLogger(__name__)
 
 TITLE = "Refrain · ReplayGain"
 
@@ -32,7 +28,6 @@ TITLE = "Refrain · ReplayGain"
 class ReplayGainWindow(QWidget):
     closed = Signal()
     finished = Signal(object)  # Finished: the index of an open main window catches up on its folders
-    shellFailed = Signal(str)
 
     def __init__(self, cards: ToolCards, locks: PathLocks, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -43,10 +38,12 @@ class ReplayGainWindow(QWidget):
         self.view = ReplayGainView()
         self.view.doneRequested.connect(self.close)
         self.view.cancelRequested.connect(lambda: self.runner.cancel())
-        self.view.openLogRequested.connect(lambda path: self._in_shell(
-            lambda: fsops.open_with_default_app(path), f"Windows couldn't open {os.path.basename(path)}."))
-        self.view.revealRequested.connect(lambda path: self._in_shell(
-            lambda: fsops.open_in_explorer(path, True), f"File Explorer couldn't show {path}."))
+        self.shell = Shell("replaygain-shell", self)
+        self.shell.failed.connect(self._shell_failed)
+        self.view.openLogRequested.connect(lambda path: self.shell.run(
+            lambda: self.shell.launch(path), f"Windows couldn't open {os.path.basename(path)}."))
+        self.view.revealRequested.connect(lambda path: self.shell.run(
+            lambda: self.shell.show_in_explorer(path, True), f"File Explorer couldn't show {path}."))
         self.note = QLabel()  # the log or File Explorer couldn't open
         self.note.setWordWrap(True)
         self.note.hide()
@@ -57,8 +54,6 @@ class ReplayGainWindow(QWidget):
         self.runner.lines.connect(self.view.add_lines)
         self.runner.progress.connect(self.view.set_progress)
         self.runner.finished.connect(self._finished)
-        self._shell = ThreadPoolExecutor(1, thread_name_prefix="replaygain-shell")
-        self.shellFailed.connect(self._shell_failed)
 
     @property
     def running(self) -> bool:
@@ -119,17 +114,8 @@ class ReplayGainWindow(QWidget):
 
     def shutdown(self) -> None:
         self.runner.close()  # a running rsgain is killed; its album is reported as cancelled
-        self._shell.shutdown(wait=False)
+        self.shell.shutdown()
 
-    def _in_shell(self, fn, message: str) -> None:
-        def run() -> None:
-            try:
-                fn()
-            except OSError as e:
-                log.warning("%s (%s)", message, e)
-                self.shellFailed.emit(message)
-        self._shell.submit(run)
-
-    def _shell_failed(self, message: str) -> None:
+    def _shell_failed(self, message: str, _fallback: str, _fallback_is_dir: bool) -> None:
         self.note.setText(message)
         self.note.show()

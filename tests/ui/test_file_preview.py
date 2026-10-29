@@ -169,7 +169,7 @@ def test_other_selections_keep_their_pages(qtbot, panel, fixtures_dir, tmp_path)
 
 def test_selecting_a_log_in_the_list_previews_it_and_open_launches_it(qtbot, window, service, library_dir):
     launched = []
-    window.launch = launched.append
+    window.shell.launch = launched.append
     window.open_folder(entry(service, "Artist", "Album"))
     window.file_view.select_ids([entry(service, "Artist", "Album", "cover.jpg")])
     page = window.side_panel.preview

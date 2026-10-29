@@ -9,9 +9,7 @@ Back, Done and Close close the window; closing during a run asks first, and unsa
 app.
 """
 
-import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,21 +17,18 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMainWindow, QMessageBox, QStackedWidget
 
-from refrain.core import fsops
 from refrain.core.path_locks import PathLocks
 from refrain.ui import theme
 from refrain.ui.controllers.split import SplitController
 from refrain.ui.controllers.trim import TrimController
+from refrain.ui.shell import Shell
 from refrain.ui.toast import Toast
 from refrain.ui.tools.tool_cards import ToolCards
-
-log = logging.getLogger(__name__)
 
 
 class ToolHost(QMainWindow):
     closed = Signal()
     finished = Signal(object)  # list[Path]: folders the run changed; an open main window's index catches up
-    shellFailed = Signal(str)
 
     def __init__(self, cards: ToolCards, locks: PathLocks, title: str) -> None:
         super().__init__()
@@ -45,11 +40,8 @@ class ToolHost(QMainWindow):
         self.center = QStackedWidget()
         self.setCentralWidget(self.center)
         self.toast = Toast(self)
-        self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\Refrain\playlists, as the app's
-        self.launch = fsops.open_with_default_app
-        self.show_in_explorer = fsops.open_in_explorer
-        self._shell = ThreadPoolExecutor(1, thread_name_prefix="tool-shell")
-        self.shellFailed.connect(self.toast.show_message)
+        self.shell = Shell("tool-shell", self)
+        self.shell.failed.connect(lambda message, _fallback, _is_dir: self.toast.show_message(message))
         self.controller: SplitController | TrimController | None = None
 
     # -- what the controllers call on their window --
@@ -72,15 +64,6 @@ class ToolHost(QMainWindow):
 
     def _name_masks(self) -> tuple[tuple[str, ...], str]:
         return tuple(self.settings.name_masks), self.settings.name_replacement
-
-    def _in_shell(self, fn, message: str, fallback: str, fallback_is_dir: bool) -> None:
-        def run() -> None:
-            try:
-                fn()
-            except OSError as e:
-                log.warning("%s (%s)", message, e)
-                self.shellFailed.emit(message)
-        self._shell.submit(run)
 
     def bring_to_front(self) -> None:
         if self.isMinimized():
@@ -117,7 +100,7 @@ class ToolHost(QMainWindow):
     def shutdown(self) -> None:
         if self.controller is not None:
             self.controller.close()  # a running trim's flac is killed and its .partial file deleted
-        self._shell.shutdown(wait=False)
+        self.shell.shutdown()
 
 
 class CueEditorWindow(ToolHost):

@@ -32,15 +32,15 @@ class Recorder:
 @pytest.fixture
 def launched(window, tmp_path):
     recorder = Recorder()
-    window.launch = recorder
-    window.playlist_dir = tmp_path / "playlists"
+    window.shell.launch = recorder
+    window.shell.playlist_dir = tmp_path / "playlists"
     return recorder
 
 
 @pytest.fixture
 def explorer(window):
     recorder = Recorder()
-    window.show_in_explorer = recorder
+    window.shell.show_in_explorer = recorder
     return recorder
 
 
@@ -212,8 +212,8 @@ def test_nothing_to_play(window, service, launched):
 
 
 def test_no_app_for_playlists(qtbot, window, service, library_dir, tmp_path, explorer):
-    window.launch = Recorder(OSError(1155, "No application is associated with the specified file"))
-    window.playlist_dir = tmp_path / "playlists"
+    window.shell.launch = Recorder(OSError(1155, "No application is associated with the specified file"))
+    window.shell.playlist_dir = tmp_path / "playlists"
     window.play_folder(entry(service, "Artist", "Album"), recursive=False)
     qtbot.waitUntil(window.toast.isVisible, timeout=3000)
     assert ".m3u8" in window.toast.label.text() and window.toast.button.text() == "Open in File Explorer"

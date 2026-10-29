@@ -577,8 +577,8 @@ def test_leaving_a_new_sheet_asks_only_after_a_change(qtbot, split, library_dir,
 
 def test_preview_opens_the_current_sheet_with_its_hidden_track(qtbot, editor, split, library_dir, tmp_path):
     launched = []
-    editor.launch = launched.append
-    editor.playlist_dir = tmp_path / "playlists"
+    editor.shell.launch = launched.append
+    editor.shell.playlist_dir = tmp_path / "playlists"
     folder = library_dir / "Albums" / HIDDEN
     page = open_sheet(qtbot, split, folder / SHEET)
     edit_cell(qtbot, split, 3, "title", "A Duet")  # unsaved edits are previewed

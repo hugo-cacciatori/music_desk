@@ -3,20 +3,16 @@ window alone; the process ends when it closes. The removal is the app's own (`Ta
 the process's locks.
 """
 
-import logging
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 from shiboken6 import isValid
 
 from refrain.context_menu.remove_report import RemoveReport, ask_remove, split_tracks
-from refrain.core import fsops
 from refrain.core.path_locks import PathLocks
 from refrain.services.tag_writer import ReplayGainRemoved, TagWriter
+from refrain.ui.shell import Shell
 from refrain.ui.tools.tool_cards import ToolCards
-
-log = logging.getLogger(__name__)
 
 
 class RemoveEntry(QObject):
@@ -31,7 +27,7 @@ class RemoveEntry(QObject):
         self.report: RemoveReport | None = None
         self._left_out: list[str] = []
         self._folders: list[Path] = []
-        self._shell = ThreadPoolExecutor(1, thread_name_prefix="remove-shell")
+        self.shell = Shell("remove-shell", self)  # a failure is only logged: the report has no place for it
 
     @property
     def running(self) -> bool:
@@ -48,7 +44,8 @@ class RemoveEntry(QObject):
         folders = sorted({str(Path(path).parent) for path in tracks})
         self._folders = [Path(folder) for folder in folders]
         self.report = RemoveReport(folders[0] if folders else "")
-        self.report.revealRequested.connect(lambda path: self._shell.submit(self._reveal, path))
+        self.report.revealRequested.connect(lambda path: self.shell.run(
+            lambda: self.shell.show_in_explorer(path, True), f"File Explorer couldn't show {path}."))
         self.report.closed.connect(self.closed)
         self.report.closed.connect(self.report.deleteLater)  # parentless: freed while Qt runs
         if not tracks:
@@ -72,16 +69,9 @@ class RemoveEntry(QObject):
             self.report.show_result(result, self._left_out)
         self.finished.emit(self._folders)
 
-    @staticmethod
-    def _reveal(path: str) -> None:
-        try:
-            fsops.open_in_explorer(path, True)
-        except OSError as e:
-            log.warning("File Explorer couldn't show %s (%s)", path, e)
-
     def shutdown(self) -> None:
         self.tag_writer.close()  # the removal finishes first
-        self._shell.shutdown(wait=False)
+        self.shell.shutdown()
         if self.report is not None and isValid(self.report):  # not yet freed by its own close
             self.report.hide()
             self.report.deleteLater()

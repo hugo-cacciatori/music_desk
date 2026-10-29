@@ -43,7 +43,7 @@ def test_rsgain_unavailable(window):
 
 def test_open_licences_folder(qtbot, window):
     recorder = Recorder()
-    window.show_in_explorer = recorder
+    window.shell.show_in_explorer = recorder
     [dialog] = open_about(window)
     dialog.licenses_button.click()
     qtbot.waitUntil(lambda: recorder.calls == [(str(licenses_dir()), True)], timeout=5000)

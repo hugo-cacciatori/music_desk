@@ -2,7 +2,6 @@ import base64
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import cast
 
@@ -36,7 +35,7 @@ from PySide6.QtWidgets import (
 
 from refrain.context_menu.entries import OPEN, Selection, menu_entries
 from refrain.context_menu.request import EDIT_CUE, NEW_CUE, SETTINGS, SPLIT, TRIM
-from refrain.core import fsops, inline_rename, playlists
+from refrain.core import inline_rename, playlists
 from refrain.core.index import queries
 from refrain.core.index.roots import AddResult, AddStatus, Root
 from refrain.core.index.scanner import ScanProgress, ScanReport, find_folder
@@ -63,6 +62,7 @@ from refrain.ui.hover import with_status_tips
 from refrain.ui.no_wheel import install_no_wheel
 from refrain.ui.playlist_panel import PlaylistPanel
 from refrain.ui.qt_util import app, shortcut
+from refrain.ui.shell import Shell
 from refrain.ui.side_panel.panel import SelectedItem, SidePanel
 from refrain.ui.sidebar import Sidebar
 from refrain.ui.toast import Toast
@@ -101,7 +101,6 @@ class DropOverlay(QLabel):
 
 
 class MainWindow(QMainWindow):
-    shellFailed = Signal(str, str, bool)  # message, a path to show in Explorer instead, whether it is a folder
     renameDone = Signal(object, bool)  # RenameResult, whether it was an Undo
     renameFailed = Signal(str)
     playlistExported = Signal(str, int)  # the saved file, its track count (emitted from the shell thread)
@@ -122,12 +121,7 @@ class MainWindow(QMainWindow):
         self.flac_version: str | None = None  # likewise; the cue split needs it (SPEC §22)
         self._indexing_paused = False  # while a task reads whole albums (the library says so)
         self._waiting_folder: tuple[str, float] | None = None  # (path, deadline): opens once indexed (SPEC §29)
-        # Handing files to Windows can stall (a slow drive, a busy shell), so it happens off the UI thread.
-        # These three are replaced in tests, which never launch anything.
-        self.launch = fsops.open_with_default_app
-        self.show_in_explorer = fsops.open_in_explorer
-        self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\Refrain\playlists
-        self._shell = ThreadPoolExecutor(1, thread_name_prefix="shell")
+        self.shell = Shell("shell", self)  # handing files to Windows, off the UI thread
         self.setWindowTitle(APP_TITLE)
         self.resize(1200, 760)
         self.index_label = QLabel()
@@ -170,8 +164,8 @@ class MainWindow(QMainWindow):
         self.side_panel.metadata.trimRequested.connect(lambda path: self.entryRequested.emit(TRIM, [str(path)]))
         self.side_panel.metadata.newCueRequested.connect(
             lambda path: self.entryRequested.emit(NEW_CUE, [str(path)]))
-        self.side_panel.preview.openRequested.connect(lambda path: self._in_shell(
-            lambda: self.launch(path), f"Windows couldn't open {os.path.basename(path)}: no app is set for this "
+        self.side_panel.preview.openRequested.connect(lambda path: self.shell.run(
+            lambda: self.shell.launch(path), f"Windows couldn't open {os.path.basename(path)}: no app is set for this "
             "file type, or the file isn't reachable.", path, False))
         # Each feature's flow lives in its controller (SPEC §16); every task has its own window (SPEC §35).
         self.tools = ToolsController(self, self, cards)  # the toolbar's tools, as their entries (SPEC §30, §35)
@@ -267,7 +261,7 @@ class MainWindow(QMainWindow):
         self.side_panel.metadata.filesSaved.connect(
             lambda count: self.statusBar().showMessage(f"Saved the tags of {count} files.", STATUS_MS))
         self.side_panel.metadata.saveFailed.connect(lambda message: self.toast.show_message(message))
-        self.shellFailed.connect(self._shell_failed)
+        self.shell.failed.connect(self._shell_failed)
         app().installEventFilter(self)  # the mouse back/forward buttons, anywhere in the window
         install_no_wheel(app())  # Ground rule 7, in every window and dialog
 
@@ -318,8 +312,8 @@ class MainWindow(QMainWindow):
         """Help › About: versions and licences."""
         dialog = AboutDialog(self.rsgain_version, self, flac_version=self.flac_version)
         folder = str(licenses_dir())
-        dialog.licensesRequested.connect(lambda: self._in_shell(
-            lambda: self.show_in_explorer(folder, True), f"File Explorer couldn't open {folder}.", "", True))
+        dialog.licensesRequested.connect(lambda: self.shell.run(
+            lambda: self.shell.show_in_explorer(folder, True), f"File Explorer couldn't open {folder}.", "", True))
         self.show_about(dialog)
 
     def show_about(self, dialog: AboutDialog) -> None:
@@ -1011,7 +1005,7 @@ class MainWindow(QMainWindow):
             playlists.export_playlist(entries, target, relative)
             self.playlistExported.emit(str(target), len(entries))
 
-        self._in_shell(run, f"The playlist couldn't be saved as {target}.", str(target.parent), True)
+        self.shell.run(run, f"The playlist couldn't be saved as {target}.", str(target.parent), True)
 
     def _playlist_exported(self, target: str, count: int) -> None:
         text = f"Exported {count:,} track{'s' if count != 1 else ''} to {target}."
@@ -1072,7 +1066,7 @@ class MainWindow(QMainWindow):
             self.advanced_search.service.close()
         self.save_state()
         app().removeEventFilter(self)
-        self._shell.shutdown(wait=False)
+        self.shell.shutdown()
         super().closeEvent(event)
         self.closed.emit()
 
@@ -1233,7 +1227,7 @@ class MainWindow(QMainWindow):
                 return
             self.renameDone.emit(result, False)
 
-        self._shell.submit(run)
+        self.shell.submit(run)
 
     def _renamed(self, result: inline_rename.RenameResult, was_undo: bool) -> None:
         if not result.steps:
@@ -1260,7 +1254,7 @@ class MainWindow(QMainWindow):
                     self.renameFailed.emit(str(e))
                     return
                 self.renameDone.emit(back, True)
-            self._shell.submit(run)
+            self.shell.submit(run)
 
         self.toast.show_message(text, "Undo", undo, timeout_ms=10_000)
 
@@ -1274,13 +1268,13 @@ class MainWindow(QMainWindow):
         if not self._library_open():
             return
         for path in self._paths(ids):
-            self._in_shell(lambda p=path: self.launch(p),
+            self.shell.run(lambda p=path: self.shell.launch(p),
                            f"Windows couldn't open {os.path.basename(path)}: no app is set for this file type, "
                            "or the file isn't reachable.", path, False)
 
     def open_url(self, url: str) -> None:
         """A web search from the Lyrics tab, in the default browser."""
-        self._in_shell(lambda: self.launch(url), "Windows couldn't open the web browser.", "", False)
+        self.shell.run(lambda: self.shell.launch(url), "Windows couldn't open the web browser.", "", False)
 
     def reveal(self, entry_id: int) -> None:
         if not self._library_open() or not self._folder_exists(entry_id):
@@ -1288,7 +1282,8 @@ class MainWindow(QMainWindow):
         conn = self.open_library.conn
         path = str(path_of(conn, entry_id))
         is_dir = bool(conn.execute("SELECT is_dir FROM entries WHERE id = ?", (entry_id,)).fetchone()[0])
-        self._in_shell(lambda: self.show_in_explorer(path, is_dir), f"File Explorer couldn't show {path}.", "", True)
+        self.shell.run(lambda: self.shell.show_in_explorer(path, is_dir), f"File Explorer couldn't show {path}.",
+                       "", True)
 
     def copy_paths(self, ids: list[int]) -> None:
         paths = self._paths(ids) if self._library_open() else []
@@ -1316,26 +1311,17 @@ class MainWindow(QMainWindow):
             return
 
         def run() -> None:
-            playlist = playlists.write_temp_playlist(entries, self.playlist_dir)
-            self.launch(playlist)
+            playlist = playlists.write_temp_playlist(entries, self.shell.playlist_dir)
+            self.shell.launch(playlist)
 
-        self._in_shell(run, "No app is set to play .m3u8 playlists. To choose one, open Windows Settings > Apps > "
+        self.shell.run(run, "No app is set to play .m3u8 playlists. To choose one, open Windows Settings > Apps > "
                        "Default apps and search for .m3u8.", fallback, fallback_is_dir)
         self.statusBar().showMessage(f"Playing {len(entries)} track{'s' if len(entries) > 1 else ''}…", STATUS_MS)
 
-    def _in_shell(self, fn, message: str, fallback: str, fallback_is_dir: bool) -> None:
-        def run() -> None:
-            try:
-                fn()
-            except OSError as e:
-                log.warning("%s (%s)", message, e)
-                self.shellFailed.emit(message, fallback, fallback_is_dir)
-        self._shell.submit(run)
-
     def _shell_failed(self, message: str, fallback: str, fallback_is_dir: bool) -> None:
         if fallback:
-            self.toast.show_message(message, "Open in File Explorer", lambda: self._shell.submit(
-                lambda: self.show_in_explorer(fallback, fallback_is_dir)))
+            self.toast.show_message(message, "Open in File Explorer", lambda: self.shell.submit(
+                lambda: self.shell.show_in_explorer(fallback, fallback_is_dir)))
         else:
             self.toast.show_message(message)
 

@@ -160,9 +160,9 @@ class TrimController(QObject):
         window = self.window
 
         def run() -> None:
-            window.launch(playlists.write_preview(sheet, window.playlist_dir))
+            window.shell.launch(playlists.write_preview(sheet, window.shell.playlist_dir))
 
-        window._in_shell(run, NO_CUE_PLAYER, str(plan.source), False)
+        window.shell.run(run, NO_CUE_PLAYER, str(plan.source), False)
         window.statusBar().showMessage(f"Previewing {plan.source.name} in the player…", 8000)
 
     # -- the run --

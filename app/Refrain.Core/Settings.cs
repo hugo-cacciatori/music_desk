@@ -30,6 +30,7 @@ public sealed class Settings
     public bool Maximized { get; set; }
     public bool TreeVisible { get; set; }
     public double TreeWidth { get; set; } = 240;
+    public double PanelWidth { get; set; } = 380;
     public string? LastFolder { get; set; }
     public List<string> ExpandedFolders { get; set; } = [];
     public HeaderState? FileHeader { get; set; }

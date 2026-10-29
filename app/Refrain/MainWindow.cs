@@ -44,6 +44,8 @@ public sealed partial class MainWindow : Window
     readonly TextBlock status = new() { Margin = new Thickness(16, 4, 16, 6), TextTrimming = TextTrimming.CharacterEllipsis };
     readonly AddressBar address = new();
     readonly FolderTree tree = new();
+    readonly SidePanel panel;
+    readonly ColumnDefinition panelColumn = new();
     readonly FileTable files;
     readonly FileTable results;
     readonly Border filesPage;
@@ -76,6 +78,7 @@ public sealed partial class MainWindow : Window
         library = new Library(AppPaths.Database);
         search = new SearchService(library.Db);
         files = new FileTable(Columns.FileList, settings.FileHeader);
+        panel = new SidePanel(library, () => Content.XamlRoot, () => WinRT.Interop.WindowNative.GetWindowHandle(this));
         results = new FileTable(Columns.Search, settings.SearchHeader ?? new HeaderState { SortKey = "folder" }, searchResults: true);
         searchTimer = Timer(TimeSpan.FromMilliseconds(120), () => _ = RunSearch(inPlace: false));
         liveSearchTimer = Timer(TimeSpan.FromSeconds(1), () => _ = RunSearch(inPlace: true));
@@ -93,7 +96,7 @@ public sealed partial class MainWindow : Window
         Grid.SetRow(results, 1);
         resultsPage.Children.Add(results);
         treeCard = Card(tree);
-        splitter = Splitter();
+        splitter = Splitter(treeColumn, 1, width => settings.TreeWidth = width);
 
         var root = new Grid { Padding = new Thickness(8, 0, 8, 0), AllowDrop = true };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -113,6 +116,14 @@ public sealed partial class MainWindow : Window
 
         Wire(root);
         RestorePlacement();
+        AppWindow.Closing += async (_, e) =>
+        {
+            if (closing || !panel.Dirty) return;
+            e.Cancel = true;  // unsaved edits: ask first (SPEC §7)
+            if (!await panel.ConfirmLeave()) return;
+            closing = true;
+            Close();
+        };
         Closed += (_, _) => Shutdown();
         root.Loaded += async (_, _) =>
         {
@@ -209,6 +220,15 @@ public sealed partial class MainWindow : Window
         resultsCardElement = resultsCard;
         Grid.SetColumn(page, 2);
         body.Children.Add(page);
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+        panelColumn.Width = new GridLength(Math.Clamp(settings.PanelWidth, 240, 900));
+        body.ColumnDefinitions.Add(panelColumn);
+        var panelSplitter = Splitter(panelColumn, -1, width => settings.PanelWidth = width);
+        Grid.SetColumn(panelSplitter, 3);
+        body.Children.Add(panelSplitter);
+        var panelCard = Card(panel);
+        Grid.SetColumn(panelCard, 4);
+        body.Children.Add(panelCard);
         return body;
     }
 
@@ -240,8 +260,9 @@ public sealed partial class MainWindow : Window
         return panel;
     }
 
-    /// <summary>The tree's width, dragged; kept between sessions.</summary>
-    FrameworkElement Splitter()
+    /// <summary>A column's width, dragged (the tree's to the right, the side panel's to the left); kept between
+    /// sessions.</summary>
+    FrameworkElement Splitter(ColumnDefinition column, int direction, Action<double> keep)
     {
         var grip = new SplitterGrip();
         double startX = 0, startWidth = 0;
@@ -250,15 +271,15 @@ public sealed partial class MainWindow : Window
         {
             dragging = true;
             startX = e.GetCurrentPoint(null).Position.X;
-            startWidth = treeColumn.ActualWidth;
+            startWidth = column.ActualWidth;
             grip.CapturePointer(e.Pointer);
         };
         grip.PointerMoved += (_, e) =>
         {
             if (!dragging) return;
-            var width = Math.Clamp(startWidth + e.GetCurrentPoint(null).Position.X - startX, 120, 800);
-            treeColumn.Width = new GridLength(width);
-            settings.TreeWidth = width;
+            var width = Math.Clamp(startWidth + direction * (e.GetCurrentPoint(null).Position.X - startX), 120, 900);
+            column.Width = new GridLength(width);
+            keep(width);
         };
         grip.PointerReleased += (_, e) =>
         {
@@ -341,6 +362,8 @@ public sealed partial class MainWindow : Window
         files.MenuRequested += (rows, anchor, point) => ShowMenu(rows, anchor, point, fromResults: false);
         results.MenuRequested += (rows, anchor, point) => ShowMenu(rows, anchor, point, fromResults: true);
         files.UpRequested += () => _ = GoUp();
+        files.SelectionChanged += () => _ = SelectionChanged(files);
+        results.SelectionChanged += () => _ = SelectionChanged(results);
         files.LayoutChanged += () => settings.FileHeader = files.State;
         results.LayoutChanged += () =>
         {
@@ -553,6 +576,7 @@ public sealed partial class MainWindow : Window
     /// selects the folder you came from; <paramref name="select"/> picks a row instead.</summary>
     async Task OpenFolder(long folderId, long? select = null, bool record = true)
     {
+        if (!await panel.ConfirmLeave()) return;
         var (rows, chain) = await Read(conn => (Queries.Listing(conn, folderId), Queries.Chain(conn, folderId)));
         if (chain.Count == 0) return;  // it left the index meanwhile
         if (select is null)
@@ -730,6 +754,7 @@ public sealed partial class MainWindow : Window
             }
         }
         foreach (var folder in changed) await tree.Refresh(folder);
+        await panel.Refresh(changed, Shown.SelectedRows, current);
         if (resultsShown) liveSearchTimer.Start();
     }
 
@@ -755,10 +780,40 @@ public sealed partial class MainWindow : Window
         ShowResults();
     }
 
+    FileTable Shown => resultsShown ? results : files;
+
+    /// <summary>The side panel follows the shown list's selection; with unsaved edits it asks first, and Cancel keeps
+    /// the selection as it was.</summary>
+    async Task SelectionChanged(FileTable table)
+    {
+        if (table != Shown || restoringSelection) return;
+        var rows = table.SelectedRows;
+        var ids = rows.Select(r => r.Id).ToList();
+        if (table == panelTable && ids.SequenceEqual(panelSelection) && panelFolder == current) return;
+        if (!await panel.ConfirmLeave())
+        {
+            restoringSelection = true;
+            panelTable?.Select(panelSelection, scroll: false);
+            restoringSelection = false;
+            return;
+        }
+        panelTable = table;
+        panelSelection = ids;
+        panelFolder = current;
+        await panel.Show(rows, current);
+    }
+
+    FileTable? panelTable;
+    List<long> panelSelection = [];
+    long? panelFolder;
+    bool restoringSelection;
+    bool closing;
+
     void ShowResults()
     {
         if (resultsShown) return;
         resultsShown = true;
+        _ = SelectionChanged(results);
         filesPage.Visibility = Visibility.Collapsed;
         resultsCardElement!.Visibility = Visibility.Visible;
     }
@@ -771,6 +826,7 @@ public sealed partial class MainWindow : Window
         liveSearchTimer.Stop();
         resultsCardElement!.Visibility = Visibility.Collapsed;
         filesPage.Visibility = Visibility.Visible;
+        _ = SelectionChanged(files);
     }
 
     // -- status, about, placement --

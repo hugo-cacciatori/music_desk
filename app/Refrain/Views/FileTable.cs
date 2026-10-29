@@ -49,6 +49,9 @@ public sealed partial class FileTable : Grid
     public event Action? LayoutChanged;
     /// <summary>Backspace in the list: go up (SPEC §5).</summary>
     public event Action? UpRequested;
+    /// <summary>The user changed the selection, or a new set of rows replaced it (not while rows update in place).</summary>
+    public event Action? SelectionChanged;
+    bool quiet;
 
     public FileTable(IReadOnlyList<Column> columns, HeaderState? saved, bool searchResults = false)
     {
@@ -84,6 +87,10 @@ public sealed partial class FileTable : Grid
             if (RowAt(e.OriginalSource) is { } row) Activated?.Invoke(row);
         };
         List.KeyDown += OnKeyDown;
+        List.SelectionChanged += (_, _) =>
+        {
+            if (!quiet) SelectionChanged?.Invoke();
+        };
         List.CharacterReceived += OnCharacter;
         List.ContextRequested += OnContextRequested;
         List.Loaded += (_, _) => FollowHorizontalScroll();
@@ -131,13 +138,27 @@ public sealed partial class FileTable : Grid
 
     void Apply(List<FileRow> ordered, bool inPlace, IEnumerable<long>? select = null)
     {
-        if (!inPlace)
+        quiet = true;
+        var before = SelectedRows.Select(r => r.Id).ToList();
+        try
         {
-            items.Clear();
-            foreach (var row in ordered) items.Add(row);
-            if (select is not null) Select(select);
-            return;
+            if (inPlace) Update(ordered);
+            else
+            {
+                items.Clear();
+                foreach (var row in ordered) items.Add(row);
+                if (select is not null) Select(select);
+            }
         }
+        finally
+        {
+            quiet = false;
+        }
+        if (!inPlace || !before.SequenceEqual(SelectedRows.Select(r => r.Id))) SelectionChanged?.Invoke();
+    }
+
+    void Update(List<FileRow> ordered)
+    {
         var selected = SelectedRows.Select(r => r.Id).ToHashSet();
         var wanted = ordered.Select(r => r.Id).ToHashSet();
         for (var i = items.Count - 1; i >= 0; i--)
@@ -162,7 +183,22 @@ public sealed partial class FileTable : Grid
         Select(selected, scroll: false);
     }
 
+    /// <summary>Selects these rows without raising <see cref="SelectionChanged"/>.</summary>
     public void Select(IEnumerable<long> ids, bool scroll = true)
+    {
+        var wasQuiet = quiet;
+        quiet = true;
+        try
+        {
+            SelectQuietly(ids, scroll);
+        }
+        finally
+        {
+            quiet = wasQuiet;
+        }
+    }
+
+    void SelectQuietly(IEnumerable<long> ids, bool scroll)
     {
         var wanted = ids.ToHashSet();
         List.SelectedItems.Clear();

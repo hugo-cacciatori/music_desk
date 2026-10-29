@@ -200,6 +200,22 @@ public sealed class IndexTests : IDisposable
     }
 
     [Fact]
+    public void A_folder_summary_counts_its_subtree()
+    {
+        var music = Library();
+        Scan(Add(music).RootId!.Value);
+        var album = FolderOf(Path.Combine(music, "Fixture Artist - Fixture Album"));
+        var summary = Read(conn => FolderSummary.Read(conn, album))!;
+        var cd2 = Read(conn => FolderSummary.Read(conn, FolderOf(Path.Combine(music, "Fixture Artist - Fixture Album", "CD2"))))!;
+        Assert.Equal("Fixture Artist - Fixture Album", summary.Name);
+        Assert.True(summary.Tracks > cd2.Tracks && cd2.Tracks > 0);  // the subtree, CD2 included
+        Assert.Contains("FLAC", summary.Formats);
+        Assert.Contains("MP3", summary.Formats);
+        Assert.True(summary.Subfolders >= 1 && summary.Files >= 1);
+        Assert.True(summary.Duration > 0);
+    }
+
+    [Fact]
     public void Natural_order_is_explorers()
     {
         var names = new List<string> { "Track 10", "track 2", "Track 1", "B", "a" };

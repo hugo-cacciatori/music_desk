@@ -2,8 +2,6 @@
 
 import threading
 
-from PySide6.QtWidgets import QMenu
-
 from music_desk import __version__
 from music_desk.licenses import COMPONENTS, licenses_dir
 
@@ -21,7 +19,7 @@ class Recorder:
 def open_about(window) -> list:
     shown = []
     window.show_about = shown.append  # never a real modal dialog in tests
-    menu = next(m for m in window.menuBar().findChildren(QMenu) if m.title() == "&Help")
+    menu = window.more_button.menu()  # the … button (SPEC §36 task 3)
     next(a for a in menu.actions() if a.text() == "&About MusicDesk").trigger()
     return shown
 

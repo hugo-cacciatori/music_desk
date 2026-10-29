@@ -14,7 +14,7 @@ the scan indexed meanwhile.
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer
-from PySide6.QtGui import QFont, QKeySequence
+from PySide6.QtGui import QFont, QIcon, QKeySequence
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QMenu, QToolButton, QWidget
 
 from music_desk.core.index.search import FILES, LIMIT, LYRICS, MODES
@@ -68,7 +68,7 @@ class SearchController(QObject):
         self.mode = window.settings.search_mode if window.settings.search_mode in MODES else FILES
         self.modes = QWidget()
         modes_layout = QHBoxLayout(self.modes)
-        modes_layout.setContentsMargins(0, 0, 4, 0)
+        modes_layout.setContentsMargins(0, 0, 0, 0)  # joined to the field (SPEC §36 task 3)
         modes_layout.setSpacing(0)
         self.mode_buttons: dict[str, QToolButton] = {}
         for mode in MODES:
@@ -78,6 +78,8 @@ class SearchController(QObject):
             button.setCheckable(True)
             button.setAutoExclusive(True)
             button.setToolTip(tip)
+            button.setObjectName("searchMode")
+            button.setProperty("segment", "first" if mode == MODES[0] else "next")
             button.setChecked(mode == self.mode)
             button.setFont(_scaled(button.font()))
             button.clicked.connect(lambda _=False, mode=mode: self.set_mode(mode))
@@ -89,6 +91,11 @@ class SearchController(QObject):
         self.field.setMinimumWidth(240)
         self.field.setMaximumWidth(FIELD_WIDTH)
         self.field.setMinimumHeight(self.field.fontMetrics().height() + 14)
+        self.field.setObjectName("searchField")
+        # The magnifier, tinted by the window with its toolbars' icons.
+        self.search_icon = self.field.addAction(QIcon(), QLineEdit.ActionPosition.LeadingPosition)
+        for button in self.mode_buttons.values():  # one height for the toggle and the field
+            button.setFixedHeight(self.field.minimumHeight())
         self.field.textEdited.connect(self._edited)
         self.field.returnPressed.connect(self.enter)
         shortcut(QKeySequence(Qt.Key.Key_Escape), self.field, self.close, Qt.ShortcutContext.WidgetShortcut)

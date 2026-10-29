@@ -10,7 +10,7 @@ colour change needs no widget to be told.
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QPalette
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QFrame, QWidget
 
 # Spacing steps, on Windows 11's 4 px grid.
 SPACE_XS, SPACE_S, SPACE_M, SPACE_L, SPACE_XL = 4, 8, 12, 16, 24
@@ -33,6 +33,14 @@ FONT_FAMILIES = ("Segoe UI Variable", "Segoe UI")
 # invalid field's background.
 DANGER = (QColor("#c42b1c"), QColor("#ff99a4"))
 INVALID_BACKGROUND = (QColor("#ffcdcd"), QColor("#5c2b2b"))
+# Windows 11's layering (SPEC §36 task 3): the window's background under the cards, a card's edge, a control's
+# edge, and secondary text (an unselected tab).
+LAYER = (QColor("#f3f3f3"), QColor("#202020"))
+CARD_BORDER = (QColor("#e5e5e5"), QColor("#383838"))
+CONTROL_BORDER = (QColor("#d1d1d1"), QColor("#4c4c4c"))
+SECONDARY_TEXT = (QColor("#5f5f5f"), QColor("#c5c5c5"))
+CARD_RADIUS, CONTROL_RADIUS = 8, 8
+CARD_INSET = 3  # px between a card's edge and its content, so square content leaves the round corners whole
 
 
 def is_dark() -> bool:
@@ -49,6 +57,10 @@ def danger() -> QColor:
 
 def invalid_background() -> QColor:
     return INVALID_BACKGROUND[is_dark()]
+
+
+def _pick(pair: tuple[QColor, QColor]) -> str:
+    return pair[is_dark()].name()
 
 
 def accent() -> QColor:
@@ -102,6 +114,16 @@ def is_invalid(widget: QWidget) -> bool:
     return bool(widget.property("invalid"))
 
 
+def card(widget: QWidget) -> None:
+    """A panel drawn as a card: a rounded surface with a thin edge; its lists lose their own frame inside it."""
+    widget.setProperty("card", True)
+    widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+    widget.setContentsMargins(CARD_INSET, CARD_INSET, CARD_INSET, CARD_INSET)
+    for view in widget.findChildren(QAbstractItemView):
+        view.setFrameShape(QFrame.Shape.NoFrame)
+    _repolish(widget)
+
+
 def _repolish(widget: QWidget) -> None:
     style = widget.style()
     style.unpolish(widget)
@@ -124,6 +146,33 @@ def style_sheet() -> str:
         f"QLabel#dropOverlay {{ background: {overlay.name(QColor.NameFormat.HexArgb)};"
         f" border: 3px dashed {accent().name()}; }}\n"
         "#toast { background: palette(tool-tip-base); border: 1px solid palette(mid); border-radius: 6px; }\n"
+        # Windows 11's layering: the toolbars and the status bar on the window's background, the panels as cards.
+        f"QMainWindow#mainWindow {{ background: {_pick(LAYER)}; }}\n"
+        "QMainWindow#mainWindow > QToolBar, QMainWindow#mainWindow > QStatusBar"
+        " { background: transparent; border: none; }\n"
+        f"QMainWindow#mainWindow > QToolBar {{ padding: 0 {SPACE_XS}px; }}\n"  # in line with the cards' edges
+        "QToolButton#moreButton::menu-indicator { image: none; }\n"
+        f'[card="true"] {{ background: palette(base); border: 1px solid {_pick(CARD_BORDER)};'
+        f" border-radius: {CARD_RADIUS}px; }}\n"
+        # The search toggle joined to the field, which has a magnifier and an accent line under it.
+        f"QToolButton#searchMode {{ background: palette(base); border: 1px solid {_pick(CONTROL_BORDER)};"
+        " border-right: none; padding: 0 12px; }\n"
+        f'QToolButton#searchMode[segment="first"] {{ border-top-left-radius: {CONTROL_RADIUS}px;'
+        f" border-bottom-left-radius: {CONTROL_RADIUS}px; }}\n"
+        f"QToolButton#searchMode:checked {{ background: {accent().name()}; color: {on_accent().name()};"
+        f" border-color: {accent().name()}; }}\n"
+        f"QToolButton#searchMode:hover:!checked {{ background: {_pick(LAYER)}; }}\n"
+        f"QLineEdit#searchField {{ background: palette(base); border: 1px solid {_pick(CONTROL_BORDER)};"
+        f" border-bottom: 2px solid {accent().name()}; border-top-right-radius: {CONTROL_RADIUS}px;"
+        f" border-bottom-right-radius: {CONTROL_RADIUS}px; padding: 0 8px; }}\n"
+        # The side panel's tabs: plain text, the selected one underlined in the accent colour.
+        "QTabWidget#sidePanelTabs::pane { border: none; }\n"
+        "QTabWidget#sidePanelTabs::tab-bar { left: 10px; }\n"
+        "QTabWidget#sidePanelTabs > QTabBar::tab { background: transparent; border: none;"
+        " border-bottom: 2px solid transparent; padding: 6px 2px 4px 2px; margin: 2px 14px 0 0;"
+        f" color: {_pick(SECONDARY_TEXT)}; }}\n"
+        "QTabWidget#sidePanelTabs > QTabBar::tab:selected { color: palette(text);"
+        f" border-bottom: 2px solid {accent().name()}; }}\n"
     )
 
 

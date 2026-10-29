@@ -1,12 +1,14 @@
-"""The tools toolbar's icons (SPEC §30), drawn here rather than shipped: simple line drawings in the palette's text
-colour, so they follow light and dark themes. Drawn large and scaled down by Qt, sharp enough at any DPI.
+"""The toolbars' icons (SPEC §30; the navigation row's and the … button's since SPEC §36 task 3), drawn here
+rather than shipped: simple line drawings in the palette's text colour, so they follow light and dark themes.
+Drawn large and scaled down by Qt, sharp enough at any DPI.
 """
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
 
 SIZE = 64  # the drawing's side; Qt scales it to the toolbar's icon size
-NAMES = ("rename", "replaygain", "tidy", "cleanup", "playlist", "advanced_search")
+NAMES = ("rename", "replaygain", "tidy", "cleanup", "playlist", "advanced_search", "folders", "back", "forward", "up",
+         "rescan", "explorer", "more", "search")
 
 
 def _rename(p: QPainter) -> None:
@@ -78,8 +80,85 @@ def _advanced_search(p: QPainter) -> None:
     p.drawLine(QPointF(37, 37), QPointF(56, 56))
 
 
+def _folder_outline(p: QPainter, top: float) -> None:
+    path = QPainterPath(QPointF(6, 52))
+    path.lineTo(6, top)
+    path.lineTo(24, top)
+    path.lineTo(30, top + 7)
+    path.lineTo(58, top + 7)
+    path.lineTo(58, 52)
+    path.closeSubpath()
+    p.drawPath(path)
+
+
+def _folders(p: QPainter) -> None:
+    """A folder: the folder tree."""
+    _folder_outline(p, 12)
+    p.drawLine(QPointF(6, 27), QPointF(58, 27))
+
+
+def _arrow(p: QPainter, angle: float) -> None:
+    """An arrow pointing right, turned by `angle` degrees."""
+    p.save()
+    p.translate(32, 32)
+    p.rotate(angle)
+    p.drawLine(QPointF(-22, 0), QPointF(22, 0))
+    p.drawLine(QPointF(22, 0), QPointF(6, -16))
+    p.drawLine(QPointF(22, 0), QPointF(6, 16))
+    p.restore()
+
+
+def _back(p: QPainter) -> None:
+    _arrow(p, 180)
+
+
+def _forward(p: QPainter) -> None:
+    _arrow(p, 0)
+
+
+def _up(p: QPainter) -> None:
+    _arrow(p, -90)
+
+
+def _rescan(p: QPainter) -> None:
+    """A circling arrow: read again."""
+    p.drawArc(QRectF(10, 10, 44, 44), 60 * 16, 300 * 16)
+    p.drawLine(QPointF(43, 13), QPointF(44, 4))  # the head, at the arc's start (60 degrees)
+    p.drawLine(QPointF(43, 13), QPointF(52, 17))
+
+
+def _explorer(p: QPainter) -> None:
+    """A folder with an arrow leaving it: open elsewhere."""
+    path = QPainterPath(QPointF(32, 52))
+    path.lineTo(6, 52)
+    path.lineTo(6, 14)
+    path.lineTo(22, 14)
+    path.lineTo(28, 20)
+    path.lineTo(32, 20)
+    p.drawPath(path)
+    p.drawLine(QPointF(30, 40), QPointF(56, 14))
+    p.drawLine(QPointF(56, 14), QPointF(40, 14))
+    p.drawLine(QPointF(56, 14), QPointF(56, 30))
+
+
+def _more(p: QPainter) -> None:
+    """Three dots: more commands."""
+    p.save()
+    p.setBrush(p.pen().color())
+    for x in (12, 32, 52):
+        p.drawEllipse(QPointF(x, 32), 3, 3)
+    p.restore()
+
+
+def _search(p: QPainter) -> None:
+    """A magnifier."""
+    p.drawEllipse(QRectF(8, 8, 34, 34))
+    p.drawLine(QPointF(37, 37), QPointF(56, 56))
+
+
 DRAW = {"rename": _rename, "replaygain": _replaygain, "tidy": _tidy, "cleanup": _cleanup, "playlist": _playlist,
-        "advanced_search": _advanced_search}
+        "advanced_search": _advanced_search, "folders": _folders, "back": _back, "forward": _forward, "up": _up,
+        "rescan": _rescan, "explorer": _explorer, "more": _more, "search": _search}
 
 
 def tool_icon(name: str, color: QColor) -> QIcon:

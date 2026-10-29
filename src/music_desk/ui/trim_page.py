@@ -266,7 +266,7 @@ class TrimPage(QWidget):
         times.addWidget(self.summary, 1, 0, 1, 5)
         times.setColumnStretch(4, 1)
 
-        self.subfolder_name = trim.DEFAULT_SUBFOLDER  # File > Options…, Trim (SPEC §12)
+        self.subfolder_name = trim.DEFAULT_SUBFOLDER  # … > Options…, Trim (SPEC §12)
         self.subfolder = QLabel()
         self.subfolder.setToolTip(TIPS["subfolder"])
         self.copy_path = QLabel()
@@ -373,7 +373,7 @@ class TrimPage(QWidget):
         self.start_edit.setText(trim.format_time(0))
         self.end_edit.setText(trim.format_time(total_ms))
         self.subfolder_name = subfolder
-        self.subfolder.setText(f"Subfolder: {subfolder} (File > Options…, Trim)")
+        self.subfolder.setText(f"Subfolder: {subfolder} (… > Options…, Trim)")
         theme.set_invalid(self.subfolder, False)
         self.waveform.set_track(total_ms)
         self._show("editing", "")
@@ -385,7 +385,7 @@ class TrimPage(QWidget):
             theme.set_invalid(edit, bool(why))
             edit.setToolTip(why or TIPS[name])  # a problem's reason first (SPEC §24)
         why = plan.problem("subfolder")
-        line = f"Subfolder: {self.subfolder_name} (File > Options…, Trim)"
+        line = f"Subfolder: {self.subfolder_name} (… > Options…, Trim)"
         self.subfolder.setText(f"{line}: {why}" if why else line)
         self.summary.setText(plan.summary if plan.times_ok and plan.length > 0 else "")
         if plan.name:

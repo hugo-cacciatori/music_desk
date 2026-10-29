@@ -58,3 +58,13 @@ def test_a_new_accent_colour_rebuilds_the_style_sheet(qtbot, qapp):
     finally:
         qapp.setPalette(before)
         current.refresh()
+
+
+def test_the_main_window_is_layered(window):
+    """SPEC §36 task 3: the panels are cards on the window's background, the side panel's tabs plain text."""
+    for panel in (window.sidebar, window.center, window.playlist_panel, window.side_panel):
+        assert panel.property("card") is True
+    assert window.objectName() == "mainWindow" and "QMainWindow#mainWindow" in theme.style_sheet()
+    assert window.side_panel.tabs.objectName() == "sidePanelTabs" and window.side_panel.tabs.documentMode()
+    assert window.search_field.objectName() == "searchField"
+    assert [b.objectName() for b in window.search.mode_buttons.values()] == ["searchMode", "searchMode"]

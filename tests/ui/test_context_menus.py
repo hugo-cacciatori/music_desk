@@ -130,7 +130,7 @@ def test_folder_menus(window, service):
     assert texts(tree)[:len(texts(folder))] == texts(folder) and "Remove from library" not in texts(tree)
     for absent in ("Rename", "Cut", "Copy", "Paste", "New folder"):
         assert absent not in texts(folder) + texts(tree)
-    assert texts(window.sidebar.context_menu_for(QModelIndex())) == ["Add folder…"]  # the option: File > Options…
+    assert texts(window.sidebar.context_menu_for(QModelIndex())) == ["Add folder…"]  # the option: … > Options…
 
 
 def test_right_click_on_an_unselected_row_selects_it(qtbot, window, service):

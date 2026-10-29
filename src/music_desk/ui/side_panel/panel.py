@@ -35,6 +35,8 @@ class SidePanel(QWidget):
         self.io = io
         self._conn = conn or (lambda: None)
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("sidePanelTabs")  # plain text tabs, the selected one underlined: theme.style_sheet
+        self.tabs.setDocumentMode(True)
         self.metadata = MetadataTab(io, writer)
         self.lyrics = LyricsTab(self._conn, lyrics_service)
         self.tabs.addTab(self.metadata, "Metadata")

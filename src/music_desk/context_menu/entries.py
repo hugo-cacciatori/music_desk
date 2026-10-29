@@ -30,7 +30,7 @@ from music_desk.core.formats import FORMATS
 
 OPEN = "open"  # Open in MusicDesk: a start on the folder (SPEC §29), not an entry option
 # Where an entry's window says the options are: it may come from Explorer or from the app (SPEC §35).
-OPTIONS_WHERE = "File > Options… in MusicDesk, or MusicDesk > Settings in the right-click menu"
+OPTIONS_WHERE = "… > Options… in MusicDesk, or MusicDesk > Settings in the right-click menu"
 
 REPLAYGAIN_EXTENSIONS = frozenset(e for f in FORMATS if f.replaygain for e in f.extensions)  # what rsgain scans
 MUSIC_EXTENSIONS = frozenset(e for f in FORMATS for e in f.extensions)  # Rename's music files

@@ -221,11 +221,13 @@ def test_tidy_comes_first_and_in_evidence(window):
 
 def test_three_rows_search_address_then_the_tools(window):
     search, top, tools = window.search_bar, window.navigation_bar, window.tools_bar
-    # The search first, on its own row: its toggle and its field, centred, the field taking most of it (SPEC §33).
+    # The search first, on its own row: its toggle joined to its field, centred, the field taking most of it
+    # (SPEC §33), and the … button at the row's end, in place of the menu bar (SPEC §36 task 3).
     assert [search.widgetForAction(a) for a in search.actions()] == [window.search_row]
     layout = window.search_row.layout()
     assert [layout.itemAt(i).widget() for i in range(layout.count())] == [
-        None, window.search.modes, window.search_field, None]
+        None, window.search.modes, window.search_field, None, window.more_button]
+    assert layout.spacing() == 0
     assert window.toolBarArea(search) == window.toolBarArea(top) and window.toolBarBreak(top)
     assert search.geometry().top() < top.geometry().top() < tools.geometry().top()
     assert window.search_field.height() > window.address_bar.height() // 2
@@ -320,10 +322,11 @@ def test_options_open_the_window_on_the_tools_page(qtbot, window, service, libra
 
 
 def test_file_options_holds_every_option(qtbot, window, service, library_dir):
-    assert [a.text() for a in window.menuBar().actions()] == ["&File", "&Help"]  # no Options menu
-    file_menu = window.menuBar().actions()[0].menu()
+    assert window.menuBar().actions() == []  # the … button instead (SPEC §36 task 3)
+    file_menu = window.more_button.menu()
     # No Add folder… or Rescan library since 0.8.4: the sidebar adds folders (Ctrl+O still works).
-    assert [a.text() for a in file_menu.actions() if not a.isSeparator()] == ["&Options…", "E&xit"]
+    assert [a.text() for a in file_menu.actions() if not a.isSeparator()] == ["&Options…", "&About MusicDesk",
+                                                                              "E&xit"]
     assert window.add_folder_action in window.actions()
     options = next(a for a in file_menu.actions() if a.text() == "&Options…")
     assert options.statusTip()
@@ -342,7 +345,7 @@ def test_file_options_holds_every_option(qtbot, window, service, library_dir):
     qtbot.waitUntil(lambda: window.tools.cards.names_card.example.text() == "Example: 01 First.flac")
     dialog.close()
     options.trigger()
-    assert dialog.current == REPLAYGAIN  # File > Options… reopens where it was
+    assert dialog.current == REPLAYGAIN  # … > Options… reopens where it was
     dialog.close()
 
 

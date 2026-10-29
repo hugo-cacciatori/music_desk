@@ -169,7 +169,7 @@ def test_context_menu_offers_remove(qtbot, window, service, library_dir):
     texts = [a.text() for a in menu.actions() if a.text()]
     assert texts[0] == "ReplayGain as an album (−15 LUFS)"  # Explorer's entries first (SPEC §35)
     assert "Open" in texts and texts[-2:] == ["Remove from library", "Add folder…"]
-    # "Hide folders without music" is in File > Options…, Browser only (SPEC §12).
+    # "Hide folders without music" is in … > Options…, Browser only (SPEC §12).
     assert [a.text() for a in window.sidebar.context_menu_for(QModelIndex()).actions() if a.text()] == [
         "Add folder…"]
 

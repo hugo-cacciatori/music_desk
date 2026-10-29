@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 OWNER = "Clean up"
 INTRO = ("Clean up found these. Every box is checked: uncheck what to keep, then click Delete selected to send the "
-         "rest to the Recycle Bin. Closing this window keeps them all. The Clean up options (File > Options…) say "
+         "rest to the Recycle Bin. Closing this window keeps them all. The Clean up options (… > Options…) say "
          "what is looked for.")
 
 

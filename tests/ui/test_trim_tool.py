@@ -146,7 +146,7 @@ def test_the_page_shows_the_track_and_its_waveform(qtbot, host, album):
     page = open_page(qtbot, host, album / HIDDEN)
     assert "FLAC 16-bit/44.1 kHz · 0:12.000" in page.format_label.text()
     assert (page.start_edit.text(), page.end_edit.text()) == ("0:00.000", "0:12.000")
-    assert page.subfolder.text() == "Subfolder: lite (File > Options…, Trim)"  # set there only (SPEC §12)
+    assert page.subfolder.text() == "Subfolder: lite (… > Options…, Trim)"  # set there only (SPEC §12)
     assert not page.trim_button.isEnabled() and page.trim_note.text() == "Nothing to trim: move a handle."
     assert page.preview_button.isEnabled()
     assert page.copy_path.text() == f"The copy: lite\\{HIDDEN}"
@@ -206,7 +206,7 @@ def test_keys_nudge_the_times(qtbot, host, album):
 def test_bad_values_are_marked_and_disable_trim(qtbot, host, album, field, text, reason):
     page = open_page(qtbot, host, album / HIDDEN)
     type_time(qtbot, host, page.start_edit, "0:01.000")
-    if field == "subfolder":  # File > Options…, Trim: it applies to the open track at once
+    if field == "subfolder":  # … > Options…, Trim: it applies to the open track at once
         card = host.tools.cards.trim_card
         type_time(qtbot, host, card.subfolder, text)
         assert card.problems.text() == f"• {reason}"
@@ -265,7 +265,7 @@ def test_preview_without_a_player_says_how_to_set_one(qtbot, host, album, tmp_pa
 
 def test_a_trim_writes_a_proved_copy_and_leaves_the_original(qtbot, host, service, album):
     original = (album / HIDDEN).read_bytes()
-    host.tools.cards.trim_card.set_value("songs")  # File > Options…, Trim
+    host.tools.cards.trim_card.set_value("songs")  # … > Options…, Trim
     page = open_page(qtbot, host, album / HIDDEN)
     type_time(qtbot, host, page.start_edit, "0:03.000")
     report = run(qtbot, host)
@@ -277,7 +277,7 @@ def test_a_trim_writes_a_proved_copy_and_leaves_the_original(qtbot, host, servic
     assert (album / HIDDEN).read_bytes() == original
     host.controller.open(album / HIDDEN)  # the same track again: the subfolder is remembered
     ready(qtbot, host)
-    assert page.subfolder.text() == "Subfolder: songs (File > Options…, Trim)"
+    assert page.subfolder.text() == "Subfolder: songs (… > Options…, Trim)"
     assert page.copy_path.text() == (f"The copy: songs\\Fixture Artist - Split Album (2).flac\n{HIDDEN} is already "
                                      "in songs, so the copy is named Fixture Artist - Split Album (2).flac.")
 

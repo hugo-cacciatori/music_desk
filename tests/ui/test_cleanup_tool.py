@@ -101,6 +101,6 @@ def test_bad_options_start_nothing(qtbot, open_app, service, library_dir):
     card.junk_extensions.textEdited.emit(".flac")
     entry = click(qtbot, open_app, service, library_dir / "Cleanup")
     assert entry is not None and entry.offer is None and entry.notice is not None
-    assert "File > Options…" in entry.notice.message.text()
+    assert "… > Options…" in entry.notice.message.text()
     entry.notice.close_button.click()
     card.reset()

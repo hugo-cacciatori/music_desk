@@ -1,5 +1,5 @@
 """The sidebar's LIBRARY section: the folder tree with the roots at the top, "Add folder…" and "Remove from library"
-(SPEC §3, §5). Its option, "Hide folders without music", is in File > Options…, Browser (SPEC §12)."""
+(SPEC §3, §5). Its option, "Hide folders without music", is in … > Options…, Browser (SPEC §12)."""
 
 import sqlite3
 from collections.abc import Callable

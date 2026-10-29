@@ -2,7 +2,7 @@
 
 Unknown keys are ignored and a value of the wrong type falls back to its default, so an old or hand-edited file
 never stops the app. Saving writes a temporary file and replaces the old one, so a crash can't leave half a file.
-Every setting is set in the Options window only (File > Options…, SPEC §12), whose Restore defaults puts back the
+Every setting is set in the Options window only (… > Options…, SPEC §12), whose Restore defaults puts back the
 defaults below; the UI state fields are kept by the windows themselves.
 """
 

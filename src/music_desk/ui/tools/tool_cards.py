@@ -2,7 +2,7 @@
 Split (§22), Trim (§23) and Browser (§5): every setting of the app, and only there.
 
 The cards replaced the Tools page (M21). They live as long as the window, together in one non-modal Options window
-opened from File > Options…, so a run reads their options whether it is open or not. The options are the saved
+opened from … > Options…, so a run reads their options whether it is open or not. The options are the saved
 defaults (Settings.name_masks / name_replacement, rename_options, replaygain_options, cleanup_options,
 save_cue_beside, trim_subfolder, hide_folders_without_music), saved again as they change. Starting a tool is the
 toolbar's: `request` turns a tool and its target into a ToolRequest, or says why it can't.
@@ -38,7 +38,7 @@ PAGE_TITLES = {NAMES: "File names", RENAME: "Rename", REPLAYGAIN: "ReplayGain", 
 
 
 class OptionsWindow(QDialog):
-    """File > Options… (SPEC §12, §30): every page in one window, picked from the list on the left. Not modal: the
+    """… > Options… (SPEC §12, §30): every page in one window, picked from the list on the left. Not modal: the
     window stays usable, and every change is saved as it is made, so Close (or Esc) only closes. Restore all
     defaults asks first: there is no Recycle Bin for settings."""
 

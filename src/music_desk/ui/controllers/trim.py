@@ -107,7 +107,7 @@ class TrimController(QObject):
         self._edited()
 
     def _settings_changed(self) -> None:
-        """The subfolder is File > Options…, Trim (SPEC §12): a change there applies to the open track at once."""
+        """The subfolder is … > Options…, Trim (SPEC §12): a change there applies to the open track at once."""
         subfolder = self.window.settings.trim_subfolder or trim.DEFAULT_SUBFOLDER
         if self.page.state == "editing" and subfolder != self.page.subfolder_name:
             self.page.subfolder_name = subfolder

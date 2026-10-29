@@ -81,7 +81,7 @@ def test_hide_folders_without_music(qtbot, window, service):
     artist = window.sidebar.tree.currentIndex()
     window.sidebar.tree.expand(artist)
     assert child_names(model, artist) == ["Album", "Scans"]
-    browser = window.tools.cards.browser_card  # File > Options…, Browser (SPEC §12)
+    browser = window.tools.cards.browser_card  # … > Options…, Browser (SPEC §12)
     browser.hide_without_music.setChecked(True)
     assert child_names(model, window.sidebar.tree.currentIndex()) == ["Album"]
     assert window.settings.hide_folders_without_music

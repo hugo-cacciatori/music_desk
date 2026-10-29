@@ -28,9 +28,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QSplitter,
     QStackedWidget,
-    QStyle,
     QToolBar,
     QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -62,7 +62,7 @@ from music_desk.ui.file_view import FileView
 from music_desk.ui.hover import with_status_tips
 from music_desk.ui.no_wheel import install_no_wheel
 from music_desk.ui.playlist_panel import PlaylistPanel
-from music_desk.ui.qt_util import app, shortcut, standard_icon
+from music_desk.ui.qt_util import app, shortcut
 from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
 from music_desk.ui.sidebar import Sidebar
 from music_desk.ui.toast import Toast
@@ -210,7 +210,16 @@ class MainWindow(QMainWindow):
         self.splitter.setSizes([240, 560, 0, 440])  # a first start: a lyrics pane wide enough to read (SPEC §8)
         self._selected_ids: list[int] = []
         self._restoring_selection = False
-        self.setCentralWidget(self.splitter)
+        # The panels as cards on the window's background (SPEC §36 task 3), 8 px apart.
+        self.splitter.setHandleWidth(theme.SPACE_S)
+        for panel in (self.sidebar, self.center, self.playlist_panel, self.side_panel):
+            theme.card(panel)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(theme.SPACE_S, 0, theme.SPACE_S, theme.SPACE_S)
+        body_layout.addWidget(self.splitter)
+        self.setObjectName("mainWindow")  # the window's background: theme.style_sheet
+        self.setCentralWidget(body)
         self._build_navigation(conn)
         self._restore_state()
         self._restore_playlist()
@@ -219,17 +228,20 @@ class MainWindow(QMainWindow):
         self.add_folder_action = QAction("&Add folder…", self, shortcut=QKeySequence("Ctrl+O"))
         self.add_folder_action.triggered.connect(self.add_folder)
         self.addAction(self.add_folder_action)  # Ctrl+O; the sidebar's Add folder… is the visible way (0.8.4)
-        file_menu = self.menuBar().addMenu("&File")
-        # No Add folder… or Rescan library since 0.8.4 (SPEC §30). Every option in one window, the toolbar's
-        # Options… opening it on its tool's page.
-        file_menu.addAction("&Options…", lambda: self.tools.open_options())
-        file_menu.addSeparator()
-        file_menu.addAction("E&xit", self.close)
-        # No View or Action menu since M16 (SPEC §5): their entries live where they are used.
-        help_menu = self.menuBar().addMenu("&Help")
-        help_menu.addAction("&About MusicDesk", self.open_about)
-        for menu in (file_menu, help_menu):
-            with_status_tips(menu)
+        # No menu bar (SPEC §36 task 3): the … button at the search row's right end holds Options…, About and Exit.
+        # No Add folder… or Rescan library since 0.8.4 (SPEC §30); every option in one window, the Options… window.
+        self.options_action = QAction("&Options…", self)
+        self.options_action.triggered.connect(lambda: self.tools.open_options())
+        self.about_action = QAction("&About MusicDesk", self)
+        self.about_action.triggered.connect(self.open_about)
+        self.exit_action = QAction("E&xit", self)
+        self.exit_action.triggered.connect(self.close)
+        more = QMenu(self)
+        more.addAction(self.options_action)
+        more.addAction(self.about_action)
+        more.addSeparator()
+        more.addAction(self.exit_action)
+        self.more_button.setMenu(with_status_tips(more))
 
         self.overlay = DropOverlay(self)
         self.toast = Toast(self)
@@ -420,33 +432,30 @@ class MainWindow(QMainWindow):
     # -- history and navigation --
 
     def _build_navigation(self, conn) -> None:
-        self.back_action = QAction(standard_icon(QStyle.StandardPixmap.SP_ArrowBack), "Back", self)
+        self.back_action = QAction("Back", self)
         # Explicit keys: Qt's standard Back also binds Backspace, which goes up here (SPEC §5), and a key bound
         # twice is ambiguous and fires nothing.
         self.back_action.setShortcut(QKeySequence("Alt+Left"))
         self.back_action.triggered.connect(self.go_back)
         self.back_action.setToolTip("Go back to the folder you were in before (Alt+Left)")
-        self.forward_action = QAction(standard_icon(QStyle.StandardPixmap.SP_ArrowForward), "Forward", self)
+        self.forward_action = QAction("Forward", self)
         self.forward_action.setShortcut(QKeySequence("Alt+Right"))
         self.forward_action.triggered.connect(self.go_forward)
         self.forward_action.setToolTip("Go forward again to the folder you went back from (Alt+Right)")
-        self.up_action = QAction(standard_icon(QStyle.StandardPixmap.SP_ArrowUp), "Up", self)
+        self.up_action = QAction("Up", self)
         self.up_action.setShortcut(QKeySequence("Alt+Up"))
         self.up_action.triggered.connect(self.go_up)
         self.up_action.setToolTip("Open the folder that contains this one (Alt+Up)")
-        self.refresh_action = QAction(standard_icon(QStyle.StandardPixmap.SP_BrowserReload), "Rescan folder",
-                                      self)
+        self.refresh_action = QAction("Rescan folder", self)
         self.refresh_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Refresh))
         self.refresh_action.triggered.connect(self.rescan_folder)
         self.refresh_action.setToolTip("Read this folder from the disk again now, to show changes made outside "
                                        "MusicDesk (F5)")
         # The folder tree is a side function (SPEC §33): hidden by default, one click shows it.
-        self.folders_action = QAction(standard_icon(QStyle.StandardPixmap.SP_DirIcon), "Folders", self,
-                                      checkable=True, shortcut=QKeySequence("Ctrl+Shift+F"))
+        self.folders_action = QAction("Folders", self, checkable=True, shortcut=QKeySequence("Ctrl+Shift+F"))
         self.folders_action.setToolTip("Show or hide the folder tree (Ctrl+Shift+F)")
         self.folders_action.toggled.connect(self.set_tree_visible)
-        self.explorer_action = QAction(standard_icon(QStyle.StandardPixmap.SP_DirOpenIcon), "Open in File Explorer",
-                                       self)
+        self.explorer_action = QAction("Open in File Explorer", self)
         self.explorer_action.setToolTip("Open this folder in File Explorer")
         self.explorer_action.triggered.connect(
             lambda: self.reveal(self.folder_id) if self.folder_id is not None else None)
@@ -467,10 +476,17 @@ class MainWindow(QMainWindow):
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 2, 0, 2)
+        layout.setSpacing(0)  # the toggle joined to the field
         layout.addStretch(1)
         layout.addWidget(self.search.modes)
         layout.addWidget(self.search_field, 6)  # most of the row, up to its widest
         layout.addStretch(1)
+        self.more_button = QToolButton()  # its menu: __init__, once the actions exist
+        self.more_button.setObjectName("moreButton")
+        self.more_button.setAutoRaise(True)
+        self.more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.more_button.setToolTip("Options…, About and Exit")
+        layout.addWidget(self.more_button)
         search_bar.addWidget(row)
         self.search_row = row
         self.search_bar = search_bar
@@ -550,12 +566,17 @@ class MainWindow(QMainWindow):
             current.changed.connect(self._tint_tool_icons)  # light and dark, or a new accent colour
 
     def _tint_tool_icons(self) -> None:
-        """The tools' line drawings in the text colour, Tidy's in the colour that reads on the accent."""
+        """The toolbars' line drawings in the text colour, Tidy's in the colour that reads on the accent."""
         color = self.palette().color(QPalette.ColorRole.ButtonText)
         for tool, action in self.tool_actions.items():
             action.setIcon(tool_icon(tool, theme.on_accent() if tool == TIDY else color))
-        self.playlist_action.setIcon(tool_icon("playlist", color))
-        self.advanced_search_action.setIcon(tool_icon("advanced_search", color))
+        for name, action in (("playlist", self.playlist_action), ("advanced_search", self.advanced_search_action),
+                             ("folders", self.folders_action), ("back", self.back_action),
+                             ("forward", self.forward_action), ("up", self.up_action),
+                             ("rescan", self.refresh_action), ("explorer", self.explorer_action)):
+            action.setIcon(tool_icon(name, color))
+        self.more_button.setIcon(tool_icon("more", color))
+        self.search.search_icon.setIcon(tool_icon("search", color))
 
     def _set_tidy_in_evidence(self, bar: QToolBar) -> None:
         """Tidy, the tool the app is built around (SPEC §33, Hugo 2026-10-24): larger than the other buttons and

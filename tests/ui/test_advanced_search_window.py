@@ -34,10 +34,6 @@ def tag_replaygain(path):
     tagged.save()
 
 
-def menu_titles(window) -> list[str]:
-    return [action.text() for action in window.menuBar().actions()]
-
-
 def open_window(window):
     window.advanced_search_action.trigger()
     return window.advanced_search
@@ -52,15 +48,15 @@ def run(qtbot, search_window, key=None):
 
 
 def test_the_menus_and_the_toolbar(window):
-    # No Lyrics menu since M12; no View or Action menu since M16 (SPEC §5); options in File > Options… (§30).
-    assert menu_titles(window) == ["&File", "&Help"]
+    # No menu bar since SPEC §36 task 3: the … button holds Options… (§30), About and Exit.
+    assert window.menuBar().actions() == []
     toolbar = [a.text() for a in window.findChild(QToolBar, "tools").actions() if a.text()]
     assert toolbar[-2:] == ["Playlist", "Advanced search"]
     assert window.advanced_search_action.isEnabled()
 
 
 def test_hide_folders_without_music_left_the_tree_menu(window):
-    """It is in File > Options…, Browser only (SPEC §12)."""
+    """It is in … > Options…, Browser only (SPEC §12)."""
     menu = window.sidebar.context_menu_for(window.sidebar.model.index(0, 0))
     assert not any("Hide folders" in action.text() for action in menu.actions())
 

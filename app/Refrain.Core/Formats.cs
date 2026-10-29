@@ -18,6 +18,13 @@ public static class Formats
         ".oga", ".tta",
     };
 
+    /// <summary>What rsgain measures and tags (SPEC §1's ReplayGain column).</summary>
+    public static readonly IReadOnlySet<string> ReplayGain = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ".flac", ".ogg", ".oga", ".opus", ".spx", ".mp3", ".mp2", ".wav", ".aif", ".aiff", ".aifc", ".m4a", ".mp4",
+        ".wv", ".mpc", ".tak", ".wma",
+    };
+
     public static bool IsAudio(string? ext) => ext is not null && Audio.Contains(ext);
 
     /// <summary>Whether the indexer reads this file's tags and stream info.</summary>

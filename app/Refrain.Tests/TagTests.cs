@@ -169,6 +169,20 @@ public sealed class TagTests : IDisposable
     }
 
     [Fact]
+    public void A_wma_comment_is_the_description_the_python_app_reads()
+    {
+        var path = Copy("formats/tone.wma");
+        TagFile.Save(path, new Dictionary<Field, string> { [Field.Comment] = "Live take" }, null);
+        Assert.Equal("Live take", TagFile.Read(path).Values[Field.Comment]);
+        var python = PythonApp.Run("""
+            import sys
+            from refrain.core.tags import TaggedFile
+            print(TaggedFile(sys.stdin.read()).fields().comment)
+            """, path);
+        Assert.Equal("Live take", python.Trim());
+    }
+
+    [Fact]
     public void An_mp3_keeps_its_id3_version_and_gets_no_id3v1()
     {
         var path = Copy("formats/tone.mp3");

@@ -184,4 +184,52 @@ public static class Python
         var decimals = Math.Max(0, 5 - exponent);
         return Math.Round(value, decimals).ToString("0." + new string('#', decimals), CultureInfo.InvariantCulture);
     }
+
+    /// <summary><c>str(x)</c> of a float: the shortest text that reads back the same, "5.0" for a whole number,
+    /// "1e-05" in exponent form.</summary>
+    public static string Repr(double value)
+    {
+        if (double.IsNaN(value)) return "nan";
+        if (double.IsInfinity(value)) return value > 0 ? "inf" : "-inf";
+        var text = value.ToString("R", CultureInfo.InvariantCulture);
+        var e = text.IndexOf('E');
+        if (e < 0 && !text.Contains('.') && text.TrimStart('-').Length > 16)
+        {
+            // Python turns to an exponent from 1e16, .NET later.
+            var minus = text.StartsWith('-') ? "-" : "";
+            var integer = text[minus.Length..];
+            var mantissa = integer.TrimEnd('0');
+            return $"{minus}{mantissa[0]}{(mantissa.Length > 1 ? "." + mantissa[1..] : "")}e+{integer.Length - 1:00}";
+        }
+        if (e < 0) return text.Contains('.') ? text : text + ".0";
+        var exponent = int.Parse(text[(e + 1)..], CultureInfo.InvariantCulture);
+        if (exponent is < -4 or >= 16) return $"{text[..e]}e{(exponent < 0 ? "-" : "+")}{Math.Abs(exponent):00}";
+        // .NET turns to an exponent from 1e15, Python from 1e16: write the digits out.
+        var sign = text.StartsWith('-') ? "-" : "";
+        var digits = text[sign.Length..e].Replace(".", "");
+        var point = exponent + 1;
+        var whole = digits.PadRight(point, '0');
+        var fraction = whole[point..].TrimEnd('0');
+        return $"{sign}{whole[..point]}.{(fraction.Length > 0 ? fraction : "0")}";
+    }
+
+    /// <summary><c>f"{x:.Nf}"</c>: the exact value rounded to N decimals, a tie to even (as Python).</summary>
+    public static string Fixed(double value, int decimals)
+    {
+        if (!double.IsFinite(value)) return Repr(value);
+        // .NET writes a double's exact digits at any precision; Python rounds those, a tie going to the even digit.
+        var exact = value.ToString("F" + (decimals + 400), CultureInfo.InvariantCulture);
+        var dot = exact.IndexOf('.');
+        var tail = exact[(dot + 1 + decimals)..];
+        var tie = tail[0] == '5' && tail.AsSpan(1).TrimEnd('0').IsEmpty;
+        if (!tie) return value.ToString("F" + decimals, CultureInfo.InvariantCulture);
+        var kept = exact[..(dot + 1 + decimals)].TrimEnd('.');
+        var last = kept[^1];
+        if ((last - '0') % 2 == 0) return kept;  // already even: the tie rounds down
+        return value.ToString("F" + decimals, CultureInfo.InvariantCulture);  // odd: away from zero, as .NET does
+    }
+
+    /// <summary><c>round(x, n)</c>.</summary>
+    public static double Round(double value, int decimals) =>
+        double.Parse(Fixed(value, decimals), CultureInfo.InvariantCulture);
 }

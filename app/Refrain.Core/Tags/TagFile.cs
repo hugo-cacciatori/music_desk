@@ -72,7 +72,7 @@ public static class TagFile
             [Field.Year] = Date(file) ?? "",
             [Field.Genre] = Text(tag.JoinedGenres, "TCON"),
             [Field.Composer] = Text(tag.JoinedComposers, "TCOM"),
-            [Field.Comment] = string.IsNullOrEmpty(tag.Comment) ? "" : commentLatin1 ? LegacyText.Fix(tag.Comment) : tag.Comment,
+            [Field.Comment] = Comment(file) is not { Length: > 0 } comment ? "" : commentLatin1 ? LegacyText.Fix(comment) : comment,
         };
         var front = FrontCovers(file).FirstOrDefault();
         var props = file.Properties;
@@ -132,6 +132,10 @@ public static class TagFile
         return file.Tag.Year > 0 ? file.Tag.Year.ToString(CultureInfo.InvariantCulture) : null;
     }
 
+    /// <summary>WMA's comment is the content description's (SPEC §1); TagLib#'s Comment there is WM/Text.</summary>
+    static string? Comment(TagLib.File file) =>
+        file.GetTag(TagTypes.Asf) is TagLib.Asf.Tag asf ? asf.Description : file.Tag.Comment;
+
     /// <summary>The front covers: pictures of that type, or every MP4 cover (MP4 pictures have no type).</summary>
     static List<IPicture> FrontCovers(TagLib.File file) =>
         file.Tag.Pictures.Where(p => file.TagTypesOnDisk.HasFlag(TagTypes.Apple) || p.Type == PictureType.FrontCover)
@@ -182,6 +186,7 @@ public static class TagFile
                     case Field.Year: SetDate(file, value); break;
                     case Field.Genre: tag.Genres = value is null ? [] : [value]; break;
                     case Field.Composer: tag.Composers = value is null ? [] : [value]; break;
+                    case Field.Comment when file.GetTag(TagTypes.Asf) is TagLib.Asf.Tag asf: asf.Description = value; break;
                     case Field.Comment: tag.Comment = value; break;
                 }
             }
@@ -211,17 +216,10 @@ public static class TagFile
 
     /// <summary>TagLib# adds tag types a format may hold (an ID3v1 tag to every MP3); only the ones on disk are kept,
     /// plus the format's main one when the file has none yet.</summary>
-    static void KeepTagsOnDisk(TagLib.File file)
+    internal static void KeepTagsOnDisk(TagLib.File file)
     {
         var keep = file.TagTypesOnDisk;
-        var main = file switch
-        {
-            TagLib.Flac.File or TagLib.Ogg.File => TagTypes.Xiph,
-            TagLib.Mpeg4.File => TagTypes.Apple,
-            TagLib.Asf.File => TagTypes.Asf,
-            TagLib.WavPack.File or TagLib.MusePack.File => TagTypes.Ape,
-            _ => TagTypes.Id3v2,
-        };
+        var main = MainTag(file);
         if ((keep & main) == 0)
         {
             keep |= main;
@@ -229,6 +227,16 @@ public static class TagFile
         }
         file.RemoveTags(file.TagTypes & ~keep);
     }
+
+    /// <summary>The format's own tag family (SPEC §1): the one the Python app reads and writes.</summary>
+    internal static TagTypes MainTag(TagLib.File file) => file switch
+    {
+        TagLib.Flac.File or TagLib.Ogg.File => TagTypes.Xiph,
+        TagLib.Mpeg4.File => TagTypes.Apple,
+        TagLib.Asf.File => TagTypes.Asf,
+        TagLib.WavPack.File or TagLib.MusePack.File => TagTypes.Ape,
+        _ => TagTypes.Id3v2,
+    };
 
     /// <summary>The date as typed, where the tag family keeps text ("1997-05-21"); else its year.</summary>
     static void SetDate(TagLib.File file, string? value)

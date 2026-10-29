@@ -33,7 +33,15 @@ from music_desk.core.path_locks import PathLocks
 from music_desk.core.rsgain import rsgain_version
 from music_desk.instance import InstanceServer, hand_over
 from music_desk.logging_setup import setup_logging
-from music_desk.paths import app_data_dir, flac_path, icon_path, library_db_path, rsgain_path
+from music_desk.paths import (
+    app_data_dir,
+    flac_path,
+    icon_path,
+    is_frozen,
+    library_db_path,
+    move_old_app_data,
+    rsgain_path,
+)
 from music_desk.services.library import LibraryService
 from music_desk.services.replaygain_job import Finished
 from music_desk.settings import Settings
@@ -272,10 +280,22 @@ def open_library() -> LibraryService | None:
 def main() -> int:
     if self_test.FLAG in sys.argv[1:]:  # the release gate: no log, no other Refrain, no window (AGENTS.md rule 9)
         return self_test.main(sys.argv[1:])
+    # MusicDesk's data moves to Refrain's folder before anything opens it (SPEC §36 task 6). The installed app only:
+    # a run from source never takes the data of an installed MusicDesk.
+    moved, left = move_old_app_data() if is_frozen() else ([], [])
     setup_logging()
     log.info("%s %s starting (Python %s, frozen=%s)", APP_TITLE, __version__, sys.version.split()[0],
              getattr(sys, "frozen", False))
     log.info("App data: %s", app_data_dir())
+    if moved:
+        log.info("Moved from MusicDesk's app data: %s", ", ".join(moved))
+    if left:
+        log.warning("Left in MusicDesk's app data: %s", ", ".join(left))
+        QApplication(sys.argv)
+        QMessageBox.warning(None, APP_TITLE, "Refrain couldn't move your library and settings from MusicDesk's "
+                            f"folder ({', '.join(left)}). Close MusicDesk if it's open, then start Refrain again; "
+                            "nothing was lost.")
+        return 1
 
     set_app_user_model_id()
     app = QApplication(sys.argv)

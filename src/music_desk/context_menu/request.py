@@ -1,7 +1,7 @@
 """What a start asks of Refrain (SPEC §29, §31): a folder to open, or a right-click entry and the clicked paths.
 
 The handler starts `Refrain.exe --<entry> --list <file>`: the paths, one per line, are in a file it wrote in
-%LOCALAPPDATA%\\MusicDesk\\menu\\, so a large selection isn't cut by the command line's length limit. The file is
+%LOCALAPPDATA%\\Refrain\\menu\\, so a large selection isn't cut by the command line's length limit. The file is
 read and deleted here. Paths may also be plain arguments (a run from source, tests). Plain Python, no Qt.
 """
 

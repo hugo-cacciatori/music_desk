@@ -1,4 +1,4 @@
-"""Logging to %LOCALAPPDATA%\\MusicDesk\\logs\\app.log (and stderr when running from source)."""
+"""Logging to %LOCALAPPDATA%\\Refrain\\logs\\app.log (and stderr when running from source)."""
 
 import logging
 import sys

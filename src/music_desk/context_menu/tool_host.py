@@ -43,7 +43,7 @@ class ToolHost(QMainWindow):
         self.center = QStackedWidget()
         self.setCentralWidget(self.center)
         self.toast = Toast(self)
-        self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\MusicDesk\playlists, as the app's
+        self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\Refrain\playlists, as the app's
         self.launch = fsops.open_with_default_app
         self.show_in_explorer = fsops.open_in_explorer
         self._shell = ThreadPoolExecutor(1, thread_name_prefix="tool-shell")

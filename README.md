@@ -105,7 +105,7 @@ To uninstall, open the Refrain folder in the Start menu and choose "Uninstall Re
 refrain" in Start), or use Settings › Apps › Installed apps. Start's own Uninstall button on Refrain only opens
 that Settings page.
 
-Refrain keeps its own data (the library index, settings and logs) in `%LOCALAPPDATA%\MusicDesk`. Uninstalling
+Refrain keeps its own data (the library index, settings and logs) in `%LOCALAPPDATA%\Refrain`. Uninstalling
 asks whether to delete it too. Your music folders are never touched.
 
 ## Build from source

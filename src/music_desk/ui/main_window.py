@@ -126,7 +126,7 @@ class MainWindow(QMainWindow):
         # These three are replaced in tests, which never launch anything.
         self.launch = fsops.open_with_default_app
         self.show_in_explorer = fsops.open_in_explorer
-        self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\MusicDesk\playlists
+        self.playlist_dir: Path | None = None  # None: %LOCALAPPDATA%\Refrain\playlists
         self._shell = ThreadPoolExecutor(1, thread_name_prefix="shell")
         self.setWindowTitle(APP_TITLE)
         self.resize(1200, 760)

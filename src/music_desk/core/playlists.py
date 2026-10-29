@@ -1,7 +1,7 @@
 """Temporary .m3u8 playlists for "Play folder", "Play selection" and "Play results" (SPEC §14), and the temporary
 cue sheets of "Preview in player" on the Trim and Split pages (SPEC §23).
 
-They are the app's own files, written to %LOCALAPPDATA%\\MusicDesk\\playlists and opened with the default player.
+They are the app's own files, written to %LOCALAPPDATA%\\Refrain\\playlists and opened with the default player.
 Only the newest ones of each kind are kept. The playlist builder's export (M7) writes the same .m3u8 format where
 the user chooses.
 """

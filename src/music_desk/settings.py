@@ -1,4 +1,4 @@
-"""Typed settings, persisted as JSON in %LOCALAPPDATA%\\MusicDesk\\settings.json (SPEC §12).
+"""Typed settings, persisted as JSON in %LOCALAPPDATA%\\Refrain\\settings.json (SPEC §12).
 
 Unknown keys are ignored and a value of the wrong type falls back to its default, so an old or hand-edited file
 never stops the app. Saving writes a temporary file and replaces the old one, so a crash can't leave half a file.

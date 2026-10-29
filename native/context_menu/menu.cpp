@@ -3,7 +3,7 @@
 // A classic in-process IContextMenu handler, as 7-Zip's. It stays small: it looks only at what was right-clicked
 // (empty space, folders, files: their kinds, never their contents), builds the submenu, and on a click starts
 // Refrain.exe (beside this DLL) once, with the entry and every path. Every action stays in the Python app.
-// The paths go through a list file in %LOCALAPPDATA%\MusicDesk\menu\ (one per line, UTF-8), so a large selection
+// The paths go through a list file in %LOCALAPPDATA%\Refrain\menu\ (one per line, UTF-8), so a large selection
 // isn't cut by the command line's length limit; Refrain reads and deletes it.
 //
 // Built by packaging/build_menu.py; registered by the installer (SPEC §31). Two exports beside COM's,

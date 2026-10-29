@@ -3,7 +3,7 @@
 ;
 ; Installs for all users in Program Files by default (admin); the setup's first page also offers "only for me"
 ; (no admin, in %LOCALAPPDATA%\Programs). The Start menu gets a Refrain folder with the app and "Uninstall
-; Refrain". The uninstaller keeps the app's own data (%LOCALAPPDATA%\MusicDesk:
+; Refrain". The uninstaller keeps the app's own data (%LOCALAPPDATA%\Refrain:
 ; the library index, settings, logs) unless the user asks to delete it. Music folders are never touched.
 ;
 ; The right-click menu's handler (SPEC §31) is installed under a name of its own per version, so an update never

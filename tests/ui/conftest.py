@@ -13,9 +13,16 @@ from PySide6.QtWidgets import QWidget
 from music_desk.app import Starter
 from music_desk.services.library import LibraryService
 from music_desk.settings import Settings
+from music_desk.ui import theme
 from music_desk.ui.main_window import MainWindow
 
 ALBUM = "Fixture Artist - Fixture Album"
+
+
+@pytest.fixture(autouse=True)
+def themed(qapp):
+    """Every UI test runs with the app's theme, as the app does (SPEC §36)."""
+    theme.apply(qapp)
 
 
 @pytest.fixture(autouse=True)

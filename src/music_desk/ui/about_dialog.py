@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from music_desk import __version__
 from music_desk.licenses import COMPONENTS
+from music_desk.ui import theme
 from music_desk.ui.qt_util import cell_text
 
 HEADERS = ("Component", "Version", "Licence")
@@ -32,7 +33,9 @@ class AboutDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("About MusicDesk")
         title = QLabel(f"<b>MusicDesk {__version__}</b>")
-        title.setStyleSheet("font-size: 16px;")
+        font = title.font()
+        font.setPixelSize(theme.ABOUT_TITLE_PX)
+        title.setFont(font)
         self.versions = QLabel(
             f"Python {platform.python_version()} · Qt {qVersion()} (PySide6 {pyside_version})\n"
             f"ReplayGain: {rsgain_version or 'rsgain unavailable'} · "

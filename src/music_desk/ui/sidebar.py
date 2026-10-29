@@ -8,6 +8,7 @@ from PySide6.QtCore import QModelIndex, QPoint, Qt, Signal
 from PySide6.QtWidgets import QLabel, QMenu, QPushButton, QVBoxLayout, QWidget
 
 from music_desk.core.index.roots import Root
+from music_desk.ui import theme
 from music_desk.ui.folder_tree import ENTRY_ID_ROLE, FolderTreeModel, FolderTreeView
 from music_desk.ui.hover import exempt, with_status_tips
 
@@ -22,7 +23,7 @@ class Sidebar(QWidget):
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.header = QLabel("LIBRARY")
-        self.header.setStyleSheet("font-weight: 600; letter-spacing: 1px;")
+        theme.section_header(self.header)
         self.model = FolderTreeModel(conn, self)
         self.tree = FolderTreeView(self.model, expanded)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)

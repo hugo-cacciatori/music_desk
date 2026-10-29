@@ -13,7 +13,7 @@ The page edits only (M20, Hugo 2026-10-17): splitting is "Split this cue sheetâ€
 import html
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 from music_desk.context_menu.entries import OPTIONS_WHERE
 from music_desk.core.cue import ENCODINGS, FRAMES_PER_SECOND, AlbumPlan
 from music_desk.core.cue_edit import CueDocument, Problem, format_time
+from music_desk.ui import theme
 from music_desk.ui.hover import exempt
 from music_desk.ui.qt_util import cell_text
 
@@ -46,7 +47,6 @@ EDITABLE = ("start", "gap", "title", "performer", "songwriter", "isrc", "flags")
 ALBUM_LABELS = (("performer", "Performer"), ("title", "Title"), ("genre", "Genre"), ("date", "Date"),
                 ("disc", "Disc"), ("disc_total", "Total discs"), ("catalog", "Catalog"),
                 ("songwriter", "Songwriter"))
-BAD = QColor(255, 205, 205)
 
 
 def frames_text(samples: int, rate: int) -> str:
@@ -177,7 +177,7 @@ class SplitPage(QWidget):
         track_buttons.addWidget(self.fill_button)
         self.problems = QLabel()
         self.problems.setWordWrap(True)
-        self.problems.setStyleSheet("color: #c42b1c;")
+        theme.mark_danger(self.problems)
         self.notes = QLabel()
         self.notes.setWordWrap(True)
 
@@ -353,7 +353,7 @@ class SplitPage(QWidget):
                     item.setFlags(flags)
                     reasons = marks.get((sheet_row, key), []) if sheet_row is not None else []
                     if reasons:
-                        item.setBackground(QBrush(BAD))
+                        item.setBackground(QBrush(theme.invalid_background()))
                         item.setToolTip("\n".join(reasons))
                     elif key == "name" and track is not None:
                         note = next((n for num, n in (plan.notes if plan else []) if num == track.number), "")
@@ -373,7 +373,7 @@ class SplitPage(QWidget):
             if problem.row is None and problem.column in self.album_edits:
                 album_marks.setdefault(problem.column, []).append(problem.message)
         for key, edit in self.album_edits.items():
-            edit.setStyleSheet("background: #ffcdcd;" if key in album_marks else "")
+            theme.set_invalid(edit, key in album_marks)
             edit.setToolTip("\n".join(album_marks.get(key, [])))
         messages = list(dict.fromkeys(p.message for p in problems))
         if plan is not None:
@@ -387,8 +387,8 @@ class SplitPage(QWidget):
         self.notes.setVisible(bool(notes))
         # A source the split can't use draws the eye: the control is marked like a bad cell, the reason in bold.
         self.source_note.setText(f"<b>{html.escape(source_text)}</b>" if source_bad else source_text)
-        self.source_note.setStyleSheet("color: #c42b1c;" if source_bad else "")
-        self.source.setStyleSheet("QComboBox { background: #ffcdcd; }" if source_bad else "")
+        theme.mark_danger(self.source_note, source_bad)
+        theme.set_invalid(self.source, source_bad)
 
     def set_buttons(self, *, save: bool, save_as: bool, can_delete: bool, preview: bool = False,
                     fill: bool = False) -> None:

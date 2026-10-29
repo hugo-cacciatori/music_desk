@@ -138,7 +138,7 @@ AREAS: dict[str, Area] = {
 }
 
 # Sources every desktop test goes through (the window and what all of it uses): a change runs the whole layer.
-WHOLE_DESKTOP = ("ui/main_window.py", "ui/qt_util.py", "ui/toast.py", "ui/controllers/__init__.py")
+WHOLE_DESKTOP = ("ui/main_window.py", "ui/qt_util.py", "ui/theme.py", "ui/toast.py", "ui/controllers/__init__.py")
 # Package markers and the entry point: nothing to test on their own.
 NO_TESTS = ("__main__.py", "context_menu/__init__.py", "core/__init__.py", "core/index/__init__.py",
             "services/__init__.py", "ui/__init__.py", "ui/side_panel/__init__.py", "ui/tools/__init__.py")
@@ -147,7 +147,8 @@ NO_TESTS = ("__main__.py", "context_menu/__init__.py", "core/__init__.py", "core
 # check, which catches a caller left behind by a changed signature in either layer.
 GUARDS = {
     CORE: ("core/test_no_qt.py", "test_types.py"),
-    DESKTOP: ("ui/test_hover_texts.py", "ui/test_no_wheel.py", "ui/test_main_window.py", "test_types.py"),
+    DESKTOP: ("ui/test_hover_texts.py", "ui/test_no_wheel.py", "ui/test_main_window.py", "ui/test_theme.py",
+              "test_types.py"),
 }
 # Test-tooling files: the map itself and its check.
 TOOLING = ("areas.py", "test_areas.py")

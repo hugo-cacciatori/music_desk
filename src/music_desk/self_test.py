@@ -85,9 +85,12 @@ def _qt() -> str:
     from PySide6.QtWidgets import QApplication
 
     from music_desk.settings import Settings
+    from music_desk.ui import theme
     from music_desk.ui.main_window import MainWindow
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
+    if isinstance(app, QApplication):  # a widgets app, as MainWindow needs
+        theme.apply(app)
     window = MainWindow(None, Settings())  # never shown; Settings() without a path saves nothing
     window.deleteLater()
     app.processEvents()

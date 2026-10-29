@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core import preview
 from music_desk.services.tag_io import PreviewRead, TagIO
+from music_desk.ui import theme
 from music_desk.ui.file_view import format_size
 
 
@@ -46,7 +47,7 @@ class FilePreview(QWidget):
         names = QVBoxLayout()
         self.name_label = QLabel()
         self.name_label.setWordWrap(True)
-        self.name_label.setStyleSheet("font-weight: 600;")
+        theme.strong(self.name_label)
         self.details = QLabel()
         self.details.setWordWrap(True)
         self.details.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

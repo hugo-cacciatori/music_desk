@@ -16,6 +16,7 @@ from music_desk.core.index.store import path_of
 from music_desk.core.tags import TaggedFile
 from music_desk.services import trim_job
 from music_desk.settings import Settings
+from music_desk.ui import theme
 from music_desk.ui.side_panel.metadata_tab import TRIM_TIP
 from music_desk.ui.tools.tool_cards import ToolCards
 
@@ -214,7 +215,7 @@ def test_bad_values_are_marked_and_disable_trim(qtbot, host, album, field, text,
         edit = {"start": page.start_edit, "end": page.end_edit}[field]
         type_time(qtbot, host, edit, text)
     assert not page.trim_button.isEnabled() and reason in page.trim_note.text()
-    assert edit.styleSheet() and edit.toolTip() == reason
+    assert theme.is_invalid(edit) and edit.toolTip() == reason
     assert page.preview_button.isEnabled() == (field == "subfolder")  # only valid times matter to the preview
     host.tools.cards.trim_card.reset()
 

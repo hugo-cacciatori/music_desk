@@ -5,7 +5,7 @@ import shutil
 
 import pytest
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QToolBar, QToolButton
+from PySide6.QtWidgets import QApplication, QToolBar, QToolButton
 
 from music_desk.core import cleanup, rename, replaygain
 from music_desk.core.index.store import path_of
@@ -214,8 +214,9 @@ def test_tidy_comes_first_and_in_evidence(window):
     rename = tools.widgetForAction(window.tool_actions[RENAME])
     assert tools.widgetForAction(tools.actions()[0]) is tidy and tidy.objectName() == "tidyButton"
     assert tidy.iconSize().width() > rename.iconSize().width() and tidy.font().bold()
-    accent = window.palette().color(QPalette.ColorRole.Accent).name()
-    assert f"background: {accent}" in tidy.styleSheet() and not rename.styleSheet()  # the others as they are
+    accent = window.palette().color(QPalette.ColorRole.Accent).name()  # the theme's rule for its object name
+    assert f"QToolButton#tidyButton {{ background: {accent};" in QApplication.instance().styleSheet()
+    assert rename.objectName() != "tidyButton"  # the others as they are
 
 
 def test_three_rows_search_address_then_the_tools(window):

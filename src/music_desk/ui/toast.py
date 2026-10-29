@@ -14,8 +14,6 @@ class Toast(QFrame):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("toast")
-        self.setStyleSheet("#toast { background: palette(tool-tip-base); border: 1px solid palette(mid);"
-                           " border-radius: 6px; }")
         self.label = QLabel()
         self.label.setWordWrap(True)
         self.button = QPushButton()

@@ -38,6 +38,7 @@ from music_desk.core.metadata import COVER, COVER_EXTENSIONS, LARGE_COVER, Snaps
 from music_desk.core.tags import Fields
 from music_desk.services.tag_io import ImageRead, Loaded, LoadedMany, TagIO
 from music_desk.services.tag_writer import BatchWritten, TagWriter
+from music_desk.ui import theme
 from music_desk.ui.hover import exempt
 from music_desk.ui.qt_util import shortcut, standard_icon
 
@@ -183,7 +184,7 @@ class MetadataTab(QWidget):
         names = QVBoxLayout()
         self.name_label = QLabel()
         self.name_label.setWordWrap(True)
-        self.name_label.setStyleSheet("font-weight: 600;")
+        theme.strong(self.name_label)
         self.format_label = QLabel()
         self.format_label.setWordWrap(True)
         self.cover_source = QLabel()
@@ -236,7 +237,7 @@ class MetadataTab(QWidget):
         buttons = QHBoxLayout()
         self.error_label = QLabel()
         self.error_label.setWordWrap(True)
-        self.error_label.setStyleSheet("color: #c42b1c;")
+        theme.mark_danger(self.error_label)
         self.error_label.hide()
         self.revert_button = QPushButton("Revert")
         self.revert_button.clicked.connect(self.revert)

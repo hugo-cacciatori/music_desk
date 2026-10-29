@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from music_desk.core.cue_edit import check_lengths, format_length
+from music_desk.ui import theme
 
 MAX_TRACKS = 99  # what a cue sheet numbers
 
@@ -58,7 +59,7 @@ class TrackLengthsDialog(QDialog):
         self.deleted = QLabel()
         self.reason = QLabel()
         self.reason.setWordWrap(True)
-        self.reason.setStyleSheet("color: #c42b1c;")
+        theme.mark_danger(self.reason)
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self._accept)
         self.buttons.rejected.connect(self.reject)

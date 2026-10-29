@@ -39,6 +39,7 @@ from music_desk.core.index.queries import TrackRow
 from music_desk.core.index.scanner import find_folder
 from music_desk.core.playlist_builder import Builder, Item
 from music_desk.core.playlists import PlaylistEntry
+from music_desk.ui import theme
 from music_desk.ui.entry_drag import ENTRY_IDS_MIME, entry_ids
 from music_desk.ui.file_view import format_duration
 from music_desk.ui.hover import with_status_tips
@@ -346,7 +347,7 @@ class PlaylistPanel(QWidget):
         super().__init__(parent)
         self.model = PlaylistModel(conn, parent=self)
         self.title = QLabel("PLAYLIST")
-        self.title.setStyleSheet("font-weight: 600; letter-spacing: 1px;")
+        theme.section_header(self.title)
         self.view = PlaylistView()
         self.view.setModel(self.model)
         self.view.setRootIsDecorated(False)

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core.fsops import natural_key
 from music_desk.core.index.search import FILES, LIMIT, LYRICS, SearchRow
+from music_desk.ui import theme
 from music_desk.ui.entry_drag import EntryDragView
 from music_desk.ui.file_view import COLUMNS, ENTRY_ID_ROLE, Column, FileListModel
 from music_desk.ui.qt_util import shortcut
@@ -246,14 +247,13 @@ class CardDelegate(QStyledItemDelegate):
     keep 5,000 results fast)."""
 
     MARGIN, PADDING, GAP = 6, 10, 4
-    TITLE_SCALE, TEXT_SCALE = 1.2, 1.1
 
     def _fonts(self, font: QFont) -> tuple[QFont, QFont, QFont]:
         title = QFont(font)
-        title.setPointSizeF(font.pointSizeF() * self.TITLE_SCALE)
+        title.setPointSizeF(font.pointSizeF() * theme.SCALE_CARD_TITLE)
         title.setBold(True)
         text = QFont(font)
-        text.setPointSizeF(font.pointSizeF() * self.TEXT_SCALE)
+        text.setPointSizeF(font.pointSizeF() * theme.SCALE_CARD_TEXT)
         return title, QFont(font), text
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:  # noqa: N802 - Qt's name

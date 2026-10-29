@@ -10,7 +10,6 @@ from PySide6.QtCore import QByteArray, QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
-    QColor,
     QDragEnterEvent,
     QDragLeaveEvent,
     QDropEvent,
@@ -51,6 +50,7 @@ from music_desk.services.lyrics_service import OFFLINE, PAUSED, RUNNING, UNREACH
 from music_desk.services.tag_io import TagIO
 from music_desk.services.tag_writer import TagWriter
 from music_desk.settings import Settings
+from music_desk.ui import theme
 from music_desk.ui.about_dialog import AboutDialog
 from music_desk.ui.address_bar import AddressBar
 from music_desk.ui.advanced_search import AdvancedSearchWindow
@@ -85,8 +85,11 @@ class DropOverlay(QLabel):
         super().__init__("Add to library", parent)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.setStyleSheet("background: rgba(40, 110, 200, 60); border: 3px dashed rgb(40, 110, 200);"
-                           " font-size: 22px; font-weight: 600;")
+        self.setObjectName("dropOverlay")  # its colours: theme.style_sheet
+        font = self.font()
+        font.setPixelSize(theme.OVERLAY_TEXT_PX)
+        self.setFont(font)
+        theme.strong(self)
         self.hide()
 
     def cover(self) -> None:
@@ -515,17 +518,14 @@ class MainWindow(QMainWindow):
         builder and Advanced search. Tidy, Rename and Clean up are plain buttons starting their right-click entry on
         the selection or the open folder; ReplayGain lists its entries (SPEC §35). The options are in File >
         Options… only. Icons with a short label; Tidy first and in evidence (SPEC §33)."""
-        color = self.palette().color(QPalette.ColorRole.ButtonText)
         bar = QToolBar("Tools")
         bar.setMovable(False)
         bar.setObjectName("tools")
         bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.tools_bar = bar
         self.tool_actions: dict[str, QAction] = {}
-        accent = self.palette().color(QPalette.ColorRole.Accent)
-        on_accent = QColor("black") if accent.lightnessF() > 0.6 else QColor("white")
         for tool, label in ((TIDY, "Tidy"), (RENAME, "Rename"), (REPLAYGAIN, "ReplayGain"), (CLEANUP, "Clean up")):
-            action = QAction(tool_icon(tool, on_accent if tool == TIDY else color), label, self)
+            action = QAction(label, self)
             if tool == REPLAYGAIN:  # its entries, as the right-click menu lists them (Hugo, 2026-10-25)
                 entries = QMenu(self)
                 entries.aboutToShow.connect(lambda entries=entries: self.tools.fill_replaygain_menu(entries))
@@ -539,32 +539,36 @@ class MainWindow(QMainWindow):
             self.tool_actions[tool] = action
             self._update_tool_tip(tool)
         self.tidy_action = self.tool_actions[TIDY]
-        self._set_tidy_in_evidence(bar, accent, on_accent)
+        self._set_tidy_in_evidence(bar)
         bar.addSeparator()
-        self.playlist_action.setIcon(tool_icon("playlist", color))
         self.playlist_action.setText("Playlist")
         bar.addAction(self.playlist_action)
-        self.advanced_search_action.setIcon(tool_icon("advanced_search", color))
         bar.addAction(self.advanced_search_action)
         self.addToolBar(bar)
+        self._tint_tool_icons()
+        if (current := theme.current()) is not None:
+            current.changed.connect(self._tint_tool_icons)  # light and dark, or a new accent colour
 
-    def _set_tidy_in_evidence(self, bar: QToolBar, accent: QColor, on_accent: QColor) -> None:
+    def _tint_tool_icons(self) -> None:
+        """The tools' line drawings in the text colour, Tidy's in the colour that reads on the accent."""
+        color = self.palette().color(QPalette.ColorRole.ButtonText)
+        for tool, action in self.tool_actions.items():
+            action.setIcon(tool_icon(tool, theme.on_accent() if tool == TIDY else color))
+        self.playlist_action.setIcon(tool_icon("playlist", color))
+        self.advanced_search_action.setIcon(tool_icon("advanced_search", color))
+
+    def _set_tidy_in_evidence(self, bar: QToolBar) -> None:
         """Tidy, the tool the app is built around (SPEC §33, Hugo 2026-10-24): larger than the other buttons and
-        filled with Windows' accent colour, its icon and label in white or black, whichever reads on it."""
+        filled with Windows' accent colour (theme.style_sheet), its icon and label in white or black, whichever
+        reads on it."""
         button = bar.widgetForAction(self.tidy_action)
         if not isinstance(button, QToolButton):
             return
         button.setObjectName("tidyButton")
         button.setIconSize(bar.iconSize() * 1.5)
-        font = button.font()
+        font = theme.scaled(button.font(), theme.SCALE_TIDY)
         font.setBold(True)
-        font.setPointSizeF(font.pointSizeF() * 1.15)
         button.setFont(font)
-        button.setStyleSheet(
-            f"QToolButton#tidyButton {{ background: {accent.name()}; color: {on_accent.name()}; border: none;"
-            f" border-radius: 4px; padding: 4px 12px; margin-right: 6px; }}"
-            f"QToolButton#tidyButton:hover {{ background: {accent.lighter(115).name()}; }}"
-            f"QToolButton#tidyButton:pressed {{ background: {accent.darker(115).name()}; }}")
 
     def _update_tool_tip(self, tool: str) -> None:
         """The hover text names the target, or says why a click can't start, read as the mouse comes over the

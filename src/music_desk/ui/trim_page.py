@@ -25,8 +25,8 @@ from PySide6.QtWidgets import (
 from music_desk.core import trim, waveform
 from music_desk.core.trim import TrimPlan
 from music_desk.core.waveform import Peaks
+from music_desk.ui import theme
 
-BAD_STYLE = "background: #ffcdcd;"
 HANDLE_GRAB_PX = 8  # how near a handle a press must be to drag it
 WAVEFORM_HEIGHT = 70  # px; filling the page, it was much too big (Hugo, M16)
 
@@ -309,7 +309,7 @@ class TrimPage(QWidget):
         self.done_button.clicked.connect(self.doneRequested)
         self.trim_note = QLabel()
         self.trim_note.setWordWrap(True)
-        self.trim_note.setStyleSheet("color: #c42b1c;")
+        theme.mark_danger(self.trim_note)
         buttons = QHBoxLayout()
         for button in (self.preview_button, self.trim_button, self.stop_button):
             buttons.addWidget(button)
@@ -368,13 +368,13 @@ class TrimPage(QWidget):
         self.format_label.setText(f"<b>{path.name}</b> · {format_line}")
         for name, edit in (("start", self.start_edit), ("end", self.end_edit)):
             edit.total_ms = total_ms
-            edit.setStyleSheet("")
+            theme.set_invalid(edit, False)
             edit.setToolTip(TIPS[name])
         self.start_edit.setText(trim.format_time(0))
         self.end_edit.setText(trim.format_time(total_ms))
         self.subfolder_name = subfolder
         self.subfolder.setText(f"Subfolder: {subfolder} (File > Options…, Trim)")
-        self.subfolder.setStyleSheet("")
+        theme.set_invalid(self.subfolder, False)
         self.waveform.set_track(total_ms)
         self._show("editing", "")
 
@@ -382,7 +382,7 @@ class TrimPage(QWidget):
         """The marks, the summary, the copy's path and the reasons Trim is disabled."""
         for name, edit in (("start", self.start_edit), ("end", self.end_edit), ("subfolder", self.subfolder)):
             why = plan.problem(name)
-            edit.setStyleSheet(BAD_STYLE if why else "")
+            theme.set_invalid(edit, bool(why))
             edit.setToolTip(why or TIPS[name])  # a problem's reason first (SPEC §24)
         why = plan.problem("subfolder")
         line = f"Subfolder: {self.subfolder_name} (File > Options…, Trim)"

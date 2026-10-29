@@ -8,6 +8,7 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from music_desk.core.index.queries import FolderSummary
+from music_desk.ui import theme
 from music_desk.ui.file_view import format_duration
 
 
@@ -36,7 +37,7 @@ class FolderSummaryView(QWidget):
         names = QVBoxLayout()
         self.name_label = QLabel()
         self.name_label.setWordWrap(True)
-        self.name_label.setStyleSheet("font-weight: 600;")
+        theme.strong(self.name_label)
         self.path_label = QLabel()
         self.path_label.setWordWrap(True)
         self.path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

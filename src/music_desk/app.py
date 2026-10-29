@@ -37,7 +37,7 @@ from music_desk.paths import app_data_dir, flac_path, icon_path, library_db_path
 from music_desk.services.library import LibraryService
 from music_desk.services.replaygain_job import Finished
 from music_desk.settings import Settings
-from music_desk.ui import qt_util
+from music_desk.ui import qt_util, theme
 from music_desk.ui.main_window import APP_TITLE, MainWindow
 from music_desk.ui.stall_watch import StallWatch
 from music_desk.ui.tools.tool_cards import ToolCards
@@ -282,6 +282,7 @@ def main() -> int:
     app.setApplicationName(APP_TITLE)
     app.setApplicationVersion(__version__)
     app.setWindowIcon(QIcon(str(icon_path())))
+    theme.apply(app)  # the font, and the style sheet that follows Windows' colours (SPEC §36)
 
     # One MusicDesk at a time (SPEC §29): a running one gets this start's folder, or its right-click entry (§31),
     # and comes to the front.

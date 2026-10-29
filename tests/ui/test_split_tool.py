@@ -17,6 +17,7 @@ from music_desk.core.index.store import path_of
 from music_desk.core.tags import TaggedFile
 from music_desk.services import split_job
 from music_desk.settings import Settings
+from music_desk.ui import theme
 from music_desk.ui.split_page import COLUMN
 from music_desk.ui.tools.tool_cards import ToolCards
 
@@ -428,12 +429,12 @@ def test_a_missing_source_is_marked_until_one_is_chosen(qtbot, split, library_di
     assert split.source_warning() == ("This sheet points to Fixture Album.wav, which isn't in this folder. Choose "
                                       "its audio file.")
     assert "<b>This sheet points to Fixture Album.wav" in page.source_note.text()
-    assert page.source.styleSheet() and not page.preview_button.isEnabled() and page.save_as_button.isVisible()
+    assert theme.is_invalid(page.source) and not page.preview_button.isEnabled() and page.save_as_button.isVisible()
     index = page.source.findData("image.wav")
     page.source.setCurrentIndex(index)
     page.source.activated.emit(index)
     ready(qtbot, split)
-    assert split.source_warning() is None and not page.source.styleSheet()
+    assert split.source_warning() is None and not theme.is_invalid(page.source)
     assert "WAV, 44.1 kHz, 0:06" in page.source_note.text() and page.preview_button.isEnabled()
 
 
@@ -448,7 +449,7 @@ def test_an_unsupported_or_multi_file_source_is_marked(qtbot, split, library_dir
     change(split.doc)
     split._refresh()
     ready(qtbot, split)
-    assert split.source_warning() == warning and page.source.styleSheet()
+    assert split.source_warning() == warning and theme.is_invalid(page.source)
     assert not page.preview_button.isEnabled()
 
 
@@ -456,7 +457,7 @@ def test_a_source_that_cant_be_read_is_marked(qtbot, split, library_dir):
     folder = library_dir / "Albums" / "wav_image"
     (folder / "image.wav").write_bytes(b"RIFF....WAVEjunk")
     page = open_sheet(qtbot, split, folder / "image.cue")
-    assert split.source_warning().endswith("Choose its audio file.") and page.source.styleSheet()
+    assert split.source_warning().endswith("Choose its audio file.") and theme.is_invalid(page.source)
 
 
 # -- M13: New cue sheet… --

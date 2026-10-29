@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QMenu, QToolButton, QWidge
 from music_desk.core.index.search import FILES, LIMIT, LYRICS, MODES
 from music_desk.services.library import LibraryService
 from music_desk.services.search_service import SearchResults, SearchService
+from music_desk.ui import theme
 from music_desk.ui.controllers import STATUS_MS
 from music_desk.ui.hover import with_status_tips
 from music_desk.ui.qt_util import shortcut
@@ -29,7 +30,6 @@ from music_desk.ui.search_view import sort_keys as search_sort_keys
 TYPING_MS = 120  # runs as you type, once typing pauses
 REFRESH_MS = 1000  # the index changed: the query runs again
 FIELD_WIDTH = 900  # the field's widest, centred in its row (SPEC §33)
-FONT_SCALE = 1.35  # the field's and the toggle's text, larger than the window's
 MODE_TEXTS = {  # label, hover text, placeholder
     FILES: ("Files", "File search: folder and file names, titles, artists, albums and years",
             "Search files: names, titles, artists, albums, years (Ctrl+K)"),
@@ -271,5 +271,6 @@ class SearchController(QObject):
 
 
 def _scaled(font: QFont) -> QFont:
-    font.setPointSizeF(font.pointSizeF() * FONT_SCALE)
+    """The field's and the toggle's text, larger than the window's."""
+    font.setPointSizeF(font.pointSizeF() * theme.SCALE_SEARCH)
     return font

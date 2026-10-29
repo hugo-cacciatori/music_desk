@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from music_desk.core import rename
 from music_desk.core.rename import RenameOptions
+from music_desk.ui import theme
 
 DESCRIPTION = (
     "Renames every music file in this folder (and its subfolders) from its tags, using the first mask whose fields "
@@ -46,7 +47,6 @@ def problems_text(problems: list[str]) -> str:
     return "\n".join(f"• {problem}" for problem in problems)
 
 
-TITLE_SCALE = 1.3
 CARD_MARGIN = 14  # px inside each card
 
 
@@ -60,7 +60,7 @@ class Card(QFrame):
         self.title = QLabel(title)
         font = self.title.font()
         font.setBold(True)
-        font.setPointSizeF(font.pointSizeF() * TITLE_SCALE)
+        font.setPointSizeF(font.pointSizeF() * theme.SCALE_TOOL_TITLE)
         self.title.setFont(font)
         self.description = QLabel(description)
         self.description.setWordWrap(True)
@@ -68,7 +68,7 @@ class Card(QFrame):
         self.body = QVBoxLayout()
         self.problems = QLabel()
         self.problems.setWordWrap(True)
-        self.problems.setStyleSheet("color: #c42b1c;")
+        theme.mark_danger(self.problems)
         self.problems.hide()
         self.buttons = QHBoxLayout()
         layout = QVBoxLayout(self)

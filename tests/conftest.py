@@ -19,7 +19,7 @@ REFERENCE = Path(__file__).parent / "reference"
 # -- test selection by feature (tests/areas.py, SPEC §18 "Test selection") --
 
 STARTED = time.time()  # this conftest loads as the run starts: the run's time includes its start-up
-RUN_LOG = Path(tempfile.gettempdir()) / "music_desk-test-runs.log"
+RUN_LOG = Path(tempfile.gettempdir()) / "refrain-test-runs.log"
 RECENT_S = 30 * 60
 
 

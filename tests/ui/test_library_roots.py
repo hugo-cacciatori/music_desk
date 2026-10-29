@@ -6,10 +6,10 @@ import pytest
 from PySide6.QtCore import QMimeData, QModelIndex, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
-from music_desk.core.index import roots as roots_module
-from music_desk.core.index.roots import AddStatus
-from music_desk.services.library import LibraryService
-from music_desk.ui.main_window import MainWindow
+from refrain.core.index import roots as roots_module
+from refrain.core.index.roots import AddStatus
+from refrain.services.library import LibraryService
+from refrain.ui.main_window import MainWindow
 
 
 @pytest.fixture

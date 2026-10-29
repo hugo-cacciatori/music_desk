@@ -8,9 +8,9 @@ import pytest
 from browser_helpers import entry
 from PySide6.QtWidgets import QToolBar
 
-from music_desk.core.index import album_search
-from music_desk.core.tags import TaggedFile
-from music_desk.services import album_search_service
+from refrain.core.index import album_search
+from refrain.core.tags import TaggedFile
+from refrain.services import album_search_service
 
 RG = {"replaygain_track_gain": "-6.00 dB", "replaygain_track_peak": "0.9", "replaygain_album_gain": "-6.50 dB",
       "replaygain_album_peak": "0.95"}
@@ -173,7 +173,7 @@ def test_the_search_runs_on_a_worker(qtbot, window, monkeypatch):
 
 
 def test_disabled_without_a_library(qtbot):
-    from music_desk.ui.main_window import MainWindow
+    from refrain.ui.main_window import MainWindow
 
     window = MainWindow(None)
     qtbot.addWidget(window)

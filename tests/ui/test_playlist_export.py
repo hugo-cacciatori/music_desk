@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 from browser_helpers import entry
 
-from music_desk.core.playlist_builder import Item
-from music_desk.settings import Settings
-from music_desk.ui.main_window import MainWindow
+from refrain.core.playlist_builder import Item
+from refrain.settings import Settings
+from refrain.ui.main_window import MainWindow
 
 ALBUM_FILES = ["track 1.flac", "Track 2.flac", "Track 3.mp3", "Track 10.flac"]
 

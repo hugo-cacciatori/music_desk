@@ -1,8 +1,8 @@
 """core/masks.py: file names from tags, shared by Rename, Tidy, the cue split and the rename hint (SPEC §21)."""
 
-from music_desk.core import masks, rename
-from music_desk.core.metadata import suggested_name
-from music_desk.core.tags import TaggedFile
+from refrain.core import masks, rename
+from refrain.core.metadata import suggested_name
+from refrain.core.tags import TaggedFile
 
 
 def test_name_for():

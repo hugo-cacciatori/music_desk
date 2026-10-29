@@ -5,12 +5,12 @@ from datetime import date
 
 import pytest
 
-from music_desk.core.index import queries
-from music_desk.core.index.lyrics_index import pending_count, pending_tracks, record_lyrics, retry_before
-from music_desk.core.index.roots import add_root
-from music_desk.core.index.scanner import Scanner
-from music_desk.core.index.store import DbWriter, LyricsStore, connect_read, path_of
-from music_desk.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND, cache_key
+from refrain.core.index import queries
+from refrain.core.index.lyrics_index import pending_count, pending_tracks, record_lyrics, retry_before
+from refrain.core.index.roots import add_root
+from refrain.core.index.scanner import Scanner
+from refrain.core.index.store import DbWriter, LyricsStore, connect_read, path_of
+from refrain.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND, cache_key
 
 TODAY = date(2026, 10, 15)
 BEFORE = retry_before(TODAY)

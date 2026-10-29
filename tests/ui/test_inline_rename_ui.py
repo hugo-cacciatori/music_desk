@@ -5,7 +5,7 @@ from browser_helpers import column, entry
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QLineEdit
 
-from music_desk.core.tags import TaggedFile
+from refrain.core.tags import TaggedFile
 
 
 def rename_in_list(qtbot, window, name, new_name):

@@ -6,8 +6,8 @@ import shutil
 
 import pytest
 
-from music_desk.context_menu import request as menu
-from music_desk.context_menu.tool_host import TrimWindow
+from refrain.context_menu import request as menu
+from refrain.context_menu.tool_host import TrimWindow
 
 
 @pytest.fixture

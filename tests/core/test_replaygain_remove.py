@@ -5,7 +5,7 @@ import shutil
 
 import pytest
 
-from music_desk.core.replaygain import (
+from refrain.core.replaygain import (
     ALBUM_GAIN,
     ALBUM_PEAK,
     DEFAULT_OPTIONS,
@@ -15,7 +15,7 @@ from music_desk.core.replaygain import (
     lufs_comment_pattern,
     remove_replaygain,
 )
-from music_desk.core.tags import TaggedFile
+from refrain.core.tags import TaggedFile
 
 RG_KEYS = (TRACK_GAIN, TRACK_PEAK, ALBUM_GAIN, ALBUM_PEAK)
 
@@ -90,8 +90,8 @@ def test_a_custom_comment_template(tmp_path, fixtures_dir):
 
 def test_what_a_real_run_wrote_is_removed(fixture_copy):
     """The bundled rsgain and the ReplayGain step write the tags (any key case rsgain uses); removal clears them."""
-    from music_desk import paths
-    from music_desk.core.replaygain import process_album
+    from refrain import paths
+    from refrain.core.replaygain import process_album
 
     album = fixture_copy("replaygain/Fixture Artist/Album B")
     run_log = process_album(album, exe=paths.rsgain_path())

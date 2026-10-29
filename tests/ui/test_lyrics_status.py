@@ -2,9 +2,9 @@
 
 import time
 
-from music_desk.core.index.store import path_of
-from music_desk.services.lyrics_service import IDLE, OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
-from music_desk.ui.file_view import COLUMN_INDEX
+from refrain.core.index.store import path_of
+from refrain.services.lyrics_service import IDLE, OFFLINE, PAUSED, RUNNING, UNREACHABLE, LyricsProgress
+from refrain.ui.file_view import COLUMN_INDEX
 
 
 def progress(state, pending=12):

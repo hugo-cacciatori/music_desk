@@ -7,7 +7,7 @@ from datetime import date
 import pytest
 from lrclib_fake import FakeUrlopen, SleepRecorder, http_error, no_jitter
 
-from music_desk.core.lyrics import (
+from refrain.core.lyrics import (
     ERROR,
     FOUND,
     INSTRUMENTAL,
@@ -27,7 +27,7 @@ from music_desk.core.lyrics import (
     search_urls,
     strip_timestamps,
 )
-from music_desk.core.tags import TaggedFile
+from refrain.core.tags import TaggedFile
 
 TODAY = date(2026, 10, 15)
 TRACK = Track(artist="Fixture Artist", title="First", album="Fixture Album", duration=200)

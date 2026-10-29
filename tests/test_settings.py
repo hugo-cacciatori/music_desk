@@ -2,7 +2,7 @@
 
 import json
 
-from music_desk.settings import Settings
+from refrain.settings import Settings
 
 
 def test_defaults_when_missing(tmp_path):
@@ -77,7 +77,7 @@ def test_mistyped_masks_fall_back_to_the_defaults(tmp_path):
 
 def test_old_junk_cleanup_moves_to_clean_up(tmp_path):
     """Before 0.8.10 the junk cleanup was a Rename option: it comes back as Clean up's, as it was (SPEC §32)."""
-    from music_desk.core import cleanup
+    from refrain.core import cleanup
 
     path = tmp_path / "settings.json"
     path.write_text(json.dumps({"rename_options": {"recursive": False, "cleanup": True,

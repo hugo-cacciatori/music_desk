@@ -8,9 +8,9 @@ import subprocess
 
 import pytest
 
-from music_desk.core.formats import format_for, open_audio
-from music_desk.core.rsgain import strip_ansi
-from music_desk.paths import rsgain_path
+from refrain.core.formats import format_for, open_audio
+from refrain.core.rsgain import strip_ansi
+from refrain.paths import rsgain_path
 
 # Fixture -> (gain key, peak key), as mutagen exposes them. Vorbis comment keys match ignoring case.
 EXPECTED_KEYS = {

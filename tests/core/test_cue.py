@@ -6,8 +6,8 @@ import struct
 
 import pytest
 
-from music_desk.core import cue
-from music_desk.core.masks import DEFAULT_MASKS
+from refrain.core import cue
+from refrain.core.masks import DEFAULT_MASKS
 
 SPLIT = "split"
 
@@ -275,7 +275,7 @@ def test_only_track_3_keeps_the_boundaries_and_its_number(split_dir):
 
 
 def test_an_edited_sheet_in_memory_is_planned(split_dir):
-    from music_desk.core.cue_edit import read_document
+    from refrain.core.cue_edit import read_document
 
     path = split_dir / "hidden_track" / "Split Album.cue"
     document = read_document(path)

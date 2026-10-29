@@ -7,7 +7,7 @@ import time
 import pytest
 from browser_helpers import column, entry
 
-from music_desk.core.index.scanner import Scanner
+from refrain.core.index.scanner import Scanner
 
 
 @pytest.fixture

@@ -1,4 +1,4 @@
-"""Draws the app icon, resources/icons/music_desk.ico (16 to 256 px) and music_desk.png (256 px), and, with
+"""Draws the app icon, resources/icons/refrain.ico (16 to 256 px) and refrain.png (256 px), and, with
 --wizard <folder>, the installer's wizard images (build_installer.py makes them in build/wizard, never committed).
 
 The logo (SPEC §36) is the repeat sign, the score mark for a refrain: a thick bar, a thin bar and two dots, white on
@@ -158,9 +158,9 @@ def main(argv: list[str]) -> int:
         return 0
     OUT.mkdir(parents=True, exist_ok=True)
     images = [draw(size) for size in SIZES]
-    write_ico(OUT / "music_desk.ico", images)
-    images[-1].save(str(OUT / "music_desk.png"))
-    print(f"wrote {OUT / 'music_desk.ico'} ({len(SIZES)} sizes) and music_desk.png")
+    write_ico(OUT / "refrain.ico", images)
+    images[-1].save(str(OUT / "refrain.png"))
+    print(f"wrote {OUT / 'refrain.ico'} ({len(SIZES)} sizes) and refrain.png")
     return 0
 
 if __name__ == "__main__":

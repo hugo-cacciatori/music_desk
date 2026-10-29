@@ -12,8 +12,8 @@ from mutagen.flac import FLAC, Picture
 from mutagen.id3 import APIC, ID3, TIT2, USLT
 from mutagen.mp4 import MP4Cover
 
-from music_desk.core.formats import AUDIO_EXTENSIONS, FORMATS, REPLAYGAIN_EXTENSIONS, TagFamily, format_for, open_audio
-from music_desk.core.tags import Cover, pack_asf_picture, unpack_asf_picture
+from refrain.core.formats import AUDIO_EXTENSIONS, FORMATS, REPLAYGAIN_EXTENSIONS, TagFamily, format_for, open_audio
+from refrain.core.tags import Cover, pack_asf_picture, unpack_asf_picture
 
 TITLE = "Round Trip – ünïcødé"
 LYRICS = "Line one\nLine two"

@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from music_desk.core.index import queries
-from music_desk.core.index.roots import add_root
-from music_desk.core.index.scanner import Scanner
-from music_desk.core.index.store import DbWriter, connect_read, path_of
-from music_desk.core.playlist_builder import Builder, Item
-from music_desk.core.playlists import PlaylistEntry, export_playlist, playlist_path, render
+from refrain.core.index import queries
+from refrain.core.index.roots import add_root
+from refrain.core.index.scanner import Scanner
+from refrain.core.index.store import DbWriter, connect_read, path_of
+from refrain.core.playlist_builder import Builder, Item
+from refrain.core.playlists import PlaylistEntry, export_playlist, playlist_path, render
 
 
 def items(*names) -> list[Item]:

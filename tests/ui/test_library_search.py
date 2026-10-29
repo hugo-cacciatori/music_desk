@@ -10,12 +10,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractButton, QCheckBox
 
-from music_desk.core.index.lyrics_index import record_lyrics
-from music_desk.core.index.search import FILES, LYRICS
-from music_desk.settings import Settings
-from music_desk.ui.main_window import MainWindow
-from music_desk.ui.search_view import CARD_COLUMN, SEARCH_COLUMN_INDEX, SEARCH_COLUMNS, line_spans
-from music_desk.ui.side_panel.lyrics_tab import FOUND_STATE
+from refrain.core.index.lyrics_index import record_lyrics
+from refrain.core.index.search import FILES, LYRICS
+from refrain.settings import Settings
+from refrain.ui.main_window import MainWindow
+from refrain.ui.search_view import CARD_COLUMN, SEARCH_COLUMN_INDEX, SEARCH_COLUMNS, line_spans
+from refrain.ui.side_panel.lyrics_tab import FOUND_STATE
 
 ALBUM = "Fixture Artist - Fixture Album"
 

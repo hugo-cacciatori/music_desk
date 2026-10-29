@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from music_desk.ui.hover import is_exempt
+from refrain.ui.hover import is_exempt
 
 CONTROLS = (QAbstractButton, QComboBox, QAbstractSpinBox, QAbstractSlider, QLineEdit)
 
@@ -78,14 +78,14 @@ def test_every_page_and_panel(window):
 
 def test_every_task_window(qtbot):
     """The right-click entries' windows, which the toolbar and the app's menus open too (SPEC §35)."""
-    from music_desk.context_menu.rename_entry import RenameWindow
-    from music_desk.context_menu.replaygain_entry import ReplayGainWindow
-    from music_desk.context_menu.split_recap import SplitRecapWindow
-    from music_desk.context_menu.tidy_entry import TidyWindow
-    from music_desk.context_menu.tool_host import CueEditorWindow, TrimWindow
-    from music_desk.core.path_locks import PathLocks
-    from music_desk.settings import Settings
-    from music_desk.ui.tools.tool_cards import ToolCards
+    from refrain.context_menu.rename_entry import RenameWindow
+    from refrain.context_menu.replaygain_entry import ReplayGainWindow
+    from refrain.context_menu.split_recap import SplitRecapWindow
+    from refrain.context_menu.tidy_entry import TidyWindow
+    from refrain.context_menu.tool_host import CueEditorWindow, TrimWindow
+    from refrain.core.path_locks import PathLocks
+    from refrain.settings import Settings
+    from refrain.ui.tools.tool_cards import ToolCards
 
     cards, locks = ToolCards(Settings()), PathLocks()
     windows = [kind(cards, locks) for kind in (RenameWindow, ReplayGainWindow, SplitRecapWindow, TidyWindow,
@@ -101,8 +101,8 @@ def test_every_task_window(qtbot):
 
 
 def test_the_other_windows_and_dialogs(window, qtbot):
-    from music_desk.ui.about_dialog import AboutDialog
-    from music_desk.ui.track_lengths import TrackLengthsDialog
+    from refrain.ui.about_dialog import AboutDialog
+    from refrain.ui.track_lengths import TrackLengthsDialog
 
     window.open_advanced_search()
     assert window.advanced_search is not None
@@ -114,8 +114,8 @@ def test_the_other_windows_and_dialogs(window, qtbot):
 
 
 def test_menu_entries_show_a_status_bar_tip(window, service):
-    from music_desk.context_menu.entries import HELP
-    from music_desk.ui.hover import MENU_TIPS, menu_key
+    from refrain.context_menu.entries import HELP
+    from refrain.ui.hover import MENU_TIPS, menu_key
 
     album = entry(service, "Artist", "Album")
     window.open_folder(album)

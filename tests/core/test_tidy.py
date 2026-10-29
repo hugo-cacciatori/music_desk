@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from music_desk.core import rename
-from music_desk.core.masks import DEFAULT_MASKS, DEFAULT_REPLACEMENT
-from music_desk.core.replaygain import ALBUM_GAIN, ALBUM_PEAK, TRACK_GAIN, TRACK_PEAK, ReplayGainOptions
-from music_desk.core.tags import TaggedFile
-from music_desk.core.tidy import Kind, find_albums, plan_tidy, plan_tidy_paths, replaygain_needed
+from refrain.core import rename
+from refrain.core.masks import DEFAULT_MASKS, DEFAULT_REPLACEMENT
+from refrain.core.replaygain import ALBUM_GAIN, ALBUM_PEAK, TRACK_GAIN, TRACK_PEAK, ReplayGainOptions
+from refrain.core.tags import TaggedFile
+from refrain.core.tidy import Kind, find_albums, plan_tidy, plan_tidy_paths, replaygain_needed
 
 RG = ReplayGainOptions()
 RENAME = rename.RenameOptions()

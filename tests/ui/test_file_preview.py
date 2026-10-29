@@ -10,11 +10,11 @@ from browser_helpers import entry
 from PySide6.QtGui import QImage, QImageIOHandler, QImageWriter
 from PySide6.QtWidgets import QAbstractButton, QLineEdit, QPlainTextEdit
 
-from music_desk.core import preview
-from music_desk.core.path_locks import PathLocks
-from music_desk.services.tag_io import TagIO
-from music_desk.services.tag_writer import TagWriter
-from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
+from refrain.core import preview
+from refrain.core.path_locks import PathLocks
+from refrain.services.tag_io import TagIO
+from refrain.services.tag_writer import TagWriter
+from refrain.ui.side_panel.panel import SelectedItem, SidePanel
 
 
 @pytest.fixture

@@ -4,8 +4,8 @@ import shutil
 
 from browser_helpers import entry
 
-from music_desk.core.index import queries
-from music_desk.core.tags import TaggedFile
+from refrain.core.index import queries
+from refrain.core.tags import TaggedFile
 
 
 def stats(service, folder_id):
@@ -117,7 +117,7 @@ def test_summary_follows_the_index(qtbot, window, service, library_dir):
 
 
 def test_lrclib_coverage_follows_lookups(qtbot, window, service):
-    from music_desk.core.index.lyrics_index import record_lyrics
+    from refrain.core.index.lyrics_index import record_lyrics
 
     album = entry(service, "Artist", "Album")
     window.open_folder(album)

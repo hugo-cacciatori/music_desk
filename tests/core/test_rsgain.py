@@ -1,6 +1,6 @@
 
-from music_desk.core.rsgain import rsgain_version, strip_ansi
-from music_desk.paths import rsgain_path
+from refrain.core.rsgain import rsgain_version, strip_ansi
+from refrain.paths import rsgain_path
 
 
 def test_strip_ansi():

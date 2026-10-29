@@ -6,12 +6,12 @@ import time
 
 from PySide6.QtCore import QTimer
 
-from music_desk.ui.stall_watch import StallWatch
+from refrain.ui.stall_watch import StallWatch
 
 
 def test_a_stall_is_logged(qtbot, caplog):
     watch = StallWatch()
-    with caplog.at_level(logging.WARNING, logger="music_desk.ui.stall_watch"):
+    with caplog.at_level(logging.WARNING, logger="refrain.ui.stall_watch"):
         QTimer.singleShot(0, lambda: time.sleep(0.15))
         qtbot.waitUntil(lambda: watch.worst_ms > 0, timeout=3000)
     assert watch.worst_ms >= 100

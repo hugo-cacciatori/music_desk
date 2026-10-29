@@ -4,8 +4,8 @@ import dataclasses
 
 import pytest
 
-from music_desk.core import rename, replaygain
-from music_desk.core.replaygain import ReplayGainOptions
+from refrain.core import rename, replaygain
+from refrain.core.replaygain import ReplayGainOptions
 
 
 def test_default_options_are_valid():

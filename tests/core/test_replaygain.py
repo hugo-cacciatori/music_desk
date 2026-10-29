@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from rsgain_fake import VALUES, FakeScanner  # noqa: F401 - VALUES is used by the tests below
 
-from music_desk.core.cancel import CancelToken
-from music_desk.core.replaygain import (
+from refrain.core.cancel import CancelToken
+from refrain.core.replaygain import (
     ALBUM_GAIN,
     ALBUM_PEAK,
     TRACK_GAIN,
@@ -23,8 +23,8 @@ from music_desk.core.replaygain import (
     process_album,
     process_discography,
 )
-from music_desk.core.rsgain import ScanResult
-from music_desk.core.tags import TaggedFile
+from refrain.core.rsgain import ScanResult
+from refrain.core.tags import TaggedFile
 
 ARTIST = "replaygain/Fixture Artist"
 NOW = datetime(2026, 1, 2, 3, 4, 5)

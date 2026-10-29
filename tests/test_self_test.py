@@ -4,7 +4,7 @@ one, the report file, and the start that runs it instead of the app."""
 import sys
 from pathlib import Path
 
-from music_desk import app, paths, self_test
+from refrain import app, paths, self_test
 
 
 def test_every_check_passes_from_source(qapp, tmp_path):

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from music_desk.core.cleanup import (
+from refrain.core.cleanup import (
     DEFAULT_LISTS,
     CleanupOptions,
     find_clutter,

@@ -5,7 +5,7 @@ import re
 import tomllib
 from pathlib import Path
 
-from music_desk.licenses import COMPONENTS, licenses_dir
+from refrain.licenses import COMPONENTS, licenses_dir
 
 ROOT = Path(__file__).parents[1]
 

@@ -8,11 +8,11 @@ from browser_helpers import child_names, column, entry
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QSignalSpy
 
-from music_desk.core.index import queries
-from music_desk.settings import Settings
-from music_desk.ui.file_view import COLUMN_INDEX, format_duration, format_size
-from music_desk.ui.folder_tree import ENTRY_ID_ROLE
-from music_desk.ui.main_window import MainWindow
+from refrain.core.index import queries
+from refrain.settings import Settings
+from refrain.ui.file_view import COLUMN_INDEX, format_duration, format_size
+from refrain.ui.folder_tree import ENTRY_ID_ROLE
+from refrain.ui.main_window import MainWindow
 
 # -- queries --
 

@@ -2,7 +2,7 @@
 
 from PySide6.QtCore import QModelIndex
 
-from music_desk.ui.file_view import COLUMN_INDEX
+from refrain.ui.file_view import COLUMN_INDEX
 
 
 def entry(service, *names) -> int:

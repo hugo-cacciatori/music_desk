@@ -10,15 +10,15 @@ from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication
 
-from music_desk.context_menu.tool_host import TrimWindow
-from music_desk.core.flac import Cancelled
-from music_desk.core.index.store import path_of
-from music_desk.core.tags import TaggedFile
-from music_desk.services import trim_job
-from music_desk.settings import Settings
-from music_desk.ui import theme
-from music_desk.ui.side_panel.metadata_tab import TRIM_TIP
-from music_desk.ui.tools.tool_cards import ToolCards
+from refrain.context_menu.tool_host import TrimWindow
+from refrain.core.flac import Cancelled
+from refrain.core.index.store import path_of
+from refrain.core.tags import TaggedFile
+from refrain.services import trim_job
+from refrain.settings import Settings
+from refrain.ui import theme
+from refrain.ui.side_panel.metadata_tab import TRIM_TIP
+from refrain.ui.tools.tool_cards import ToolCards
 
 HIDDEN = "Fixture Artist - Split Album.flac"  # 12 s: a 3 s hidden track, then the songs
 

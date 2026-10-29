@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QLabel
 
-from music_desk.ui.main_window import APP_TITLE, MainWindow
+from refrain.ui.main_window import APP_TITLE, MainWindow
 
 
 def test_main_window_shows(qtbot):

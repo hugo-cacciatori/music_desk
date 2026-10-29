@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from music_desk.core.cue_edit import (
+from refrain.core.cue_edit import (
     check_lengths,
     format_cue,
     format_length,
@@ -101,7 +101,7 @@ def test_fill_adds_and_deletes_tracks_at_the_end():
 
 
 def test_fill_needs_a_valid_first_start():
-    from music_desk.core.cue import CueError
+    from refrain.core.cue import CueError
 
     doc = doc_of(SHEET.replace("00:00:32", "0:x"))
     with pytest.raises(CueError, match="Track 1's start isn't valid"):

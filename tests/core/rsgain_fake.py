@@ -3,9 +3,9 @@ so ReplayGain tests are fast and exact. The real rsgain runs in the parity and r
 
 from pathlib import Path
 
-from music_desk.core.replaygain import TRACK_GAIN, TRACK_PEAK
-from music_desk.core.rsgain import ScanResult
-from music_desk.core.tags import TaggedFile
+from refrain.core.replaygain import TRACK_GAIN, TRACK_PEAK
+from refrain.core.rsgain import ScanResult
+from refrain.core.tags import TaggedFile
 
 # Values the real rsgain 3.6 writes for these fixtures (see the parity tests).
 VALUES = {

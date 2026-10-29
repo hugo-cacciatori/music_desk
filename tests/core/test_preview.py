@@ -2,7 +2,7 @@
 
 import pytest
 
-from music_desk.core import preview
+from refrain.core import preview
 
 PREVIEW = "preview"
 

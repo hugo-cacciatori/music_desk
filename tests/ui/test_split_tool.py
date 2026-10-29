@@ -10,16 +10,16 @@ import shutil
 
 import pytest
 
-from music_desk.context_menu.split_recap import SplitRecapWindow
-from music_desk.context_menu.tool_host import CueEditorWindow
-from music_desk.core.flac import Cancelled
-from music_desk.core.index.store import path_of
-from music_desk.core.tags import TaggedFile
-from music_desk.services import split_job
-from music_desk.settings import Settings
-from music_desk.ui import theme
-from music_desk.ui.split_page import COLUMN
-from music_desk.ui.tools.tool_cards import ToolCards
+from refrain.context_menu.split_recap import SplitRecapWindow
+from refrain.context_menu.tool_host import CueEditorWindow
+from refrain.core.flac import Cancelled
+from refrain.core.index.store import path_of
+from refrain.core.tags import TaggedFile
+from refrain.services import split_job
+from refrain.settings import Settings
+from refrain.ui import theme
+from refrain.ui.split_page import COLUMN
+from refrain.ui.tools.tool_cards import ToolCards
 
 HIDDEN = "hidden_track"
 SOURCE = "Fixture Artist - Split Album.flac"
@@ -622,7 +622,7 @@ def test_fill_from_track_lengths(qtbot, split, library_dir, monkeypatch):
 
 
 def test_the_lengths_dialog(qtbot):
-    from music_desk.ui.track_lengths import TrackLengthsDialog
+    from refrain.ui.track_lengths import TrackLengthsDialog
 
     dialog = TrackLengthsDialog([75 * 60, None, 75 * 30], 0, 75 * 600)
     qtbot.addWidget(dialog)

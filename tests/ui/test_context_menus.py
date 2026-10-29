@@ -11,9 +11,9 @@ from browser_helpers import column, entry
 from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import QAbstractItemView, QApplication
 
-from music_desk.context_menu.rename_entry import RenameWindow
-from music_desk.core import fsops
-from music_desk.ui.entry_drag import ENTRY_IDS_MIME, entry_mime
+from refrain.context_menu.rename_entry import RenameWindow
+from refrain.core import fsops
+from refrain.ui.entry_drag import ENTRY_IDS_MIME, entry_mime
 
 
 class Recorder:
@@ -76,7 +76,7 @@ def test_explorer_command_lines():
 
 
 def test_playlist_queries_read_the_index(service, library_dir):
-    from music_desk.core.index import queries
+    from refrain.core.index import queries
 
     album = entry(service, "Artist", "Album")
     names = [e.path.name for e in queries.playlist_for_folder(service.conn, album)]

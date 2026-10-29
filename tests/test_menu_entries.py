@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from music_desk.context_menu.entries import HELP, OPEN, Selection, entry_names, target_text
-from music_desk.context_menu.entries import menu_entries as entries_for
+from refrain.context_menu.entries import HELP, OPEN, Selection, entry_names, target_text
+from refrain.context_menu.entries import menu_entries as entries_for
 
 ONE_FOLDER = ["open", "replaygain-album", "replaygain-discography", "rename", "tidy", "cleanup", "settings"]
 MENU_CPP = Path(__file__).parents[1] / "native" / "context_menu" / "menu.cpp"

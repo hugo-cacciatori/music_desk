@@ -7,13 +7,13 @@ import shutil
 import pytest
 from PySide6.QtCore import QCoreApplication, QEvent
 
-from music_desk.app import Starter
-from music_desk.context_menu import request as menu
-from music_desk.context_menu.remove_entry import RemoveEntry
-from music_desk.context_menu.rename_entry import RenameWindow
-from music_desk.core.replaygain import TRACK_GAIN
-from music_desk.core.tags import TaggedFile
-from music_desk.settings import Settings
+from refrain.app import Starter
+from refrain.context_menu import request as menu
+from refrain.context_menu.remove_entry import RemoveEntry
+from refrain.context_menu.rename_entry import RenameWindow
+from refrain.core.replaygain import TRACK_GAIN
+from refrain.core.tags import TaggedFile
+from refrain.settings import Settings
 
 ALBUM = "Fixture Artist - Fixture Album"
 
@@ -38,7 +38,7 @@ def artist(library_dir):
 @pytest.fixture
 def quits(monkeypatch):
     calls = []
-    monkeypatch.setattr("music_desk.app.QApplication.quit", lambda: calls.append(True))
+    monkeypatch.setattr("refrain.app.QApplication.quit", lambda: calls.append(True))
     return calls
 
 

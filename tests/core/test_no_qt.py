@@ -3,9 +3,9 @@
 import ast
 from pathlib import Path
 
-import music_desk.core
+import refrain.core
 
-CORE_DIR = Path(music_desk.core.__file__).parent
+CORE_DIR = Path(refrain.core.__file__).parent
 
 
 def test_core_does_not_import_qt():

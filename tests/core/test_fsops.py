@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from music_desk.core.fsops import CannotRecycle, can_recycle, open_shared, send_to_recycle_bin
-from music_desk.core.tags import TaggedFile
+from refrain.core.fsops import CannotRecycle, can_recycle, open_shared, send_to_recycle_bin
+from refrain.core.tags import TaggedFile
 
 
 def test_a_file_being_read_can_be_deleted_and_renamed(tmp_path):

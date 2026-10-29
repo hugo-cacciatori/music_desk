@@ -6,8 +6,8 @@ import shutil
 
 import pytest
 
-from music_desk.context_menu import request as menu
-from music_desk.context_menu.cleanup_entry import CleanupEntry
+from refrain.context_menu import request as menu
+from refrain.context_menu.cleanup_entry import CleanupEntry
 
 ALBUM = "Fixture Artist - Fixture Album"
 

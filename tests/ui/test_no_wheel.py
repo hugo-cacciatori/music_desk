@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from music_desk.ui.no_wheel import install_no_wheel
-from music_desk.ui.qt_util import app
+from refrain.ui.no_wheel import install_no_wheel
+from refrain.ui.qt_util import app
 
 
 def wheel_down(widget: QWidget) -> None:

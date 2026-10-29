@@ -9,13 +9,13 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QEvent
 from rsgain_fake import VALUES, FakeScanner
 
-from music_desk.app import Starter
-from music_desk.context_menu import request as menu
-from music_desk.context_menu import tidy_entry
-from music_desk.context_menu.cleanup_entry import CleanupEntry
-from music_desk.context_menu.tidy_entry import TidyWindow
-from music_desk.services.tidy_job import TidyRunner
-from music_desk.settings import Settings
+from refrain.app import Starter
+from refrain.context_menu import request as menu
+from refrain.context_menu import tidy_entry
+from refrain.context_menu.cleanup_entry import CleanupEntry
+from refrain.context_menu.tidy_entry import TidyWindow
+from refrain.services.tidy_job import TidyRunner
+from refrain.settings import Settings
 
 TRACKS = {**VALUES, "01 One.flac": ("-3.00 dB", "0.5"), "02 Two.flac": ("-2.00 dB", "0.6")}
 ALBUM = "Fixture Artist - Fixture Album"
@@ -39,7 +39,7 @@ def rips(library_dir):
 @pytest.fixture
 def quits(monkeypatch):
     calls = []
-    monkeypatch.setattr("music_desk.app.QApplication.quit", lambda: calls.append(True))
+    monkeypatch.setattr("refrain.app.QApplication.quit", lambda: calls.append(True))
     return calls
 
 

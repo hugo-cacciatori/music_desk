@@ -4,7 +4,7 @@ import pytest
 from mutagen.id3 import ID3
 from mutagen.wave import WAVE
 
-from music_desk.core.tags import FIELD_NAMES, Fields, TagError, TaggedFile
+from refrain.core.tags import FIELD_NAMES, Fields, TagError, TaggedFile
 
 FORMAT_FIXTURES = ["tone.flac", "tone.ogg", "tone.oga", "tone.opus", "tone.mp3", "tone.mp2", "tone.wav", "tone.aiff",
                    "tone_aac.m4a", "tone_alac.m4a", "tone.m4b", "tone.wv", "tone.tta", "tone.wma"]

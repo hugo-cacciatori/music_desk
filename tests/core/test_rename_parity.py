@@ -9,8 +9,8 @@ import shutil
 
 import pytest
 
-from music_desk.core import cleanup
-from music_desk.core.rename import RenameOptions, apply_plan, plan_renames
+from refrain.core import cleanup
+from refrain.core.rename import RenameOptions, apply_plan, plan_renames
 
 SCRIPT_FORMATS = frozenset({".flac", ".mp3"})
 
@@ -86,7 +86,7 @@ def test_junk_parity_with_deliberate_keeps(script, monkeypatch, fixtures_dir, tm
 
 def test_summary_wording_matches_the_script(script, fixtures_dir, tmp_path, capsys):
     """The result's section titles are the script's print_summary lines (its list output aside)."""
-    from music_desk.core.rename import summary_sections
+    from refrain.core.rename import summary_sections
 
     script_dir, app_dir = twins(fixtures_dir, tmp_path, "album/Fixture Artist - Fixture Album")
     script_report = script.RenameReport()

@@ -7,9 +7,9 @@ from datetime import date
 import pytest
 from lrclib_fake import FakeUrlopen, SleepRecorder, no_jitter
 
-from music_desk.core.index import schema
-from music_desk.core.index.store import DbWriter, LyricsStore, connect_read
-from music_desk.core.lyrics import DictCache, LrclibClient, Track, cache_key, lookup
+from refrain.core.index import schema
+from refrain.core.index.store import DbWriter, LyricsStore, connect_read
+from refrain.core.lyrics import DictCache, LrclibClient, Track, cache_key, lookup
 
 
 @pytest.fixture

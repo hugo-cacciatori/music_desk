@@ -1,10 +1,10 @@
 """core/rsgain.scan: the album scan subprocess (SPEC §13)."""
 
 
-from music_desk.core.cancel import CancelToken
-from music_desk.core.rsgain import MAX_COMMAND_LINE, scan
-from music_desk.core.tags import TaggedFile
-from music_desk.paths import rsgain_path
+from refrain.core.cancel import CancelToken
+from refrain.core.rsgain import MAX_COMMAND_LINE, scan
+from refrain.core.tags import TaggedFile
+from refrain.paths import rsgain_path
 
 ALBUM_A = "replaygain/Fixture Artist/Album A"
 

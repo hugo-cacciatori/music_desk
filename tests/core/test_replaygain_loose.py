@@ -7,16 +7,16 @@ from pathlib import Path
 import pytest
 from rsgain_fake import FakeScanner
 
-from music_desk.core.cancel import CancelToken
-from music_desk.core.replaygain import (
+from refrain.core.cancel import CancelToken
+from refrain.core.replaygain import (
     ALBUM_GAIN,
     ALBUM_PEAK,
     TRACK_GAIN,
     ReplayGainOptions,
     process_loose_tracks,
 )
-from music_desk.core.rsgain import ScanResult
-from music_desk.core.tags import TaggedFile
+from refrain.core.rsgain import ScanResult
+from refrain.core.tags import TaggedFile
 
 NOW = datetime(2026, 1, 2, 3, 4, 5)
 EXE = Path(r"C:\fake\rsgain.exe")

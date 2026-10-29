@@ -2,6 +2,6 @@
 
 import sys
 
-from music_desk.app import main
+from refrain.app import main
 
 sys.exit(main())

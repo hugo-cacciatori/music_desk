@@ -13,8 +13,8 @@ import pytest
 from tagdump import tag_dump
 from tinytag import TinyTag
 
-from music_desk.core.formats import AUDIO_EXTENSIONS
-from music_desk.core.tags import TaggedFile
+from refrain.core.formats import AUDIO_EXTENSIONS
+from refrain.core.tags import TaggedFile
 
 ALBUM = "album/Fixture Artist - Fixture Album"
 FLAC_MP3_FIXTURES = [f"{ALBUM}/01 First.flac", f"{ALBUM}/lowercase_rg.mp3", f"{ALBUM}/no_track.mp3",

@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from music_desk.context_menu.entries import Selection, menu_entries
-from music_desk.context_menu.request import (
+from refrain.context_menu.entries import Selection, menu_entries
+from refrain.context_menu.request import (
     CLEANUP,
     EDIT_CUE,
     REMOVE_REPLAYGAIN,
@@ -28,8 +28,8 @@ from music_desk.context_menu.request import (
     StartRequest,
     parse_arguments,
 )
-from music_desk.core import cue
-from music_desk.core.formats import FORMATS
+from refrain.core import cue
+from refrain.core.formats import FORMATS
 
 # packaging/ is a folder of scripts, not a package (and `packaging` is a library's name): load the build script.
 _spec = importlib.util.spec_from_file_location("build_menu", Path(__file__).parents[1] / "packaging" / "build_menu.py")

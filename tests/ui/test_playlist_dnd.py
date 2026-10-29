@@ -14,8 +14,8 @@ from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
-from music_desk.core.index import queries
-from music_desk.ui.entry_drag import ENTRY_IDS_MIME, entry_ids, entry_mime
+from refrain.core.index import queries
+from refrain.ui.entry_drag import ENTRY_IDS_MIME, entry_ids, entry_mime
 
 ALBUM = "Fixture Artist - Fixture Album"
 ALBUM_FILES = ["track 1.flac", "Track 2.flac", "Track 3.mp3", "Track 10.flac"]

@@ -7,11 +7,11 @@ from datetime import datetime
 
 import pytest
 
-from music_desk.core.cancel import CancelToken
-from music_desk.core.index.roots import add_root, list_roots
-from music_desk.core.index.scanner import Scanner, read_file
-from music_desk.core.index.store import DbWriter, connect_read, path_of
-from music_desk.core.lyrics import cache_key
+from refrain.core.cancel import CancelToken
+from refrain.core.index.roots import add_root, list_roots
+from refrain.core.index.scanner import Scanner, read_file
+from refrain.core.index.store import DbWriter, connect_read, path_of
+from refrain.core.lyrics import cache_key
 
 NOW = datetime(2026, 10, 15, 12, 0, 0)
 ALBUM = "Fixture Artist - Fixture Album"
@@ -227,7 +227,7 @@ def test_offline_root_keeps_its_index(writer, read, library, root_id, tmp_path):
 
 
 def test_unlistable_folder_keeps_its_index(writer, read, library, root_id, monkeypatch):
-    from music_desk.core.index import scanner as scanner_module
+    from refrain.core.index import scanner as scanner_module
 
     scanner(writer).scan_root(root_id)
     before = indexed_paths(read, library)
@@ -377,7 +377,7 @@ def test_hundred_thousand_entries(writer, tmp_path):
 # -- path scans (the watcher's entry point) --
 
 def test_find_folder(writer, read, library, root_id):
-    from music_desk.core.index.scanner import find_folder
+    from refrain.core.index.scanner import find_folder
 
     scanner(writer).scan_root(root_id)
     album = entry_id(read, library, f"Fixture Artist/{ALBUM}")
@@ -424,7 +424,7 @@ def test_scan_of_a_removed_root(writer):
 # -- one file after a tag save --
 
 def test_update_file_rereads_one_file(writer, read, library, root_id):
-    from music_desk.core.tags import TaggedFile
+    from refrain.core.tags import TaggedFile
 
     scanner(writer).scan_root(root_id)
     path = library / "Formats" / "tone.flac"
@@ -466,7 +466,7 @@ def test_update_file_of_an_unknown_file_scans_its_folder(writer, read, library, 
 # -- renames made by the app --
 
 def test_apply_renames_keeps_ids(writer, read, library, root_id):
-    from music_desk.core.inline_rename import rename_entry
+    from refrain.core.inline_rename import rename_entry
 
     scanner(writer).scan_root(root_id)
     folder = library / "Fixture Artist" / "Lrc"
@@ -483,7 +483,7 @@ def test_apply_renames_keeps_ids(writer, read, library, root_id):
 
 
 def test_apply_renames_of_a_folder(writer, read, library, root_id):
-    from music_desk.core.inline_rename import rename_entry
+    from refrain.core.inline_rename import rename_entry
 
     scanner(writer).scan_root(root_id)
     album_id = entry_id(read, library, f"Fixture Artist/{ALBUM}")
@@ -495,7 +495,7 @@ def test_apply_renames_of_a_folder(writer, read, library, root_id):
 
 
 def test_apply_renames_when_audio_becomes_text(writer, read, library, root_id):
-    from music_desk.core.inline_rename import rename_entry
+    from refrain.core.inline_rename import rename_entry
 
     scanner(writer).scan_root(root_id)
     before = read.execute("SELECT count(*) FROM tracks").fetchone()[0]
@@ -506,7 +506,7 @@ def test_apply_renames_when_audio_becomes_text(writer, read, library, root_id):
 
 
 def test_apply_renames_when_text_becomes_audio(writer, read, library, root_id, fixtures_dir):
-    from music_desk.core.inline_rename import rename_entry
+    from refrain.core.inline_rename import rename_entry
 
     shutil.copy2(fixtures_dir / "formats" / "tone.flac", library / "Formats" / "hidden.dat")
     scanner(writer).scan_root(root_id)

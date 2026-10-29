@@ -9,11 +9,11 @@ from browser_helpers import entry
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QToolBar
 
-from music_desk.core.index import queries
-from music_desk.core.playlist_builder import Builder, Item
-from music_desk.settings import Settings
-from music_desk.ui.main_window import MainWindow
-from music_desk.ui.playlist_panel import COLUMN_INDEX, COLUMNS, PLACEHOLDER
+from refrain.core.index import queries
+from refrain.core.playlist_builder import Builder, Item
+from refrain.settings import Settings
+from refrain.ui.main_window import MainWindow
+from refrain.ui.playlist_panel import COLUMN_INDEX, COLUMNS, PLACEHOLDER
 
 ALBUM = "Fixture Artist - Fixture Album"
 

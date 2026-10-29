@@ -7,10 +7,10 @@ from pathlib import Path
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QLabel, QLineEdit
 
-from music_desk.ui import theme
-from music_desk.ui.task_header import TaskHeader
+from refrain.ui import theme
+from refrain.ui.task_header import TaskHeader
 
-SRC = Path(__file__).resolve().parents[2] / "src" / "music_desk"
+SRC = Path(__file__).resolve().parents[2] / "src" / "refrain"
 
 
 def test_no_style_sheet_outside_the_theme():
@@ -84,7 +84,7 @@ def test_a_task_header_names_the_folder_above_its_path(qtbot, tmp_path):
 
 
 def test_task_windows_have_their_main_action_in_the_accent_colour(qtbot):
-    from music_desk.ui.tools.tidy_page import TidyPage
+    from refrain.ui.tools.tidy_page import TidyPage
 
     page = TidyPage()
     qtbot.addWidget(page)

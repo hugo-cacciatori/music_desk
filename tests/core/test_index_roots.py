@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from music_desk.core.index.roots import (
+from refrain.core.index.roots import (
     AddStatus,
     add_root,
     check_online,
@@ -14,7 +14,7 @@ from music_desk.core.index.roots import (
     normalize,
     remove_root,
 )
-from music_desk.core.index.store import DbWriter, connect_read, path_of
+from refrain.core.index.store import DbWriter, connect_read, path_of
 
 NOW = datetime(2026, 10, 15, 12, 0, 0)
 

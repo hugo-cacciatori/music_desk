@@ -11,11 +11,11 @@ import pytest
 from entry_helpers import entry_window
 from rsgain_fake import FakeScanner
 
-from music_desk.context_menu import replaygain_entry
-from music_desk.context_menu import request as menu
-from music_desk.core.replaygain import ALBUM_GAIN, ALBUM_PEAK, TRACK_GAIN
-from music_desk.core.tags import TaggedFile
-from music_desk.services.replaygain_job import ALBUMS, LOOSE, TRACKS, ReplayGainRunner
+from refrain.context_menu import replaygain_entry
+from refrain.context_menu import request as menu
+from refrain.core.replaygain import ALBUM_GAIN, ALBUM_PEAK, TRACK_GAIN
+from refrain.core.tags import TaggedFile
+from refrain.services.replaygain_job import ALBUMS, LOOSE, TRACKS, ReplayGainRunner
 
 
 @pytest.fixture

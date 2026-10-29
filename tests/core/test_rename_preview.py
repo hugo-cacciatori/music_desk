@@ -2,8 +2,8 @@
 
 import pytest
 
-from music_desk.core.cancel import CancelToken
-from music_desk.core.rename import (
+from refrain.core.cancel import CancelToken
+from refrain.core.rename import (
     PlanCancelled,
     RenameOptions,
     Status,

@@ -4,9 +4,9 @@ import sqlite3
 
 import pytest
 
-from music_desk.core.index import schema
-from music_desk.core.index.schema import SCHEMA_VERSION, SchemaError, configure, migrate
-from music_desk.core.index.store import path_of
+from refrain.core.index import schema
+from refrain.core.index.schema import SCHEMA_VERSION, SchemaError, configure, migrate
+from refrain.core.index.store import path_of
 
 TABLES = {"roots", "entries", "tracks", "lyrics", "folder_stats", "search"}
 

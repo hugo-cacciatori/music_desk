@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from music_desk import __version__  # noqa: E402
+from refrain import __version__  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "packaging"))
 import build_menu  # noqa: E402
@@ -62,7 +62,7 @@ def self_test(dist: Path) -> None:
 
 def main(argv: list[str]) -> int:
     if "--skip-pyinstaller" not in argv:
-        spec = ROOT / "packaging" / "music_desk.spec"
+        spec = ROOT / "packaging" / "refrain.spec"
         subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", str(spec)], cwd=ROOT, check=True)
     if not (ROOT / "dist" / "Refrain" / "Refrain.exe").is_file():
         raise SystemExit("dist/Refrain/Refrain.exe is missing: run without --skip-pyinstaller.")

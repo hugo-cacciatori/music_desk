@@ -4,10 +4,10 @@ import shutil
 
 import pytest
 
-from music_desk.core.index.store import DbWriter
-from music_desk.services.indexer import Indexer
-from music_desk.services.library import LibraryService
-from music_desk.ui.main_window import MainWindow
+from refrain.core.index.store import DbWriter
+from refrain.services.indexer import Indexer
+from refrain.services.library import LibraryService
+from refrain.ui.main_window import MainWindow
 
 ALBUM = "Fixture Artist - Fixture Album"
 

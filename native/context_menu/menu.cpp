@@ -297,7 +297,7 @@ static std::wstring quoted(const std::wstring& argument) {
 }
 
 static std::wstring local_app_data() {
-    // As music_desk.paths.app_data_dir: the LOCALAPPDATA variable first.
+    // As refrain.paths.app_data_dir: the LOCALAPPDATA variable first.
     wchar_t buffer[MAX_PATH * 4];
     DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, ARRAYSIZE(buffer));
     if (length > 0 && length < ARRAYSIZE(buffer))

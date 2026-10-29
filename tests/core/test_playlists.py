@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from music_desk.core.playlists import (
+from refrain.core.playlists import (
     PlaylistEntry,
     PreviewSheet,
     PreviewTrack,

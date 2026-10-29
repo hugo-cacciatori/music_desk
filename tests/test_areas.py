@@ -40,24 +40,24 @@ def layers(selection) -> set[str]:
 
 
 def test_a_backend_change_runs_backend_tests_only():
-    selection = select(["src/music_desk/core/split.py"])
+    selection = select(["src/refrain/core/split.py"])
     assert "core/test_split.py" in selection.tests and "test_types.py" in selection.tests
     assert DESKTOP not in layers(selection) and not selection.everything
 
 
 def test_with_callers_adds_the_areas_desktop_tests():
-    selection = select(["src/music_desk/core/split.py"], with_callers=True)
+    selection = select(["src/refrain/core/split.py"], with_callers=True)
     assert "ui/test_split_tool.py" in selection.tests and "ui/test_trim_tool.py" not in selection.tests
 
 
 def test_a_desktop_change_runs_desktop_tests_only():
-    selection = select(["src/music_desk/ui/split_page.py"])
+    selection = select(["src/refrain/ui/split_page.py"])
     assert "ui/test_split_tool.py" in selection.tests and "ui/test_hover_texts.py" in selection.tests
     assert CORE not in layers(selection)
 
 
 def test_the_window_runs_every_desktop_test():
-    selection = select(["src/music_desk/ui/main_window.py"])
+    selection = select(["src/refrain/ui/main_window.py"])
     assert {t for t in all_test_files() if t.startswith("ui/")} <= set(selection.tests)
     assert CORE not in layers(selection)
 

@@ -12,16 +12,16 @@ from PySide6.QtGui import QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
-from music_desk.core.index.roots import add_root
-from music_desk.core.index.scanner import Scanner
-from music_desk.core.index.store import DbWriter, connect_read, path_of
-from music_desk.core.lyrics import LrclibClient, LyricsOptions
-from music_desk.core.tags import TaggedFile
-from music_desk.services.lyrics_service import LyricsService
-from music_desk.settings import Settings
-from music_desk.ui.main_window import MainWindow
-from music_desk.ui.side_panel import lyrics_tab as tab_module
-from music_desk.ui.side_panel.lyrics_tab import LyricsTab
+from refrain.core.index.roots import add_root
+from refrain.core.index.scanner import Scanner
+from refrain.core.index.store import DbWriter, connect_read, path_of
+from refrain.core.lyrics import LrclibClient, LyricsOptions
+from refrain.core.tags import TaggedFile
+from refrain.services.lyrics_service import LyricsService
+from refrain.settings import Settings
+from refrain.ui.main_window import MainWindow
+from refrain.ui.side_panel import lyrics_tab as tab_module
+from refrain.ui.side_panel.lyrics_tab import LyricsTab
 
 TODAY = date(2026, 10, 15)
 ALBUM = "Fixture Artist - Fixture Album"

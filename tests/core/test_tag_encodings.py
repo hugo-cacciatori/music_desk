@@ -4,7 +4,7 @@ Western Latin-1 text unchanged."""
 import pytest
 from mutagen.id3 import ID3, TALB, TIT2, TPE1, Encoding
 
-from music_desk.core.tags import TaggedFile, decode_latin1_text
+from refrain.core.tags import TaggedFile, decode_latin1_text
 
 
 def as_mutagen_reads(text: str, codec: str) -> str:

@@ -7,8 +7,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtTest import QTest
 
-from music_desk.settings import Settings
-from music_desk.ui.main_window import MainWindow
+from refrain.settings import Settings
+from refrain.ui.main_window import MainWindow
 
 
 def open_path(window, service, *names):

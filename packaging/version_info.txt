@@ -1,5 +1,5 @@
 # Windows version resource for Refrain.exe (PyInstaller's VSVersionInfo format). Keep the version in step with
-# music_desk.__version__ (tests/test_packaging.py checks it).
+# refrain.__version__ (tests/test_packaging.py checks it).
 VSVersionInfo(
   ffi=FixedFileInfo(
     filevers=(0, 11, 0, 0),

@@ -7,7 +7,7 @@ import shutil
 import pytest
 from entry_helpers import entry_window
 
-from music_desk.context_menu import request as menu
+from refrain.context_menu import request as menu
 
 ALBUM = "Fixture Artist - Fixture Album"
 

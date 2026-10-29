@@ -6,9 +6,9 @@ import shutil
 
 import pytest
 
-from music_desk.context_menu.cleanup_entry import CleanupEntry
-from music_desk.core.index.store import path_of
-from music_desk.ui.tools.tool_cards import CLEANUP
+from refrain.context_menu.cleanup_entry import CleanupEntry
+from refrain.core.index.store import path_of
+from refrain.ui.tools.tool_cards import CLEANUP
 
 ALBUM = "Fixture Artist - Fixture Album"
 

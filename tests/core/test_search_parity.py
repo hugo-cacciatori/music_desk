@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from music_desk.core.index.lyrics_index import record_lyrics
-from music_desk.core.index.roots import add_root
-from music_desk.core.index.scanner import Scanner
-from music_desk.core.index.search import fold, parse_query, text_search
-from music_desk.core.index.store import DbWriter, connect_read, path_of
+from refrain.core.index.lyrics_index import record_lyrics
+from refrain.core.index.roots import add_root
+from refrain.core.index.scanner import Scanner
+from refrain.core.index.search import fold, parse_query, text_search
+from refrain.core.index.store import DbWriter, connect_read, path_of
 
 LRCLIB_TEXTS = [
     "Love is a glove\nThat fits the hand",

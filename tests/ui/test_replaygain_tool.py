@@ -10,13 +10,13 @@ import pytest
 from PySide6.QtWidgets import QMenu
 from rsgain_fake import FakeScanner
 
-from music_desk.context_menu import replaygain_entry
-from music_desk.core import fsops
-from music_desk.core.index.store import path_of
-from music_desk.core.replaygain import ALBUM_GAIN, TRACK_GAIN
-from music_desk.core.rsgain import ScanResult
-from music_desk.core.tags import TaggedFile
-from music_desk.services.replaygain_job import ReplayGainRunner
+from refrain.context_menu import replaygain_entry
+from refrain.core import fsops
+from refrain.core.index.store import path_of
+from refrain.core.replaygain import ALBUM_GAIN, TRACK_GAIN
+from refrain.core.rsgain import ScanResult
+from refrain.core.tags import TaggedFile
+from refrain.services.replaygain_job import ReplayGainRunner
 
 
 @pytest.fixture
@@ -191,7 +191,7 @@ def test_the_real_rsgain_while_the_library_is_scanned(qtbot, open_app, service, 
     """Hugo's report (2026-10-15): ReplayGain never completed while the library was still being indexed."""
     import threading
 
-    from music_desk.core.index.scanner import Scanner
+    from refrain.core.index.scanner import Scanner
 
     gate = threading.Event()
     real = Scanner._reconcile
@@ -219,7 +219,7 @@ def test_the_real_rsgain_while_tags_are_read(qtbot, open_app, service, library_d
     """The same, in the scan's second phase: hundreds of audio files having their tags read meanwhile."""
     import time
 
-    from music_desk.core.index import scanner as scanner_module
+    from refrain.core.index import scanner as scanner_module
 
     real = scanner_module.read_file
 
@@ -283,7 +283,7 @@ def test_m5_done_when_the_windows_replaygain_log_matches_the_script(qtbot, open_
 
     from test_replaygain_parity import compare_trees
 
-    from music_desk.paths import rsgain_path
+    from refrain.paths import rsgain_path
 
     monkeypatch.setattr(reference_music_tools, "RSGAIN_PATH", str(rsgain_path()))
     monkeypatch.setattr(reference_music_tools, "AUDIO_EXTENSIONS", {".flac", ".mp3"})

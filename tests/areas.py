@@ -1,6 +1,6 @@
 """The feature map behind `pytest --changed` and `pytest --area` (SPEC §18 "Test selection").
 
-Each area lists its source files (relative to src/music_desk/) and its test files (relative to tests/). A source
+Each area lists its source files (relative to src/refrain/) and its test files (relative to tests/). A source
 under core/ is the backend layer; any other source is the desktop app's. A changed source runs its areas' tests of
 its own layer only (Hugo, 2026-10-23): a backend change runs backend tests, a desktop change desktop tests. The
 tests at the top of tests/ (settings, packaging…) are plain Python and run with their area in either layer.
@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
-SRC = ROOT / "src" / "music_desk"
+SRC = ROOT / "src" / "refrain"
 
 CORE, DESKTOP, PLAIN = "backend", "desktop", "plain"  # PLAIN: tests at the top of tests/, run with either layer
 
@@ -232,8 +232,8 @@ def select(changed: list[str], with_callers: bool = False) -> Selection:
     """The tests a set of changed files (repo-relative, forward slashes) needs, each with its reasons."""
     selection = Selection()
     for path in changed:
-        if path.startswith("src/music_desk/"):
-            rel = path.removeprefix("src/music_desk/")
+        if path.startswith("src/refrain/"):
+            rel = path.removeprefix("src/refrain/")
             if not rel.endswith(".py") or rel in NO_TESTS:
                 continue
             layer = layer_of_source(rel)

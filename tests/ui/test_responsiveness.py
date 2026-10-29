@@ -12,8 +12,8 @@ import time
 import pytest
 from PySide6.QtCore import QElapsedTimer, QTimer
 
-from music_desk.services.library import LibraryService
-from music_desk.ui.main_window import MainWindow
+from refrain.services.library import LibraryService
+from refrain.ui.main_window import MainWindow
 
 
 class StallProbe:

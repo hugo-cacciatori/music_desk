@@ -6,8 +6,8 @@ import shutil
 
 import pytest
 
-from music_desk.core.cancel import CancelToken
-from music_desk.core.rename import RenameOptions, Status, apply_plan, plan_paths, plan_renames, sanitize, validate
+from refrain.core.cancel import CancelToken
+from refrain.core.rename import RenameOptions, Status, apply_plan, plan_paths, plan_renames, sanitize, validate
 
 ALBUM = "album/Fixture Artist - Fixture Album"
 

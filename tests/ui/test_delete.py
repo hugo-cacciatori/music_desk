@@ -14,7 +14,7 @@ from browser_helpers import entry
 from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtTest import QTest
 
-from music_desk.core.fsops import CannotRecycle
+from refrain.core.fsops import CannotRecycle
 
 
 class Bin:

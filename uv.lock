@@ -63,7 +63,7 @@ wheels = [
 ]
 
 [[package]]
-name = "music-desk"
+name = "refrain"
 version = "0.11.0"
 source = { editable = "." }
 dependencies = [

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from music_desk.core import cue
-from music_desk.core.cue_edit import (
+from refrain.core import cue
+from refrain.core.cue_edit import (
     CueEncodingError,
     format_cue,
     format_time,
@@ -17,7 +17,7 @@ from music_desk.core.cue_edit import (
     save_cue,
     validate,
 )
-from music_desk.core.fsops import CannotRecycle
+from refrain.core.fsops import CannotRecycle
 
 SHEET = (
     'REM GENRE "Alternative Rock"\r\n'

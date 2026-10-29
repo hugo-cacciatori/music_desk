@@ -9,14 +9,14 @@ import pytest
 from lrclib_fake import ScriptedLrclib as Lrclib
 from lrclib_fake import SleepRecorder, collect, found_for, no_jitter, unreachable
 
-from music_desk.core.index.lyrics_index import pending_tracks, retry_before
-from music_desk.core.index.roots import add_root
-from music_desk.core.index.scanner import Scanner
-from music_desk.core.index.store import DbWriter, connect_read, path_of
-from music_desk.core.lyrics import FOUND, LrclibClient, LyricsOptions, cache_key
-from music_desk.services.library import LibraryService
-from music_desk.services.lyrics_service import IDLE, OFFLINE, LyricsService
-from music_desk.ui.main_window import MainWindow
+from refrain.core.index.lyrics_index import pending_tracks, retry_before
+from refrain.core.index.roots import add_root
+from refrain.core.index.scanner import Scanner
+from refrain.core.index.store import DbWriter, connect_read, path_of
+from refrain.core.lyrics import FOUND, LrclibClient, LyricsOptions, cache_key
+from refrain.services.library import LibraryService
+from refrain.services.lyrics_service import IDLE, OFFLINE, LyricsService
+from refrain.ui.main_window import MainWindow
 
 TODAY = date(2026, 10, 15)
 ALBUM = "Fixture Artist - Fixture Album"

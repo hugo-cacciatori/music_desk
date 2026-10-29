@@ -115,7 +115,7 @@ installer. Python 3.13 is fetched by uv if needed.
 
 ```bash
 uv sync
-uv run python -m music_desk                    # run from source
+uv run python -m refrain                    # run from source
 uv run pytest                                  # the tests the changes need (--all: every test)
 uv run ruff check .
 uv run python packaging/build_installer.py     # dist/Refrain/ and dist/installer/Refrain-Setup-<version>.exe

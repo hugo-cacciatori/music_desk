@@ -10,11 +10,11 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QEvent
 from rsgain_fake import FakeScanner
 
-from music_desk.app import Starter
-from music_desk.context_menu import replaygain_entry
-from music_desk.context_menu import request as menu
-from music_desk.services.replaygain_job import ReplayGainRunner
-from music_desk.settings import Settings
+from refrain.app import Starter
+from refrain.context_menu import replaygain_entry
+from refrain.context_menu import request as menu
+from refrain.services.replaygain_job import ReplayGainRunner
+from refrain.settings import Settings
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def gated(monkeypatch):
 @pytest.fixture
 def quits(monkeypatch):
     calls = []
-    monkeypatch.setattr("music_desk.app.QApplication.quit", lambda: calls.append(True))
+    monkeypatch.setattr("refrain.app.QApplication.quit", lambda: calls.append(True))
     return calls
 
 

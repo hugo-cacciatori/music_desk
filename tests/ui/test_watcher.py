@@ -7,8 +7,8 @@ import time
 
 import pytest
 
-from music_desk.services.library import LibraryService
-from music_desk.services.watcher import Watcher, _coalesce
+from refrain.services.library import LibraryService
+from refrain.services.watcher import Watcher, _coalesce
 
 FAST = {"debounce": 0.1, "max_delay": 1.0}
 

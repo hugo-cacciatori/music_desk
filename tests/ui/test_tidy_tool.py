@@ -10,16 +10,16 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QPushButton
 from rsgain_fake import VALUES, FakeScanner
 
-from music_desk.context_menu import tidy_entry
-from music_desk.context_menu.tidy_entry import TidyWindow
-from music_desk.core.cleanup import Item
-from music_desk.core.index.store import path_of
-from music_desk.core.path_locks import PathLocks
-from music_desk.core.replaygain import ALBUM_GAIN, TRACK_GAIN
-from music_desk.core.tags import TaggedFile
-from music_desk.services.tidy_job import OWNER, TidyRunner
-from music_desk.ui.recycle_window import RecycleWindow
-from music_desk.ui.tools.tool_cards import TIDY
+from refrain.context_menu import tidy_entry
+from refrain.context_menu.tidy_entry import TidyWindow
+from refrain.core.cleanup import Item
+from refrain.core.index.store import path_of
+from refrain.core.path_locks import PathLocks
+from refrain.core.replaygain import ALBUM_GAIN, TRACK_GAIN
+from refrain.core.tags import TaggedFile
+from refrain.services.tidy_job import OWNER, TidyRunner
+from refrain.ui.recycle_window import RecycleWindow
+from refrain.ui.tools.tool_cards import TIDY
 
 TRACKS = {**VALUES, "01 One.flac": ("-3.00 dB", "0.5"), "02 Two.flac": ("-2.00 dB", "0.6")}
 

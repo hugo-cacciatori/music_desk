@@ -4,8 +4,8 @@ import shutil
 
 import pytest
 
-from music_desk.core.inline_rename import RenameError, rename_entry, sidecar_for, undo, validate_name
-from music_desk.core.path_locks import PathLocks
+from refrain.core.inline_rename import RenameError, rename_entry, sidecar_for, undo, validate_name
+from refrain.core.path_locks import PathLocks
 
 
 @pytest.fixture

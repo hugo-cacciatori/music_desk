@@ -1,4 +1,4 @@
-from music_desk import paths
+from refrain import paths
 
 
 def test_bundled_rsgain_exists():

@@ -10,11 +10,11 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QWidget
 
-from music_desk.app import Starter
-from music_desk.services.library import LibraryService
-from music_desk.settings import Settings
-from music_desk.ui import theme
-from music_desk.ui.main_window import MainWindow
+from refrain.app import Starter
+from refrain.services.library import LibraryService
+from refrain.settings import Settings
+from refrain.ui import theme
+from refrain.ui.main_window import MainWindow
 
 ALBUM = "Fixture Artist - Fixture Album"
 

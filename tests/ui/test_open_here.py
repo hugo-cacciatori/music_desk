@@ -10,9 +10,9 @@ from pathlib import Path
 
 from browser_helpers import entry
 
-from music_desk import here
-from music_desk.app import folder_argument
-from music_desk.instance import InstanceServer, hand_over
+from refrain import here
+from refrain.app import folder_argument
+from refrain.instance import InstanceServer, hand_over
 
 
 def wait_open(qtbot, window, service, path: Path) -> None:
@@ -67,7 +67,7 @@ def test_no_folder_only_brings_the_window_to_the_front(qtbot, window, service):
 def start_later(name: str, folder: str | None) -> subprocess.Popen:
     """A second start in its own process, as for real: the blocking client can't share the server's thread."""
     code = ("from PySide6.QtCore import QCoreApplication; app = QCoreApplication([]); "
-            "from music_desk.instance import hand_over; "
+            "from refrain.instance import hand_over; "
             f"raise SystemExit(0 if hand_over({folder!r}, {name!r}) else 1)")
     return subprocess.Popen([sys.executable, "-c", code])
 

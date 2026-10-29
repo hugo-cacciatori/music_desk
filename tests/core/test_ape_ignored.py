@@ -5,15 +5,15 @@ import shutil
 
 import pytest
 
-from music_desk.core import cue
-from music_desk.core.formats import AUDIO_EXTENSIONS, is_audio
-from music_desk.core.index import queries
-from music_desk.core.index.roots import add_root
-from music_desk.core.index.scanner import Scanner
-from music_desk.core.index.store import DbWriter, connect_read
-from music_desk.core.metadata import LOSSLESS_EXTENSIONS
-from music_desk.core.rename import options_from_json, plan_renames
-from music_desk.core.replaygain import list_audio_files
+from refrain.core import cue
+from refrain.core.formats import AUDIO_EXTENSIONS, is_audio
+from refrain.core.index import queries
+from refrain.core.index.roots import add_root
+from refrain.core.index.scanner import Scanner
+from refrain.core.index.store import DbWriter, connect_read
+from refrain.core.metadata import LOSSLESS_EXTENSIONS
+from refrain.core.rename import options_from_json, plan_renames
+from refrain.core.replaygain import list_audio_files
 
 
 @pytest.fixture

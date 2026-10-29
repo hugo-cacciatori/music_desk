@@ -4,7 +4,7 @@ import re
 import struct
 from pathlib import Path
 
-from music_desk import __version__, paths
+from refrain import __version__, paths
 
 ROOT = Path(__file__).parents[1]
 
@@ -29,8 +29,8 @@ def test_version_info_matches_the_app_version():
 
 
 def test_the_spec_uses_them():
-    spec = (ROOT / "packaging" / "music_desk.spec").read_text(encoding="utf-8")
-    assert "music_desk.ico" in spec and "version_info.txt" in spec and '"resources/icons"' in spec
+    spec = (ROOT / "packaging" / "refrain.spec").read_text(encoding="utf-8")
+    assert "refrain.ico" in spec and "version_info.txt" in spec and '"resources/icons"' in spec
     assert 'name="RefrainHere"' in spec and "here_exe," in spec and "here_launcher.py" in spec  # SPEC §29
 
 
@@ -43,7 +43,7 @@ def test_installer_script():
     assert '#define AppGuid "AF5F6B62-C2F8-41D7-8FBE-124F1D693BF9"' in iss and "AppId={{{#AppGuid}}" in iss
     assert r"DefaultDirName={autopf}\{#AppName}" in iss and "PrivilegesRequiredOverridesAllowed=dialog" in iss
     assert "ArchitecturesInstallIn64BitMode=x64compatible" in iss
-    assert r"LicenseFile=..\LICENSE" in iss and r"SetupIconFile=..\resources\icons\music_desk.ico" in iss
+    assert r"LicenseFile=..\LICENSE" in iss and r"SetupIconFile=..\resources\icons\refrain.ico" in iss
     assert r'Source: "..\dist\Refrain\*"' in iss and "recursesubdirs" in iss
     assert r"{localappdata}\{#AppName}" in iss and "not UninstallSilent" in iss and "MB_DEFBUTTON2" in iss
     assert r'Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"' in iss
@@ -54,7 +54,7 @@ def test_installer_script():
     # The refrain keyword (SPEC §29): App Paths points to RefrainHere.exe, and the uninstaller removes it.
     assert (r'Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\refrain.exe"; '
             r'ValueType: string; ValueName: ""; ValueData: "{app}\RefrainHere.exe"; Flags: uninsdeletekey') in iss
-    for path in ("LICENSE", "resources/icons/music_desk.ico"):
+    for path in ("LICENSE", "resources/icons/refrain.ico"):
         assert (ROOT / path).is_file()
 
 
@@ -75,7 +75,7 @@ def test_the_installer_lists_every_wizard_image(monkeypatch):
 
 def test_flac_is_bundled():
     """flac.exe and its one DLL ship in resources/flac (SPEC §13), with their licences."""
-    spec = (ROOT / "packaging" / "music_desk.spec").read_text(encoding="utf-8")
+    spec = (ROOT / "packaging" / "refrain.spec").read_text(encoding="utf-8")
     assert '"resources/flac"' in spec
     assert paths.flac_path().is_file() and (paths.flac_path().parent / "libFLAC.dll").is_file()
 

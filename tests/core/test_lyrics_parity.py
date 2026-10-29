@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from lrclib_fake import FakeUrlopen, SleepRecorder, http_error, no_jitter
 
-from music_desk.core.lyrics import (
+from refrain.core.lyrics import (
     LrclibClient,
     Track,
     cache_key,

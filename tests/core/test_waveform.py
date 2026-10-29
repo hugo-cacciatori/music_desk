@@ -8,11 +8,11 @@ import struct
 
 import pytest
 
-from music_desk import paths
-from music_desk.core import trim, waveform
-from music_desk.core.cue import SourceInfo
-from music_desk.core.flac import FlacRunner
-from music_desk.core.waveform import PeakReducer, Peaks
+from refrain import paths
+from refrain.core import trim, waveform
+from refrain.core.cue import SourceInfo
+from refrain.core.flac import FlacRunner
+from refrain.core.waveform import PeakReducer, Peaks
 
 
 def pcm(values: list[int], bits: int) -> bytes:

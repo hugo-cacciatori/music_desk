@@ -7,10 +7,10 @@ import pytest
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QToolBar, QToolButton
 
-from music_desk.core import cleanup, rename, replaygain
-from music_desk.core.index.store import path_of
-from music_desk.settings import Settings
-from music_desk.ui.tools.tool_cards import (
+from refrain.core import cleanup, rename, replaygain
+from refrain.core.index.store import path_of
+from refrain.settings import Settings
+from refrain.ui.tools.tool_cards import (
     CLEANUP,
     NAMES,
     RENAME,
@@ -387,8 +387,8 @@ def test_the_cards_go_with_the_window(qtbot, service):
     from PySide6.QtCore import QEvent
     from PySide6.QtWidgets import QApplication
 
-    from music_desk.ui.main_window import MainWindow
-    from music_desk.ui.tools.tool_cards import PAGE_TITLES
+    from refrain.ui.main_window import MainWindow
+    from refrain.ui.tools.tool_cards import PAGE_TITLES
 
     window = MainWindow(service)
     window.show()

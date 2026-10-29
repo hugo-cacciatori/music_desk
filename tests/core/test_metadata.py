@@ -5,8 +5,8 @@ import mutagen
 import pytest
 from test_tags import FORMAT_FIXTURES
 
-from music_desk.core import metadata
-from music_desk.core.tags import FIELD_NAMES, TaggedFile
+from refrain.core import metadata
+from refrain.core.tags import FIELD_NAMES, TaggedFile
 
 
 def raw_keys(path) -> set[str]:

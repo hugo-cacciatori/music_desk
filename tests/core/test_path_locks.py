@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from music_desk.core.path_locks import LockedError, PathLocks
+from refrain.core.path_locks import LockedError, PathLocks
 
 
 def test_a_folder_lock_covers_its_tree(tmp_path):

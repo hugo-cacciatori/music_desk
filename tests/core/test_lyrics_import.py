@@ -9,12 +9,12 @@ from datetime import date
 
 import pytest
 
-from music_desk.core.index.lyrics_import import CACHE_NAME, better, import_cache, merge_cache
-from music_desk.core.index.lyrics_index import pending_tracks, record_lyrics, retry_before
-from music_desk.core.index.roots import add_root
-from music_desk.core.index.scanner import Scanner
-from music_desk.core.index.store import DbWriter, connect_read, path_of, read_lyrics
-from music_desk.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND, cache_key
+from refrain.core.index.lyrics_import import CACHE_NAME, better, import_cache, merge_cache
+from refrain.core.index.lyrics_index import pending_tracks, record_lyrics, retry_before
+from refrain.core.index.roots import add_root
+from refrain.core.index.scanner import Scanner
+from refrain.core.index.store import DbWriter, connect_read, path_of, read_lyrics
+from refrain.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND, cache_key
 
 ALBUM = "Fixture Artist - Fixture Album"
 FIRST = cache_key("Fixture Artist", "First")

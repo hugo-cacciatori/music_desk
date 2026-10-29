@@ -5,11 +5,11 @@ import shutil
 
 import pytest
 
-from music_desk.core.index import album_search
-from music_desk.core.index.roots import add_root
-from music_desk.core.index.scanner import Scanner
-from music_desk.core.index.store import DbWriter, connect_read
-from music_desk.core.tags import TaggedFile
+from refrain.core.index import album_search
+from refrain.core.index.roots import add_root
+from refrain.core.index.scanner import Scanner
+from refrain.core.index.store import DbWriter, connect_read
+from refrain.core.tags import TaggedFile
 
 RG = {"replaygain_track_gain": "-6.00 dB", "replaygain_track_peak": "0.9", "replaygain_album_gain": "-6.50 dB",
       "replaygain_album_peak": "0.95"}

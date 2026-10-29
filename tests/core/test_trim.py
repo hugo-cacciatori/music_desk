@@ -12,10 +12,10 @@ import struct
 
 import pytest
 
-from music_desk import paths
-from music_desk.core import cue, playlists, split, trim
-from music_desk.core.cancel import CancelToken
-from music_desk.core.flac import Cancelled, FlacError, FlacRunner
+from refrain import paths
+from refrain.core import cue, playlists, split, trim
+from refrain.core.cancel import CancelToken
+from refrain.core.flac import Cancelled, FlacError, FlacRunner
 
 RATE = 1000
 SAMPLES = 10 * RATE  # 10 s
@@ -351,7 +351,7 @@ def test_a_flacs_tags_are_copied_without_lyrics(fixtures_dir, tmp_path, copy_tar
 def test_a_wav_or_aiffs_fields_replaygain_and_cover_are_copied(fixture_copy, fixtures_dir, copy_target, name):
     from mutagen.flac import FLAC
 
-    from music_desk.core.tags import TaggedFile
+    from refrain.core.tags import TaggedFile
 
     source = fixture_copy(f"formats/{name}")
     tagged = TaggedFile(source)

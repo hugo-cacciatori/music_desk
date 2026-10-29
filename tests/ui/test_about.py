@@ -2,8 +2,8 @@
 
 import threading
 
-from music_desk import __version__
-from music_desk.licenses import COMPONENTS, licenses_dir
+from refrain import __version__
+from refrain.licenses import COMPONENTS, licenses_dir
 
 
 class Recorder:

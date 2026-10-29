@@ -8,10 +8,10 @@ import shutil
 import pytest
 from PySide6.QtCore import QCoreApplication, QEvent
 
-from music_desk.app import Starter
-from music_desk.context_menu import request as menu
-from music_desk.context_menu.tool_host import CueEditorWindow, TrimWindow
-from music_desk.settings import Settings
+from refrain.app import Starter
+from refrain.context_menu import request as menu
+from refrain.context_menu.tool_host import CueEditorWindow, TrimWindow
+from refrain.settings import Settings
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ def albums(library_dir):
 @pytest.fixture
 def quits(monkeypatch):
     calls = []
-    monkeypatch.setattr("music_desk.app.QApplication.quit", lambda: calls.append(True))
+    monkeypatch.setattr("refrain.app.QApplication.quit", lambda: calls.append(True))
     return calls
 
 

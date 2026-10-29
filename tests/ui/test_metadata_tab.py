@@ -11,12 +11,12 @@ from lrclib_fake import collect
 from mutagen.id3 import ID3
 from PySide6.QtCore import Qt
 
-from music_desk.core import metadata
-from music_desk.core.path_locks import PathLocks
-from music_desk.core.tags import FIELD_NAMES, TaggedFile
-from music_desk.services.tag_io import TagIO
-from music_desk.services.tag_writer import TagWriter
-from music_desk.ui.side_panel.panel import SelectedItem, SidePanel
+from refrain.core import metadata
+from refrain.core.path_locks import PathLocks
+from refrain.core.tags import FIELD_NAMES, TaggedFile
+from refrain.services.tag_io import TagIO
+from refrain.services.tag_writer import TagWriter
+from refrain.ui.side_panel.panel import SelectedItem, SidePanel
 
 # The tab's code is the same for every format: two tag families prove its wiring, and
 # tests/core/test_metadata.py checks the write on every format (SPEC §18, 2026-10-23).

@@ -6,11 +6,11 @@ import shutil
 import pytest
 from browser_helpers import entry
 
-from music_desk.context_menu import request as menu
-from music_desk.context_menu.remove_entry import RemoveEntry
-from music_desk.context_menu.remove_report import RemoveReport
-from music_desk.core.replaygain import ALBUM_GAIN, TRACK_GAIN
-from music_desk.core.tags import TaggedFile
+from refrain.context_menu import request as menu
+from refrain.context_menu.remove_entry import RemoveEntry
+from refrain.context_menu.remove_report import RemoveReport
+from refrain.core.replaygain import ALBUM_GAIN, TRACK_GAIN
+from refrain.core.tags import TaggedFile
 
 
 def tag(path):

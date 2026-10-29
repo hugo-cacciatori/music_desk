@@ -7,10 +7,10 @@ import shutil
 
 import pytest
 
-from music_desk.context_menu.rename_entry import RenameWindow
-from music_desk.core.index.store import path_of
-from music_desk.core.tags import TaggedFile
-from music_desk.ui.tools.tool_cards import RENAME
+from refrain.context_menu.rename_entry import RenameWindow
+from refrain.core.index.store import path_of
+from refrain.core.tags import TaggedFile
+from refrain.ui.tools.tool_cards import RENAME
 
 ALBUM = "Fixture Artist - Fixture Album"
 

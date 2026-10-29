@@ -7,12 +7,12 @@ import threading
 
 import pytest
 
-from music_desk.core.index.lyrics_index import record_lyrics
-from music_desk.core.index.queries import playlist_for_ids
-from music_desk.core.index.roots import add_root
-from music_desk.core.index.scanner import Scanner
-from music_desk.core.index.schema import configure, migrate
-from music_desk.core.index.search import (
+from refrain.core.index.lyrics_index import record_lyrics
+from refrain.core.index.queries import playlist_for_ids
+from refrain.core.index.roots import add_root
+from refrain.core.index.scanner import Scanner
+from refrain.core.index.schema import configure, migrate
+from refrain.core.index.search import (
     LYRICS,
     extract,
     fold,
@@ -23,8 +23,8 @@ from music_desk.core.index.search import (
     spans,
     text_search,
 )
-from music_desk.core.index.store import DbWriter, connect_read, path_of
-from music_desk.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND
+from refrain.core.index.store import DbWriter, connect_read, path_of
+from refrain.core.lyrics import FOUND, INSTRUMENTAL, NOT_FOUND
 
 
 class Library:
@@ -400,7 +400,7 @@ def test_a_new_copy_of_a_found_song_is_searchable_at_once(tmp_path, fixtures_dir
 
 def test_names_are_searchable_while_the_tag_read_is_held_back(tmp_path, fixtures_dir, monkeypatch):
     """SPEC §6: the walk's names are found while no tag has been read (a stub reader holds the tag read)."""
-    from music_desk.core.index import scanner as scanner_module
+    from refrain.core.index import scanner as scanner_module
 
     lib = tmp_path / "lib"
     shutil.copytree(fixtures_dir / "album" / ALBUM, lib / ALBUM)

@@ -9,11 +9,11 @@ import shutil
 
 import pytest
 
-from music_desk import paths
-from music_desk.core import cue, playlists, split
-from music_desk.core.cancel import CancelToken
-from music_desk.core.flac import Cancelled, FlacError, FlacRunner, flac_version
-from music_desk.core.masks import DEFAULT_MASKS
+from refrain import paths
+from refrain.core import cue, playlists, split
+from refrain.core.cancel import CancelToken
+from refrain.core.flac import Cancelled, FlacError, FlacRunner, flac_version
+from refrain.core.masks import DEFAULT_MASKS
 
 SAMPLES = 10 * 75  # the fake source: 10 s at a "rate" of 75 samples a second, so one CD frame is one sample
 PCM = bytes((i * 7 + i // 13) % 251 for i in range(SAMPLES))  # never repeats over this length
@@ -215,7 +215,7 @@ def test_finish_names_and_tags_and_touches_nothing_else(fixtures_dir, tmp_path, 
                                              "03 Duet.flac"]
     from mutagen.flac import FLAC
 
-    from music_desk.core.tags import TaggedFile
+    from refrain.core.tags import TaggedFile
 
     opening = TaggedFile(done.tracks[1])
     fields = opening.fields()

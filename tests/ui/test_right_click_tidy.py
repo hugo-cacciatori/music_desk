@@ -8,9 +8,9 @@ import pytest
 from entry_helpers import entry_window
 from rsgain_fake import VALUES, FakeScanner
 
-from music_desk.context_menu import request as menu
-from music_desk.context_menu import tidy_entry
-from music_desk.services.tidy_job import TidyRunner
+from refrain.context_menu import request as menu
+from refrain.context_menu import tidy_entry
+from refrain.services.tidy_job import TidyRunner
 
 TRACKS = {**VALUES, "01 One.flac": ("-3.00 dB", "0.5"), "02 Two.flac": ("-2.00 dB", "0.6")}
 

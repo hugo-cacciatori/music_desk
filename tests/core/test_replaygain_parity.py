@@ -14,9 +14,9 @@ import shutil
 import pytest
 from tagdump import tag_dump
 
-from music_desk.core.formats import open_audio
-from music_desk.core.replaygain import process_album, process_discography
-from music_desk.paths import rsgain_path
+from refrain.core.formats import open_audio
+from refrain.core.replaygain import process_album, process_discography
+from refrain.paths import rsgain_path
 
 ARTIST = "replaygain/Fixture Artist"
 

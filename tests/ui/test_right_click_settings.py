@@ -5,10 +5,10 @@ import subprocess
 import sys
 import uuid
 
-from music_desk.app import Starter
-from music_desk.context_menu.request import SETTINGS, StartRequest, first_track, parse_arguments
-from music_desk.instance import InstanceServer
-from music_desk.settings import Settings
+from refrain.app import Starter
+from refrain.context_menu.request import SETTINGS, StartRequest, first_track, parse_arguments
+from refrain.instance import InstanceServer
+from refrain.settings import Settings
 
 # -- the start's arguments --
 
@@ -61,7 +61,7 @@ def test_a_later_start_hands_its_entry_over(qtbot):
     server.entryRequested.connect(lambda entry, paths: entries.append((entry, paths)))
     server.folderRequested.connect(folders.append)
     code = ("from PySide6.QtCore import QCoreApplication; app = QCoreApplication([]); "
-            "from music_desk.instance import hand_over; "
+            "from refrain.instance import hand_over; "
             f"raise SystemExit(0 if hand_over(None, {name!r}, 'settings', ['D:/a', 'D:/b']) else 1)")
     process = subprocess.Popen([sys.executable, "-c", code])
     qtbot.waitUntil(lambda: entries == [("settings", ["D:/a", "D:/b"])], timeout=15000)
@@ -80,7 +80,7 @@ def open_settings(qtbot, service, paths):
 
 def test_settings_alone_opens_only_the_options_window(qtbot, service, library_dir, monkeypatch):
     quits = []
-    monkeypatch.setattr("music_desk.app.QApplication.quit", lambda: quits.append(True))
+    monkeypatch.setattr("refrain.app.QApplication.quit", lambda: quits.append(True))
     starter = open_settings(qtbot, service, [library_dir / "Artist" / "Album"])
     cards = starter.settings_entry.cards
     dialog = cards.options_window
@@ -96,7 +96,7 @@ def test_settings_alone_opens_only_the_options_window(qtbot, service, library_di
 
 def test_a_normal_start_meanwhile_opens_the_main_window_on_the_same_cards(qtbot, service, library_dir, monkeypatch):
     quits = []
-    monkeypatch.setattr("music_desk.app.QApplication.quit", lambda: quits.append(True))
+    monkeypatch.setattr("refrain.app.QApplication.quit", lambda: quits.append(True))
     starter = open_settings(qtbot, service, [])
     cards = starter.settings_entry.cards
     qtbot.addWidget(cards.options_window)

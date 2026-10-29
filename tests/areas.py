@@ -42,12 +42,14 @@ AREAS: dict[str, Area] = {
          "ui/test_lyrics_tab.py")),
     "index": Area(
         ("core/index/schema.py", "core/index/store.py", "core/index/scanner.py", "core/index/roots.py",
-         "core/index/queries.py", "services/indexer.py", "services/watcher.py", "services/library.py"),
+         "core/index/queries.py", "services/indexer.py", "services/watcher.py", "services/library.py",
+         "ui/controllers/roots.py"),
         ("core/test_index_schema.py", "core/test_index_store.py", "core/test_index_scanner.py",
          "core/test_index_roots.py", "core/test_ape_ignored.py", "ui/test_indexer.py", "ui/test_watcher.py",
          "ui/test_library_roots.py", "ui/test_refresh.py", "ui/test_responsiveness.py")),
     "browser": Area(
-        ("core/index/queries.py", "ui/folder_tree.py", "ui/file_view.py", "ui/address_bar.py", "ui/sidebar.py"),
+        ("core/index/queries.py", "ui/folder_tree.py", "ui/file_view.py", "ui/address_bar.py", "ui/sidebar.py",
+         "ui/controllers/menus.py", "ui/controllers/roots.py"),
         ("ui/test_browser.py", "ui/test_navigation.py", "ui/test_context_menus.py", "ui/test_folder_summary.py",
          "ui/test_library_roots.py", "ui/test_responsiveness.py")),
     "search": Area(
@@ -65,7 +67,7 @@ AREAS: dict[str, Area] = {
     "rename": Area(
         ("core/rename.py", "core/masks.py", "core/inline_rename.py", "services/rename_job.py",
          "ui/tools/rename_card.py", "ui/tools/rename_preview.py", "ui/tools/names_card.py",
-         "ui/controllers/tools.py"),
+         "ui/controllers/tools.py", "ui/controllers/rename.py"),
         ("core/test_rename.py", "core/test_rename_parity.py", "core/test_rename_preview.py", "core/test_masks.py",
          "core/test_inline_rename.py", "ui/test_rename_tool.py", "ui/test_inline_rename_ui.py",
          "ui/test_right_click_rename.py")),
@@ -100,7 +102,8 @@ AREAS: dict[str, Area] = {
         ("core/fsops.py", "ui/controllers/delete.py"),
         ("core/test_fsops.py", "ui/test_delete.py")),
     "playlists": Area(
-        ("core/playlists.py", "core/playlist_builder.py", "ui/playlist_panel.py", "ui/entry_drag.py"),
+        ("core/playlists.py", "core/playlist_builder.py", "ui/playlist_panel.py", "ui/entry_drag.py",
+         "ui/controllers/playlist.py"),
         ("core/test_playlists.py", "core/test_playlist_builder.py", "ui/test_playlist_panel.py",
          "ui/test_playlist_dnd.py", "ui/test_playlist_export.py", "ui/test_context_menus.py")),
     "preview": Area(
@@ -138,8 +141,8 @@ AREAS: dict[str, Area] = {
 }
 
 # Sources every desktop test goes through (the window and what all of it uses): a change runs the whole layer.
-WHOLE_DESKTOP = ("ui/main_window.py", "ui/qt_util.py", "ui/theme.py", "ui/task_header.py", "ui/toast.py",
-                 "ui/controllers/__init__.py")
+WHOLE_DESKTOP = ("ui/main_window.py", "ui/main_toolbars.py", "ui/status_line.py", "ui/shell.py", "ui/qt_util.py",
+                 "ui/theme.py", "ui/task_header.py", "ui/toast.py", "ui/controllers/__init__.py")
 # Package markers and the entry point: nothing to test on their own.
 NO_TESTS = ("__main__.py", "context_menu/__init__.py", "core/__init__.py", "core/index/__init__.py",
             "services/__init__.py", "ui/__init__.py", "ui/side_panel/__init__.py", "ui/tools/__init__.py")

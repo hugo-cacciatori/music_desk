@@ -7,6 +7,11 @@ __pycache__/
 .ruff_cache/
 .claude/settings.local.json
 
+# The C# app (app/): build output
+app/**/bin/
+app/**/obj/
+app/**/TestResults/
+
 # AI-agent files and project docs: private, never public (owner, 2026-10-23)
 AGENTS.md
 CLAUDE.md

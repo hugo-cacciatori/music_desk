@@ -1,0 +1,15 @@
+<Project>
+  <!-- Shared by every project of the C# app (SPEC §36 "3."). -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Version>0.1.0</Version>
+    <Product>Refrain</Product>
+    <Copyright>GPL-3.0-or-later</Copyright>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,8 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="Refrain/Refrain.csproj" />
+  <Project Path="Refrain.Core/Refrain.Core.csproj" />
+  <Project Path="Refrain.Tests/Refrain.Tests.csproj" />
+</Solution>

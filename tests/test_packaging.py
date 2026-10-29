@@ -40,7 +40,7 @@ def test_installer_script():
     that keeps the app's data unless asked (and always in a silent uninstall). The Start menu gets a Refrain
     folder with an uninstall shortcut, and an upgrade deletes the loose shortcut of 0.1.0-0.2.x."""
     iss = (ROOT / "packaging" / "installer.iss").read_text(encoding="utf-8")
-    assert "AppId={{AF5F6B62-C2F8-41D7-8FBE-124F1D693BF9}" in iss
+    assert '#define AppGuid "AF5F6B62-C2F8-41D7-8FBE-124F1D693BF9"' in iss and "AppId={{{#AppGuid}}" in iss
     assert r"DefaultDirName={autopf}\{#AppName}" in iss and "PrivilegesRequiredOverridesAllowed=dialog" in iss
     assert "ArchitecturesInstallIn64BitMode=x64compatible" in iss
     assert r"LicenseFile=..\LICENSE" in iss and r"SetupIconFile=..\resources\icons\music_desk.ico" in iss
@@ -119,3 +119,20 @@ def test_the_installer_build_includes_the_menu_handler():
     steps = ['"-m", "PyInstaller"', 'build_menu.build(ROOT / "dist" / "Refrain")',
              'self_test(ROOT / "dist" / "Refrain")', "[str(find_iscc())"]  # the gate before Inno Setup (rule 9)
     assert [script.index(step) for step in steps] == sorted(script.index(step) for step in steps)
+
+
+def test_the_installer_upgrades_musicdesk_in_place():
+    """SPEC §36 task 7: the same AppId makes Refrain MusicDesk's upgrade, in Refrain's own folder and Start menu
+    group; MusicDesk's folder (found in the shared uninstall entry, only when it holds MusicDesk.exe), shortcuts,
+    handler keys and keyword go; the setup stops while MusicDesk runs."""
+    iss = (ROOT / "packaging" / "installer.iss").read_text(encoding="utf-8")
+    assert "UsePreviousAppDir=no" in iss and "UsePreviousGroup=no" in iss
+    for shortcut in (r'Type: filesandordirs; Name: "{autoprograms}\MusicDesk"',
+                     r'Type: files; Name: "{autoprograms}\MusicDesk.lnk"',
+                     r'Type: files; Name: "{autodesktop}\MusicDesk.lnk"'):
+        assert shortcut in iss
+    assert r"Uninstall\{{#AppGuid}}_is1" in iss and "'Inno Setup: App Path'" in iss
+    assert "FileExists(AddBackslash(Dir) + 'MusicDesk.exe')" in iss
+    assert "function PrepareToInstall" in iss and "MusicDeskRunning()" in iss
+    assert iss.index("RemoveFiles(OldDir, 'MusicDeskMenu*.dll', '')") < iss.index("DelTree(OldDir, True, True, True)")
+    assert r"ContextMenuHandlers\8MusicDesk" in iss and r"App Paths\musicdesk.exe" in iss

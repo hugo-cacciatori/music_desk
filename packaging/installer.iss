@@ -16,6 +16,8 @@
 #endif
 
 #define AppName "Refrain"
+; The AppId's GUID ([Setup]), also the name of the uninstall entry MusicDesk and Refrain share ([Code]).
+#define AppGuid "AF5F6B62-C2F8-41D7-8FBE-124F1D693BF9"
 #define AppExe "Refrain.exe"
 #define MenuDll "RefrainMenu-" + AppVersion + ".dll"
 ; The handler's CLSID, as in native\context_menu\menu.cpp ("{{" is one brace for Inno): never change it.
@@ -24,8 +26,8 @@
 #define MenuKey "8Refrain"
 
 [Setup]
-; The AppId identifies the app for upgrades and the uninstaller: never change it.
-AppId={{AF5F6B62-C2F8-41D7-8FBE-124F1D693BF9}
+; The AppId identifies the app for upgrades and the uninstaller: never change it ("{{" is one brace).
+AppId={{{#AppGuid}}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
@@ -34,6 +36,10 @@ AppSupportURL=https://github.com/hugo-cacciatori/music_desk/issues
 VersionInfoVersion={#AppVersion}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
+; Up to 0.11.x the app was MusicDesk, in its own folder and Start menu group (SPEC §36 task 7): the same AppId
+; makes Refrain its upgrade, in Refrain's folder and group; MusicDesk's are removed ([InstallDelete], [Code]).
+UsePreviousAppDir=no
+UsePreviousGroup=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
@@ -70,6 +76,10 @@ Source: "..\dist\Refrain\RefrainMenu.dll"; DestDir: "{app}"; DestName: "{#MenuDl
 [InstallDelete]
 ; 0.1.0-0.2.x put a loose shortcut at the top of the Start menu's Programs; it moved into the Refrain folder.
 Type: files; Name: "{autoprograms}\{#AppName}.lnk"
+; MusicDesk's shortcuts (up to 0.11.x): its Start menu folder, its loose shortcut and its desktop icon.
+Type: filesandordirs; Name: "{autoprograms}\MusicDesk"
+Type: files; Name: "{autoprograms}\MusicDesk.lnk"
+Type: files; Name: "{autodesktop}\MusicDesk.lnk"
 
 [Icons]
 ; A Start menu folder with the uninstaller beside the app: Start's own Uninstall button only opens Settings for
@@ -108,20 +118,25 @@ Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Shell Extensions\A
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-// The menu handlers in the app's folder other than `Keep`: deleted, or, when Explorer has one loaded (it can't be
-// deleted then, but it can be renamed), moved to the Temp folder, which Windows cleans.
-procedure RemoveMenuHandlers(Keep: String);
+const
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#AppGuid}}_is1';
+
 var
-  App, Name: String;
+  OldDir: String;  // MusicDesk's folder (up to 0.11.x) when it isn't Refrain's: removed after the install
+
+// The files in `Dir` matching `Pattern` other than `Keep`: deleted, or, when Explorer has one loaded (a menu handler
+// can't be deleted then, but it can be renamed), moved to the Temp folder, which Windows cleans.
+procedure RemoveFiles(Dir, Pattern, Keep: String);
+var
+  Name: String;
   Found: TFindRec;
 begin
-  App := ExpandConstant('{app}');
-  if FindFirst(App + '\RefrainMenu-*.dll', Found) then
+  if FindFirst(Dir + '\' + Pattern, Found) then
   try
     repeat
       Name := Found.Name;
-      if (CompareText(Name, Keep) <> 0) and not DeleteFile(App + '\' + Name) then
-        RenameFile(App + '\' + Name, AddBackslash(GetTempDir) + 'Refrain-' +
+      if (CompareText(Name, Keep) <> 0) and not DeleteFile(Dir + '\' + Name) then
+        RenameFile(Dir + '\' + Name, AddBackslash(GetTempDir) + 'Refrain-' +
                    GetDateTimeString('yyyymmddhhnnss', #0, #0) + '-' + Name);
     until not FindNext(Found);
   finally
@@ -129,10 +144,52 @@ begin
   end;
 end;
 
+procedure RemoveMenuHandlers(Keep: String);
+begin
+  RemoveFiles(ExpandConstant('{app}'), 'RefrainMenu-*.dll', Keep);
+end;
+
+// Whether MusicDesk.exe runs: its files couldn't be removed, nor its data moved by Refrain's first start.
+function MusicDeskRunning(): Boolean;
+var
+  Output: String;
+  Code: Integer;
+  Lines: AnsiString;
+begin
+  Output := ExpandConstant('{tmp}\tasklist.txt');
+  Result := Exec(ExpandConstant('{cmd}'), '/C tasklist /FI "IMAGENAME eq MusicDesk.exe" /NH > "' + Output + '"',
+                 '', SW_HIDE, ewWaitUntilTerminated, Code)
+            and LoadStringFromFile(Output, Lines) and (Pos('musicdesk.exe', Lowercase(String(Lines))) > 0);
+end;
+
+// Before any file is written: MusicDesk's folder, from the uninstall entry the same AppId shares, when it holds
+// MusicDesk.exe and isn't Refrain's folder; and MusicDesk closed first.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Dir: String;
+begin
+  Result := '';
+  OldDir := '';
+  if RegQueryStringValue(HKA, UninstallKey, 'Inno Setup: App Path', Dir) and
+     (CompareText(RemoveBackslash(Dir), RemoveBackslash(ExpandConstant('{app}'))) <> 0) and
+     FileExists(AddBackslash(Dir) + 'MusicDesk.exe') then
+    OldDir := RemoveBackslash(Dir);
+  if MusicDeskRunning() then
+    Result := 'MusicDesk is running. Close it, then run this setup again: Refrain replaces it and takes over ' +
+              'its library and settings.';
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
+  begin
     RemoveMenuHandlers('{#MenuDll}');
+    if OldDir <> '' then
+    begin
+      RemoveFiles(OldDir, 'MusicDeskMenu*.dll', '');  // one Explorer has loaded goes to the Temp folder
+      DelTree(OldDir, True, True, True);  // MusicDesk's program files only; its data is moved by Refrain
+    end;
+  end;
 end;
 
 // After the files are removed: offer to delete the app's own data too. The answer defaults to No, and a silent

@@ -14,6 +14,9 @@ public static partial class Program
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool AllowSetForegroundWindow(int processId);
 
+    [LibraryImport("user32.dll", EntryPoint = "MessageBoxW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int MessageBox(nint owner, string text, string caption, uint type);
+
     [STAThread]
     static int Main(string[] args)
     {
@@ -26,6 +29,14 @@ public static partial class Program
             AllowSetForegroundWindow(-1);  // ASFW_ANY: the running Refrain may take the foreground
             if (Instance.HandOver(request)) return 0;
             Log.Info("Another Refrain holds the pipe but didn't answer; starting anyway.");
+        }
+        // The first start after the Python app moves its settings, library folders and LRCLIB results over (SPEC §36
+        // "10."), before anything opens them. A failure changes nothing and says why.
+        if (Migration.Run(AppPaths.DataFolder) is { Error: { } error })
+        {
+            MessageBox(0, error, "Refrain", 0x30);  // MB_ICONWARNING
+            instance?.Dispose();
+            return 1;
         }
         WinRT.ComWrappersSupport.InitializeComWrappers();
         Application.Start(init =>

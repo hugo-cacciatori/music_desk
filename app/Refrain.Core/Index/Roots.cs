@@ -57,10 +57,19 @@ public static class Roots
         return new AddResult(inside.Count > 0 ? AddOutcome.Merged : AddOutcome.Added, path, id);
     }
 
-    static long Insert(SqliteConnection conn, SqliteTransaction tx, string path)
+    /// <summary>A library folder brought over as it was (the Python app's migration, SPEC §36 "10."): no disk check,
+    /// so an offline folder comes over too; the start's online check scans it.</summary>
+    public static long Restore(SqliteConnection conn, SqliteTransaction tx, string path, string addedAt, bool online)
+    {
+        var id = Insert(conn, tx, path, addedAt);
+        SetOnline(conn, tx, id, online);
+        return id;
+    }
+
+    static long Insert(SqliteConnection conn, SqliteTransaction tx, string path, string? addedAt = null)
     {
         var id = (long)conn.Scalar("INSERT INTO roots (path, added_at) VALUES ($p, $t) RETURNING id", tx,
-            ("$p", path), ("$t", DateTime.UtcNow.ToString("O")))!;
+            ("$p", path), ("$t", addedAt ?? DateTime.UtcNow.ToString("O")))!;
         conn.Execute("INSERT INTO entries (root_id, parent_id, name, is_dir) VALUES ($r, NULL, $p, 1)", tx,
             ("$r", id), ("$p", path));
         conn.Execute("INSERT INTO search (rowid, name) SELECT id, NULL FROM entries WHERE root_id = $r", tx, ("$r", id));

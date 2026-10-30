@@ -102,7 +102,7 @@ public static partial class Recycle
     }
 }
 
-/// <summary>What the Redundant files window's Delete selected did (SPEC §32).</summary>
+/// <summary>What the redundant files list's Delete selected did (SPEC §32).</summary>
 public sealed class RecycleReport
 {
     public List<OfferItem> Recycled { get; } = [];
@@ -133,7 +133,7 @@ public sealed class RecycleReport
     }
 }
 
-/// <summary>Recycling the checked items of the Redundant files window (SPEC §32), ported from the Python app's
+/// <summary>Recycling the checked items of Tidy's redundant files list (SPEC §32), ported from the Python app's
 /// <c>services/recycle_job.py</c>: each item checked again first (gone, or a folder now holding something else, is
 /// skipped); where Windows can't recycle, the item is kept. Stop takes effect between two items. The caller holds a
 /// lock on the items.</summary>

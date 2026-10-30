@@ -8,7 +8,7 @@ public sealed record ClutterLists(IReadOnlySet<string> Pictures, IReadOnlySet<st
         options.Videos.Select(e => e.ToLowerInvariant()).ToHashSet());
 }
 
-/// <summary>A row of the Redundant files window: a file, or a whole folder (<see cref="Lists"/> set: a clutter folder,
+/// <summary>A row of Tidy's redundant files list: a file, or a whole folder (<see cref="Lists"/> set: a clutter folder,
 /// checked again against them before it goes).</summary>
 public sealed record OfferItem(string Path, string Why, string Label = "", ClutterLists? Lists = null)
 {

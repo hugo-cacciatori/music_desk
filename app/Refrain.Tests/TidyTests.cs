@@ -160,7 +160,9 @@ public sealed class TidyTests
         var outcome = TidyTask.Run(plan, Gain, TestContext.Current.CancellationToken, exe: ReplayGainTests.Rsgain,
             flac: new Refrain.Core.Cue.Flac(SplitTests.FlacExe));
 
-        Assert.Equal(pyReport.Replace(twins.Py, "<ROOT>"), outcome.Text().Replace(twins.Cs, "<ROOT>"));
+        // One deliberate difference: the offers show under the report, not in a window of their own (SPEC §36).
+        Assert.Equal(pyReport.Replace(twins.Py, "<ROOT>").Replace("the Redundant files window that opened.", "the list below."),
+            outcome.Text().Replace(twins.Cs, "<ROOT>"));
         Assert.Equal(pyOffers, outcome.Offers.Select(i => $"{Rel(twins.Cs, i.Path)} | {i.Why}"));
         ReplayGainTests.AssertSame(twins);
 

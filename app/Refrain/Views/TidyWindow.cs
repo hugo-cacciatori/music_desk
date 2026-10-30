@@ -11,8 +11,8 @@ namespace Refrain.Views;
 
 /// <summary>Tidy's own window (SPEC §28, §31, §35): it reads the tree, shows the whole plan (every album with what
 /// will happen to it), and Run Tidy does it album by album under a lock on the trees, with progress and live lines,
-/// then the report, which stays until closed. When something is offered, the Redundant files window opens at the end.
-/// Closing it while Tidy runs asks first.</summary>
+/// then the report, which stays until closed. What is offered for the Recycle Bin shows under the report, in the same
+/// window (SPEC §36 "Tidy's redundant files in Tidy's own window"). Closing it while Tidy runs asks first.</summary>
 public sealed partial class TidyWindow : Window
 {
     readonly IReadOnlyList<string> folders;
@@ -26,6 +26,8 @@ public sealed partial class TidyWindow : Window
     readonly StackPanel albums = new() { Spacing = 4 };
     readonly ScrollViewer planScroll = new();
     readonly TextBox log = Ui.ReportBox();
+    readonly Grid results = new() { RowSpacing = 16 };  // the log, then the redundant files when some are offered
+    RecyclePanel? offered;
     readonly Button run = Ui.Primary("Run Tidy");
     readonly Button stop = Ui.Button("Stop", "Stop after the current step; no further album starts");
     readonly Button close = Ui.Button("Close", "Close this window; nothing has been changed");
@@ -65,10 +67,13 @@ public sealed partial class TidyWindow : Window
             Grid.SetRow(parts[i], i);
             root.Children.Add(parts[i]);
         }
-        // The log takes the list's place, in its row: a hidden one in a star row of its own still took half the
-        // height (measured, 2026-10-30).
-        Grid.SetRow(log, Grid.GetRow(planScroll));
-        root.Children.Add(log);
+        // The log and the redundant files take the plan's place, in its row: a hidden one in a star row of its own
+        // still took half the height (measured, 2026-10-30).
+        results.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        results.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });  // a star row once something is offered
+        results.Children.Add(log);
+        Grid.SetRow(results, Grid.GetRow(planScroll));
+        root.Children.Add(results);
         Content = root;
 
         run.Click += (_, _) => Run();
@@ -77,6 +82,13 @@ public sealed partial class TidyWindow : Window
         done.Click += (_, _) => Close();
         AppWindow.Closing += async (_, e) =>
         {
+            if (offered is { Running: true })
+            {
+                e.Cancel = true;  // closing while items go to the Recycle Bin stops after the one being sent
+                closing = true;
+                offered.Stop();
+                return;
+            }
             if (!running || closing) return;
             e.Cancel = true;
             var dialog = new ContentDialog
@@ -256,14 +268,6 @@ public sealed partial class TidyWindow : Window
     {
         running = false;
         Finished?.Invoke(current.Trees);
-        var offers = outcome.Offers;
-        if (offers.Count > 0)
-        {
-            var window = new RecycleWindow(current.Root.Length > 0 ? current.Root : folders[0], offers, TidyTask.Owner,
-                TidyText.OfferIntro, locks);
-            window.Finished += changed => Finished?.Invoke(changed);
-            window.Start();
-        }
         if (closing)
         {
             Close();
@@ -273,6 +277,18 @@ public sealed partial class TidyWindow : Window
         summary.Text = text.Split('\n')[0];
         message.Text = "";
         log.Text = text.Replace("\n", "\r");
+        if (outcome.Offers.Count > 0)
+        {
+            offered = new RecyclePanel(outcome.Offers, TidyTask.Owner, TidyText.OfferIntro, locks);
+            offered.Finished += changed =>
+            {
+                Finished?.Invoke(changed);
+                if (closing) Close();
+            };
+            results.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
+            Grid.SetRow(offered, 1);
+            results.Children.Add(offered);
+        }
         Show("result");
     }
 
@@ -280,7 +296,7 @@ public sealed partial class TidyWindow : Window
     {
         if (state != "planning") Ui.Fit(this);  // the plan (or why there is none) sets the window's size
         planScroll.Visibility = state == "plan" ? Visibility.Visible : Visibility.Collapsed;
-        log.Visibility = state is "running" or "result" ? Visibility.Visible : Visibility.Collapsed;
+        results.Visibility = state is "running" or "result" ? Visibility.Visible : Visibility.Collapsed;
         busy.Visibility = state is "planning" or "running" ? Visibility.Visible : Visibility.Collapsed;
         run.Visibility = state == "plan" ? Visibility.Visible : Visibility.Collapsed;
         stop.Visibility = state == "running" ? Visibility.Visible : Visibility.Collapsed;

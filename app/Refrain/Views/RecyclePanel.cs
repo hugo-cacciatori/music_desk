@@ -6,10 +6,11 @@ using Refrain.Core.Tidy;
 
 namespace Refrain.Views;
 
-/// <summary>The Redundant files window (SPEC §32, one window for Tidy and, later, Clean up): one row per file or whole
-/// folder, every box checked; kept items below, greyed, with their reason. Delete selected sends the checked ones to
-/// the Recycle Bin under a lock on them, then the window becomes its report. Closing it before keeps everything.</summary>
-public sealed partial class RecycleWindow : Window
+/// <summary>The redundant files (SPEC §32, §36 "Tidy's redundant files in Tidy's own window"), shown in Tidy's window
+/// under its report: one row per file or whole folder, every box checked; kept items below, greyed, with their reason.
+/// Delete selected sends the checked ones to the Recycle Bin under a lock on them, then the list becomes its report.
+/// Closing the window before keeps everything.</summary>
+public sealed partial class RecyclePanel : Grid
 {
     readonly string owner;
     readonly PathLocks locks;
@@ -25,31 +26,25 @@ public sealed partial class RecycleWindow : Window
     readonly StackPanel checks = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
     readonly Button delete = Ui.Primary("Delete selected");
     readonly Button stop = Ui.Button("Stop", "Stop after the item being sent now; the others stay");
-    readonly Button close = Ui.Button("Close", "Close this window; whatever is still listed is kept");
-    bool running;
-    bool closing;
 
     /// <summary>The folders whose contents changed, once the items are sent: the index re-reads them.</summary>
     public event Action<IReadOnlyList<string>>? Finished;
 
+    /// <summary>Items are being sent to the Recycle Bin.</summary>
+    public bool Running { get; private set; }
+
     /// <summary><paramref name="recycle"/>: replaced in tests, which never reach the real Recycle Bin.</summary>
-    public RecycleWindow(string folder, IReadOnlyList<OfferItem> items, string owner, string introText, PathLocks locks,
+    public RecyclePanel(IReadOnlyList<OfferItem> items, string owner, string introText, PathLocks locks,
         Action<string>? recycle = null, Func<string, string?>? canRecycle = null)
     {
         this.owner = owner;
         this.locks = locks;
         this.recycle = recycle;
         canRecycle ??= Recycle.CanRecycle;
-        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
-        Ui.Prepare(this, $"Refrain · Redundant files: {(name.Length > 0 ? name : folder)}");
         intro.Text = introText;
+        RowSpacing = 8;
 
-        var heading = new StackPanel { Spacing = 2 };
-        heading.Children.Add(Ui.Title("Redundant files"));
-        heading.Children.Add(Ui.Secondary(folder));
-
-        var header = Row("File", "Folder", "Why", null, header: true);
-        list.Children.Add(header);
+        list.Children.Add(Row("File", "Folder", "Why", null, header: true));
         var kept = new List<(OfferItem, string)>();
         foreach (var item in items)
         {
@@ -78,47 +73,29 @@ public sealed partial class RecycleWindow : Window
         uncheckAll.Click += (_, _) => SetAll(false);
         checks.Children.Add(checkAll);
         checks.Children.Add(uncheckAll);
-
         ToolTipService.SetToolTip(delete, "Send the checked items to the Recycle Bin now");
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         buttons.Children.Add(delete);
         buttons.Children.Add(stop);
-        buttons.Children.Add(close);
+        buttons.Children.Add(progress);
+        progress.VerticalAlignment = VerticalAlignment.Center;
 
-        var root = new Grid { Padding = new Thickness(24, 16, 24, 16), RowSpacing = 10 };
-        FrameworkElement[] parts = [heading, intro, checks, listScroll, progress, buttons];
+        var heading = new TextBlock { Text = "Redundant files", FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        FrameworkElement[] parts = [heading, intro, checks, listScroll, buttons];
         for (var i = 0; i < parts.Length; i++)
         {
-            var stretch = parts[i] == listScroll;
-            root.RowDefinitions.Add(new RowDefinition { Height = stretch ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
-            Grid.SetRow(parts[i], i);
-            root.Children.Add(parts[i]);
+            RowDefinitions.Add(new RowDefinition { Height = parts[i] == listScroll ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
+            SetRow(parts[i], i);
+            Children.Add(parts[i]);
         }
-        // The report takes the list's place, in its row: a hidden one in a star row of its own still took half the
-        // height (measured, 2026-10-30).
-        Grid.SetRow(report, Grid.GetRow(listScroll));
-        root.Children.Add(report);
-        Content = root;
+        SetRow(report, Grid.GetRow(listScroll));  // the report takes the list's place, in its row
+        Children.Add(report);
 
         delete.Click += (_, _) => Run();
         stop.Click += (_, _) => Stop();
-        close.Click += (_, _) => Close();
-        AppWindow.Closing += (_, e) =>
-        {
-            if (!running) return;
-            e.Cancel = true;  // closing while it recycles stops it first
-            closing = true;
-            Stop();
-        };
         report.Visibility = Visibility.Collapsed;
         stop.Visibility = Visibility.Collapsed;
         Update();
-    }
-
-    public void Start()
-    {
-        Ui.Show(this);
-        Ui.Fit(this);
     }
 
     /// <summary>A row of three columns; a file's or folder's row opens in File Explorer from its context menu.</summary>
@@ -138,7 +115,7 @@ public sealed partial class RecycleWindow : Window
         var cells = new[] { Cell(file), Cell(folder), Cell(why) };
         for (var i = 0; i < cells.Length; i++)
         {
-            Grid.SetColumn((FrameworkElement)cells[i], i);
+            SetColumn((FrameworkElement)cells[i], i);
             grid.Children.Add(cells[i]);
         }
         if (item is not null)
@@ -159,7 +136,7 @@ public sealed partial class RecycleWindow : Window
         Update();
     }
 
-    void Update() => delete.IsEnabled = !running && rows.Any(r => r.Box.IsChecked == true);
+    void Update() => delete.IsEnabled = !Running && rows.Any(r => r.Box.IsChecked == true);
 
     void Run()
     {
@@ -175,11 +152,10 @@ public sealed partial class RecycleWindow : Window
             progress.Text = e.Message;
             return;
         }
-        running = true;
+        Running = true;
         foreach (var (_, box) in rows) box.IsEnabled = false;
         checks.Visibility = Visibility.Collapsed;
         delete.Visibility = Visibility.Collapsed;
-        close.Visibility = Visibility.Collapsed;
         stop.Visibility = Visibility.Visible;
         Task.Run(() => RecycleTask.Run(chosen, cancel.Token, recycle,
                 (done, total, name) => ui.TryEnqueue(() => progress.Text = name.Length > 0 ? $"Sending to the Recycle Bin ({done + 1} of {total}): {name}" : "")))
@@ -190,28 +166,23 @@ public sealed partial class RecycleWindow : Window
             }, TaskScheduler.Default);
     }
 
-    void Stop()
+    /// <summary>Stops after the item being sent now (the window closing, or Stop).</summary>
+    public void Stop()
     {
-        if (!running) return;
+        if (!Running) return;
         stop.IsEnabled = false;
         cancel.Cancel();
     }
 
     void Ended(RecycleReport result)
     {
-        running = false;
-        Finished?.Invoke(result.Folders);
-        if (closing)
-        {
-            Close();
-            return;
-        }
+        Running = false;
         intro.Text = "Done. What went to the Recycle Bin, and what stayed:";
         listScroll.Visibility = Visibility.Collapsed;
         report.Text = result.Text().Replace("\n", "\r");
         report.Visibility = Visibility.Visible;
         progress.Text = "";
         stop.Visibility = Visibility.Collapsed;
-        close.Visibility = Visibility.Visible;
+        Finished?.Invoke(result.Folders);
     }
 }

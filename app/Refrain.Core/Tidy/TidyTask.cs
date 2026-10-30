@@ -16,7 +16,7 @@ public sealed class TidyOutcome(string root)
 {
     public string Root { get; } = root;
     public List<AlbumDone> Albums { get; } = [];
-    /// <summary>For the Redundant files window: half-split images and their sheets, and the plan's clutter
+    /// <summary>For the redundant files list: half-split images and their sheets, and the plan's clutter
     /// (re-checked).</summary>
     public List<OfferItem> Offers { get; } = [];
     public bool Cancelled { get; set; }
@@ -40,7 +40,7 @@ public sealed class TidyOutcome(string root)
         {
             lines.Add("");
             lines.Add($"{Report.Plural(Offers.Count, "item")} to offer for the Recycle Bin: you choose what to keep in " +
-                      "the Redundant files window that opened.");
+                      "the list below.");
         }
         return string.Join("\n", lines);
     }

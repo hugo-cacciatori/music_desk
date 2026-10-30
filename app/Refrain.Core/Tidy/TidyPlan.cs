@@ -405,7 +405,7 @@ public static class Tidying
         }
     }
 
-    /// <summary>A split or half-split folder's image and sheets, as rows of the Redundant files window.</summary>
+    /// <summary>A split or half-split folder's image and sheets, as rows of the redundant files list.</summary>
     public static List<OfferItem> OfferItems(FolderPlan folder)
     {
         var image = folder.Offer.Select(p => Path.GetFileName(p)!).FirstOrDefault(n => !n.EndsWith(".cue", StringComparison.OrdinalIgnoreCase)) ?? "the image";
@@ -467,7 +467,7 @@ public static class TidyText
     public const string RunNote = "Run Tidy does all of this, album by album. Files made redundant by a split (the " +
                                   "image and its cue sheet) and the files offered are kept; you choose which to recycle at the end.";
 
-    /// <summary>What the Redundant files window says first, for Tidy.</summary>
+    /// <summary>What the redundant files list says first, under Tidy's report.</summary>
     public const string OfferIntro = "Tidy made these files redundant (split images and their cue sheets), or found them beside the music (pictures, videos, folders holding nothing else). Every box is " +
         "checked: uncheck what to keep, then click Delete selected to send the rest to the Recycle Bin. Closing this " +
         "window keeps them all.";

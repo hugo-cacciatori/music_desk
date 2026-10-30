@@ -50,13 +50,18 @@ public static class Album
             .Where(name => options.SubfolderKeywords.Any(k => name!.ToLowerInvariant().Contains(k, StringComparison.Ordinal)))
             .Select(name => name!).ToList();
 
-    /// <summary>A keyword subfolder holding a disc of its album (cd2, disc 2…): any album-data keyword but the
-    /// track-data (lite) and excluded (bonus) ones. Its tracks are measured with the album (SPEC §10 B, Hugo
-    /// 2026-10-30), and Tidy renames them; lite and bonus only get values copied, and Tidy leaves them alone.</summary>
-    public static bool IsDisc(string name, ReplayGainOptions options)
+    /// <summary>A keyword subfolder holding other songs of its album (cd2, disc 2, bonus…): any but a copy of the
+    /// album's tracks, which a track-data keyword (lite) names and no excluded one does. Its tracks are measured with
+    /// the album (SPEC §10 B, Hugo 2026-10-30), and Tidy renames them; a copy only gets values copied, and Tidy leaves
+    /// it alone.</summary>
+    public static bool IsDisc(string name, ReplayGainOptions options) => !IsCopy(name, options);
+
+    /// <summary>A keyword subfolder holding a copy of the album's tracks (lite), which gets their track values.</summary>
+    static bool IsCopy(string name, ReplayGainOptions options)
     {
         var lower = name.ToLowerInvariant();
-        return !options.TrackDataKeywords.Concat(options.ExcludedKeywords).Any(k => lower.Contains(k, StringComparison.Ordinal));
+        return options.TrackDataKeywords.Any(k => lower.Contains(k, StringComparison.Ordinal)) &&
+               !options.ExcludedKeywords.Any(k => lower.Contains(k, StringComparison.Ordinal));
     }
 
     /// <summary>The disc subfolders' tracks, as paths relative to the album folder (<c>CD2\01 Song.flac</c>), in the
@@ -262,9 +267,7 @@ public static class Album
 
         foreach (var subfolder in subfolders)
         {
-            var name = subfolder.ToLowerInvariant();
-            var copyTrackData = options.TrackDataKeywords.Any(k => name.Contains(k, StringComparison.Ordinal)) &&
-                                !options.ExcludedKeywords.Any(k => name.Contains(k, StringComparison.Ordinal));
+            var copyTrackData = IsCopy(subfolder, options);
             var path = Path.Combine(folder, subfolder);
             var images = ImageNames(path);
             var folderFiles = ListAudio(path).Supported

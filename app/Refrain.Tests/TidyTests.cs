@@ -141,7 +141,14 @@ public sealed class TidyTests
         using var twins = new ReplayGainTests.Twins("album", Compose);
         var (expected, _, _) = RunPython(twins.Py, run: false);
         var plan = Tidying.Plan(twins.Cs, Names, Gain, Tidy, TestContext.Current.CancellationToken);
-        Assert.Equal(expected, PlanLines(plan, twins.Cs));
+        // The one deliberate difference (SPEC §10 B, Hugo 2026-10-30): a bonus folder is a disc of its album now, so
+        // its block (the folder and its renames) is planned; the rest is the Python app's plan.
+        var lines = PlanLines(plan, twins.Cs);
+        var bonus = lines.FindIndex(l => l.StartsWith("  F ", StringComparison.Ordinal) && l.Contains(@"\bonus |", StringComparison.Ordinal));
+        Assert.True(bonus >= 0, string.Join(Environment.NewLine, lines));
+        var end = lines.FindIndex(bonus + 1, l => !l.StartsWith("    ", StringComparison.Ordinal));
+        lines.RemoveRange(bonus, end - bonus);
+        Assert.Equal(expected, lines);
         // The tree holds the hard cases, so the comparison means something.
         foreach (var part in new[] { "| name taken |", "| missing tags |", "| rename |", "| kept |", "fallback=track", "lrc=01 With Lyrics.lrc",
                      "rg=missing tags", "| half-split |", "(empty folder)", "picture beside music", "| not split |", "rg=after the split",

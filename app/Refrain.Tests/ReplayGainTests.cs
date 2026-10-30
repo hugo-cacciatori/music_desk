@@ -102,7 +102,7 @@ public sealed class ReplayGainTests
     public void A_disc_subfolder_is_measured_with_the_album()
     {
         // SPEC §10 B (Hugo, 2026-10-30): CD2's track was only given the album values; it gets its own now, and the
-        // album values cover both discs. lite and bonus still only get values copied.
+        // album values cover both discs. A bonus folder is measured too; lite, a copy, only gets values copied.
         using var temp = new TempFolder();
         var album = Path.Combine(temp.Path, "Album A");
         Setup.Copy(Path.Combine(Setup.Fixtures, "replaygain", "Fixture Artist", "Album A"), album);
@@ -124,6 +124,7 @@ public sealed class ReplayGainTests
         Assert.Equal(values.Min(v => Album.Parse(v.Track!)), Album.Parse(values[0].Album!), 2);
         var log = File.ReadAllText(Path.Combine(album, "replaygain.log"));
         Assert.Contains("CD2: 1 file measured with the album", log);
+        Assert.Contains("bonus: 1 file measured with the album", log);
         Assert.Contains("lite: 2/2 files got the album data, 2 also got their track data", log);
     }
 

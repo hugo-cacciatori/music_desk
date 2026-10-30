@@ -270,7 +270,7 @@ public sealed partial class TrimWindow : Window
         this.paths = paths;
         this.settings = settings;
         this.locks = locks;
-        Ui.Prepare(this, "Refrain · Trim", 820, 580);
+        Ui.Prepare(this, "Refrain · Trim");
         planTimer = ui.CreateTimer();
         planTimer.Interval = TimeSpan.FromMilliseconds(PlanDelayMs);
         planTimer.IsRepeating = false;
@@ -626,6 +626,7 @@ public sealed partial class TrimWindow : Window
 
     void Show(string next)
     {
+        if (next != "loading") Ui.Fit(this);  // the track's editor (or why it can't be trimmed) sets the window's size
         state = next;
         var editing = next is "editing" or "running";
         message.Visibility = next == "editing" ? Visibility.Collapsed : Visibility.Visible;

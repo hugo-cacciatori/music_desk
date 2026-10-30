@@ -43,7 +43,7 @@ public sealed partial class SplitWindow : Window
         this.paths = paths;
         this.settings = settings;
         this.locks = locks;
-        Ui.Prepare(this, "Refrain · Split", 760, 520);
+        Ui.Prepare(this, "Refrain · Split");
         ToolTipService.SetToolTip(split, "Write these tracks as FLAC files in the cue sheet's folder, each proven against the original; the image and its cue sheet aren't touched");
         where.IsTextSelectionEnabled = true;
         tracksScroll.Content = tracks;
@@ -62,14 +62,18 @@ public sealed partial class SplitWindow : Window
         buttons.Children.Add(right);
 
         var root = new Grid { Padding = new Thickness(24, 16, 24, 16), RowSpacing = 10 };
-        FrameworkElement[] parts = [head, message, details, tracksScroll, report, buttons];
+        FrameworkElement[] parts = [head, message, details, tracksScroll, buttons];
         for (var i = 0; i < parts.Length; i++)
         {
-            var stretch = parts[i] == tracksScroll || parts[i] == report;
+            var stretch = parts[i] == tracksScroll;
             root.RowDefinitions.Add(new RowDefinition { Height = stretch ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
             Grid.SetRow(parts[i], i);
             root.Children.Add(parts[i]);
         }
+        // The report takes the list's place, in its row: a hidden one in a star row of its own still took half the
+        // height (measured, 2026-10-30).
+        Grid.SetRow(report, Grid.GetRow(tracksScroll));
+        root.Children.Add(report);
         Content = root;
 
         split.Click += (_, _) => Run();
@@ -232,6 +236,7 @@ public sealed partial class SplitWindow : Window
 
     void Show(string state)
     {
+        if (state != "loading") Ui.Fit(this);  // the recap (or why there is none) sets the window's size
         details.Visibility = tracksScroll.Visibility = state is "recap" or "running" ? Visibility.Visible : Visibility.Collapsed;
         report.Visibility = state == "result" ? Visibility.Visible : Visibility.Collapsed;
         busy.Visibility = state is "loading" or "running" ? Visibility.Visible : Visibility.Collapsed;

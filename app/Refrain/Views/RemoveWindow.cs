@@ -35,7 +35,7 @@ public sealed partial class RemoveWindow : Window
         (tracks, leftOut) = RemoveTask.Split(paths);
         this.options = options;
         this.locks = locks;
-        Ui.Prepare(this, "Refrain · Remove ReplayGain tags", 760, tracks.Count == 0 ? 320 : 400);
+        Ui.Prepare(this, "Refrain · Remove ReplayGain tags");
 
         var folders = tracks.Select(p => Path.GetDirectoryName(p)!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var where = folders.Count == 1 ? folders[0] : "several folders";
@@ -71,7 +71,11 @@ public sealed partial class RemoveWindow : Window
         if (tracks.Count == 0) ShowOutcome(new RemoveOutcome(), [.. leftOut]);
     }
 
-    public void Start() => Ui.Show(this);
+    public void Start()
+    {
+        Ui.Show(this);
+        Ui.Fit(this);
+    }
 
     void Run()
     {

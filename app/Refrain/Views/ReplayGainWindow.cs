@@ -24,7 +24,7 @@ public sealed partial class ReplayGainWindow : Window
     readonly CancellationTokenSource cancel = new();
     readonly ProgressBar busy = new() { IsIndeterminate = true, Width = 160, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock message = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-    readonly TextBox report = Ui.ReportBox();
+    readonly TextBox report = Ui.ReportBox(minWidth: 720, minHeight: 280);  // the live lines fill in after the fit
     readonly Button openLog = Ui.Button("Open replaygain.log", "Open the replaygain.log this run wrote, in its default app");
     readonly Button reveal = Ui.Button("Open in File Explorer", "Show the folder in File Explorer");
     readonly Button stop = Ui.Button("Stop", "Stop ReplayGain: rsgain is stopped and the album being measured isn't leveled");
@@ -49,7 +49,7 @@ public sealed partial class ReplayGainWindow : Window
         this.options = options;
         this.locks = locks;
         unit = kind == ReplayGainKind.Loose ? "Track" : "Album";
-        Ui.Prepare(this, "Refrain · ReplayGain", 960, 640);
+        Ui.Prepare(this, "Refrain · ReplayGain");
 
         var where = kind is ReplayGainKind.Tracks or ReplayGainKind.Loose
             ? $"{Report.Plural(paths.Count, "file")} in {Path.GetDirectoryName(paths[0])}"
@@ -200,6 +200,7 @@ public sealed partial class ReplayGainWindow : Window
 
     void Show(string state, string text)
     {
+        Ui.Fit(this);  // the first state is the run (or why it can't start): the report has a minimum size meanwhile
         message.Text = text;
         busy.Visibility = state == "running" ? Visibility.Visible : Visibility.Collapsed;
         report.Visibility = state is "running" or "result" ? Visibility.Visible : Visibility.Collapsed;

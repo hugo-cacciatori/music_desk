@@ -22,20 +22,58 @@ static class Ui
         return value as T ?? WinRT.CastExtensions.As<T>(value);
     }
 
-    /// <summary>A window of its own (SPEC §35: own taskbar button): title, backdrop, icon and size. In an agent's
-    /// off-screen check it sits beyond every monitor and out of Alt+Tab.</summary>
-    public static void Prepare(Window window, string title, int width, int height)
+    const double ReadingWidth = 800;  // wrapped text is laid out at most this wide (px at 100%)
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Window, object> Fitted = new();
+
+    /// <summary>A window of its own (SPEC §35: own taskbar button): title, backdrop, icon and a small first size
+    /// until <see cref="Fit"/> sizes it to its content. In an agent's off-screen check it sits beyond every monitor and
+    /// out of Alt+Tab.</summary>
+    public static void Prepare(Window window, string title)
     {
         window.Title = title;
         window.SystemBackdrop = new MicaBackdrop();
         window.AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "refrain.ico"));
-        window.AppWindow.Resize(new SizeInt32(width, height));
+        window.AppWindow.Resize(new SizeInt32(560, 240));
         if (!MainWindow.Offscreen) return;
         var areas = DisplayArea.FindAll();
         var right = 0;
         for (var i = 0; i < areas.Count; i++) right = Math.Max(right, areas[i].OuterBounds.X + areas[i].OuterBounds.Width);
         window.AppWindow.Move(new PointInt32(right + 200, 0));
         window.AppWindow.IsShownInSwitchers = false;
+    }
+
+    /// <summary>Sizes the window to the smallest size that fits its content (SPEC §36 "Window sizes"), once: call it
+    /// when the first real content shows; later calls do nothing, so a window is never resized under the user. Wrapped
+    /// text is laid out at most <see cref="ReadingWidth"/> wide (wider only for parts that can't wrap), the window stays
+    /// within 90% of its screen's work area, and it is moved to stay on that screen.</summary>
+    public static void Fit(Window window)
+    {
+        if (Fitted.TryGetValue(window, out _) || window.Content is not FrameworkElement root) return;
+        Fitted.Add(window, new object());
+        // After the content's first layout pass, so templates and text are in place.
+        root.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (root.XamlRoot is null) return;
+            var scale = root.XamlRoot.RasterizationScale;
+            var area = DisplayArea.GetFromWindowId(window.AppWindow.Id, DisplayAreaFallback.Nearest).WorkArea;
+            var (maxWidth, maxHeight) = (area.Width * 0.9 / scale, area.Height * 0.9 / scale);
+            root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            var width = Math.Min(root.DesiredSize.Width, maxWidth);
+            if (width > ReadingWidth)
+            {
+                root.Measure(new Windows.Foundation.Size(ReadingWidth, double.PositiveInfinity));
+                width = Math.Min(Math.Max(ReadingWidth, root.DesiredSize.Width), maxWidth);
+            }
+            root.Measure(new Windows.Foundation.Size(width, double.PositiveInfinity));
+            var height = Math.Min(root.DesiredSize.Height, maxHeight);
+            window.AppWindow.ResizeClient(new SizeInt32((int)Math.Ceiling(width * scale), (int)Math.Ceiling(height * scale)));
+            root.InvalidateMeasure();
+            if (MainWindow.Offscreen) return;
+            var (position, size) = (window.AppWindow.Position, window.AppWindow.Size);
+            var x = Math.Clamp(position.X, area.X, Math.Max(area.X, area.X + area.Width - size.Width));
+            var y = Math.Clamp(position.Y, area.Y, Math.Max(area.Y, area.Y + area.Height - size.Height));
+            if (x != position.X || y != position.Y) window.AppWindow.Move(new PointInt32(x, y));
+        });
     }
 
     /// <summary>Shows a window: activated normally, never taking the focus in an agent's off-screen check.</summary>
@@ -46,11 +84,14 @@ static class Ui
     }
 
     /// <summary>Report text in a fixed-width font, so the reports' tables line up; read-only, selectable, scrolled
-    /// both ways.</summary>
-    public static TextBox ReportBox()
+    /// both ways. A minimum size keeps room for a report that fills in after the window was fitted (SPEC §36 "Window
+    /// sizes").</summary>
+    public static TextBox ReportBox(double minWidth = 0, double minHeight = 0)
     {
         var box = new TextBox
         {
+            MinWidth = minWidth,
+            MinHeight = minHeight,
             IsReadOnly = true,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.NoWrap,

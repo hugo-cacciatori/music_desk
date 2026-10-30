@@ -43,7 +43,7 @@ public sealed partial class TidyWindow : Window
         this.folders = folders;
         this.settings = settings;
         this.locks = locks;
-        Ui.Prepare(this, "Refrain · Tidy", 1000, 700);
+        Ui.Prepare(this, "Refrain · Tidy");
 
         var heading = new StackPanel { Spacing = 2 };
         heading.Children.Add(Ui.Title("Tidy"));
@@ -57,14 +57,18 @@ public sealed partial class TidyWindow : Window
         foreach (var element in new FrameworkElement[] { busy, run, stop, close, done }) buttons.Children.Add(element);
 
         var root = new Grid { Padding = new Thickness(24, 16, 24, 16), RowSpacing = 10 };
-        FrameworkElement[] parts = [heading, summary, message, planScroll, log, buttons];
+        FrameworkElement[] parts = [heading, summary, message, planScroll, buttons];
         for (var i = 0; i < parts.Length; i++)
         {
-            var stretch = parts[i] == planScroll || parts[i] == log;
+            var stretch = parts[i] == planScroll;
             root.RowDefinitions.Add(new RowDefinition { Height = stretch ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
             Grid.SetRow(parts[i], i);
             root.Children.Add(parts[i]);
         }
+        // The log takes the list's place, in its row: a hidden one in a star row of its own still took half the
+        // height (measured, 2026-10-30).
+        Grid.SetRow(log, Grid.GetRow(planScroll));
+        root.Children.Add(log);
         Content = root;
 
         run.Click += (_, _) => Run();
@@ -274,6 +278,7 @@ public sealed partial class TidyWindow : Window
 
     void Show(string state)
     {
+        if (state != "planning") Ui.Fit(this);  // the plan (or why there is none) sets the window's size
         planScroll.Visibility = state == "plan" ? Visibility.Visible : Visibility.Collapsed;
         log.Visibility = state is "running" or "result" ? Visibility.Visible : Visibility.Collapsed;
         busy.Visibility = state is "planning" or "running" ? Visibility.Visible : Visibility.Collapsed;

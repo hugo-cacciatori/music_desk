@@ -41,7 +41,7 @@ public sealed partial class RecycleWindow : Window
         this.recycle = recycle;
         canRecycle ??= Recycle.CanRecycle;
         var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
-        Ui.Prepare(this, $"Refrain · Redundant files: {(name.Length > 0 ? name : folder)}", 900, 560);
+        Ui.Prepare(this, $"Refrain · Redundant files: {(name.Length > 0 ? name : folder)}");
         intro.Text = introText;
 
         var heading = new StackPanel { Spacing = 2 };
@@ -86,14 +86,18 @@ public sealed partial class RecycleWindow : Window
         buttons.Children.Add(close);
 
         var root = new Grid { Padding = new Thickness(24, 16, 24, 16), RowSpacing = 10 };
-        FrameworkElement[] parts = [heading, intro, checks, listScroll, report, progress, buttons];
+        FrameworkElement[] parts = [heading, intro, checks, listScroll, progress, buttons];
         for (var i = 0; i < parts.Length; i++)
         {
-            var stretch = parts[i] == listScroll || parts[i] == report;
+            var stretch = parts[i] == listScroll;
             root.RowDefinitions.Add(new RowDefinition { Height = stretch ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
             Grid.SetRow(parts[i], i);
             root.Children.Add(parts[i]);
         }
+        // The report takes the list's place, in its row: a hidden one in a star row of its own still took half the
+        // height (measured, 2026-10-30).
+        Grid.SetRow(report, Grid.GetRow(listScroll));
+        root.Children.Add(report);
         Content = root;
 
         delete.Click += (_, _) => Run();
@@ -111,7 +115,11 @@ public sealed partial class RecycleWindow : Window
         Update();
     }
 
-    public void Start() => Ui.Show(this);
+    public void Start()
+    {
+        Ui.Show(this);
+        Ui.Fit(this);
+    }
 
     /// <summary>A row of three columns; a file's or folder's row opens in File Explorer from its context menu.</summary>
     static Grid Row(object file, string folder, string why, OfferItem? item, bool header = false)

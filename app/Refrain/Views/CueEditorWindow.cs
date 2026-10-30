@@ -94,7 +94,7 @@ public sealed partial class CueEditorWindow : Window
         isNew = newSheet;
         audioPath = newSheet ? file : null;
         path = newSheet ? Path.ChangeExtension(file, ".cue") : file;
-        Ui.Prepare(this, newSheet ? "Refrain · New cue sheet" : "Refrain · Edit cue sheet", 1180, 860);
+        Ui.Prepare(this, newSheet ? "Refrain · New cue sheet" : "Refrain · Edit cue sheet");
         heading.Text = newSheet ? "New cue sheet" : "Edit cue sheet";
         where.IsTextSelectionEnabled = true;
         planTimer = ui.CreateTimer();
@@ -322,6 +322,7 @@ public sealed partial class CueEditorWindow : Window
             return (CueDocument.New(Path.GetFileName(audioFile!), performer, title), CueEditing.AudioFiles(Path.GetDirectoryName(audioFile!)!));
         }).ContinueWith(task => ui.TryEnqueue(() =>
         {
+            Ui.Fit(this);  // the sheet (or why it can't be read) sets the window's size, once laid out
             if (task.Exception is { } error)
             {
                 status.Text = $"{Path.GetFileName(file)} can't be read: {error.InnerException?.Message ?? error.Message}";

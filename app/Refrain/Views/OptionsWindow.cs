@@ -30,7 +30,7 @@ public sealed partial class OptionsWindow : Window
         this.settings = settings;
         this.save = save;
         this.examplePath = examplePath;
-        Ui.Prepare(this, "Refrain · Options", 900, 680);
+        Ui.Prepare(this, "Refrain · Options");
 
         builders["File names"] = FileNamesPage;
         builders["ReplayGain"] = ReplayGainPage;
@@ -87,7 +87,11 @@ public sealed partial class OptionsWindow : Window
     }
 
     /// <summary>Shows the window: activated normally, never taking the focus in an agent's off-screen check.</summary>
-    public void ShowWindow() => Ui.Show(this);
+    public void ShowWindow()
+    {
+        Ui.Show(this);
+        Ui.Fit(this);
+    }
 
     void ShowPage(string name)
     {

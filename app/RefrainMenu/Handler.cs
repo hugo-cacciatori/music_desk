@@ -100,16 +100,13 @@ public sealed partial class Handler : IShellExtInit, IContextMenu
             if (Capture)
             {
                 // The tests: the command is described, and nothing is written into the real data folder.
-                Captured = list is null ? $"{exe} {arguments}" : $"{exe} {arguments}<list: {list.Replace("\n", "|")}>";
+                Captured = $"{exe} {arguments}<list: {list.Replace("\n", "|")}>";
                 return Ok;
             }
-            if (list is not null)
-            {
-                Directory.CreateDirectory(MenuLogic.MenuFolder);
-                var file = Path.Combine(MenuLogic.MenuFolder, $"{Guid.NewGuid():N}.txt");
-                File.WriteAllText(file, list, new UTF8Encoding(false));
-                arguments += MenuLogic.Quote(file);
-            }
+            Directory.CreateDirectory(MenuLogic.MenuFolder);
+            var file = Path.Combine(MenuLogic.MenuFolder, $"{Guid.NewGuid():N}.txt");
+            File.WriteAllText(file, list, new UTF8Encoding(false));
+            arguments += MenuLogic.Quote(file);
             Native.AllowSetForegroundWindow(-1);
             Process.Start(new ProcessStartInfo(exe, arguments) { UseShellExecute = false, WorkingDirectory = Native.ModuleFolder() })?.Dispose();
             return Ok;

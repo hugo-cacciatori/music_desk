@@ -54,8 +54,9 @@ try {
 
     # The window too, which the self-test can't open: started off-screen (beyond every monitor, never the focus), it
     # must still run after 12 s with no error in its log. A published build once closed at start on a XAML resource.
+    # Started as Explorer's Search entry starts it: a bare start only shows a note and closes (SPEC §36 "11.").
     $env:REFRAIN_OFFSCREEN = '1'
-    $window = Start-Process (Join-Path $gate 'Refrain\Refrain.exe') -WorkingDirectory $gate -PassThru
+    $window = Start-Process (Join-Path $gate 'Refrain\Refrain.exe') -ArgumentList '--search' -WorkingDirectory $gate -PassThru
     Start-Sleep -Seconds 12
     $running = -not $window.HasExited
     if ($running) { Stop-Process -Id $window.Id -Force; $window.WaitForExit() }

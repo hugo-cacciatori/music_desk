@@ -25,12 +25,12 @@ public static class MenuLogic
     public const string ReplayGainAlbum = "replaygain-album", ReplayGainDiscography = "replaygain-discography",
         ReplayGainAlbums = "replaygain-albums", ReplayGainTracks = "replaygain-tracks", ReplayGainLoose = "replaygain-loose",
         RemoveReplayGain = "remove-replaygain", Tidy = "tidy", Split = "split", EditCue = "edit-cue",
-        Trim = "trim", NewCue = "new-cue";  // New cue sheet… (the Metadata tab's, not a menu entry)
+        Trim = "trim", NewCue = "new-cue", EditTags = "edit-tags";
 
     public static readonly IReadOnlyList<string> ReplayGainVerbs =
         [ReplayGainAlbum, ReplayGainDiscography, ReplayGainAlbums, ReplayGainTracks, ReplayGainLoose];
 
-    public static readonly Entry Open = new("open", "Open in Refrain", "Show this folder in Refrain, adding it to the library if needed");
+    public static readonly Entry Search = new("search", "Search", "Open the Search window, adding this folder to the library if needed");
     public static readonly Entry Settings = new("settings", "Settings", "Open Refrain's Options window");
     public static readonly Entry Separator = new("", "", "");
 
@@ -48,8 +48,17 @@ public static class MenuLogic
         ".flac", ".wav", ".aif", ".aiff",
     };
 
+    /// <summary>What Edit tags… edits (the formats TagLib# reads); held equal to Refrain.Core's Formats.IsRead by a test.</summary>
+    public static readonly IReadOnlySet<string> TagExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ".flac", ".ogg", ".opus", ".spx", ".mp3", ".mp2", ".wav", ".aif", ".aiff", ".aifc", ".m4a", ".mp4", ".m4b",
+        ".wv", ".mpc", ".tak", ".ofr", ".ofs", ".wma", ".dsf", ".dff", ".aac",
+    };
+
     static readonly Dictionary<string, string> Help = new()
     {
+        [EditTags] = "Opens these tracks' tags and cover in Refrain's tag editor; nothing changes until you click Save",
+        [NewCue] = "Opens a new cue sheet for this file in the cue sheet editor, to cut it into tracks",
         [ReplayGainAlbum] = "Runs ReplayGain on this folder as one album, with the target set in Refrain",
         [ReplayGainDiscography] = "Runs ReplayGain on each album in this folder, then levels them together",
         [ReplayGainAlbums] = "Runs ReplayGain on each folder as its own album, one after another",
@@ -72,11 +81,11 @@ public static class MenuLogic
     public static string TargetText(double target) =>
         $"{(target < 0 ? "−" : "")}{Math.Abs(target).ToString("G6", CultureInfo.InvariantCulture)} LUFS";
 
-    /// <summary>The entries, in order (SPEC §31; each kept function's are added with its rebuild task, §36 "7.", "8."):
-    /// Open in Refrain on one folder or empty space; the ReplayGain entries on folders only, or on files with tracks
+    /// <summary>The entries, in order (SPEC §31, §36 "11."): Edit tags… on music files whose tags Refrain reads (no
+    /// folder); Search on one folder or empty space; the ReplayGain entries on folders only, or on files with tracks
     /// rsgain scans (no folder); Remove ReplayGain tags when every item is such a track; Tidy on empty space or folders
-    /// only (never files); Split this cue sheet… and Edit this cue sheet… on one .cue alone; Trim this track… on one
-    /// FLAC, WAV or AIFF file alone; a separator; Settings, always.
+    /// only (never files); Split this cue sheet… and Edit this cue sheet… on one .cue alone; Trim this track… and New
+    /// cue sheet… on one FLAC, WAV or AIFF file alone; a separator; Settings, always.
     /// <paramref name="target"/>: the ReplayGain options' target, shown in the labels.</summary>
     public static List<Entry> Entries(Clicked clicked, IReadOnlyList<(string Path, bool IsFolder)> items, double target = -15)
     {
@@ -84,15 +93,18 @@ public static class MenuLogic
         var folders = background ? 1 : items.Count(i => i.IsFolder);
         var files = background ? 0 : items.Count(i => !i.IsFolder);
         var audio = background ? 0 : items.Count(i => !i.IsFolder && ReplayGainExtensions.Contains(Path.GetExtension(i.Path)));
+        var tagged = background ? 0 : items.Count(i => !i.IsFolder && TagExtensions.Contains(Path.GetExtension(i.Path)));
         var oneFolder = items.Where(i => !i.IsFolder).Select(i => Path.GetDirectoryName(i.Path)?.ToUpperInvariant())
             .Distinct().Count() <= 1;  // an album is one folder's tracks (a search's results may not be)
         var suffix = $" ({TargetText(target)})";
         Entry Make(string verb, string label) => new(verb, label + suffix, Help[verb]);
 
         var entries = new List<Entry>();
+        if (!background && folders == 0 && files > 0 && tagged == files)
+            entries.Add(new Entry(EditTags, files == 1 ? "Edit tags…" : $"Edit tags of {files} tracks…", Help[EditTags]));
         if (background || (folders == 1 && files == 0))
         {
-            entries.Add(Open);
+            entries.Add(Search);
             entries.Add(Make(ReplayGainAlbum, "ReplayGain as an album"));
             entries.Add(Make(ReplayGainDiscography, "ReplayGain as a discography"));
         }
@@ -115,7 +127,10 @@ public static class MenuLogic
             entries.Add(new Entry(EditCue, "Edit this cue sheet…", Help[EditCue]));
         }
         if (!background && folders == 0 && files == 1 && TrimExtensions.Contains(Path.GetExtension(items[0].Path)))
+        {
             entries.Add(new Entry(Trim, "Trim this track…", Help[Trim]));
+            entries.Add(new Entry(NewCue, "New cue sheet…", Help[NewCue]));
+        }
         if (entries.Count > 0) entries.Add(Separator);
         entries.Add(Settings);
         return entries;
@@ -151,14 +166,12 @@ public static class MenuLogic
         }
     }
 
-    /// <summary>What an entry starts: Open is <c>Refrain.exe "folder"</c> (SPEC §29); every other entry writes the
-    /// paths one per line to a new file in the data folder's <c>menu\</c> and starts <c>Refrain.exe --entry --list
-    /// file</c>, so a large selection never meets the command line's length limit.</summary>
-    public static (string Exe, string Arguments, string? ListText) Command(Entry entry, IReadOnlyList<string> paths,
+    /// <summary>What an entry starts: the paths one per line in a new file in the data folder's <c>menu</c>, and
+    /// <c>Refrain.exe --entry --list file</c>, so a large selection never meets the command line's length limit.</summary>
+    public static (string Exe, string Arguments, string ListText) Command(Entry entry, IReadOnlyList<string> paths,
         string appFolder)
     {
         var exe = Path.Combine(appFolder, "Refrain.exe");
-        if (entry.Verb == Open.Verb) return (exe, Quote(paths[0]), null);
         return (exe, $"--{entry.Verb} --list ", string.Join("\n", paths) + "\n");
     }
 

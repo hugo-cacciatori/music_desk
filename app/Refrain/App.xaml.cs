@@ -24,6 +24,12 @@ public static partial class Program
         // One Refrain at a time (SPEC §29): a later start hands its folder or entry over, lets the running window
         // come to the front, and exits.
         var request = StartRequest.Parse(args);
+        // Refrain works from Explorer's menu (SPEC §36 "11."): started on its own, it says so and closes.
+        if (request.IsEmpty)
+        {
+            MessageBox(0, "Refrain works from File Explorer: right-click a folder or files, then Refrain.", "Refrain", 0x40);  // MB_ICONINFORMATION
+            return 0;
+        }
         var instance = Instance.TryStart();
         if (instance is null)
         {
@@ -99,7 +105,7 @@ public partial class App : Application
     }
 
     /// <summary>A start's request: Settings opens only the Options window (SPEC §31 "Settings"), a task entry its own
-    /// window; anything else (Explorer's Search entry, a folder, an empty start) the Search window.</summary>
+    /// window; anything else (Explorer's Search entry, a folder from the keyword) the Search window.</summary>
     void Handle(StartRequest start)
     {
         if (start.Entry == "settings")
@@ -135,7 +141,8 @@ public partial class App : Application
 
     static bool IsTask(string entry) =>
         ReplayGainKinds.ContainsKey(entry) ||
-        entry is MenuLogic.RemoveReplayGain or MenuLogic.Tidy or MenuLogic.Split or MenuLogic.EditCue or MenuLogic.NewCue or MenuLogic.Trim;
+        entry is MenuLogic.RemoveReplayGain or MenuLogic.Tidy or MenuLogic.Split or MenuLogic.EditCue or MenuLogic.NewCue or MenuLogic.Trim
+            or MenuLogic.EditTags;
 
     /// <summary>A task entry from Explorer (SPEC §35): the task opens its own window, which alone comes to the front.</summary>
     public void RunEntry(string entry, IReadOnlyList<string> paths)
@@ -166,6 +173,12 @@ public partial class App : Application
         else if (entry == MenuLogic.Trim)
         {
             var task = new TrimWindow(paths, settings, Locks);
+            task.Finished += folders => window?.TaskChanged(folders);
+            task.Start();
+        }
+        else if (entry == MenuLogic.EditTags)
+        {
+            var task = new EditTagsWindow(paths);
             task.Finished += folders => window?.TaskChanged(folders);
             task.Start();
         }

@@ -98,14 +98,6 @@ public static class Tidying
     public const string SplitByHand = "open its .cue to split it by hand";
     static readonly HashSet<string> SplitReads = new(StringComparer.OrdinalIgnoreCase) { ".flac", ".wav", ".aif", ".aiff" };
 
-    /// <summary>A keyword subfolder holding a disc of its album (cd2, disc 2…): any album-data keyword but the
-    /// track-data (lite) and excluded (bonus) ones. Tidy renames these; lite and bonus it leaves alone.</summary>
-    public static bool IsDiscFolder(string name, ReplayGainOptions options)
-    {
-        var lower = name.ToLowerInvariant();
-        return !options.TrackDataKeywords.Concat(options.ExcludedKeywords).Any(k => lower.Contains(k, StringComparison.Ordinal));
-    }
-
     static List<string> AudioNames(string folder)
     {
         try
@@ -138,7 +130,7 @@ public static class Tidying
             if (AudioNames(folder).Count > 0)
             {
                 var keyword = Album.KeywordSubfolders(folder, options).ToHashSet();
-                var discs = subfolders.Where(n => keyword.Contains(n) && IsDiscFolder(n, options) && AudioNames(Path.Combine(folder, n)).Count > 0)
+                var discs = subfolders.Where(n => keyword.Contains(n) && Album.IsDisc(n, options) && AudioNames(Path.Combine(folder, n)).Count > 0)
                     .Select(n => Path.Combine(folder, n)).ToList();
                 albums.Add((folder, discs));
                 subfolders.RemoveAll(keyword.Contains);
@@ -270,14 +262,15 @@ public static class Tidying
         return null;
     }
 
-    /// <summary>Why the album needs a ReplayGain run, or null when every track rsgain scans (the images aside) has the
-    /// four values and the comment for the current target, and its disc subfolders' tracks have the album values.</summary>
-    public static string? ReplayGainNeeded(string album, IEnumerable<string> discs, ReplayGainOptions options,
-        IEnumerable<string> exclude)
+    /// <summary>Why the album needs a ReplayGain run, or null when every track rsgain scans (the images aside), its
+    /// disc subfolders' included (SPEC §10 B, Hugo 2026-10-30), has the four values and the comment for the current
+    /// target.</summary>
+    public static string? ReplayGainNeeded(string album, ReplayGainOptions options, IEnumerable<string> exclude)
     {
         var skip = exclude.Select(LyricsKeyFold).ToHashSet();
         var files = Album.ListAudio(album).Supported.Where(n => !skip.Contains(LyricsKeyFold(n))).ToList();
         if (files.Count == 0) return null;
+        files.AddRange(Album.DiscTracks(album, options).Tracks);
         var targets = new List<double>();
         foreach (var name in files)
         {
@@ -299,20 +292,6 @@ public static class Tidying
         }
         var others = targets.Where(t => !double.IsNaN(t) && Math.Abs(t - options.Target) > 1e-6).Distinct().Order().ToList();
         if (others.Count > 0) return $"target {string.Join(", ", others.Select(Python.G))} LUFS, now {options.TargetText}";
-        foreach (var disc in discs)
-            foreach (var name in Album.ListAudio(disc).Supported)
-            {
-                try
-                {
-                    using var tags = RgTags.Open(Path.Combine(disc, name));
-                    if (tags.Get(RgTags.AlbumGain) is null || tags.Get(RgTags.AlbumPeak) is null)
-                        return $"missing tags in {Path.GetFileName(disc)}";
-                }
-                catch (Exception)
-                {
-                    return $"{Path.GetFileName(disc)}\\{name} can't be read";
-                }
-            }
         return null;
     }
 
@@ -343,7 +322,7 @@ public static class Tidying
             else if (album.Folders.Any(f => f.Kind == FolderKind.NotSplit))
                 album.ReplayGain = "after the split";
             else
-                album.ReplayGain = ReplayGainNeeded(folder, album.Folders.Skip(1).Select(f => f.Folder), replayGain, own.Images);
+                album.ReplayGain = ReplayGainNeeded(folder, replayGain, own.Images);
             plan.Albums.Add(album);
         }
         PlaceClutter(plan, Clutter.Find(root, ClutterLists.Of(tidy), cancel).Where(item => !Needed(plan, item)).ToList(), replayGain);

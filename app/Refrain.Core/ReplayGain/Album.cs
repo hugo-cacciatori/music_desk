@@ -50,6 +50,35 @@ public static class Album
             .Where(name => options.SubfolderKeywords.Any(k => name!.ToLowerInvariant().Contains(k, StringComparison.Ordinal)))
             .Select(name => name!).ToList();
 
+    /// <summary>A keyword subfolder holding a disc of its album (cd2, disc 2…): any album-data keyword but the
+    /// track-data (lite) and excluded (bonus) ones. Its tracks are measured with the album (SPEC §10 B, Hugo
+    /// 2026-10-30), and Tidy renames them; lite and bonus only get values copied, and Tidy leaves them alone.</summary>
+    public static bool IsDisc(string name, ReplayGainOptions options)
+    {
+        var lower = name.ToLowerInvariant();
+        return !options.TrackDataKeywords.Concat(options.ExcludedKeywords).Any(k => lower.Contains(k, StringComparison.Ordinal));
+    }
+
+    /// <summary>The disc subfolders' tracks, as paths relative to the album folder (<c>CD2\01 Song.flac</c>), in the
+    /// order Windows lists them; their other audio and waiting images as (relative name, reason) warnings. A disc whose
+    /// folder name is in <paramref name="skip"/> stays out (a selection of tracks measures only those).</summary>
+    public static (List<string> Tracks, List<(string Name, string Reason)> Left) DiscTracks(string folder, ReplayGainOptions options,
+        IReadOnlySet<string>? skip = null)
+    {
+        List<string> tracks = [];
+        List<(string, string)> left = [];
+        foreach (var disc in KeywordSubfolders(folder, options).Where(d => IsDisc(d, options) && skip?.Contains(Fold(d)) != true))
+        {
+            var (supported, unsupported) = ListAudio(Path.Combine(folder, disc));
+            var images = ImageNames(Path.Combine(folder, disc), supported.Concat(unsupported));
+            foreach (var name in supported)
+                if (images.Contains(Fold(name))) left.Add((Path.Combine(disc, name), "skipped, image waiting to be split"));
+                else tracks.Add(Path.Combine(disc, name));
+            left.AddRange(unsupported.Select(name => (Path.Combine(disc, name), UnsupportedReason(name))));
+        }
+        return (tracks, left);
+    }
+
     /// <summary>A ReplayGain value such as "-6.5 dB" or "0.98" as a number. Throws FormatException.</summary>
     public static double Parse(string value)
     {
@@ -199,15 +228,21 @@ public static class Album
         }
     }
 
-    /// <summary>Copies the album's ReplayGain data to the files of its keyword subfolders. In track-data subfolders
-    /// (e.g. "lite", but not excluded ones like "bonus"), the track data of the file with the same name in the album
-    /// folder is copied too.</summary>
+    /// <summary>Copies the album's ReplayGain data to the files of its keyword subfolders that aren't discs (the discs
+    /// were measured with the album, and say so). In track-data subfolders (e.g. "lite", but not excluded ones like
+    /// "bonus"), the track data of the file with the same name in the album folder is copied too.</summary>
     public static void CopyToSubfolders(string folder, IReadOnlyList<string> files, RunLog runLog,
         IReadOnlySet<string> exclude)
     {
         var options = runLog.Options;
-        var subfolders = KeywordSubfolders(folder, options);
+        var all = KeywordSubfolders(folder, options);
         runLog.Subfolders = [];
+        foreach (var disc in all.Where(d => IsDisc(d, options)))
+        {
+            var measured = files.Count(f => Path.GetDirectoryName(f) == disc);
+            if (measured > 0) runLog.Subfolders.Add($"{disc}: {Report.Plural(measured, "file")} measured with the album");
+        }
+        var subfolders = all.Where(d => !files.Any(f => Path.GetDirectoryName(f) == d)).ToList();  // a disc left out: copied as before
         if (subfolders.Count == 0) return;
 
         // Every album file now holds the same album data: the first one serves as reference.
@@ -285,6 +320,9 @@ public static class Album
         var images = ImageNames(folder, files.Concat(unsupported));
         var waiting = files.Where(n => images.Contains(Fold(n)) && !skip.Contains(Fold(n))).ToList();
         files = files.Where(n => !skip.Contains(Fold(n)) && !images.Contains(Fold(n))).ToList();
+        // The discs' tracks join the scan, so each gets its own track values and the album values cover every disc.
+        var (discTracks, discLeft) = files.Count > 0 ? DiscTracks(folder, options, skip) : ([], []);
+        files.AddRange(discTracks);
         if (files.Count == 0)
         {
             reporter.Info(waiting.Count > 0 ? $"Only an image waiting to be split in {folder}" : $"No audio file rsgain can scan in {folder}");
@@ -298,6 +336,7 @@ public static class Album
                 if (!skip.Contains(Fold(name)))  // an excluded file isn't a track of this run at all
                     runLog.Warn($"{name}: {UnsupportedReason(name)}");
             foreach (var name in waiting) runLog.Warn($"{name}: skipped, image waiting to be split");
+            foreach (var (name, reason) in discLeft) runLog.Warn($"{name}: {reason}");
             if (ScanAlbum(folder, files, runLog, scanner, exe, cancel))
             {
                 PreventClipping(folder, files, runLog);

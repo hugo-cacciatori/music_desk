@@ -99,6 +99,35 @@ public sealed class ReplayGainTests
     }
 
     [Fact]
+    public void A_disc_subfolder_is_measured_with_the_album()
+    {
+        // SPEC §10 B (Hugo, 2026-10-30): CD2's track was only given the album values; it gets its own now, and the
+        // album values cover both discs. lite and bonus still only get values copied.
+        using var temp = new TempFolder();
+        var album = Path.Combine(temp.Path, "Album A");
+        Setup.Copy(Path.Combine(Setup.Fixtures, "replaygain", "Fixture Artist", "Album A"), album);
+        var runLog = Album.Process(album, Options, exe: Rsgain, cancel: TestContext.Current.CancellationToken);
+
+        Assert.Equal("OK", runLog!.Result());
+        Assert.Contains(@"CD2\01 Disc Two.flac", runLog.Files);
+        string[] tracks = ["01 Tone.flac", "02 Spike.flac", "03 Spike.mp3", @"CD2\01 Disc Two.flac"];
+        var values = tracks.Select(name =>
+        {
+            using var tags = RgTags.Open(Path.Combine(album, name));
+            return (Track: tags.Get(RgTags.TrackGain), Peak: tags.Get(RgTags.TrackPeak), Album: tags.Get(RgTags.AlbumGain),
+                AlbumPeak: tags.Get(RgTags.AlbumPeak), tags.Comment);
+        }).ToList();
+        Assert.All(values, v => Assert.NotNull(v.Track));
+        Assert.All(values, v => Assert.NotNull(v.Peak));
+        Assert.All(values, v => Assert.Equal(Options.LufsComment, v.Comment));
+        Assert.Single(values.Select(v => (v.Album, v.AlbumPeak)).Distinct());
+        Assert.Equal(values.Min(v => Album.Parse(v.Track!)), Album.Parse(values[0].Album!), 2);
+        var log = File.ReadAllText(Path.Combine(album, "replaygain.log"));
+        Assert.Contains("CD2: 1 file measured with the album", log);
+        Assert.Contains("lite: 2/2 files got the album data, 2 also got their track data", log);
+    }
+
+    [Fact]
     public void A_discography_is_leveled_as_the_python_app_does()
     {
         using var twins = new Twins(@"replaygain\Fixture Artist");

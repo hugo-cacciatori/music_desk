@@ -47,7 +47,7 @@ static class PythonApp
     public static string Recorded(string value, params string[] roots)
     {
         var (file, key) = NextKey();
-        var map = roots.Select((r, i) => (r, $"<ROOT{i}>")).ToList();
+        var map = roots.Select((r, i) => (r, $"<ROOT{i}>")).Append((Repository, "<REPO>")).ToList();  // rsgain's path, in logs
         if (Recording)
         {
             Save(file, key, Tokenize(value, map));
@@ -121,8 +121,10 @@ static class PythonApp
         {
             var all = Read(file);
             var (name, index) = (key[..key.LastIndexOf(" #", StringComparison.Ordinal)], int.Parse(key[(key.LastIndexOf('#') + 1)..]));
-            if (index == 0) all[name] = [];
-            all[name].Add(value);
+            if (!all.TryGetValue(name, out var answers)) all[name] = answers = [];
+            // The value at its place: a test's replayed Python answers keep theirs, and a new recording replaces the old.
+            if (index < answers.Count) answers[index] = value;
+            else answers.Add(value);
             Directory.CreateDirectory(ExpectedFolder);
             var sorted = all.OrderBy(kv => kv.Key, StringComparer.Ordinal).ToDictionary(kv => kv.Key, kv => kv.Value);
             File.WriteAllText(FilePath(file), JsonSerializer.Serialize(sorted, new JsonSerializerOptions

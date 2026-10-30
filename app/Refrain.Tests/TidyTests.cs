@@ -197,6 +197,21 @@ public sealed class TidyTests
     }
 
     [Fact]
+    public void A_disc_track_without_its_own_values_needs_replaygain()
+    {
+        // SPEC §10 B (Hugo, 2026-10-30): a disc subfolder's tracks need the four values and the comment too.
+        using var temp = new TempFolder();
+        var album = Path.Combine(temp.Path, "Album A");
+        var source = Path.Combine(Setup.Fixtures, "replaygain", "Fixture Artist", "Album A");
+        Setup.Copy(source, album);
+        Album.Process(album, Gain, exe: ReplayGainTests.Rsgain, cancel: TestContext.Current.CancellationToken);
+        Assert.Null(Tidying.ReplayGainNeeded(album, Gain, []));
+
+        File.Copy(Path.Combine(source, "CD2", "01 Disc Two.flac"), Path.Combine(album, "CD2", "01 Disc Two.flac"), overwrite: true);
+        Assert.Equal("missing tags", Tidying.ReplayGainNeeded(album, Gain, []));
+    }
+
+    [Fact]
     public void Cue_sheets_and_playlists_are_offered_except_a_skipped_albums_sheet()
     {
         using var temp = new TempFolder();

@@ -25,7 +25,7 @@ public static class MenuLogic
     public const string ReplayGainAlbum = "replaygain-album", ReplayGainDiscography = "replaygain-discography",
         ReplayGainAlbums = "replaygain-albums", ReplayGainTracks = "replaygain-tracks", ReplayGainLoose = "replaygain-loose",
         RemoveReplayGain = "remove-replaygain", Tidy = "tidy", Split = "split", EditCue = "edit-cue",
-        NewCue = "new-cue";  // New cue sheet… (the Metadata tab's, not a menu entry)
+        Trim = "trim", NewCue = "new-cue";  // New cue sheet… (the Metadata tab's, not a menu entry)
 
     public static readonly IReadOnlyList<string> ReplayGainVerbs =
         [ReplayGainAlbum, ReplayGainDiscography, ReplayGainAlbums, ReplayGainTracks, ReplayGainLoose];
@@ -41,6 +41,13 @@ public static class MenuLogic
         ".wv", ".mpc", ".tak", ".wma",
     };
 
+    /// <summary>What Trim cuts (the bundled flac reads them, SPEC §23); held equal to Refrain.Core's SplitPlanner.Supported
+    /// by a test.</summary>
+    public static readonly IReadOnlySet<string> TrimExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ".flac", ".wav", ".aif", ".aiff",
+    };
+
     static readonly Dictionary<string, string> Help = new()
     {
         [ReplayGainAlbum] = "Runs ReplayGain on this folder as one album, with the target set in Refrain",
@@ -52,6 +59,7 @@ public static class MenuLogic
         [Tidy] = "Plans Tidy (split, rename, ReplayGain) on every album here; nothing changes until you run it",
         [Split] = "Shows what splitting this cue sheet writes; nothing is split until you click Split",
         [EditCue] = "Opens this cue sheet in Refrain's cue sheet editor",
+        [Trim] = "Opens the track's Trim window; the trimmed copy is made only when you click Trim",
     };
 
     public static Clicked Classify(bool background, IReadOnlyList<(string Path, bool IsFolder)> items) =>
@@ -67,8 +75,8 @@ public static class MenuLogic
     /// <summary>The entries, in order (SPEC §31; each kept function's are added with its rebuild task, §36 "7.", "8."):
     /// Open in Refrain on one folder or empty space; the ReplayGain entries on folders only, or on files with tracks
     /// rsgain scans (no folder); Remove ReplayGain tags when every item is such a track; Tidy on empty space or folders
-    /// only (never files); Split this cue sheet… and Edit this cue sheet… on one .cue alone; a separator; Settings,
-    /// always.
+    /// only (never files); Split this cue sheet… and Edit this cue sheet… on one .cue alone; Trim this track… on one
+    /// FLAC, WAV or AIFF file alone; a separator; Settings, always.
     /// <paramref name="target"/>: the ReplayGain options' target, shown in the labels.</summary>
     public static List<Entry> Entries(Clicked clicked, IReadOnlyList<(string Path, bool IsFolder)> items, double target = -15)
     {
@@ -106,6 +114,8 @@ public static class MenuLogic
             entries.Add(new Entry(Split, "Split this cue sheet…", Help[Split]));
             entries.Add(new Entry(EditCue, "Edit this cue sheet…", Help[EditCue]));
         }
+        if (!background && folders == 0 && files == 1 && TrimExtensions.Contains(Path.GetExtension(items[0].Path)))
+            entries.Add(new Entry(Trim, "Trim this track…", Help[Trim]));
         if (entries.Count > 0) entries.Add(Separator);
         entries.Add(Settings);
         return entries;

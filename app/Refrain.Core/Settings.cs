@@ -42,6 +42,8 @@ public sealed class Settings
     public string OptionsPage { get; set; } = "";
     /// <summary>The Split page (SPEC §12, §22): Save puts a new cue sheet beside its audio file without asking.</summary>
     public bool SaveCueBeside { get; set; }
+    /// <summary>The Trim page (SPEC §12, §23): the subfolder the trimmed copy goes in.</summary>
+    public string TrimSubfolder { get; set; } = Cue.Trim.DefaultSubfolder;
 
     public FileNamesOptions GetFileNames() => FileNamesOptions.From(FileNames);
     public void Set(FileNamesOptions options) => FileNames = Element(options.Write);

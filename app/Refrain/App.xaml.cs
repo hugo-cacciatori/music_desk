@@ -109,7 +109,7 @@ public partial class App : Application
 
     static bool IsTask(string entry) =>
         ReplayGainKinds.ContainsKey(entry) ||
-        entry is MenuLogic.RemoveReplayGain or MenuLogic.Tidy or MenuLogic.Split or MenuLogic.EditCue or MenuLogic.NewCue;
+        entry is MenuLogic.RemoveReplayGain or MenuLogic.Tidy or MenuLogic.Split or MenuLogic.EditCue or MenuLogic.NewCue or MenuLogic.Trim;
 
     /// <summary>A task entry, from Explorer or from the app (SPEC §35): unsaved Metadata edits on the files it changes
     /// are asked about first, then the task opens its own window, which alone comes to the front.</summary>
@@ -136,6 +136,12 @@ public partial class App : Application
         else if (entry == MenuLogic.Split)
         {
             var task = new SplitWindow(paths, settings, Locks);
+            task.Finished += folders => window?.TaskChanged(folders);
+            task.Start();
+        }
+        else if (entry == MenuLogic.Trim)
+        {
+            var task = new TrimWindow(paths, settings, Locks);
             task.Finished += folders => window?.TaskChanged(folders);
             task.Start();
         }

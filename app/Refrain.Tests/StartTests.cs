@@ -114,7 +114,8 @@ public sealed class StartTests : IDisposable
         Assert.Equal(onFolder, Labels(true, (@"D:\Music", true)));
         Assert.Equal(["ReplayGain: 3 folders, each as an album (−15 LUFS)", "Tidy 3 folders…", "—", "Settings"],
             Labels(false, (@"D:\A", true), (@"D:\B", true), (@"D:\C", true)));
-        Assert.Equal(["ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.flac", false)));
+        Assert.Equal(["ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "Trim this track…", "—", "Settings"], Labels(false, (@"D:\A\1.flac", false)));
+        Assert.Equal(["ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.mp3", false)));
         Assert.Equal(["ReplayGain: these 2 tracks as an album (−15 LUFS)", "ReplayGain: each of these 2 tracks on its own (−15 LUFS)",
             "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.flac", false), (@"D:\A\2.MP3", false)));
         // Tracks of two folders aren't one album; a cover in the selection keeps Remove away; folders and tracks together
@@ -127,6 +128,7 @@ public sealed class StartTests : IDisposable
         Assert.Equal(["Split this cue sheet…", "Edit this cue sheet…", "—", "Settings"], Labels(false, (@"D:\A\image.CUE", false)));
         Assert.Equal(["Settings"], Labels(false, (@"D:\A\image.cue", false), (@"D:\A\b.cue", false)));
         Assert.Equal("−18.5 LUFS", MenuLogic.TargetText(-18.5));
+        Assert.Equal(Refrain.Core.Cue.SplitPlanner.Supported.Keys.Order(), MenuLogic.TrimExtensions.Order());  // what Trim cuts, in step
         Assert.Equal(Formats.ReplayGain.Order(), MenuLogic.ReplayGainExtensions.Order());  // one list, in step
     }
 

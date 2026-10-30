@@ -10,8 +10,8 @@ using Windows.Graphics;
 
 namespace Refrain.Views;
 
-/// <summary>The Options window (SPEC §12, §36 "8."): every setting, and only there. Pages File names, ReplayGain and
-/// Tidy; each saves as it changes, shows its problems inline and has Restore defaults; Restore all defaults sits
+/// <summary>The Options window (SPEC §12, §36 "8."): every setting, and only there. Pages File names, ReplayGain,
+/// Tidy, Split and Trim; each saves as it changes, shows its problems inline and has Restore defaults; Restore all defaults sits
 /// beside Close. The same window from the app's … menu and from Explorer's Settings entry.</summary>
 public sealed partial class OptionsWindow : Window
 {
@@ -36,6 +36,7 @@ public sealed partial class OptionsWindow : Window
         builders["ReplayGain"] = ReplayGainPage;
         builders["Tidy"] = TidyPage;
         builders["Split"] = SplitPage;
+        builders["Trim"] = TrimPage;
         foreach (var name in builders.Keys) pages.Items.Add(name);
 
         var body = new Grid();
@@ -334,6 +335,29 @@ public sealed partial class OptionsWindow : Window
         return page;
     }
 
+    FrameworkElement TrimPage()
+    {
+        var page = Page("Trim", "Trimming one track: the copy goes in this subfolder of the track's folder, created if missing. " +
+                                "The original is never changed.");
+        filling = true;
+        var subfolder = Field(page, "Subfolder", settings.TrimSubfolder, "The subfolder's name, the same for every track (lite by default)");
+        var problems = Problems(page);
+        RestoreButton(page, "Trim", () => settings.TrimSubfolder = Core.Cue.Trim.DefaultSubfolder);
+        filling = false;
+
+        void Update()
+        {
+            var why = Core.Cue.Trim.CheckSubfolderName(subfolder.Text);
+            ShowProblems(problems, why is null ? [] : [why]);
+            if (filling || why is not null) return;  // a name Windows refuses isn't saved
+            settings.TrimSubfolder = subfolder.Text;
+            save();
+        }
+        subfolder.TextChanged += (_, _) => Update();
+        Update();
+        return page;
+    }
+
     async Task RestoreAll()
     {
         var dialog = new ContentDialog
@@ -350,6 +374,7 @@ public sealed partial class OptionsWindow : Window
         settings.Set(ReplayGainOptions.Default);
         settings.Set(TidyOptions.Default);
         settings.SaveCueBeside = false;
+        settings.TrimSubfolder = Core.Cue.Trim.DefaultSubfolder;
         save();
         if (pages.SelectedItem is string name) ShowPage(name);
     }

@@ -14,7 +14,8 @@ public sealed class TidyTests
 {
     static readonly FileNamesOptions Names = FileNamesOptions.Default;
     static readonly ReplayGainOptions Gain = ReplayGainOptions.Default;
-    static readonly TidyOptions Tidy = TidyOptions.Default;
+    // The Python app's lists, which offered no other files (cue sheets, playlists: SPEC §36 "For later").
+    static readonly TidyOptions Tidy = TidyOptions.Default with { Others = [] };
 
     /// <summary>The tree: the album fixture, Album B (with its Scans folder), .lrc sidecars, a multi-file cue, a
     /// half-split album (its image, its sheet and a track split from it), an unsplit album, one whose hidden track needs
@@ -193,6 +194,26 @@ public sealed class TidyTests
         Assert.Equal(["image split into 3 tracks", "cue sheet of Fixture Album.flac", Clutter.PictureBesideMusic],
             outcome.Offers.Select(i => i.Why));
         Assert.True(File.Exists(Path.Combine(album, "Fixture Album.flac")));  // offered, never deleted by Tidy
+    }
+
+    [Fact]
+    public void Cue_sheets_and_playlists_are_offered_except_a_skipped_albums_sheet()
+    {
+        using var temp = new TempFolder();
+        Compose(temp.Path);
+        File.WriteAllText(Path.Combine(temp.Path, "Artwork", "old.m3u8"), "");
+
+        var plan = Tidying.Plan(temp.Path, Names, Gain, TidyOptions.Default, TestContext.Current.CancellationToken);
+        string Rel(string path) => Path.GetRelativePath(temp.Path, path);
+        var clutter = plan.AllClutter.Select(c => (Rel(c.Path), c.Why)).ToList();
+        Assert.Contains((@"Half split\playlist.m3u", Clutter.OtherBesideMusic), clutter);
+        Assert.Contains((@"Per track cue\album.cue", Clutter.OtherBesideMusic), clutter);  // its tracks are split
+        Assert.Contains(("Artwork", "folder of 1 picture and 1 other file"), clutter);
+        // A split image's sheet stays "cue sheet of …"; a skipped album's sheet is how to split it by hand.
+        Assert.DoesNotContain(clutter, c => c.Item1 is @"Half split\Fixture Album.cue" or @"Not split\Fixture Album.cue");
+        Assert.Equal(FolderKind.Skipped, plan.AllFolders.Single(f => Rel(f.Folder) == "Hidden track").Kind);
+        Assert.DoesNotContain(clutter, c => c.Item1.StartsWith(@"Hidden track\", StringComparison.Ordinal));
+        Assert.Contains("1 other file", TidyText.ClutterText(plan.Albums.Single(a => Rel(a.Folder) == "Half split").Clutter));
     }
 
     [Fact]

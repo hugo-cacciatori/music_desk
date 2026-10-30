@@ -254,7 +254,8 @@ public static class Migration
         settings.Set(new TidyOptions(
             Strings(Get(rename, "audio_extensions")) ?? TidyOptions.Default.MusicTypes,
             Strings(Get(cleanup, "picture_extensions")) ?? TidyOptions.Default.Pictures,
-            Strings(Get(cleanup, "video_extensions")) ?? TidyOptions.Default.Videos));
+            Strings(Get(cleanup, "video_extensions")) ?? TidyOptions.Default.Videos,
+            TidyOptions.Default.Others));
         settings.SaveCueBeside = Flag(Get(root, "save_cue_beside")) ?? settings.SaveCueBeside;
         settings.TrimSubfolder = Text(Get(root, "trim_subfolder")) ?? settings.TrimSubfolder;
         settings.TreeVisible = Flag(Get(root, "tree_visible")) ?? settings.TreeVisible;

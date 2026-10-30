@@ -296,24 +296,25 @@ public sealed partial class OptionsWindow : Window
         var page = Page("Tidy",
             "Tidy splits every album below a folder that is still one image and its cue sheet, renames the music files " +
             "from their tags (the File names masks), runs ReplayGain where an album needs it, and offers the split " +
-            "images, the pictures, videos and empty folders it finds for the Recycle Bin, one by one.");
+            "images, the pictures, videos, cue sheets, playlists and empty folders it finds for the Recycle Bin, one by one.");
         filling = true;
         var music = Field(page, "Music file types it renames", string.Join(" ", options.MusicTypes));
         var pictures = Field(page, "Pictures it offers", string.Join(" ", options.Pictures));
         var videos = Field(page, "Videos it offers", string.Join(" ", options.Videos));
+        var others = Field(page, "Other files it offers", string.Join(" ", options.Others));
         var problems = Problems(page);
         RestoreButton(page, "Tidy", () => settings.Set(TidyOptions.Default));
         filling = false;
 
         void Update()
         {
-            var edited = new TidyOptions(List(music.Text), List(pictures.Text), List(videos.Text));
+            var edited = new TidyOptions(List(music.Text), List(pictures.Text), List(videos.Text), List(others.Text));
             ShowProblems(problems, edited.Validate());
             if (filling) return;
             settings.Set(edited);
             save();
         }
-        foreach (var box in new[] { music, pictures, videos }) box.TextChanged += (_, _) => Update();
+        foreach (var box in new[] { music, pictures, videos, others }) box.TextChanged += (_, _) => Update();
         Update();
         return page;
     }

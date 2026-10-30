@@ -102,13 +102,16 @@ public sealed record ReplayGainOptions(
 }
 
 /// <summary>The Tidy page (SPEC §36 "8."): the music types its rename step renames (Rename's "Music file types"), and
-/// the picture and video kinds it offers (Clean up's lists, SPEC §28 "Clutter").</summary>
-public sealed record TidyOptions(IReadOnlyList<string> MusicTypes, IReadOnlyList<string> Pictures, IReadOnlyList<string> Videos)
+/// the picture, video and other kinds it offers (Clean up's lists, SPEC §28 "Clutter"; the other files, cue sheets and
+/// playlists by default, Hugo 2026-10-30).</summary>
+public sealed record TidyOptions(IReadOnlyList<string> MusicTypes, IReadOnlyList<string> Pictures, IReadOnlyList<string> Videos,
+    IReadOnlyList<string> Others)
 {
     public static readonly TidyOptions Default = new(
         [.. Formats.Audio.Order(StringComparer.Ordinal)],
         [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff"],
-        [".mkv", ".avi", ".mov", ".wmv", ".m4v", ".webm", ".mpg", ".mpeg", ".vob"]);
+        [".mkv", ".avi", ".mov", ".wmv", ".m4v", ".webm", ".mpg", ".mpeg", ".vob"],
+        [".cue", ".m3u", ".m3u8", ".pls", ".wpl", ".xspf", ".asx"]);
 
     public List<string> Validate()
     {
@@ -122,15 +125,17 @@ public sealed record TidyOptions(IReadOnlyList<string> MusicTypes, IReadOnlyList
         problems.AddRange(MusicTypes.Where(e => !Formats.IsAudio(e)).Select(e => $"Music file types: '{e}' isn't a music format Refrain reads"));
         Check("Pictures", Pictures);
         Check("Videos", Videos);
-        foreach (var e in Pictures.Concat(Videos).Where(Formats.IsAudio))
-            problems.Add($"'{e}' is a music format, so it can't be offered as a picture or a video");
+        Check("Other files", Others);
+        foreach (var e in Pictures.Concat(Videos).Concat(Others).Where(Formats.IsAudio))
+            problems.Add($"'{e}' is a music format, so Tidy can't offer it");
         return problems;
     }
 
     public static TidyOptions From(JsonElement? saved) => new(
         Saved.Strings(saved, "music_types") ?? Default.MusicTypes,
         Saved.Strings(saved, "pictures") ?? Default.Pictures,
-        Saved.Strings(saved, "videos") ?? Default.Videos);
+        Saved.Strings(saved, "videos") ?? Default.Videos,
+        Saved.Strings(saved, "others") ?? Default.Others);
 
     public void Write(Utf8JsonWriter json)
     {
@@ -138,6 +143,7 @@ public sealed record TidyOptions(IReadOnlyList<string> MusicTypes, IReadOnlyList
         Saved.Write(json, "music_types", MusicTypes);
         Saved.Write(json, "pictures", Pictures);
         Saved.Write(json, "videos", Videos);
+        Saved.Write(json, "others", Others);
         json.WriteEndObject();
     }
 }

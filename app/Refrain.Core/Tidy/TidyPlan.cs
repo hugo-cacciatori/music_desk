@@ -346,7 +346,7 @@ public static class Tidying
                 album.ReplayGain = ReplayGainNeeded(folder, album.Folders.Skip(1).Select(f => f.Folder), replayGain, own.Images);
             plan.Albums.Add(album);
         }
-        PlaceClutter(plan, Clutter.Find(root, ClutterLists.Of(tidy), cancel), replayGain);
+        PlaceClutter(plan, Clutter.Find(root, ClutterLists.Of(tidy), cancel).Where(item => !Needed(plan, item)).ToList(), replayGain);
         cancel.ThrowIfCancellationRequested();
         progress?.Invoke(found.Count, found.Count, "");
         return plan;
@@ -377,6 +377,18 @@ public static class Tidying
         for (var i = 0; parts.All(p => p.Length > i) && parts.All(p => p[i].Equals(parts[0][i], StringComparison.OrdinalIgnoreCase)); i++)
             common.Add(parts[0][i]);
         return common.Count == 0 ? "" : common.Count == 1 ? common[0] + "\\" : string.Join("\\", common);
+    }
+
+    /// <summary>A file the clutter lists name but that isn't clutter here (SPEC §36 "For later"): a split image's sheet,
+    /// already offered as "cue sheet of …", and the sheets of a folder the run skips, the only way to split it by hand.</summary>
+    static bool Needed(TidyPlan plan, OfferItem item)
+    {
+        if (item.IsFolder) return false;
+        var folder = Path.GetDirectoryName(item.Path)!;
+        return plan.AllFolders.Any(f =>
+            f.Offer.Contains(item.Path, StringComparer.OrdinalIgnoreCase) ||
+            f.Kind == FolderKind.Skipped && f.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase) &&
+            Path.GetExtension(item.Path).Equals(".cue", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Each item under its album (its folder, or one of the album's keyword subfolders and what they hold),
@@ -431,12 +443,13 @@ public static class TidyText
         return actions;
     }
 
-    /// <summary>"Offer 3 pictures, 1 video, 1 folder".</summary>
+    /// <summary>"Offer 3 pictures, 1 video, 2 other files, 1 folder".</summary>
     public static string ClutterText(IReadOnlyList<OfferItem> items)
     {
         (int Count, string Noun)[] counts =
         [
             (items.Count(i => i.Why == Clutter.PictureBesideMusic), "picture"), (items.Count(i => i.Why == Clutter.VideoBesideMusic), "video"),
+            (items.Count(i => i.Why == Clutter.OtherBesideMusic), "other file"),
             (items.Count(i => i.IsFolder), "folder"),
         ];
         return "Offer " + string.Join(", ", counts.Where(c => c.Count > 0).Select(c => ReplayGain.Report.Plural(c.Count, c.Noun)));
@@ -468,7 +481,7 @@ public static class TidyText
                                   "image and its cue sheet) and the files offered are kept; you choose which to recycle at the end.";
 
     /// <summary>What the redundant files list says first, under Tidy's report.</summary>
-    public const string OfferIntro = "Tidy made these files redundant (split images and their cue sheets), or found them beside the music (pictures, videos, folders holding nothing else). Every box is " +
+    public const string OfferIntro = "Tidy made these files redundant (split images and their cue sheets), or found them beside the music (pictures, videos, cue sheets and playlists, folders holding nothing else). Every box is " +
         "checked: uncheck what to keep, then click Delete selected to send the rest to the Recycle Bin. Closing this " +
         "window keeps them all.";
 }

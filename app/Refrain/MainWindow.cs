@@ -1291,15 +1291,41 @@ public sealed partial class MainWindow : Window
     async Task ShowAbout()
     {
         var version = typeof(MainWindow).Assembly.GetName().Version;
+        var content = new StackPanel { Spacing = 12 };
+        content.Children.Add(new TextBlock
+        {
+            Text = $"Version {version?.ToString(3)} (preview of the rebuild)\n\nIts index and settings: {AppPaths.DataFolder}\n\n" +
+                   "Licence: GPL-3.0-or-later. Refrain ships with these components:",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        // The Python app's About table (SPEC §12): name, version, licence; the texts are in the licences folder.
+        var table = new Grid { ColumnSpacing = 16, RowSpacing = 2 };
+        foreach (var width in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star) })
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = width });
+        for (var i = 0; i < Licenses.Components.Length; i++)
+        {
+            var component = Licenses.Components[i];
+            table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            string[] cells = [component.Name, component.Version, component.Licence];
+            for (var column = 0; column < cells.Length; column++)
+            {
+                var cell = new TextBlock { Text = cells[column], TextWrapping = TextWrapping.Wrap };
+                Grid.SetRow(cell, i);
+                Grid.SetColumn(cell, column);
+                table.Children.Add(cell);
+            }
+        }
+        content.Children.Add(table);
         var dialog = new ContentDialog
         {
             Title = "Refrain",
-            Content = $"Version {version?.ToString(3)} (preview of the rebuild)\n\n" +
-                      $"Its index and settings: {AppPaths.DataFolder}\n\nLicence: GPL-3.0-or-later.",
+            Content = new ScrollViewer { Content = content },
+            PrimaryButtonText = "Open licences folder",
             CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
             XamlRoot = Content.XamlRoot,
         };
-        await dialog.ShowAsync();
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) Shell.Reveal(Licenses.Folder, select: false);
     }
 
     /// <summary>An agent's window check (SPEC §36 "7."): the window stays beyond every monitor, out of the taskbar and

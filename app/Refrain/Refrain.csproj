@@ -47,6 +47,8 @@
     <Content Include="..\..\resources\rsgain\**" Link="rsgain\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- flac too: the cue split and Trim cut and prove with it. -->
     <Content Include="..\..\resources\flac\**" Link="flac\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The licence texts, which About opens (SPEC §36 "10."). -->
+    <Content Include="..\..\resources\licenses\**" Link="licenses\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

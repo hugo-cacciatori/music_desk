@@ -10,7 +10,7 @@ namespace Refrain;
 /// with no window, from a copy outside the repository on an empty data folder, through what a published build can
 /// break (Native AOT trims what is only reached by reflection; a bundled file may be missing): the index, the settings,
 /// tags read and written by TagLib#, flac's cut and decode, rsgain, the right-click handler and the keyword's helper
-/// beside the app. Exit code 0 when every check passed; the report says what each found.</summary>
+/// beside the app, and the licence texts. Exit code 0 when every check passed; the report says what each found.</summary>
 static class SelfTest
 {
     public static int Run(string report)
@@ -56,6 +56,12 @@ static class SelfTest
                          ("keyword helper", Path.Combine(AppContext.BaseDirectory, "RefrainHere.exe")),
                      })
                 Check(name + " present", () => File.Exists(path) ? path : throw new FileNotFoundException("missing", path));
+            Check("licences", () =>
+            {
+                var missing = Licenses.Files().Where(f => !File.Exists(Path.Combine(Licenses.Folder, f))).ToList();
+                if (missing.Count > 0) throw new FileNotFoundException("missing: " + string.Join(", ", missing));
+                return $"{Licenses.Files().Count()} files in {Licenses.Folder}";
+            });
             Check("flac runs", () => Flac.Version(Flac.Exe) ?? throw new InvalidOperationException("no version"));
             Check("rsgain runs", () => Rsgain.Version(Rsgain.Exe) ?? throw new InvalidOperationException("no version"));
             Check("tags and the cut", () =>

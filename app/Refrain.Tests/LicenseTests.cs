@@ -60,7 +60,7 @@ public sealed class LicenseTests
         var present = Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.OrdinalIgnoreCase);
         Assert.Equal(Licenses.Files().Order(StringComparer.OrdinalIgnoreCase), present);
         var readme = File.ReadAllText(Path.Combine(folder, "README.txt"));
-        foreach (var file in Licenses.Files().Skip(2))
+        foreach (var file in Licenses.Components.SelectMany(c => c.Files).Append("GPL-3.0-exception.txt"))
             Assert.Contains(file, readme);
     }
 }

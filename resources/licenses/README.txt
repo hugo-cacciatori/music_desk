@@ -1,5 +1,6 @@
-Refrain is free software under the GNU General Public License, version 3 or later (GPL-3.0-or-later); its
-licence text is GPL-3.0.txt.
+Refrain is free software under the GNU General Public License, version 3 or later (GPL-3.0-or-later), with an
+additional permission to combine it with the Windows App SDK and the Windows SDK projection for .NET; its licence
+text is GPL-3.0.txt, and the permission is GPL-3.0-exception.txt.
 
 Refrain ships with these third-party components. Their licence texts are in this folder.
 
@@ -9,6 +10,9 @@ Refrain ships with these third-party components. Their licence texts are in this
     Refrain.exe)
   Windows App SDK 2.6.4           Microsoft Software    WindowsAppSDK-license.txt, WindowsAppSDK-NOTICE.txt,
     (WinUI 3)                     Licence Terms         WinUI-NOTICE.txt
+  Windows SDK projection          Windows SDK licence   https://aka.ms/WinSDKLicenseURL (its package ships no
+    10.0.19041.57 (C#/WinRT,      terms                 text)
+    built into Refrain.exe)
   WebView2 loader 1.0.3719.77     BSD-3-Clause          WebView2-BSD.txt
     (with the Windows App SDK)
   TagLib# 2.3.0                   LGPL-2.1              LGPL-2.1.txt

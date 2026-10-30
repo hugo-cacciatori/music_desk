@@ -10,7 +10,8 @@ public static class Licenses
 {
     public static string Folder => Path.Combine(AppContext.BaseDirectory, "licenses");
 
-    public const string Own = "GPL-3.0.txt";
+    /// <summary>Refrain's own licence: the GPL and its exception for Microsoft's libraries (SPEC §36 "10.").</summary>
+    public static readonly string[] Own = ["GPL-3.0.txt", "GPL-3.0-exception.txt"];
 
     public static readonly Component[] Components =
     [
@@ -19,6 +20,8 @@ public static class Licenses
             ["WindowsAppSDK-license.txt", "WindowsAppSDK-NOTICE.txt", "WinUI-NOTICE.txt"],
             ["Microsoft.WindowsAppSDK.WinUI", "Microsoft.WindowsAppSDK.Base", "Microsoft.WindowsAppSDK.Foundation",
              "Microsoft.WindowsAppSDK.InteractiveExperiences"]),
+        // Compiled into Refrain.exe; its package ships no text: README.txt gives the terms' address.
+        new("Windows SDK projection (C#/WinRT)", "10.0.19041.57", "Windows SDK licence terms", [], []),
         new("WebView2 loader (with the Windows App SDK)", "1.0.3719.77", "BSD-3-Clause", ["WebView2-BSD.txt"], ["Microsoft.Web.WebView2"]),
         new("TagLib#", "2.3.0", "LGPL-2.1", ["LGPL-2.1.txt"], ["TagLibSharp"]),
         new("Microsoft.Data.Sqlite", "10.0.14", "MIT", ["dotnet-MIT.txt"], ["Microsoft.Data.Sqlite", "Microsoft.Data.Sqlite.Core"]),
@@ -35,5 +38,5 @@ public static class Licenses
 
     /// <summary>Every file the list names, Refrain's own licence and the README first.</summary>
     public static IEnumerable<string> Files() =>
-        new[] { Own, "README.txt" }.Concat(Components.SelectMany(c => c.Files)).Distinct();
+        Own.Append("README.txt").Concat(Components.SelectMany(c => c.Files)).Distinct();
 }

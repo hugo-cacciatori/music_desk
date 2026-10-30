@@ -1295,7 +1295,7 @@ public sealed partial class MainWindow : Window
         content.Children.Add(new TextBlock
         {
             Text = $"Version {version?.ToString(3)} (preview of the rebuild)\n\nIts index and settings: {AppPaths.DataFolder}\n\n" +
-                   "Licence: GPL-3.0-or-later. Refrain ships with these components:",
+                   "Licence: GPL-3.0-or-later, with an exception for the Windows App SDK. Refrain ships with these components:",
             TextWrapping = TextWrapping.Wrap,
         });
         // The Python app's About table (SPEC §12): name, version, licence; the texts are in the licences folder.

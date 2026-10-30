@@ -88,7 +88,9 @@ real library.
 
 ## Licence
 
-Refrain is free software under the [GNU General Public License, version 3 or later](LICENSE). It bundles rsgain
+Refrain is free software under the [GNU General Public License, version 3 or later](LICENSE), with an
+[additional permission](resources/licenses/GPL-3.0-exception.txt) to combine it with the Windows App SDK and the
+Windows SDK projection for .NET, whose source isn't published. It bundles rsgain
 (BSD-2-Clause) with FFmpeg (LGPL-2.1-or-later) and Fraunhofer FDK AAC, and flac (GPL-2.0-or-later, with libFLAC
 under Xiph's BSD-style licence); their licence texts are in [`resources/licenses/`](resources/licenses/). It is
-built on .NET and the Windows App SDK (MIT), and uses TagLib# (LGPL-2.1) and SQLite (public domain).
+built on .NET (MIT) and the Windows App SDK (Microsoft Software License Terms), and uses TagLib# (LGPL-2.1) and SQLite (public domain).

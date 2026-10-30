@@ -40,31 +40,44 @@ public static partial class Program
             return 1;
         }
         WinRT.ComWrappersSupport.InitializeComWrappers();
+        App? app = null;
         Application.Start(init =>
         {
             SynchronizationContext.SetSynchronizationContext(
                 new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread()));
-            _ = new App(instance, request);  // lives on as Application.Current
+            app = new App(instance, request);  // lives on as Application.Current
         });
+        app?.CloseLibrary();  // the index closed cleanly once the last window is gone
         instance?.Dispose();
         return 0;
     }
 }
 
-/// <summary>The app's windows: the main window, the Options window shared by the … menu and Explorer's Settings entry,
-/// and each task's own window (SPEC §35). The process ends when its last window closes.</summary>
+/// <summary>The app's windows: the Search window, the Options window shared by its … menu and Explorer's Settings
+/// entry, and each task's own window (SPEC §35, §36 "11."). The process ends when its last window closes.</summary>
 public partial class App : Application
 {
     readonly Instance? instance;
     readonly StartRequest request;
     readonly Settings settings = Settings.Load(AppPaths.Settings);
-    MainWindow? window;
+    SearchWindow? window;
     OptionsWindow? options;
+    Library? library;
 
-    /// <summary>The process's one set of path locks: every task window and the main window share it (SPEC §35).</summary>
+    /// <summary>The process's one set of path locks: every task window and the Search window share it (SPEC §35).</summary>
     public PathLocks Locks { get; } = new();
 
     public Settings Settings => settings;
+
+    /// <summary>The index, its indexer and LRCLIB lookups: one for the process, opened by the first window that needs it
+    /// (Search, or Options' Library page), closed when the app ends.</summary>
+    public Library Library => library ??= new Library(AppPaths.Database);
+
+    public void CloseLibrary()
+    {
+        library?.Dispose();
+        library = null;
+    }
 
     public App(Instance? instance, StartRequest request)
     {
@@ -85,8 +98,8 @@ public partial class App : Application
         Handle(request);
     }
 
-    /// <summary>A start's request: Settings opens only the Options window (SPEC §31 "Settings"); anything else needs
-    /// the main window.</summary>
+    /// <summary>A start's request: Settings opens only the Options window (SPEC §31 "Settings"), a task entry its own
+    /// window; anything else (Explorer's Search entry, a folder, an empty start) the Search window.</summary>
     void Handle(StartRequest start)
     {
         if (start.Entry == "settings")
@@ -96,15 +109,16 @@ public partial class App : Application
         }
         if (start.Entry is { } entry && IsTask(entry))
         {
-            _ = RunEntry(entry, start.Paths);
+            RunEntry(entry, start.Paths);
             return;
         }
         if (window is null)
         {
-            window = new MainWindow(start, settings);
+            window = new SearchWindow(Library, settings);
             window.Closed += (_, _) => window = null;
-            if (MainWindow.Offscreen) window.AppWindow.Show(activateWindow: false);  // an agent's check: never the focus
+            if (SearchWindow.Offscreen) window.AppWindow.Show(activateWindow: false);  // an agent's check: never the focus
             else window.Activate();
+            if (!start.IsEmpty) _ = window.OpenFromOutside(start);
             return;
         }
         _ = window.OpenFromOutside(start);
@@ -123,12 +137,10 @@ public partial class App : Application
         ReplayGainKinds.ContainsKey(entry) ||
         entry is MenuLogic.RemoveReplayGain or MenuLogic.Tidy or MenuLogic.Split or MenuLogic.EditCue or MenuLogic.NewCue or MenuLogic.Trim;
 
-    /// <summary>A task entry, from Explorer or from the app (SPEC §35): unsaved Metadata edits on the files it changes
-    /// are asked about first, then the task opens its own window, which alone comes to the front.</summary>
-    public async Task RunEntry(string entry, IReadOnlyList<string> paths)
+    /// <summary>A task entry from Explorer (SPEC §35): the task opens its own window, which alone comes to the front.</summary>
+    public void RunEntry(string entry, IReadOnlyList<string> paths)
     {
         if (paths.Count == 0) return;
-        if (window is not null && !await window.AllowChanges(paths)) return;
         var replayGain = settings.GetReplayGain();
         if (ReplayGainKinds.TryGetValue(entry, out var kind))
         {
@@ -177,7 +189,7 @@ public partial class App : Application
     {
         if (options is null)
         {
-            options = new OptionsWindow(settings, () => settings.Save(AppPaths.Settings), examplePath);
+            options = new OptionsWindow(settings, () => settings.Save(AppPaths.Settings), examplePath, () => Library);
             options.Closed += (_, _) => options = null;
         }
         options.ShowWindow();

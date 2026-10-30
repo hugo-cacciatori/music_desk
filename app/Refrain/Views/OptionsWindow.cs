@@ -4,19 +4,21 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Refrain.Core;
+using Refrain.Core.Index;
 using Refrain.Core.Options;
 using Refrain.Core.Tags;
 using Windows.Graphics;
 
 namespace Refrain.Views;
 
-/// <summary>The Options window (SPEC §12, §36 "8."): every setting, and only there. Pages File names, ReplayGain,
-/// Tidy, Split and Trim; each saves as it changes, shows its problems inline and has Restore defaults; Restore all defaults sits
-/// beside Close. The same window from the app's … menu and from Explorer's Settings entry.</summary>
+/// <summary>The Options window (SPEC §12, §36 "8.", "11."): every setting, and only there. Pages Library (the library
+/// folders: add, rescan, remove), File names, ReplayGain, Tidy, Split and Trim; each setting page saves as it changes,
+/// shows its problems inline and has Restore defaults; Restore all defaults sits beside Close. The same window from the app's … menu and from Explorer's Settings entry.</summary>
 public sealed partial class OptionsWindow : Window
 {
     readonly Settings settings;
     readonly Action save;
+    readonly Func<Library> library;
     readonly ListView pages = new() { SelectionMode = ListViewSelectionMode.Single, Width = 200 };
     readonly ScrollViewer content = new() { HorizontalScrollMode = ScrollMode.Disabled, Padding = new Thickness(24, 16, 24, 16) };
     readonly string? examplePath;
@@ -25,13 +27,15 @@ public sealed partial class OptionsWindow : Window
 
     /// <summary><paramref name="examplePath"/>: what the File names example reads its first track from (the
     /// right-clicked item, or the app's open folder).</summary>
-    public OptionsWindow(Settings settings, Action save, string? examplePath)
+    public OptionsWindow(Settings settings, Action save, string? examplePath, Func<Library> library)
     {
         this.settings = settings;
+        this.library = library;
         this.save = save;
         this.examplePath = examplePath;
         Ui.Prepare(this, "Refrain · Options");
 
+        builders["Library"] = LibraryPage;
         builders["File names"] = FileNamesPage;
         builders["ReplayGain"] = ReplayGainPage;
         builders["Tidy"] = TidyPage;
@@ -157,6 +161,97 @@ public sealed partial class OptionsWindow : Window
         text.Split(',').Select(k => k.Trim()).Where(k => k.Length > 0).ToList();
 
     // -- the pages --
+
+    /// <summary>The library folders (SPEC §3, §36 "11."; the folder tree's menu before): each with Rescan and Remove…,
+    /// and Add a folder…. Not a setting: no Restore defaults, and Restore all defaults leaves it alone.</summary>
+    FrameworkElement LibraryPage()
+    {
+        var page = Page("Library", "The folders Refrain indexes and searches. Removing one only takes it out of the " +
+                                   "library: nothing on disk changes.");
+        var rows = new StackPanel { Spacing = 4 };
+        var status = Ui.Secondary();
+        var add = Ui.Button("Add a folder…", "Add a music folder to the library; its files are indexed in the background");
+        page.Children.Add(rows);
+        page.Children.Add(add);
+        page.Children.Add(status);
+        var lib = library();
+        var queue = DispatcherQueue;
+
+        async Task Fill()
+        {
+            var roots = await Task.Run(() =>
+            {
+                using var conn = lib.Db.Read();
+                return Roots.All(conn).Select(r => (Root: r, Top: Queries.TopEntry(conn, r.Id))).ToList();
+            });
+            rows.Children.Clear();
+            if (roots.Count == 0) rows.Children.Add(Ui.Secondary("No folder yet."));
+            foreach (var (root, top) in roots)
+            {
+                var row = new Grid { ColumnSpacing = 8 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.Children.Add(new TextBlock
+                {
+                    Text = root.Online ? root.Path : $"{root.Path} (offline)",
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                });
+                var rescan = Ui.Button("Rescan", "Read this folder again from the disk");
+                rescan.IsEnabled = top is not null;
+                rescan.Click += (_, _) =>
+                {
+                    if (top is { } id) lib.Indexer.Urgent(id);
+                    status.Text = $"Rescanning {root.Path}…";
+                };
+                Grid.SetColumn(rescan, 1);
+                row.Children.Add(rescan);
+                var remove = Ui.Button("Remove…", "Take this folder out of the library; nothing on disk changes");
+                remove.Click += async (_, _) =>
+                {
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Remove from library?",
+                        Content = $"{root.Path} leaves the library. Nothing on disk changes, but adding it back means " +
+                                  "indexing it again from scratch.",
+                        PrimaryButtonText = "Remove",
+                        CloseButtonText = "Cancel",
+                        DefaultButton = ContentDialogButton.Close,
+                        XamlRoot = Content.XamlRoot,
+                    };
+                    if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+                    await lib.Remove(root.Id);
+                    status.Text = $"{root.Path} was removed from the library.";
+                };
+                Grid.SetColumn(remove, 2);
+                row.Children.Add(remove);
+                rows.Children.Add(row);
+            }
+        }
+
+        add.Click += async (_, _) =>
+        {
+            var picker = new Windows.Storage.Pickers.FolderPicker();
+            picker.FileTypeFilter.Add("*");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            if (await picker.PickSingleFolderAsync() is not { } folder) return;
+            var result = await lib.Add(folder.Path);
+            status.Text = result.Outcome switch
+            {
+                AddOutcome.Merged => $"Added {result.Path}; the library folders inside it are now part of it.",
+                AddOutcome.Added => $"Added {result.Path}. Its folders are being indexed.",
+                AddOutcome.AlreadyRoot or AddOutcome.InsideRoot => $"{result.Path} is already in the library.",
+                AddOutcome.IsAFile => $"{result.Path} is a file; add the folder that holds it.",
+                _ => $"{result.Path} can't be opened as a folder.",
+            };
+        };
+        void Changed() => queue.TryEnqueue(() => _ = Fill());
+        lib.RootsChanged += Changed;
+        page.Unloaded += (_, _) => lib.RootsChanged -= Changed;
+        _ = Fill();
+        return page;
+    }
 
     FrameworkElement FileNamesPage()
     {

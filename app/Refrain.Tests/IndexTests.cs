@@ -68,8 +68,6 @@ public sealed class IndexTests : IDisposable
         Assert.Equal("FLAC", first.Format);
         Assert.True(first.Duration > 0);
         Assert.Contains(rows, r => r is { Name: "CD2", IsDir: true });
-        var stats = Read(conn => Queries.ChildFolders(conn, FolderOf(music)));
-        Assert.True(stats.Single().TrackCount >= rows.Count(r => r.IsRead && r.ReadError is null));
     }
 
     [Fact]
@@ -197,22 +195,6 @@ public sealed class IndexTests : IDisposable
         Assert.Empty(Read(Roots.All));
         Assert.Equal(0L, Read(conn => conn.Scalar("SELECT count(*) FROM search")));
         Assert.True(File.Exists(Path.Combine(music, "Fixture Artist - Fixture Album", "01 First.flac")));
-    }
-
-    [Fact]
-    public void A_folder_summary_counts_its_subtree()
-    {
-        var music = Library();
-        Scan(Add(music).RootId!.Value);
-        var album = FolderOf(Path.Combine(music, "Fixture Artist - Fixture Album"));
-        var summary = Read(conn => FolderSummary.Read(conn, album))!;
-        var cd2 = Read(conn => FolderSummary.Read(conn, FolderOf(Path.Combine(music, "Fixture Artist - Fixture Album", "CD2"))))!;
-        Assert.Equal("Fixture Artist - Fixture Album", summary.Name);
-        Assert.True(summary.Tracks > cd2.Tracks && cd2.Tracks > 0);  // the subtree, CD2 included
-        Assert.Contains("FLAC", summary.Formats);
-        Assert.Contains("MP3", summary.Formats);
-        Assert.True(summary.Subfolders >= 1 && summary.Files >= 1);
-        Assert.True(summary.Duration > 0);
     }
 
     [Fact]

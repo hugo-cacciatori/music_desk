@@ -5,24 +5,9 @@ using Xunit;
 
 namespace Refrain.Tests;
 
-/// <summary>The browser's plain pieces (SPEC §5): history, columns and their sort, and the remembered settings.</summary>
+/// <summary>The results list's plain pieces (SPEC §5): columns and their sort, and the remembered settings.</summary>
 public sealed class BrowserTests
 {
-    [Fact]
-    public void History_goes_back_and_forward_and_skips_folders_gone()
-    {
-        var history = new History();
-        foreach (var id in new long[] { 1, 2, 3, 4 }) history.Open(id);
-        Assert.Equal(3, history.Back(_ => true));
-        Assert.Equal(1, history.Back(id => id != 2));  // 2 left the index
-        Assert.False(history.CanGoBack);
-        Assert.Equal(3, history.Forward(_ => true));
-        history.Open(9);  // a new folder clears the forward stack
-        Assert.False(history.CanGoForward);
-        Assert.Equal(3, history.Back(_ => true));
-        Assert.Null(new History().Back(_ => true));
-    }
-
     static FileRow Row(long id, string name, bool dir = false, string? title = null, long? track = null) =>
         new() { Id = id, Name = name, IsDir = dir, Ext = dir ? null : ".flac", Title = title, Track = track };
 

@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Refrain.Tests;
 
-/// <summary>Play (SPEC §14), starts from outside (SPEC §29) and the right-click handler (SPEC §31, §36 "7.").</summary>
+/// <summary>Preview sheets (SPEC §22), starts from outside (SPEC §29) and the right-click handler (SPEC §31, §36 "7.").</summary>
 public sealed class StartTests : IDisposable
 {
     readonly TempFolder temp = new();
@@ -14,56 +14,18 @@ public sealed class StartTests : IDisposable
     public void Dispose() => temp.Dispose();
 
     [Fact]
-    public void A_playlist_is_extended_m3u_of_audio_files_only()
-    {
-        var text = Playlists.Render([
-            new PlayEntry(@"D:\Music\01 Airbag.flac", 284.4, "Radiohead", "Airbag"),
-            new PlayEntry(@"D:\Music\02 Untitled.mp3", null, "Radiohead", " "),
-            new PlayEntry(@"D:\Music\cover.jpg", null, null, null),
-        ]);
-        Assert.Equal("#EXTM3U\r\n#EXTINF:284,Radiohead - Airbag\r\nD:\\Music\\01 Airbag.flac\r\n" +
-                     "#EXTINF:-1,02 Untitled\r\nD:\\Music\\02 Untitled.mp3\r\n", text);
-    }
-
-    [Fact]
-    public void The_newest_twenty_playlists_are_kept_and_nothing_else_is_touched()
+    public void The_newest_twenty_preview_sheets_are_kept_and_nothing_else_is_touched()
     {
         var folder = temp.Sub("playlists");
         File.WriteAllText(Path.Combine(folder, "mine.m3u8"), "");
         var start = new DateTime(2026, 10, 29, 12, 0, 0);
         string? last = null;
-        for (var i = 0; i < 23; i++) last = Playlists.Write([new PlayEntry(@"D:\a.flac", 1, null, "a")], folder, start.AddSeconds(i / 2));
-        var kept = Directory.GetFiles(folder, "play-*.m3u8");
+        for (var i = 0; i < 23; i++) last = Playlists.WritePreview("FILE \"a.wav\" WAVE\r\n", folder, start.AddSeconds(i / 2));
+        var kept = Directory.GetFiles(folder, "preview-*.cue");
         Assert.Equal(20, kept.Length);
         Assert.Contains(last, kept);
-        Assert.Contains(kept, f => f.EndsWith("-2.m3u8"));  // two in one second
+        Assert.Contains(kept, f => f.EndsWith("-2.cue"));  // two in one second
         Assert.True(File.Exists(Path.Combine(folder, "mine.m3u8")));
-        Assert.Equal(new System.Text.UTF8Encoding(false).GetBytes("#"), File.ReadAllBytes(last!)[..1]);  // no BOM
-    }
-
-    [Fact]
-    public async Task Play_folder_goes_folder_by_folder_and_play_selection_skips_folders()
-    {
-        var music = temp.Sub("Music");
-        Setup.Copy(Path.Combine(Setup.Fixtures, "album"), music);
-        using var db = new Database(Path.Combine(temp.Path, "library.db"));
-        using (var indexer = new Indexer(db))
-        {
-            var root = await db.Write((c, t) => Roots.Add(c, t, music));
-            indexer.ScanRoot(root.RootId!.Value);
-            indexer.WaitIdle();
-        }
-        using var conn = db.Read();
-        var album = Queries.Find(conn, Path.Combine(music, "Fixture Artist - Fixture Album"))!.Value.Id;
-        var own = Playlists.ForFolder(conn, album, subfolders: false);
-        var all = Playlists.ForFolder(conn, album, subfolders: true);
-        Assert.Equal("01 First.flac", Path.GetFileName(own[0].Path));
-        Assert.True(all.Count > own.Count);
-        Assert.Equal(own, all[..own.Count]);  // the folder's own files first
-        Assert.All(all, e => Assert.True(Formats.IsAudio(Path.GetExtension(e.Path))));
-        var cd2 = Queries.Find(conn, Path.Combine(music, "Fixture Artist - Fixture Album", "CD2"))!.Value.Id;
-        var first = Queries.Find(conn, Path.Combine(music, "Fixture Artist - Fixture Album", "01 First.flac"))!.Value.Id;
-        Assert.Equal([own[0].Path], Playlists.ForIds(conn, [cd2, first]).Select(e => e.Path));
     }
 
     [Fact]

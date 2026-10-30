@@ -39,6 +39,3 @@ public sealed record FileRow
     /// <summary>What a screen reader says for a list item: its name, not every field.</summary>
     public override string ToString() => Name;
 }
-
-/// <summary>A folder of the tree: its name, and whether it has subfolders to expand.</summary>
-public sealed record FolderNode(long Id, string Name, bool HasSubfolders, long TrackCount);

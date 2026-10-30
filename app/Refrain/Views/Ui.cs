@@ -34,7 +34,7 @@ static class Ui
         window.SystemBackdrop = new MicaBackdrop();
         window.AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "refrain.ico"));
         window.AppWindow.Resize(new SizeInt32(560, 240));
-        if (!MainWindow.Offscreen) return;
+        if (!SearchWindow.Offscreen) return;
         var areas = DisplayArea.FindAll();
         var right = 0;
         for (var i = 0; i < areas.Count; i++) right = Math.Max(right, areas[i].OuterBounds.X + areas[i].OuterBounds.Width);
@@ -68,7 +68,7 @@ static class Ui
             var height = Math.Min(root.DesiredSize.Height, maxHeight);
             window.AppWindow.ResizeClient(new SizeInt32((int)Math.Ceiling(width * scale), (int)Math.Ceiling(height * scale)));
             root.InvalidateMeasure();
-            if (MainWindow.Offscreen) return;
+            if (SearchWindow.Offscreen) return;
             var (position, size) = (window.AppWindow.Position, window.AppWindow.Size);
             var x = Math.Clamp(position.X, area.X, Math.Max(area.X, area.X + area.Width - size.Width));
             var y = Math.Clamp(position.Y, area.Y, Math.Max(area.Y, area.Y + area.Height - size.Height));
@@ -79,7 +79,7 @@ static class Ui
     /// <summary>Shows a window: activated normally, never taking the focus in an agent's off-screen check.</summary>
     public static void Show(Window window)
     {
-        if (MainWindow.Offscreen) window.AppWindow.Show(activateWindow: false);
+        if (SearchWindow.Offscreen) window.AppWindow.Show(activateWindow: false);
         else window.Activate();
     }
 

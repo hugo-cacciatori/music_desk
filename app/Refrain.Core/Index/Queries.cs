@@ -71,22 +71,6 @@ public static class Queries
         return rows;
     }
 
-    /// <summary>Subfolders in Explorer's natural order, for the tree.</summary>
-    public static List<FolderNode> ChildFolders(SqliteConnection conn, long parentId)
-    {
-        using var cmd = conn.Command("""
-            SELECT e.id, e.name, EXISTS (SELECT 1 FROM entries c WHERE c.parent_id = e.id AND c.is_dir = 1),
-                   coalesce(s.n_tracks, 0)
-            FROM entries e LEFT JOIN folder_stats s ON s.entry_id = e.id
-            WHERE e.parent_id = $p AND e.is_dir = 1
-            """, null, ("$p", parentId));
-        using var r = cmd.ExecuteReader();
-        var folders = new List<FolderNode>();
-        while (r.Read()) folders.Add(new FolderNode(r.GetInt64(0), r.GetString(1), r.GetInt64(2) != 0, r.GetInt64(3)));
-        folders.Sort((a, b) => NaturalOrder.Instance.Compare(a.Name, b.Name));
-        return folders;
-    }
-
     /// <summary>The top entry of each root, by root id.</summary>
     public static long? TopEntry(SqliteConnection conn, long rootId) =>
         (long?)conn.Scalar("SELECT id FROM entries WHERE root_id = $r AND parent_id IS NULL", null, ("$r", rootId));
@@ -141,19 +125,4 @@ public static class Queries
         }
         return (current, true);
     }
-
-    /// <summary>The nearest ancestor of a vanished entry that is still indexed, from a remembered chain of ids.</summary>
-    public static long? NearestSurviving(SqliteConnection conn, IEnumerable<long> chainFromTop)
-    {
-        long? found = null;
-        foreach (var id in chainFromTop)
-        {
-            if (conn.Scalar("SELECT 1 FROM entries WHERE id = $id", null, ("$id", id)) is null) break;
-            found = id;
-        }
-        return found;
-    }
-
-    public static bool Exists(SqliteConnection conn, long entryId) =>
-        conn.Scalar("SELECT 1 FROM entries WHERE id = $id", null, ("$id", entryId)) is not null;
 }

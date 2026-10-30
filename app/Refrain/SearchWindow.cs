@@ -49,6 +49,7 @@ public sealed partial class SearchWindow : Window
     readonly FileTable results;
     readonly CardList cards = new();
     readonly LyricsPage lyrics;
+    readonly DiscographyView discography = new();
     readonly Grid resultsPage = new();
     readonly Border resultsCard;
     readonly Border lyricsCard;
@@ -131,6 +132,8 @@ public sealed partial class SearchWindow : Window
         {
             await LoadRoots();
             if (!Offscreen) searchBox.Focus(FocusState.Programmatic);  // the search has the focus at start (SPEC §33)
+            // An agent's check opens what needs a double click by itself (SPEC §36 "7.": checks only read).
+            if (Offscreen && Environment.GetEnvironmentVariable("REFRAIN_CHECK_DISCOGRAPHY") is { Length: > 0 } track) await CheckDiscography(track);
         };
     }
 
@@ -214,6 +217,10 @@ public sealed partial class SearchWindow : Window
         body.Children.Add(lyricsSplitter);
         Grid.SetColumn(lyricsCard, 2);
         body.Children.Add(lyricsCard);
+        // The discography view covers the results and the lyrics while it is open (SPEC §36 "11.").
+        Grid.SetColumnSpan(discography, 3);
+        discography.Visibility = Visibility.Collapsed;
+        body.Children.Add(discography);
         return body;
     }
 
@@ -312,9 +319,12 @@ public sealed partial class SearchWindow : Window
         cards.MenuRequested += (rows, anchor, point) => ShowMenu(rows, anchor, point);
         cards.SelectionChanged += () => _ = ShowLyricsOf(cards.SelectedRows);
         cards.Clicked += () => _ = ShowLyricsOf(cards.SelectedRows);
+        cards.Activated += row => _ = OpenDiscography(row);
+        discography.Closed += CloseDiscography;
 
         searchBox.TextChanged += (_, _) =>
         {
+            if (discography.Visibility == Visibility.Visible) discography.Visibility = Visibility.Collapsed;  // a new search
             if (searchBox.Text.Trim().Length == 0)
             {
                 searchTimer.Stop();
@@ -401,6 +411,45 @@ public sealed partial class SearchWindow : Window
     async Task Reveal(FileRow row)
     {
         if (await Read(conn => Queries.PathOf(conn, row.Id)) is { } path) Shell.Reveal(path, select: !row.IsDir);
+    }
+
+    /// <summary>A lyrics result's double click (SPEC §36 "11."): its artist's discography, opened on its album with its
+    /// lyrics; the results stay as they are underneath.</summary>
+    async Task OpenDiscography(FileRow row)
+    {
+        if (mode != SearchMode.Lyrics) return;
+        var albums = await Read(conn => ArtistAlbums.For(conn, row.Id));
+        if (albums is null)
+        {
+            Status("This song has no artist in its tags, so it has no discography to show.");
+            return;
+        }
+        discography.Visibility = Visibility.Visible;
+        discography.Show(albums);
+    }
+
+    /// <summary>An agent's off-screen check (SPEC §36 "7."): the discography of <paramref name="track"/>, once the index
+    /// has it (a minute at most), as a double click on its lyrics result would open it.</summary>
+    async Task CheckDiscography(string track)
+    {
+        for (var tries = 0; tries < 60; tries++)
+        {
+            if (await Read(conn => Queries.Find(conn, track)) is { Exact: true } hit &&
+                await Read(conn => ArtistAlbums.For(conn, hit.Id)) is { } albums)
+            {
+                discography.Visibility = Visibility.Visible;
+                discography.Show(albums, allAlbums: Environment.GetEnvironmentVariable("REFRAIN_CHECK_ALBUMS") == "1");
+                return;
+            }
+            await Task.Delay(1000);
+        }
+        Log.Error($"Check: no discography for {track}");
+    }
+
+    void CloseDiscography()
+    {
+        discography.Visibility = Visibility.Collapsed;
+        if (!Offscreen) cards.List.Focus(FocusState.Keyboard);
     }
 
     /// <summary>The lyrics panel follows the clicked card: one track's lyrics, or why there are none.</summary>
@@ -565,6 +614,7 @@ public sealed partial class SearchWindow : Window
     void SetMode(SearchMode next)
     {
         mode = next;
+        discography.Visibility = Visibility.Collapsed;
         settings.SearchMode = next == SearchMode.Lyrics ? "lyrics" : "files";
         ApplyMode();
         ShowPage();

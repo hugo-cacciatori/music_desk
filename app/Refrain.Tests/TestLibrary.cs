@@ -12,17 +12,17 @@ static class Setup
         Environment.SetEnvironmentVariable("REFRAIN_DATA",
             Directory.CreateTempSubdirectory("refrain-tests-data-").FullName);
 
-    /// <summary>tests/fixtures/generated of the repository, found upward from the test binaries.</summary>
+    /// <summary>app/Refrain.Tests/Fixtures of the repository, found upward from the test binaries.</summary>
     public static string Fixtures
     {
         get
         {
             for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
             {
-                var candidate = Path.Combine(dir.FullName, "tests", "fixtures", "generated");
+                var candidate = Path.Combine(dir.FullName, "app", "Refrain.Tests", "Fixtures");
                 if (Directory.Exists(candidate)) return candidate;
             }
-            throw new DirectoryNotFoundException("tests/fixtures/generated not found");
+            throw new DirectoryNotFoundException("app/Refrain.Tests/Fixtures not found");
         }
     }
 

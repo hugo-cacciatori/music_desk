@@ -1,3 +1,2 @@
-# Fixtures and the frozen reference scripts must stay byte-exact (parity tests, cue/lrc/m3u line endings).
-tests/fixtures/generated/** -text
-tests/reference/** -text
+# The test fixtures must stay byte-exact (cue sheets' encodings and line endings, audio files).
+app/Refrain.Tests/Fixtures/** -text

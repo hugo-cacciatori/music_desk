@@ -68,43 +68,6 @@ public sealed class ReplayGainTests
                 print(json.dumps([rg.remove_replaygain(t) for t in args["tracks"]]))
             """, JsonSerializer.Serialize(new { mode, target, exe = Rsgain, tracks = tracks?.ToArray() }));
 
-    /// <summary>Every file of the tree: an audio file's tags as mutagen reads them (ID3 frames with their version),
-    /// a log file's exact text, other files by name.</summary>
-    internal static Dictionary<string, string?> Dump(string root)
-    {
-        var output = PythonApp.Execute("""
-            import hashlib, json, sys
-            from pathlib import Path
-            from mutagen import File
-            from refrain.core.formats import AUDIO_EXTENSIONS
-            args = json.load(sys.stdin)
-            root = Path(args["root"])
-            out = {}
-            for path in sorted(root.rglob("*")):
-                if not path.is_file():
-                    continue
-                key = str(path.relative_to(root))
-                if path.name == "replaygain.log":
-                    out[key] = path.read_bytes().decode("utf-8")
-                elif path.suffix.lower() in AUDIO_EXTENSIONS:
-                    audio = File(path)
-                    tags = audio.tags if audio is not None else None
-                    if tags is None:
-                        out[key] = "no tags"
-                        continue
-                    if hasattr(tags, "getall"):
-                        items = sorted([k, f.pprint()] for k, f in tags.items()) + [["version", str(tags.version)]]
-                    else:
-                        items = sorted([str(k).lower(), repr(v)] for k, v in tags.items())
-                    items += [["picture", hashlib.sha1(p.data).hexdigest()] for p in getattr(audio, "pictures", [])]
-                    out[key] = json.dumps(items, ensure_ascii=False)
-                else:
-                    out[key] = None
-            print(json.dumps(out))
-            """, JsonSerializer.Serialize(new { root }));
-        return JsonSerializer.Deserialize<Dictionary<string, string?>>(output)!;
-    }
-
     internal static string Mask(string text, string root)
     {
         text = text.Replace(root, "<ROOT>");
@@ -113,32 +76,14 @@ public sealed class ReplayGainTests
         return Regex.Replace(text, @"\d+\.\d s\b", "<N> s");
     }
 
-    /// <summary>The two trees hold the same files, tags and logs. Returns how many logs were compared. While recording,
-    /// the Python app's tree and the C# app's are read by mutagen and compared, and the C# tree as Refrain reads it is
-    /// recorded; a normal run compares the C# tree with that recording (SPEC §36 "10." step c).</summary>
+    /// <summary>The C# tree holds the files, tags and logs the Python app's held (SPEC §36 "10." step c): as Refrain
+    /// reads them, recorded when the Python app's tree and this one were proven equal by mutagen. Returns how many logs
+    /// there are.</summary>
     internal static int AssertSame(Twins twins)
     {
-        if (PythonApp.Recording) AssertSameAsPython(twins);
         var dump = TagDump.Of(twins.Cs);
         Assert.Equal(PythonApp.Recorded(dump, twins.Cs), dump);
         return Directory.GetFiles(twins.Cs, "replaygain.log", SearchOption.AllDirectories).Length;
-    }
-
-    static void AssertSameAsPython(Twins twins)
-    {
-        var (py, cs) = (Dump(twins.Py), Dump(twins.Cs));
-        Assert.Equal(py.Keys.Order(), cs.Keys.Order());
-        foreach (var (key, pyValue) in py)
-        {
-            if (Path.GetFileName(key) == "replaygain.log")
-                Assert.Equal(Mask(pyValue!, twins.Py), Mask(cs[key]!, twins.Cs));
-            else
-            {
-                // TagLib# writes an emptied WMA description as "" where mutagen leaves it out: the same empty comment.
-                var csValue = cs[key]?.Replace("""["description", "[ASFUnicodeAttribute('')]"], """, "");
-                Assert.True(pyValue == csValue, $"{key}\nPython: {pyValue}\nC#:     {csValue}");
-            }
-        }
     }
 
     [Fact]

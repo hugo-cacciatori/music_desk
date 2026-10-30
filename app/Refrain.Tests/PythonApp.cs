@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -8,10 +7,12 @@ using Xunit;
 namespace Refrain.Tests;
 
 /// <summary>The Python app's answers (SPEC §36 "8.": parity measured, not assumed; "10." step c: kept once it is gone).
-/// Each call's answer was recorded from the Python app's own code, run on the same input as the C# port, into
-/// <c>Expected/&lt;test class&gt;.json</c>, keyed by the test and the call's place in it. A normal run replays them; with
-/// <c>REFRAIN_RECORD=1</c> (and the Python app's <c>.venv</c> and <c>src/</c>, while they existed) they are recorded again.
-/// The test's own temporary folders and the repository's folder change from run to run: they are kept as tokens.</summary>
+/// Each call's answer was recorded on 2026-10-30 from the Python app's own code (the script each test passes, kept to
+/// say how), run on the same input as the C# port, into <c>Expected/&lt;test class&gt;.json</c>, keyed by the test and the
+/// call's place in it; the Python app has left the repository since, so they are only replayed. <see cref="Recorded"/>
+/// holds C# values recorded when the Python app proved them right; <c>REFRAIN_RECORD=1</c> records those again, after a
+/// deliberate change. The test's own temporary folders and the repository's folder change from run to run: they are
+/// kept as tokens.</summary>
 static class PythonApp
 {
     public static bool Recording => Environment.GetEnvironmentVariable("REFRAIN_RECORD") == "1";
@@ -33,18 +34,12 @@ static class PythonApp
 
     static string ExpectedFolder => Path.Combine(Repository, "app", "Refrain.Tests", "Expected");
 
-    /// <summary>The answer of <paramref name="script"/> to <paramref name="input"/>, as the Python app gave it.</summary>
+    /// <summary>The answer the Python app gave to <paramref name="script"/> with <paramref name="input"/>.</summary>
     public static string Run(string script, string input = "")
     {
+        _ = script;  // recorded from it; kept in the tests to say how each answer was made
         var (file, key) = NextKey();
-        var roots = Roots(input);
-        if (Recording)
-        {
-            var output = Execute(script, input);
-            Save(file, key, Tokenize(output, roots));
-            return output;
-        }
-        return Detokenize(Load(file, key), roots);
+        return Detokenize(Load(file, key), Roots(input));
     }
 
     /// <summary>A value of the C# side, recorded when the Python app proved it right (the files a tool wrote, read
@@ -136,34 +131,5 @@ static class PythonApp
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             }) + "\n", new UTF8Encoding(false));
         }
-    }
-
-    /// <summary>Runs the Python app's code: <paramref name="script"/> with <paramref name="input"/> on stdin, through
-    /// the repository's <c>.venv</c> with <c>src/</c> on the path. Only while recording.</summary>
-    public static string Execute(string script, string input = "")
-    {
-        var repo = Repository;
-        var start = new ProcessStartInfo(Path.Combine(repo, ".venv", "Scripts", "python.exe"))
-        {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-            WorkingDirectory = repo,
-        };
-        start.ArgumentList.Add("-c");
-        start.ArgumentList.Add("import sys; sys.stdin.reconfigure(encoding='utf-8'); sys.stdout.reconfigure(encoding='utf-8')\n" + script);
-        start.Environment["PYTHONPATH"] = Path.Combine(repo, "src");
-        using var process = Process.Start(start)!;
-        process.StandardInput.Write(input);
-        process.StandardInput.Close();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        if (process.ExitCode != 0) throw new InvalidOperationException($"The Python app failed:\n{error}");
-        return output;
     }
 }

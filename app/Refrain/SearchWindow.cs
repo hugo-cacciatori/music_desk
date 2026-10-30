@@ -455,7 +455,7 @@ public sealed partial class SearchWindow : Window
     public async Task OpenFromOutside(StartRequest request)
     {
         BringToFront();
-        var folder = request.Entry is null ? request.Folder : request.Paths.FirstOrDefault();
+        var folder = request.Paths.FirstOrDefault();
         if (folder is null) return;
         var path = RealPath.Normalize(folder);
         if (!await Task.Run(() => Directory.Exists(path)))

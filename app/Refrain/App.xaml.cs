@@ -21,7 +21,7 @@ public static partial class Program
     static int Main(string[] args)
     {
         if (args is ["--self-test", var report]) return SelfTest.Run(report);  // the release gate: no window, no instance
-        // One Refrain at a time (SPEC §29): a later start hands its folder or entry over, lets the running window
+        // One Refrain at a time (SPEC §29): a later start hands its entry over, lets the running window
         // come to the front, and exits.
         var request = StartRequest.Parse(args);
         // Refrain works from Explorer's menu (SPEC §36 "11."): started on its own, it says so and closes.
@@ -105,7 +105,7 @@ public partial class App : Application
     }
 
     /// <summary>A start's request: Settings opens only the Options window (SPEC §31 "Settings"), a task entry its own
-    /// window; anything else (Explorer's Search entry, a folder from the keyword) the Search window.</summary>
+    /// window; anything else (Explorer's Search entry) the Search window.</summary>
     void Handle(StartRequest start)
     {
         if (start.Entry == "settings")

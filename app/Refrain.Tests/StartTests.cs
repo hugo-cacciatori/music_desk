@@ -29,9 +29,9 @@ public sealed class StartTests : IDisposable
     }
 
     [Fact]
-    public void A_start_reads_a_folder_or_an_entry_and_its_list()
+    public void A_start_reads_an_entry_and_its_list()
     {
-        Assert.Equal(new StartRequest(@"D:\Music", null, []) with { Paths = [] }, StartRequest.Parse([@"D:\Music"]) with { Paths = [] });
+        Assert.True(StartRequest.Parse([@"D:\Music"]).IsEmpty);  // a bare path asks for nothing (the keyword is gone)
         Assert.True(StartRequest.Parse([]).IsEmpty);
         Directory.CreateDirectory(StartRequest.MenuFolder);
         var list = Path.Combine(StartRequest.MenuFolder, "test-list.txt");
@@ -55,13 +55,13 @@ public sealed class StartTests : IDisposable
         Assert.Null(Instance.TryStart(pipe));  // a second Refrain doesn't get the pipe
         var received = new TaskCompletionSource<StartRequest>();
         first.Received += r => received.TrySetResult(r);
-        Assert.True(Instance.HandOver(new StartRequest(@"D:\Music\Björk", null, []), pipe));
+        Assert.True(Instance.HandOver(new StartRequest("search", [@"D:\Music\Björk"]), pipe));
         var got = await received.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-        Assert.Equal(@"D:\Music\Björk", got.Folder);
+        Assert.Equal([@"D:\Music\Björk"], got.Paths);
         var again = new TaskCompletionSource<StartRequest>();
         first.Received += r => again.TrySetResult(r);
-        Assert.True(Instance.HandOver(new StartRequest(null, "search", [@"D:\X"]), pipe));  // and again
-        Assert.Equal("search", (await again.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)).Entry);
+        Assert.True(Instance.HandOver(new StartRequest("tidy", [@"D:\X"]), pipe));  // and again
+        Assert.Equal("tidy", (await again.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)).Entry);
         Assert.False(Instance.HandOver(StartRequest.None, $"RefrainTest-{Guid.NewGuid():N}"));  // nobody listens
     }
 

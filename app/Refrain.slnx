@@ -5,6 +5,5 @@
   <Project Path="Refrain/Refrain.csproj" />
   <Project Path="Refrain.Core/Refrain.Core.csproj" />
   <Project Path="Refrain.Tests/Refrain.Tests.csproj" />
-  <Project Path="RefrainHere/RefrainHere.csproj" />
   <Project Path="RefrainMenu/RefrainMenu.csproj" />
 </Solution>

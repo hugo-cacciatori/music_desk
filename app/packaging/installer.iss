@@ -3,10 +3,11 @@
 ;
 ; It upgrades the Python app in place: the same AppId, so Windows sees one app, one Apps entry and one uninstaller.
 ; The Python app's program files go ([InstallDelete]); its data in %LOCALAPPDATA%\Refrain is migrated by the new
-; app's first start (Migration.cs), which the last page starts. Installs for all users in Program Files by default
-; (admin); the first page also offers "only for me" (no admin, in %LOCALAPPDATA%\Programs). The Start menu gets a
-; Refrain folder with the app and "Uninstall Refrain". The uninstaller keeps the app's own data unless the user asks
-; to delete it. Music folders are never touched.
+; app's first start (Migration.cs), from the first right-click entry used. Installs for all users in Program Files by
+; default (admin); the first page also offers "only for me" (no admin, in %LOCALAPPDATA%\Programs). Refrain works from
+; File Explorer's right-click menu only (SPEC §36 "11."): no app shortcut, no desktop icon, no start on the last page;
+; the Start menu gets a Refrain folder with "Uninstall Refrain" alone. The uninstaller keeps the app's own data
+; unless the user asks to delete it. Music folders are never touched.
 ;
 ; The right-click menu's handler (SPEC §31) is installed under a name of its own per version, so an update never
 ; replaces the DLL File Explorer has loaded: the registry points at the new file, and the next right-click loads it.
@@ -78,8 +79,10 @@ ChangesAssociations=yes
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
-[Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+[Messages]
+; There is no app shortcut to start Refrain from: the last page says where it is.
+FinishedLabel=Setup has finished installing [name]. To use it, right-click a folder or files in File Explorer, then Refrain.
+FinishedLabelNoIcons=Setup has finished installing [name]. To use it, right-click a folder or files in File Explorer, then Refrain.
 
 [Files]
 Source: "{#Source}\*"; DestDir: "{app}"; Excludes: "RefrainMenu.dll"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -87,21 +90,25 @@ Source: "{#Source}\*"; DestDir: "{app}"; Excludes: "RefrainMenu.dll"; Flags: ign
 Source: "{#Source}\RefrainMenu.dll"; DestDir: "{app}"; DestName: "{#MenuDll}"; Flags: ignoreversion onlyifdoesntexist
 
 [InstallDelete]
-; The Python app's program files (PyInstaller's folder); its Refrain.exe, RefrainHere.exe and handler DLLs are
-; replaced or removed by the files above and [Code].
+; The Python app's program files (PyInstaller's folder); its Refrain.exe and handler DLLs are replaced or removed by
+; the files above and [Code].
 Type: filesandordirs; Name: "{app}\_internal"
+; What earlier versions installed and this one doesn't (SPEC §36 "11."): the `refrain` keyword's helper and the app's
+; shortcuts (the Start menu's, the desktop's, and the loose one of 0.2.1).
+Type: files; Name: "{app}\RefrainHere.exe"
+Type: files; Name: "{group}\{#AppName}.lnk"
+Type: files; Name: "{autodesktop}\{#AppName}.lnk"
+Type: files; Name: "{autoprograms}\{#AppName}.lnk"
 
 [Icons]
-; A Start menu folder with the uninstaller beside the app: Start's own Uninstall button only opens Settings for
-; classic apps (SPEC §13).
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+; A Start menu folder with the uninstaller alone: Start's own Uninstall button only opens Settings for classic apps
+; (SPEC §13); Refrain itself starts from File Explorer's right-click menu.
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"; Comment: "Removes Refrain. Your music folders are not touched."
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
-; The `refrain` keyword in File Explorer's address bar (SPEC §29): App Paths finds RefrainHere.exe, which opens
-; Refrain on the folder shown. HKA: all users on an admin install, this user on a per-user one.
-Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\refrain.exe"; ValueType: string; ValueName: ""; ValueData: "{app}\RefrainHere.exe"; Flags: uninsdeletekey
+; The `refrain` keyword is gone (SPEC §36 "11."): its App Paths key, from earlier versions, is deleted.
+; HKA: all users on an admin install, this user on a per-user one.
+Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\refrain.exe"; ValueType: none; Flags: deletekey
 ; The Python app's handler class goes; the ContextMenuHandlers keys below now name the C# handler.
 Root: HKA; Subkey: "Software\Classes\CLSID\{#PythonMenuClsid}"; ValueType: none; Flags: deletekey
 Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"; ValueType: none; ValueName: "{#PythonMenuClsid}"; Flags: deletevalue
@@ -114,10 +121,6 @@ Root: HKA; Subkey: "Software\Classes\*\shellex\ContextMenuHandlers\{#MenuKey}"; 
 Root: HKA; Subkey: "Software\Classes\Directory\shellex\ContextMenuHandlers\{#MenuKey}"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\{#MenuKey}"; ValueType: string; ValueName: ""; ValueData: "{#MenuClsid}"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"; ValueType: string; ValueName: "{#MenuClsid}"; ValueData: "Refrain menu"; Flags: uninsdeletevalue
-
-[Run]
-; The first start migrates the Python app's settings, library folders and LRCLIB results.
-Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 // The files in `Dir` matching `Pattern` other than `Keep`: deleted, or, when Explorer has one loaded (a menu handler

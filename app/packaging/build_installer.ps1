@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
 Builds Refrain's installer (SPEC §13, §36 "10."): the app published with Native AOT for the installer
-(-p:RefrainRelease=true: its data is %LOCALAPPDATA%\Refrain), the right-click handler DLL and the keyword's helper
-beside it, the release gate, the wizard images, the Inno Setup installer and its checksum.
+(-p:RefrainRelease=true: its data is %LOCALAPPDATA%\Refrain), the right-click handler DLL beside it, the release gate,
+the wizard images, the Inno Setup installer and its checksum.
 
 .DESCRIPTION
 The release gate (AGENTS.md rule 9): a copy of the published folder outside the repository runs
@@ -32,13 +32,11 @@ function Publish([string]$project, [string]$to) {
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish $project failed" }
 }
 
-# -- the published app, with the handler and the keyword's helper beside it --
+# -- the published app, with the handler beside it --
 if (Test-Path $build) { Remove-Item -Recurse -Force $build }
 Publish 'Refrain\Refrain.csproj' $publish
 Publish 'RefrainMenu\RefrainMenu.csproj' (Join-Path $build 'menu')
-Publish 'RefrainHere\RefrainHere.csproj' (Join-Path $build 'here')
 Copy-Item (Join-Path $build 'menu\RefrainMenu.dll') $publish
-Copy-Item (Join-Path $build 'here\RefrainHere.exe') $publish
 Get-ChildItem $publish -Recurse -Include '*.pdb' | Remove-Item -Force
 
 # -- the release gate: a copy outside the repository, on its own empty data folder --

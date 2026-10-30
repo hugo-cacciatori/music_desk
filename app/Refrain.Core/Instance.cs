@@ -5,18 +5,18 @@ using System.Text.Json.Serialization;
 
 namespace Refrain.Core;
 
-/// <summary>What a start asks for (SPEC §29, §31): a folder to show, or a right-click entry and its paths.</summary>
+/// <summary>What a start asks for (SPEC §31, §36 "11."): a right-click entry and its paths. A start without one
+/// (Refrain.exe on its own, or with a bare path) asks for nothing.</summary>
 public sealed record StartRequest(
-    [property: JsonPropertyName("folder")] string? Folder,
     [property: JsonPropertyName("entry")] string? Entry,
     [property: JsonPropertyName("paths")] IReadOnlyList<string> Paths)
 {
-    public static readonly StartRequest None = new(null, null, []);
-    public bool IsEmpty => Folder is null && Entry is null;
+    public static readonly StartRequest None = new(null, []);
+    public bool IsEmpty => Entry is null;
 
-    /// <summary><c>Refrain.exe "folder"</c>, or <c>Refrain.exe --entry --list file</c> (the right-click menu writes the
-    /// paths one per line, UTF-8, into the data folder's <c>menu\</c>; the file is read, then deleted, and only a file
-    /// in that folder), or <c>--entry path…</c> (a run from source, tests).</summary>
+    /// <summary><c>Refrain.exe --entry --list file</c> (the right-click menu writes the paths one per line, UTF-8, into
+    /// the data folder's <c>menu\</c>; the file is read, then deleted, and only a file in that folder), or
+    /// <c>--entry path…</c> (a run from source, tests).</summary>
     public static StartRequest Parse(IReadOnlyList<string> args)
     {
         string? entry = null;
@@ -31,8 +31,8 @@ public sealed record StartRequest(
             else
                 paths.Add(arg.Trim('"'));
         }
-        if (entry is null) return paths.Count > 0 ? new StartRequest(paths[0], null, []) : None;
-        return new StartRequest(null, entry, paths);
+        if (entry is null) return None;
+        return new StartRequest(entry, paths);
     }
 
     public static string MenuFolder => Path.Combine(AppPaths.DataFolder, "menu");

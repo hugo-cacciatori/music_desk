@@ -9,8 +9,8 @@ namespace Refrain;
 /// <summary>The release gate (AGENTS.md rule 9): <c>Refrain.exe --self-test report.txt</c> runs the installer's build
 /// with no window, from a copy outside the repository on an empty data folder, through what a published build can
 /// break (Native AOT trims what is only reached by reflection; a bundled file may be missing): the index, the settings,
-/// tags read and written by TagLib#, flac's cut and decode, rsgain, the right-click handler and the keyword's helper
-/// beside the app, and the licence texts. Exit code 0 when every check passed; the report says what each found.</summary>
+/// tags read and written by TagLib#, flac's cut and decode, rsgain, the right-click handler beside the app, and the
+/// licence texts. Exit code 0 when every check passed; the report says what each found.</summary>
 static class SelfTest
 {
     public static int Run(string report)
@@ -53,7 +53,6 @@ static class SelfTest
             foreach (var (name, path) in new[]
                      {
                          ("flac", Flac.Exe), ("rsgain", Rsgain.Exe), ("right-click handler", Path.Combine(AppContext.BaseDirectory, "RefrainMenu.dll")),
-                         ("keyword helper", Path.Combine(AppContext.BaseDirectory, "RefrainHere.exe")),
                      })
                 Check(name + " present", () => File.Exists(path) ? path : throw new FileNotFoundException("missing", path));
             Check("licences", () =>

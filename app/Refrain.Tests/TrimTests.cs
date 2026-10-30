@@ -81,39 +81,12 @@ public sealed class TrimTests
         Assert.Equal(JsonSerializer.Deserialize<List<string>>(output)!, names.Select(n => Trim.CheckSubfolderName(n) ?? "None"));
     }
 
-    /// <summary>Tags worth copying, on both twins: lyrics to leave out, ReplayGain to keep, a repeated key, covers.</summary>
-    const string TagFixtures = """
-        import json, sys
-        from pathlib import Path
-        from mutagen.flac import FLAC, Picture
-        from mutagen.id3 import APIC, TXXX, USLT
-        from mutagen import File
-        root = Path(json.load(sys.stdin)["root"])
-        flac = FLAC(root / "tone.flac")
-        flac["LYRICS"] = "la la"
-        flac["unsyncedlyrics"] = "la"
-        flac["REPLAYGAIN_TRACK_GAIN"] = "-3.21 dB"
-        flac["replaygain_album_peak"] = "0.912345"
-        flac["PERFORMER"] = ["One", "Two"]
-        for kind in (3, 4):
-            p = Picture()
-            p.type, p.mime, p.desc, p.data = kind, "image/png", f"pic {kind}", bytes([0x89, 0x50, 0x4E, 0x47, kind] * 20)
-            flac.add_picture(p)
-        flac.save()
-        for name in ("tone.wav", "tone.aiff"):
-            audio = File(root / name)
-            audio.tags.add(TXXX(encoding=3, desc="replaygain_track_gain", text=["-2.00 dB"]))
-            audio.tags.add(TXXX(encoding=3, desc="REPLAYGAIN_TRACK_PEAK", text=["0.5"]))
-            audio.tags.add(USLT(encoding=3, lang="eng", desc="", text="words"))
-            audio.tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="", data=bytes([0xFF, 0xD8, 0xFF, 0xE0] * 30)))
-            audio.save()
-        """;
-
     [Fact]
     public void A_trim_writes_the_python_apps_copy_and_tags()
     {
-        using var twins = new ReplayGainTests.Twins("formats", side => File.Copy(Hidden, Path.Combine(side, Path.GetFileName(Hidden))));
-        foreach (var side in new[] { twins.Py, twins.Cs }) PythonApp.Run(TagFixtures, JsonSerializer.Serialize(new { root = side }));
+        // Files tagged by the Python app's own code (mutagen): lyrics to leave out, ReplayGain to keep, a repeated key,
+        // pictures; written once and kept as the "trim" fixture (SPEC §36 "10." step c).
+        using var twins = new ReplayGainTests.Twins("trim");
         (string Name, string Start, string End)[] cuts =
         [
             ("tone.flac", "0:00.100", "0:00.900"), ("tone.wav", "0:00.250", "0:01.000"), ("tone.aiff", "0:00.000", "0:00.500"),

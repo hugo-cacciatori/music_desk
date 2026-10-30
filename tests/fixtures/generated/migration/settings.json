@@ -1,0 +1,56 @@
+{
+  "hide_folders_without_music": false,
+  "name_masks": [
+    "{track:02d} {title}",
+    "{title}"
+  ],
+  "name_replacement": "-",
+  "rename_options": {
+    "recursive": false,
+    "audio_extensions": [
+      ".flac",
+      ".mp3"
+    ]
+  },
+  "replaygain_options": {
+    "target": -18.0,
+    "safety_threshold": 0.98,
+    "safety_margin": 0.5,
+    "subfolder_keywords": [
+      "lite"
+    ],
+    "track_data_keywords": [
+      "lite"
+    ],
+    "track_data_excluded_keywords": [],
+    "log_file": "rg.log",
+    "comment": "LUFS {target}"
+  },
+  "cleanup_options": {
+    "junk": true,
+    "picture_extensions": [
+      ".jpg"
+    ],
+    "video_extensions": [
+      ".mkv"
+    ]
+  },
+  "trim_subfolder": "short",
+  "save_cue_beside": true,
+  "window_geometry": "AQID",
+  "splitter_state": "",
+  "file_list_header": "",
+  "expanded_folders": [
+    "D:\\Music"
+  ],
+  "last_folder": "D:\\Music",
+  "tree_visible": true,
+  "tree_width": 300,
+  "playlist_visible": true,
+  "playlist_width": 300,
+  "playlist_header": "",
+  "playlist_relative": true,
+  "playlist_export_dir": "",
+  "search_mode": "lyrics",
+  "lyrics_text_size": 16
+}

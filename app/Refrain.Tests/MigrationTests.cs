@@ -11,55 +11,22 @@ namespace Refrain.Tests;
 /// Python app's own code are migrated, and the Python files leave for a stand-in Recycle Bin (never the real one).</summary>
 public sealed class MigrationTests
 {
-    /// <summary>Writes the Python app's index (two library folders, one offline, and LRCLIB results) and its settings
-    /// into <paramref name="data"/>; returns what the Python app reads back of the roots and the lyrics.</summary>
-    static List<string> MakePythonData(string data, string music, string gone) => JsonSerializer.Deserialize<List<string>>(PythonApp.Run("""
-        import json, sys
-        from pathlib import Path
-        from refrain.core.index.store import DbWriter, upsert_lyrics
-        from refrain.core.index.roots import add_root
-        from refrain.settings import Settings
-        args = json.load(sys.stdin)
-        data = Path(args["data"])
-        writer = DbWriter(data / "library.db").start()
-        add_root(writer, args["music"])
-        add_root(writer, args["gone"])
-        def lyrics(conn):
-            upsert_lyrics(conn, "artist\x1fsong", {"status": "found", "source": "lrclib", "lrclib_id": 7, "plain": "words\nmore",
-                                                   "synced": "[00:01.00] words", "checked": "2026-10-01"})
-            upsert_lyrics(conn, "artist\x1fsolo", {"status": "instrumental", "lrclib_id": 8, "checked": "2026-10-02"})
-            upsert_lyrics(conn, "élan\x1fnone", {"status": "not_found", "checked": "2026-09-03"})
-            conn.execute("INSERT INTO lyrics (key, status, error) VALUES ('x\x1fy', 'error', 'boom')")
-            conn.execute("UPDATE roots SET online = 0 WHERE path = ?", (args["gone"],))
-        writer.submit(lyrics).result()
-        writer.stop()
-        s = Settings.load(data / "settings.json")
-        s.name_masks = ["{track:02d} {title}", "{title}"]
-        s.name_replacement = "-"
-        s.replaygain_options = {"target": -18.0, "safety_threshold": 0.98, "safety_margin": 0.5, "subfolder_keywords": ["lite"],
-                                "track_data_keywords": ["lite"], "track_data_excluded_keywords": [], "log_file": "rg.log",
-                                "comment": "LUFS {target}"}
-        s.rename_options = {"recursive": False, "audio_extensions": [".flac", ".mp3"]}
-        s.cleanup_options = {"junk": True, "picture_extensions": [".jpg"], "video_extensions": [".mkv"]}
-        s.trim_subfolder = "short"
-        s.save_cue_beside = True
-        s.tree_visible = True
-        s.tree_width = 300
-        s.lyrics_text_size = 16
-        s.search_mode = "lyrics"
-        s.last_folder = args["music"]
-        s.expanded_folders = [args["music"]]
-        s.window_geometry = "AQID"
-        s.playlist_visible = True
-        s.save()
-        import sqlite3
-        conn = sqlite3.connect(data / "library.db")
-        out = [f"root {p} {a} {o}" for p, a, o in conn.execute("SELECT path, added_at, online FROM roots ORDER BY path")]
-        out += [f"lyrics {k} {s} {i} {p!r} {y!r} {c}" for k, s, i, p, y, c in conn.execute(
-            "SELECT key, status, lrclib_id, plain, synced, checked FROM lyrics WHERE status != 'error' ORDER BY key")]
-        conn.close()
-        print(json.dumps(out, ensure_ascii=False))
-        """, JsonSerializer.Serialize(new { data, music, gone })))!;
+    /// <summary>The Python app's data folder, written by its own code once (2026-10-30) and kept as a fixture: two library
+    /// folders (D:\Music, and E:\Gone offline), LRCLIB results (one an error the migration leaves out) and its settings.
+    /// Copied into <paramref name="data"/>; returns the roots and lyrics as the Python app read them back.</summary>
+    static List<string> MakePythonData(string data)
+    {
+        foreach (var file in Directory.GetFiles(Path.Combine(Setup.Fixtures, "migration")))
+            File.Copy(file, Path.Combine(data, Path.GetFileName(file)));
+        return
+        [
+            @"root D:\Music 2026-01-02T03:04:05 1",
+            @"root E:\Gone 2026-01-03T03:04:05 0",
+            "lyrics artist\u001fsolo instrumental 8 None None 2026-10-02",
+            "lyrics artist\u001fsong found 7 'words\\nmore' '[00:01.00] words' 2026-10-01",
+            "lyrics élan\u001fnone not_found None None None 2026-09-03",
+        ];
+    }
 
     static string Py(string? text) => text is null ? "None" : "'" + text.Replace("\n", "\\n") + "'";
 
@@ -96,8 +63,8 @@ public sealed class MigrationTests
     public void The_python_apps_folders_lyrics_and_settings_move_over()
     {
         using var temp = new TempFolder();
-        var (data, music, gone, binFolder) = (temp.Sub("data"), temp.Sub("music"), temp.Sub("gone"), temp.Sub("bin"));
-        var expected = MakePythonData(data, music, gone);
+        var (data, binFolder) = (temp.Sub("data"), temp.Sub("bin"));
+        var expected = MakePythonData(data);
         Directory.CreateDirectory(Path.Combine(data, "next", "logs"));
         Directory.CreateDirectory(Path.Combine(data, "logs"));
         Assert.True(Migration.IsPythonIndex(Path.Combine(data, "library.db")));
@@ -123,8 +90,8 @@ public sealed class MigrationTests
         Assert.Equal([".mkv"], settings.GetTidy().Videos);
         Assert.Equal(("short", true, true, 300.0, 16.0, "lyrics"),
             (settings.TrimSubfolder, settings.SaveCueBeside, settings.TreeVisible, settings.TreeWidth, settings.LyricsTextSize, settings.SearchMode));
-        Assert.Equal(music, settings.LastFolder);
-        Assert.Equal([music], settings.ExpandedFolders);
+        Assert.Equal(@"D:\Music", settings.LastFolder);
+        Assert.Equal([@"D:\Music"], settings.ExpandedFolders);
         var text = File.ReadAllText(Path.Combine(data, "settings.json"));
         Assert.DoesNotContain("window_geometry", text);  // what the C# app has no use for is dropped
         Assert.DoesNotContain("playlist", text);
@@ -139,8 +106,8 @@ public sealed class MigrationTests
     public void An_open_index_or_no_recycle_bin_loses_nothing()
     {
         using var temp = new TempFolder();
-        var (data, music, gone) = (temp.Sub("data"), temp.Sub("music"), temp.Sub("gone"));
-        MakePythonData(data, music, gone);
+        var data = temp.Sub("data");
+        MakePythonData(data);
         // SQLite adds its empty -wal and -shm side files when it reads a WAL index; the files themselves must not change.
         static Dictionary<string, string> Snapshot(string folder) => Directory.GetFiles(folder).Where(f => !f.EndsWith("-wal") && !f.EndsWith("-shm"))
             .ToDictionary(f => Path.GetFileName(f)!, f => Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(File.ReadAllBytes(f))));

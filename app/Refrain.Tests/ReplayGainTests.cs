@@ -72,7 +72,7 @@ public sealed class ReplayGainTests
     /// a log file's exact text, other files by name.</summary>
     internal static Dictionary<string, string?> Dump(string root)
     {
-        var output = PythonApp.Run("""
+        var output = PythonApp.Execute("""
             import hashlib, json, sys
             from pathlib import Path
             from mutagen import File
@@ -113,19 +113,25 @@ public sealed class ReplayGainTests
         return Regex.Replace(text, @"\d+\.\d s\b", "<N> s");
     }
 
-    /// <summary>The two trees hold the same files, tags and logs. Returns how many logs were compared.</summary>
+    /// <summary>The two trees hold the same files, tags and logs. Returns how many logs were compared. While recording,
+    /// the Python app's tree and the C# app's are read by mutagen and compared, and the C# tree as Refrain reads it is
+    /// recorded; a normal run compares the C# tree with that recording (SPEC §36 "10." step c).</summary>
     internal static int AssertSame(Twins twins)
+    {
+        if (PythonApp.Recording) AssertSameAsPython(twins);
+        var dump = TagDump.Of(twins.Cs);
+        Assert.Equal(PythonApp.Recorded(dump, twins.Cs), dump);
+        return Directory.GetFiles(twins.Cs, "replaygain.log", SearchOption.AllDirectories).Length;
+    }
+
+    static void AssertSameAsPython(Twins twins)
     {
         var (py, cs) = (Dump(twins.Py), Dump(twins.Cs));
         Assert.Equal(py.Keys.Order(), cs.Keys.Order());
-        var logs = 0;
         foreach (var (key, pyValue) in py)
         {
             if (Path.GetFileName(key) == "replaygain.log")
-            {
                 Assert.Equal(Mask(pyValue!, twins.Py), Mask(cs[key]!, twins.Cs));
-                logs++;
-            }
             else
             {
                 // TagLib# writes an emptied WMA description as "" where mutagen leaves it out: the same empty comment.
@@ -133,7 +139,6 @@ public sealed class ReplayGainTests
                 Assert.True(pyValue == csValue, $"{key}\nPython: {pyValue}\nC#:     {csValue}");
             }
         }
-        return logs;
     }
 
     [Fact]

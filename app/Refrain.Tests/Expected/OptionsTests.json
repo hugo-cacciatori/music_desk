@@ -1,0 +1,5 @@
+{
+  "Refrain.Tests.OptionsTests.Masks_name_files_and_refuse_masks_as_the_python_app_does": [
+    "{\"valid\": [true, true, true, true, true, true, true, true, true, true, false, false, false, false, false, false, true], \"names\": [[\"03 Airbag.flac\", \"Airbag.flac\", null, \"3 Air.flac\", \"   3.flac\", \"*Airbag**.flac\", null, \"+3.flac\", \"{x} Airbag.flac\", \"3.flac\", null, null, null, null, null, null, null], [\"12 A-B- -C--.flac\", \"A-B- -C--.flac\", \"2-012 Sigur R\\u00f3s - A-B- -C--.flac\", \"12 A-B.flac\", \"  12.flac\", \"A-B- -C--.flac\", \"Various [1997] \\u00c1g\\u00e6tis byrjun.flac\", \"+12.flac\", \"{x} A-B- -C--.flac\", \"c.flac\", null, null, null, null, null, null, null], [null, \"Only a title.flac\", null, null, null, \"Only a title.flac\", null, null, \"{x} Only a title.flac\", null, null, null, null, null, null, null, null], [\"07 Pr\\u00e9lude-1.flac\", \"Pr\\u00e9lude-1.flac\", null, \"7 Pr\\u00e9.flac\", \"   7.flac\", \"Pr\\u00e9lude-1.flac\", null, \"+7.flac\", \"{x} Pr\\u00e9lude-1.flac\", \"7.flac\", null, null, null, null, null, null, \"0709 Bach.flac\"]]}\r\n"
+  ]
+}

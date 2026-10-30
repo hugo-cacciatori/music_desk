@@ -68,9 +68,10 @@ public sealed class Instance : IDisposable
         get
         {
             var data = Environment.GetEnvironmentVariable("REFRAIN_DATA");
-            if (string.IsNullOrEmpty(data)) return $"RefrainNext-{Environment.UserName}";
+            var name = AppPaths.Release ? "RefrainApp" : "RefrainNext";  // never the Python app's pipe
+            if (string.IsNullOrEmpty(data)) return $"{name}-{Environment.UserName}";
             var hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(data).ToUpperInvariant()));
-            return $"RefrainNext-{Environment.UserName}-{Convert.ToHexString(hash)[..12]}";
+            return $"{name}-{Environment.UserName}-{Convert.ToHexString(hash)[..12]}";
         }
     }
 

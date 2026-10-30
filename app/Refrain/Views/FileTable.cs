@@ -39,7 +39,7 @@ public sealed partial class FileTable : Grid, IRowList
     public HeaderState State { get; private set; }
     public int LayoutVersion { get; private set; }
     public Brush HighlightBrush { get; } =
-        (Brush)Application.Current.Resources["SystemFillColorCautionBackgroundBrush"];
+        Ui.Resource<Brush>("SystemFillColorCautionBackgroundBrush");
 
     /// <summary>Enter or a double-click on a row.</summary>
     public event Action<FileRow>? Activated;
@@ -67,8 +67,8 @@ public sealed partial class FileTable : Grid, IRowList
         {
             SelectionMode = ListViewSelectionMode.Extended,
             ItemsSource = items,
-            ItemTemplate = (DataTemplate)Application.Current.Resources["FileRowTemplate"],
-            ItemContainerStyle = (Style)Application.Current.Resources["FileRowItemStyle"],
+            ItemTemplate = Ui.Resource<DataTemplate>("FileRowTemplate"),
+            ItemContainerStyle = Ui.Resource<Style>("FileRowItemStyle"),
             IsTabStop = true,
         };
         ScrollViewer.SetHorizontalScrollMode(List, ScrollMode.Enabled);
@@ -306,7 +306,7 @@ public sealed partial class FileTable : Grid, IRowList
             TextTrimming = TextTrimming.CharacterEllipsis,
             Padding = new Thickness(8, 0, 8, 0),
             TextAlignment = column.AlignRight ? TextAlignment.Right : TextAlignment.Left,
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            Foreground = Ui.Resource<Brush>("TextFillColorSecondaryBrush"),
         };
         cell.Children.Add(text);
         var grip = new Grip { Width = 8, HorizontalAlignment = HorizontalAlignment.Right };

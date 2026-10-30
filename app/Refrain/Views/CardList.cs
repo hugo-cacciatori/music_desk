@@ -40,8 +40,8 @@ public sealed partial class CardList : Grid, IRowList
         {
             SelectionMode = ListViewSelectionMode.Extended,
             ItemsSource = items,
-            ItemTemplate = (DataTemplate)Application.Current.Resources["CardTemplate"],
-            ItemContainerStyle = (Style)Application.Current.Resources["CardItemStyle"],
+            ItemTemplate = Ui.Resource<DataTemplate>("CardTemplate"),
+            ItemContainerStyle = Ui.Resource<Style>("CardItemStyle"),
             Padding = new Thickness(4),
         };
         Children.Add(List);

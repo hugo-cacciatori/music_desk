@@ -12,9 +12,19 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Unpackaged, carrying the Windows App SDK and .NET: what the installer ships. -->
     <WindowsPackageType>None</WindowsPackageType>
+    <!-- Makes publish produce Refrain.pri and App.xbf, the compiled XAML: without them the published app found none of
+         WinUI's theme resources and closed at start (measured, 2026-10-30). -->
+    <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <!-- Native AOT for the installer's build (SPEC §36 "10."). TagLib# warns that it uses reflection; it is kept
+         whole for the trimmer below, and the release gate's self-test reads and writes tags through it. -->
+    <PublishAot>true</PublishAot>
+    <NoWarn>$(NoWarn);IL2104</NoWarn>
+    <!-- CsWinRT's full AOT mode: the vtables of what the code hands to WinRT (a list's ObservableCollection<FileRow>
+         as ItemsSource) are generated; in its default mode the published app failed that cast at start. -->
+    <CsWinRTAotOptimizerEnabled>true</CsWinRTAotOptimizerEnabled>
   </PropertyGroup>
 
   <ItemGroup>

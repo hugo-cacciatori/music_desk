@@ -12,4 +12,11 @@
     <Product>Refrain</Product>
     <Copyright>GPL-3.0-or-later</Copyright>
   </PropertyGroup>
+  <!-- The installer's build (build_installer.ps1 passes -p:RefrainRelease=true): the app's data is
+       %LOCALAPPDATA%\Refrain itself, where the Python app's files are migrated (SPEC §36 "10."). Every other build is
+       a preview on %LOCALAPPDATA%\Refrain
+ext, so it never touches the Python app's live files. -->
+  <PropertyGroup Condition="'$(RefrainRelease)' == 'true'">
+    <DefineConstants>$(DefineConstants);REFRAIN_RELEASE</DefineConstants>
+  </PropertyGroup>
 </Project>

@@ -121,9 +121,14 @@ public static class MenuLogic
         return entries;
     }
 
-    /// <summary>The preview's data folder (<c>%LOCALAPPDATA%\Refrain\next\</c>), where list files go.</summary>
+    /// <summary>The app's data folder, where list files go: <c>%LOCALAPPDATA%\Refrain\</c> for the installer's build,
+    /// <c>%LOCALAPPDATA%\Refrain\next\</c> for a preview (as Refrain.Core's AppPaths).</summary>
     public static string DataFolder => Path.Combine(
+#if REFRAIN_RELEASE
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Refrain");
+#else
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Refrain", "next");
+#endif
 
     public static string MenuFolder => Path.Combine(DataFolder, "menu");
 

@@ -33,7 +33,7 @@ public sealed partial class AddressBar : Grid
     public AddressBar()
     {
         Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);  // the empty part takes clicks
-        BorderBrush = (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"];
+        BorderBrush = Ui.Resource<Brush>("ControlStrokeColorDefaultBrush");
         BorderThickness = new Thickness(1);
         CornerRadius = new CornerRadius(4);
         MinHeight = 32;

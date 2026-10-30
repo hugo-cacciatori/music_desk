@@ -20,6 +20,7 @@ public static partial class Program
     [STAThread]
     static int Main(string[] args)
     {
+        if (args is ["--self-test", var report]) return SelfTest.Run(report);  // the release gate: no window, no instance
         // One Refrain at a time (SPEC §29): a later start hands its folder or entry over, lets the running window
         // come to the front, and exits.
         var request = StartRequest.Parse(args);

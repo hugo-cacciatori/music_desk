@@ -264,7 +264,7 @@ public sealed partial class MainWindow : Window
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 0, 0, 8) };
         // Tidy first and in evidence (SPEC §30, §33): filled with the accent colour.
         tidyButton.Content = Labelled("\uE8CB", "Tidy");
-        tidyButton.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
+        tidyButton.Style = Ui.Resource<Style>("AccentButtonStyle");
         tidyButton.Click += (_, _) => StartTidy();
         var tidyTip = new ToolTip();
         tidyTip.Opened += (_, _) => tidyTip.Content = TidyHover();
@@ -321,8 +321,8 @@ public sealed partial class MainWindow : Window
         CornerRadius = new CornerRadius(8),
         BorderThickness = new Thickness(1),
         Padding = new Thickness(3),
-        Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
-        BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+        Background = Ui.Resource<Brush>("LayerFillColorDefaultBrush"),
+        BorderBrush = Ui.Resource<Brush>("CardStrokeColorDefaultBrush"),
     };
 
     static Button Icon(string glyph, string tip)

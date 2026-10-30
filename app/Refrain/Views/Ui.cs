@@ -11,7 +11,16 @@ namespace Refrain.Views;
 /// <summary>Small shared pieces of the code-built UI.</summary>
 static class Ui
 {
-    public static Brush Brush(string key) => (Brush)Application.Current.Resources[key];
+    public static Brush Brush(string key) => Resource<Brush>(key);
+
+    /// <summary>An app or theme resource as its type. Under Native AOT a resource can come back as a bare
+    /// DependencyObject (CsWinRT doesn't map its runtime class), which a C# cast refuses; As&lt;T&gt; asks the object
+    /// itself (measured, 2026-10-30: the published app closed at start on the first list's template).</summary>
+    public static T Resource<T>(string key) where T : class
+    {
+        var value = Application.Current.Resources[key];
+        return value as T ?? WinRT.CastExtensions.As<T>(value);
+    }
 
     /// <summary>A window of its own (SPEC §35: own taskbar button): title, backdrop, icon and size. In an agent's
     /// off-screen check it sits beyond every monitor and out of Alt+Tab.</summary>
@@ -72,7 +81,7 @@ static class Ui
     public static Button Primary(string text) => new()
     {
         Content = text,
-        Style = (Style)Application.Current.Resources["AccentButtonStyle"],
+        Style = Resource<Style>("AccentButtonStyle"),
     };
 
     public static Button Button(string text, string tip)

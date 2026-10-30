@@ -26,6 +26,8 @@ public sealed partial class MetadataPage : UserControl
     readonly Button remove = Ui.Button("Remove", "Remove the embedded front cover");
     readonly TextBlock name = Ui.Title();
     readonly TextBlock formatLine = Ui.Secondary();
+    readonly Button newCue = Ui.Button("New cue sheet…", "A new cue sheet for this file, to cut it into tracks: you add the tracks, then save");
+    string? onePath;
     readonly TextBlock note = Ui.Secondary();
     readonly Button revert = Ui.Button("Revert", "Drop the edits (Esc)");
     readonly Button save = Ui.Primary("Save");
@@ -52,6 +54,9 @@ public sealed partial class MetadataPage : UserControl
     public event Action<IReadOnlyList<string>>? Saved;
     /// <summary>The edits became dirty or clean.</summary>
     public event Action<bool>? DirtyChanged;
+
+    /// <summary>New cue sheet… was clicked, for this audio file.</summary>
+    public event Action<string>? NewCueRequested;
 
     public MetadataPage(Func<XamlRoot> xamlRoot, Func<nint> window)
     {
@@ -91,6 +96,14 @@ public sealed partial class MetadataPage : UserControl
         stack.Children.Add(coverButtons);
         stack.Children.Add(name);
         stack.Children.Add(formatLine);
+        // One FLAC, WAV or AIFF file: a new cue sheet for it (SPEC §23 "The entry point"; Trim… joins it, task 9d).
+        var fileButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        fileButtons.Children.Add(newCue);
+        stack.Children.Add(fileButtons);
+        newCue.Click += (_, _) =>
+        {
+            if (onePath is not null) NewCueRequested?.Invoke(onePath);
+        };
         stack.Children.Add(note);
         stack.Children.Add(Fields());
         stack.Children.Add(details);
@@ -287,6 +300,13 @@ public sealed partial class MetadataPage : UserControl
         filling = false;
         name.Text = several ? $"{files.Count} files" : files.Count == 1 ? Path.GetFileName(files[0].Path) : "";
         formatLine.Text = several ? "" : files.Count == 1 ? files[0].Details.FormatLine : "";
+        onePath = files.Count == 1 ? files[0].Path : null;
+        var cuttable = onePath is not null && Core.Cue.SplitPlanner.Supported.ContainsKey(Path.GetExtension(onePath));
+        newCue.Visibility = onePath is not null ? Visibility.Visible : Visibility.Collapsed;
+        newCue.IsEnabled = cuttable;
+        ToolTipService.SetToolTip(newCue, cuttable
+            ? "A new cue sheet for this file, to cut it into tracks: you add the tracks, then save"
+            : $"{Path.GetExtension(onePath ?? "").TrimStart('.').ToUpperInvariant()} isn't supported: a cue sheet's split reads FLAC, WAV and AIFF.");
         note.Text = string.Join("\n", notes);
         note.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         replace.IsEnabled = Editable;

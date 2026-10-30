@@ -92,10 +92,11 @@ public static class SplitRecap
 
     /// <summary>Why the sheet can't be split as it is: the masks to fix, the plan's refusal, its warnings (the
     /// preview's Split doesn't split a sheet that needs a look either). Empty: Split is enabled.</summary>
-    public static List<string> Reasons(AlbumPlan plan, bool masksValid, string optionsWhere)
+    public static List<string> Reasons(AlbumPlan plan, bool masksValid, string optionsWhere, bool valuesToFix = false)
     {
         var reasons = new List<string>();
         if (!masksValid) reasons.Add($"The File names masks need fixing: {optionsWhere}.");
+        if (valuesToFix) reasons.Add("The cue sheet has values to fix.");
         if (plan.Refusal is not null) reasons.Add(plan.Refusal);
         reasons.AddRange(plan.Warnings);
         return reasons;

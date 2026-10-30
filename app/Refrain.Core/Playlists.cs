@@ -47,19 +47,63 @@ public static class Playlists
     public static string Write(IReadOnlyList<PlayEntry> entries, string? folder = null, DateTime? now = null)
     {
         folder ??= Folder;
-        Directory.CreateDirectory(folder);
-        var stamp = (now ?? DateTime.Now).ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-        var target = System.IO.Path.Combine(folder, $"{Prefix}{stamp}.m3u8");
-        for (var n = 2; File.Exists(target); n++) target = System.IO.Path.Combine(folder, $"{Prefix}{stamp}-{n}.m3u8");
+        var target = NewFile(folder, Prefix, ".m3u8", now);
         File.WriteAllText(target, Render(entries), new UTF8Encoding(false));
         Prune(folder);
         return target;
     }
 
-    /// <summary>Removes the oldest of the app's own <c>play-*.m3u8</c> files in that folder, and nothing else.</summary>
-    public static void Prune(string folder, int keep = Keep)
+    static string NewFile(string folder, string prefix, string ext, DateTime? now)
     {
-        var files = Directory.GetFiles(folder, $"{Prefix}*.m3u8").Order(NaturalOrder.Instance).ToList();
+        Directory.CreateDirectory(folder);
+        var stamp = (now ?? DateTime.Now).ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        var target = System.IO.Path.Combine(folder, $"{prefix}{stamp}{ext}");
+        for (var n = 2; File.Exists(target); n++) target = System.IO.Path.Combine(folder, $"{prefix}{stamp}-{n}{ext}");
+        return target;
+    }
+
+    /// <summary>Preview in player (SPEC §22, §23): one audio file cut at sample positions, as a temporary cue sheet
+    /// laid out as EAC does, with the audio's full path (the sheet isn't beside it). A track that rounds to no frame is
+    /// left out, so no two tracks start on the same frame. UTF-8 with a BOM, CRLF.</summary>
+    public static string RenderPreview(string audio, int rate, long samples, IReadOnlyList<(long Start, string Title, string Performer)> tracks,
+        string title = "", string performer = "")
+    {
+        long Frames(long s) => (2 * s * Cue.CueSheet.FramesPerSecond + rate) / (2 * rate);  // the nearest CD frame, halves up
+        static string Quoted(string text) => "\"" + string.Join(" ", text.Replace('"', '\'').Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) + "\"";
+        var starts = tracks.Select(t => Frames(t.Start)).ToList();
+        var end = Frames(samples);
+        var lines = new List<string>();
+        if (performer.Trim().Length > 0) lines.Add($"PERFORMER {Quoted(performer)}");
+        if (title.Trim().Length > 0) lines.Add($"TITLE {Quoted(title)}");
+        lines.Add($"FILE {Quoted(System.IO.Path.GetFullPath(audio))} WAVE");
+        var number = 0;
+        for (var i = 0; i < tracks.Count; i++)
+        {
+            if (starts[i] >= (i + 1 < starts.Count ? starts[i + 1] : end)) continue;
+            lines.Add($"  TRACK {++number:00} AUDIO");
+            if (tracks[i].Title.Trim().Length > 0) lines.Add($"    TITLE {Quoted(tracks[i].Title)}");
+            if (tracks[i].Performer.Trim().Length > 0) lines.Add($"    PERFORMER {Quoted(tracks[i].Performer)}");
+            lines.Add($"    INDEX 01 {Cue.CueDocument.FormatTime(starts[i])}");
+        }
+        return (char)0xFEFF + string.Join("\r\n", lines) + "\r\n";
+    }
+
+    /// <summary>Writes <c>preview-YYYYMMDD-HHMMSS[-n].cue</c>, then removes all but the newest 20 preview sheets; the
+    /// temporary playlists are left alone, and they leave these alone.</summary>
+    public static string WritePreview(string text, string? folder = null, DateTime? now = null)
+    {
+        folder ??= Folder;
+        var target = NewFile(folder, "preview-", ".cue", now);
+        File.WriteAllText(target, text, new UTF8Encoding(false));
+        Prune(folder, Keep, "preview-*.cue");
+        return target;
+    }
+
+    /// <summary>Removes the oldest of the app's own temporary files of one kind (<c>play-*.m3u8</c>, or
+    /// <c>preview-*.cue</c>) in that folder, and nothing else.</summary>
+    public static void Prune(string folder, int keep = Keep, string pattern = Prefix + "*.m3u8")
+    {
+        var files = Directory.GetFiles(folder, pattern).Order(NaturalOrder.Instance).ToList();
         foreach (var old in files.Take(Math.Max(0, files.Count - keep)))
         {
             try

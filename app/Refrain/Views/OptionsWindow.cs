@@ -35,6 +35,7 @@ public sealed partial class OptionsWindow : Window
         builders["File names"] = FileNamesPage;
         builders["ReplayGain"] = ReplayGainPage;
         builders["Tidy"] = TidyPage;
+        builders["Split"] = SplitPage;
         foreach (var name in builders.Keys) pages.Items.Add(name);
 
         var body = new Grid();
@@ -288,9 +289,9 @@ public sealed partial class OptionsWindow : Window
     {
         var options = settings.GetTidy();
         var page = Page("Tidy",
-            "Tidy renames the music files of every album below a folder from their tags (the File names masks), runs " +
-            "ReplayGain where an album needs it, and offers the pictures, videos and empty folders it finds for the " +
-            "Recycle Bin, one by one.");
+            "Tidy splits every album below a folder that is still one image and its cue sheet, renames the music files " +
+            "from their tags (the File names masks), runs ReplayGain where an album needs it, and offers the split " +
+            "images, the pictures, videos and empty folders it finds for the Recycle Bin, one by one.");
         filling = true;
         var music = Field(page, "Music file types it renames", string.Join(" ", options.MusicTypes));
         var pictures = Field(page, "Pictures it offers", string.Join(" ", options.Pictures));
@@ -312,6 +313,27 @@ public sealed partial class OptionsWindow : Window
         return page;
     }
 
+    FrameworkElement SplitPage()
+    {
+        var page = Page("Split", "The cue sheet editor: how it saves a new cue sheet (New cue sheet… on an audio file).");
+        var beside = new CheckBox
+        {
+            Content = "Save new cue sheets beside their audio file without asking",
+            IsChecked = settings.SaveCueBeside,
+        };
+        ToolTipService.SetToolTip(beside, "Save puts a new sheet next to its audio file at once, named after it (numbered if the name is taken), without asking for a name");
+        void Changed()
+        {
+            settings.SaveCueBeside = beside.IsChecked == true;
+            save();
+        }
+        beside.Checked += (_, _) => Changed();
+        beside.Unchecked += (_, _) => Changed();
+        page.Children.Add(beside);
+        RestoreButton(page, "Split", () => settings.SaveCueBeside = false);
+        return page;
+    }
+
     async Task RestoreAll()
     {
         var dialog = new ContentDialog
@@ -327,6 +349,7 @@ public sealed partial class OptionsWindow : Window
         settings.Set(FileNamesOptions.Default);
         settings.Set(ReplayGainOptions.Default);
         settings.Set(TidyOptions.Default);
+        settings.SaveCueBeside = false;
         save();
         if (pages.SelectedItem is string name) ShowPage(name);
     }

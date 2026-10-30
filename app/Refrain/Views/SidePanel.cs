@@ -42,6 +42,8 @@ public sealed partial class SidePanel : Grid
         folder = new FolderPage(library);
         folder.PlayRequested += (id, subfolders) => PlayRequested?.Invoke(id, subfolders);
         preview.SplitRequested += path => _ = App.Instance.RunEntry(RefrainMenu.MenuLogic.Split, [path]);
+        preview.EditRequested += path => _ = App.Instance.RunEntry(RefrainMenu.MenuLogic.EditCue, [path]);
+        metadata.NewCueRequested += path => _ = App.Instance.RunEntry(RefrainMenu.MenuLogic.NewCue, [path]);
         message.Margin = new Thickness(16);
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });

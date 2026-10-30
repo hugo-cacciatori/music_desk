@@ -124,7 +124,7 @@ public sealed class StartTests : IDisposable
         Assert.Equal(["ReplayGain this track (−15 LUFS)", "—", "Settings"], Labels(false, (@"D:\A\1.flac", false), (@"D:\A\cover.jpg", false)));
         Assert.Equal(["Settings"], Labels(false, (@"D:\A", true), (@"D:\A\1.flac", false)));
         Assert.Equal(["Settings"], Labels(false, (@"D:\A\notes.txt", false)));
-        Assert.Equal(["Split this cue sheet…", "—", "Settings"], Labels(false, (@"D:\A\image.CUE", false)));
+        Assert.Equal(["Split this cue sheet…", "Edit this cue sheet…", "—", "Settings"], Labels(false, (@"D:\A\image.CUE", false)));
         Assert.Equal(["Settings"], Labels(false, (@"D:\A\image.cue", false), (@"D:\A\b.cue", false)));
         Assert.Equal("−18.5 LUFS", MenuLogic.TargetText(-18.5));
         Assert.Equal(Formats.ReplayGain.Order(), MenuLogic.ReplayGainExtensions.Order());  // one list, in step

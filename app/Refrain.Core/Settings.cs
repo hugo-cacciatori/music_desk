@@ -40,6 +40,8 @@ public sealed class Settings
     public JsonElement? ReplayGain { get; set; }
     public JsonElement? Tidy { get; set; }
     public string OptionsPage { get; set; } = "";
+    /// <summary>The Split page (SPEC §12, §22): Save puts a new cue sheet beside its audio file without asking.</summary>
+    public bool SaveCueBeside { get; set; }
 
     public FileNamesOptions GetFileNames() => FileNamesOptions.From(FileNames);
     public void Set(FileNamesOptions options) => FileNames = Element(options.Write);

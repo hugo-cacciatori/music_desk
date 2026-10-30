@@ -116,7 +116,13 @@ public sealed partial class SplitWindow : Window
         var names = settings.GetFileNames();
         var masksValid = names.Validate().Count == 0;
         var silent = Split.IsSilent(flac, cancel.Token);
-        Task.Run(() => SplitPlanner.Plan(cue, names.Masks, names.Replacement, silent)).ContinueWith(task => ui.TryEnqueue(() =>
+        Task.Run(() =>
+        {
+            var planned = SplitPlanner.Plan(cue, names.Masks, names.Replacement, silent);
+            // The editor's own checks too: a value it marks keeps Split greyed (SPEC §31).
+            var toFix = planned.Sheet is not null && CueDocument.Read(cue).Validate(planned.Info).Any(p => p.BlocksSave);
+            return (planned, toFix);
+        }).ContinueWith(task => ui.TryEnqueue(() =>
         {
             if (task.Exception is { } error)
             {
@@ -124,12 +130,13 @@ public sealed partial class SplitWindow : Window
                 Fail($"The cue sheet can't be planned: {error.InnerException?.Message ?? error.Message}. {SplitRecap.FixIt}");
                 return;
             }
-            if (task.Result.Sheet is null)
+            var (planned, toFix) = task.Result;
+            if (planned.Sheet is null)
             {
-                Fail($"{task.Result.Refusal} {SplitRecap.FixIt}");
+                Fail($"{planned.Refusal} {SplitRecap.FixIt}");
                 return;
             }
-            ShowRecap(task.Result, masksValid);
+            ShowRecap(planned, masksValid, toFix);
         }), TaskScheduler.Default);
     }
 
@@ -150,10 +157,10 @@ public sealed partial class SplitWindow : Window
         return grid;
     }
 
-    void ShowRecap(AlbumPlan planned, bool masksValid)
+    void ShowRecap(AlbumPlan planned, bool masksValid, bool valuesToFix)
     {
         plan = planned;
-        reasons = SplitRecap.Reasons(planned, masksValid, ReplayGainWindow.OptionsWhere);
+        reasons = SplitRecap.Reasons(planned, masksValid, ReplayGainWindow.OptionsWhere, valuesToFix);
         details.Text = string.Join("\n", SplitRecap.Details(planned));
         tracks.Children.Clear();
         tracks.Children.Add(Row("Track", "File", "Length", header: true));

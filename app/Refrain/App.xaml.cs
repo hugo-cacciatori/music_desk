@@ -108,7 +108,8 @@ public partial class App : Application
     };
 
     static bool IsTask(string entry) =>
-        ReplayGainKinds.ContainsKey(entry) || entry is MenuLogic.RemoveReplayGain or MenuLogic.Tidy or MenuLogic.Split;
+        ReplayGainKinds.ContainsKey(entry) ||
+        entry is MenuLogic.RemoveReplayGain or MenuLogic.Tidy or MenuLogic.Split or MenuLogic.EditCue or MenuLogic.NewCue;
 
     /// <summary>A task entry, from Explorer or from the app (SPEC §35): unsaved Metadata edits on the files it changes
     /// are asked about first, then the task opens its own window, which alone comes to the front.</summary>
@@ -123,6 +124,12 @@ public partial class App : Application
             var label = MenuLogic.Entries(MenuLogic.Classify(false, items), items, replayGain.Target)
                 .FirstOrDefault(e => e.Verb == entry)?.Label ?? "ReplayGain";
             var task = new ReplayGainWindow(label, kind, paths, replayGain, Locks);
+            task.Finished += folders => window?.TaskChanged(folders);
+            task.Start();
+        }
+        else if (entry is MenuLogic.EditCue or MenuLogic.NewCue)
+        {
+            var task = new CueEditorWindow(paths[0], entry == MenuLogic.NewCue, settings, Locks);
             task.Finished += folders => window?.TaskChanged(folders);
             task.Start();
         }

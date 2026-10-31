@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Media;
 using Refrain.Core;
 using Refrain.Core.Browser;
 using Refrain.Core.Index;
+using Refrain.Core.Playback;
 using Refrain.Core.ReplayGain;
 using Refrain.Core.Search;
 using Refrain.Views;
@@ -56,6 +57,8 @@ public sealed partial class SearchWindow : Window
     readonly CardList cards = new();
     readonly LyricsPage lyrics;
     readonly DiscographyView discography;
+    readonly Player player;
+    readonly PlayerBar playerBar;
     readonly Grid resultsPage = new();
     readonly Border resultsCard;
     readonly Border lyricsCard;
@@ -81,7 +84,9 @@ public sealed partial class SearchWindow : Window
         ui = DispatcherQueue.GetForCurrentThread();
         search = new SearchService(library.Db);
         lyrics = new LyricsPage(library, library.Lyrics, settings);
-        discography = new DiscographyView(library, settings);
+        player = new Player(settings, App.Instance.Locks);
+        playerBar = new PlayerBar(player);
+        discography = new DiscographyView(library, settings, player);
         // The last mode used is kept; an unknown value reads as Files (SPEC §6 "Direction task 5").
         mode = settings.SearchMode == "lyrics" ? SearchMode.Lyrics : SearchMode.Files;
         results = new FileTable(Columns.Search, settings.SearchHeader ?? new HeaderState { SortKey = "folder" }, searchResults: true);
@@ -130,6 +135,10 @@ public sealed partial class SearchWindow : Window
         ToolTipService.SetToolTip(lyricsRetry, "Try LRCLIB again now");
         Grid.SetRow(statusRow, 2);
         root.Children.Add(statusRow);
+        // The player's bar, below everything, always there (SPEC §37).
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(playerBar, 3);
+        root.Children.Add(playerBar);
         Content = root;
         Ui.Background(root);
 
@@ -141,6 +150,7 @@ public sealed partial class SearchWindow : Window
         root.Loaded += async (_, _) =>
         {
             await LoadRoots();
+            await Reopen();
             if (!Offscreen) searchBox.Focus(FocusState.Programmatic);  // the search has the focus at start (SPEC §33)
             // An agent's check opens what needs a double click by itself (SPEC §36 "7.": checks only read).
             if (Offscreen && Environment.GetEnvironmentVariable("REFRAIN_CHECK_DISCOGRAPHY") is { Length: > 0 } track) await CheckDiscography(track);
@@ -335,6 +345,11 @@ public sealed partial class SearchWindow : Window
         cards.Clicked += () => _ = ShowLyricsOf(cards.SelectedRows);
         cards.Activated += row => _ = OpenDiscography(row);
         discography.Closed += CloseDiscography;
+        playerBar.SongClicked += current =>
+        {
+            discography.Visibility = Visibility.Visible;
+            _ = discography.ShowSong(current);
+        };
 
         searchBox.TextChanged += (_, _) =>
         {
@@ -478,6 +493,7 @@ public sealed partial class SearchWindow : Window
                 discography.Visibility = Visibility.Visible;
                 discography.Show(albums, allAlbums: Environment.GetEnvironmentVariable("REFRAIN_CHECK_ALBUMS") == "1");
                 if (Environment.GetEnvironmentVariable("REFRAIN_CHECK_LEVELS") == "1") await discography.CheckLevels();
+                if (Environment.GetEnvironmentVariable("REFRAIN_CHECK_PLAYER") == "1") await discography.CheckPlayer(App.Instance.Locks);
                 return;
             }
             await Task.Delay(1000);
@@ -775,6 +791,19 @@ public sealed partial class SearchWindow : Window
             }
         }
         settings.SearchHeader = results.State;
+        // Refrain reopens on the last song, paused where it was (SPEC §37); closing it stops the music.
+        settings.PlayerPath = settings.PlayerKeep ? player.Current?.Path : null;
+        settings.PlayerSeconds = settings.PlayerKeep && player.Current is not null ? player.Position.TotalSeconds : 0;
+        player.Dispose();
         settings.Save(AppPaths.Settings);
+    }
+
+    /// <summary>The bar on the last song, paused where it was, unless the Player page turned that off (SPEC §37).</summary>
+    async Task Reopen()
+    {
+        if (Offscreen && Environment.GetEnvironmentVariable("REFRAIN_CHECK_PLAYER") == "1") player.Muted = true;
+        if (!settings.PlayerKeep || settings.PlayerPath is not { } path) return;
+        if (await Read(conn => PlayerSong.Reopen(conn, path)) is { } found)
+            player.Play(found.Queue, found.Start, TimeSpan.FromSeconds(settings.PlayerSeconds), paused: true);
     }
 }

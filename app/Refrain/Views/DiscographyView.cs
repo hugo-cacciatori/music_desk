@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Shapes;
 using Refrain.Core;
+using Refrain.Core.Playback;
 using Refrain.Core.Search;
 using Windows.Foundation;
 using Windows.System;
@@ -31,6 +32,11 @@ public sealed partial class DiscographyView : UserControl
 
     readonly Core.Library index;
     readonly Settings settings;
+    readonly Player player;
+    // The shown song's synced lyrics, one block per line, and the line lit as it is sung (SPEC §37).
+    readonly StackPanel lyricsLines = new() { Spacing = 6 };
+    List<SyncedLine> synced = [];
+    int sungLine = -1;
     readonly Grid stage = new();
     readonly Grid view = new() { Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
     readonly Grid mapLayer = new() { Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
@@ -100,10 +106,14 @@ public sealed partial class DiscographyView : UserControl
     double H => view.ActualHeight;
     bool ZoomedIn => level == Level.Album;
 
-    public DiscographyView(Core.Library index, Settings settings)
+    public DiscographyView(Core.Library index, Settings settings, Player player)
     {
         this.index = index;
         this.settings = settings;
+        this.player = player;
+        player.Changed += FollowPlayer;
+        player.Ticked += ShowSungLine;
+        lyricsLines.RenderTransform = null;
         IsTabStop = true;
         mapLayer.Children.Add(map);
         mapLayer.Clip = null;
@@ -446,13 +456,69 @@ public sealed partial class DiscographyView : UserControl
         }
     }
 
+    /// <summary>A song chosen in the album (a click, Up or Down) plays at once (SPEC §37).</summary>
     void Choose(int index2)
     {
-        if (index2 == song) return;
-        song = index2;
-        DrawSongs();
-        ShowLyrics(fade: true);
-        _ = RefreshPanel();
+        if (index2 != song)
+        {
+            song = index2;
+            DrawSongs();
+            ShowLyrics(fade: true);
+            _ = RefreshPanel();
+        }
+        if (player.Current?.Id != data!.Albums[album].Songs[song].Id) _ = PlayShown(TimeSpan.Zero);
+    }
+
+    /// <summary>The shown song from <paramref name="at"/>, its album as the player's queue.</summary>
+    async Task PlayShown(TimeSpan at)
+    {
+        if (data is not { } shownData) return;
+        var (shownAlbum, shownSong) = (album, song);
+        var (queue, start) = await Read(conn => PlayerSong.QueueOf(conn, shownData, shownAlbum, shownSong));
+        if (queue.Count > 0) player.Play(queue, start, at);
+    }
+
+    /// <summary>The player moved to another song of the album on screen (the album going on): the view follows it.</summary>
+    void FollowPlayer()
+    {
+        if (player.Current is not { } current || data is null || current.ArtistKey != data.Key) return;
+        var songs = data.Albums[album].Songs;
+        var at = songs.ToList().FindIndex(s => s.Id == current.Id);
+        if (at >= 0 && at != song)
+        {
+            song = at;
+            DrawSongs();
+            ShowLyrics(fade: level == Level.Album);
+            _ = RefreshPanel();
+        }
+        ShowSungLine();
+    }
+
+    /// <summary>Opens the player's song in its album (a click on the bar's title, SPEC §37).</summary>
+    public async Task ShowSong(PlayerSong current)
+    {
+        if (await Read(conn => ArtistAlbums.ForArtist(conn, current.ArtistKey, current.Id)) is { } found) Show(found);
+    }
+
+    /// <summary>The sung line lights up and comes to the middle, while the shown song is the one playing.</summary>
+    void ShowSungLine()
+    {
+        if (synced.Count == 0 || data is null) return;
+        var playing = player.Current?.Id == data.Albums[album].Songs[song].Id;
+        var now = playing ? SyncedLyrics.IndexAt(synced, player.Position) : -1;
+        if (now == sungLine) return;
+        for (var i = 0; i < lyricsLines.Children.Count; i++)
+            if (lyricsLines.Children[i] is TextBlock line)
+            {
+                line.Foreground = new SolidColorBrush(!playing || i == now ? p.Text : p.Secondary);
+                line.FontWeight = i == now ? FontWeights.SemiBold : FontWeights.Normal;
+            }
+        sungLine = now;
+        if (now >= 0 && lyricsLines.Children[now] is TextBlock sung && level == Level.Album)
+        {
+            var top = sung.TransformToVisual(lyricsLines).TransformPoint(new Point(0, 0)).Y;
+            lyricsScroll.ChangeView(null, Math.Max(0, top - lyricsScroll.ViewportHeight / 2 + sung.ActualHeight / 2), null, disableAnimation: !Bubbles.Animate);
+        }
     }
 
     void ShowLyrics(bool fade)
@@ -461,11 +527,33 @@ public sealed partial class DiscographyView : UserControl
         void Fill()
         {
             lyricsTitle.Text = item.Title.ToUpperInvariant();
+            // Synced lyrics show line by line, each a click away from its moment (SPEC §37); plain lyrics as a text.
+            synced = SyncedLyrics.Parse(item.Synced).Where(l => l.Text.Length > 0).ToList();
+            sungLine = -2;
+            lyricsLines.Children.Clear();
+            foreach (var line in synced)
+            {
+                var block = new TextBlock
+                {
+                    Text = line.Text, FontSize = 16, FontStyle = Windows.UI.Text.FontStyle.Italic, FontFamily = lyricsText.FontFamily,
+                    TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(p.Text),
+                };
+                ToolTipService.SetToolTip(block, $"Play from {SongInfo.Length(line.At.TotalSeconds)}");
+                var at = line.At;
+                block.Tapped += (_, _) =>
+                {
+                    if (player.Current?.Id == item.Id) player.Seek(at);
+                    else _ = PlayShown(at);
+                };
+                lyricsLines.Children.Add(block);
+            }
+            lyricsScroll.Content = synced.Count > 0 ? lyricsLines : lyricsText;
             lyricsText.Text = item.Lyrics ?? item.Note;
             lyricsText.FontStyle = item.Lyrics is null ? Windows.UI.Text.FontStyle.Normal : Windows.UI.Text.FontStyle.Italic;
             lyricsText.Foreground = new SolidColorBrush(item.Lyrics is null ? p.Secondary : p.Text);
             lyricsScroll.MaxHeight = Math.Max(120, H - 140);
             lyricsScroll.ChangeView(null, 0, null, disableAnimation: true);
+            ShowSungLine();
         }
         Bubbles.Drift(lyricsBlock, 2.5f, 300, 12);
         if (!fade || !Bubbles.Animate)
@@ -971,6 +1059,21 @@ public sealed partial class DiscographyView : UserControl
             await Settle();
             Report("album");
         }
+    }
+
+    /// <summary>An agent's off-screen check of the player (muted, SPEC §37): the open album's first song plays, then a
+    /// task takes its folder; what the player does is logged.</summary>
+    public async Task CheckPlayer(PathLocks locks)
+    {
+        if (data is null) return;
+        Choose(0);
+        await Task.Delay(2500);
+        Log.Info($"Check player: {player.Current?.Title}, playing {player.Playing}, at {player.Position.TotalSeconds:0.0} s of {player.Duration.TotalSeconds:0.0} s, notice {player.Notice ?? "none"}");
+        var folder = System.IO.Path.GetDirectoryName(player.Current?.Path ?? "") ?? "";
+        var token = locks.Acquire([folder], "ReplayGain");
+        await Task.Delay(500);
+        Log.Info($"Check player, task on its folder: playing {player.Playing}, notice {player.Notice ?? "none"}");
+        locks.Release(token);
     }
 
     // -- Open in File Explorer --

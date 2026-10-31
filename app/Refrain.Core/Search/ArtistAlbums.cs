@@ -5,8 +5,8 @@ using Refrain.Core.Lyrics;
 namespace Refrain.Core.Search;
 
 /// <summary>A song of the discography view: its title and its lyrics as LRCLIB gave them (null with a reason when there
-/// are none).</summary>
-public sealed record AlbumSong(long Id, string Title, int? Disc, int? Track, string? Lyrics, string Note);
+/// are none), synced too when LRCLIB has them timed (the sung line, SPEC §37).</summary>
+public sealed record AlbumSong(long Id, string Title, int? Disc, int? Track, string? Lyrics, string Note, string? Synced = null);
 
 /// <summary>An album, by its grouping key (<see cref="Names.AlbumKey"/>) and the name it shows.</summary>
 public sealed record ArtistAlbum(string Key, string Name, string? Year, IReadOnlyList<AlbumSong> Songs);
@@ -54,13 +54,13 @@ public sealed record ArtistAlbums(string Key, string Artist, IReadOnlyList<Artis
         }
         if (ids.Count == 0) return null;
 
-        var rows = new List<(long Id, string Title, string Album, string? Date, int? Disc, int? Track, string? Status, string? Plain)>();
+        var rows = new List<(long Id, string Title, string Album, string? Date, int? Disc, int? Track, string? Status, string? Plain, string? Synced)>();
         foreach (var chunk in ids.Chunk(500))
         {
             using var cmd = conn.CreateCommand();
             cmd.CommandText = $"""
                 SELECT t.entry_id, COALESCE(NULLIF(TRIM(t.title), ''), e.name), COALESCE(NULLIF(TRIM(t.album), ''), ''),
-                       t.date, t.disc, t.track, l.status, l.plain
+                       t.date, t.disc, t.track, l.status, l.plain, l.synced
                 FROM tracks t
                 JOIN entries e ON e.id = t.entry_id
                 LEFT JOIN lyrics l ON l.key = t.lyrics_key
@@ -71,7 +71,8 @@ public sealed record ArtistAlbums(string Key, string Artist, IReadOnlyList<Artis
             while (r.Read())
                 rows.Add((r.GetInt64(0), r.GetString(1), r.GetString(2), r.IsDBNull(3) ? null : r.GetString(3),
                     r.IsDBNull(4) ? null : r.GetInt32(4), r.IsDBNull(5) ? null : r.GetInt32(5),
-                    r.IsDBNull(6) ? null : r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7)));
+                    r.IsDBNull(6) ? null : r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7),
+                    r.IsDBNull(8) ? null : r.GetString(8)));
         }
 
         var albums = rows.GroupBy(row => Names.AlbumKey(row.Album), StringComparer.Ordinal).Select(group =>
@@ -80,7 +81,8 @@ public sealed record ArtistAlbums(string Key, string Artist, IReadOnlyList<Artis
             var songs = group
                 .OrderBy(s => s.Disc ?? 1).ThenBy(s => s.Track ?? int.MaxValue).ThenBy(s => s.Title, NaturalOrder.Instance)
                 .Where(s => seen.Add((s.Disc ?? 1, s.Track, Names.Key(s.Title))) || s.Id == start)
-                .Select(s => new AlbumSong(s.Id, s.Title, s.Disc, s.Track, Text(s.Status, s.Plain), Note(s.Status, s.Plain)))
+                .Select(s => new AlbumSong(s.Id, s.Title, s.Disc, s.Track, Text(s.Status, s.Plain), Note(s.Status, s.Plain),
+                    s.Status == LyricsEntry.Found && !string.IsNullOrWhiteSpace(s.Synced) ? s.Synced : null))
                 .ToList();
             var year = group.Select(s => Year(s.Date)).Where(y => y is not null).Order(StringComparer.Ordinal).FirstOrDefault();
             var name = group.Key.Length > 0 ? Names.Shown(group.Select(s => Names.WithoutMarkers(s.Album))) : "Other songs";

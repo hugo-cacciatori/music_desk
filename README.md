@@ -30,6 +30,11 @@ ready for a search.
   or punctuation are one artist, and "CD1", "Disc 2" or "[Remastered]" don't split an album. An info panel on the
   right shows the open artist, album or song (tags, format, ReplayGain, where the file is); right-click anything to
   open it in File Explorer.
+- **The player**, a bar along the bottom of the Search window: a click on a song in the discography view plays it,
+  and its album goes on, starting over after the last song (or stopping, in Options). Where LRCLIB has timed lyrics,
+  the line being sung lights up, and a click on a line plays from there. Refrain reopens on the last song, paused.
+  It never plays a file while ReplayGain, Tidy or another task is changing its folder: it stops and says why, or
+  skips those songs if you choose that in Options.
 - **The Search window**, over your whole library. Type any part of a folder or file name, a title, artist, album or
   lyric line; accents and case are ignored, and filters such as `artist:`, `year:`, `ext:` or `lrclib:notfound`
   narrow it. A double click on a result opens it in File Explorer. The … button adds library folders, and Options'
@@ -65,7 +70,7 @@ ready for a search.
   copy goes into a subfolder (`lite` by default) with the original's tags, checked sample for sample. The original
   is never touched.
 - **Settings** (always): file name masks, ReplayGain's target and keywords, what Tidy renames and offers, how new cue
-  sheets are saved, Trim's subfolder, and your library folders.
+  sheets are saved, Trim's subfolder, the player, and your library folders.
 - **Light and dark**: a light, airy look of soft bubbles, and a dusk version when Windows is in dark mode.
 
 ## Install

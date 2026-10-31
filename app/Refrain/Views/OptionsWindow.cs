@@ -41,6 +41,7 @@ public sealed partial class OptionsWindow : Window
         builders["Tidy"] = TidyPage;
         builders["Split"] = SplitPage;
         builders["Trim"] = TrimPage;
+        builders["Player"] = PlayerPage;
         foreach (var name in builders.Keys) pages.Items.Add(name);
 
         var body = new Grid();
@@ -458,6 +459,62 @@ public sealed partial class OptionsWindow : Window
         return page;
     }
 
+    /// <summary>The player (SPEC §37): what happens when an album ends, whether Refrain reopens on the last song, and
+    /// what a task starting on the playing song's folder does.</summary>
+    FrameworkElement PlayerPage()
+    {
+        var page = Page("Player", "The bar at the bottom of the Search window, which plays a song chosen in the discography " +
+                                  "view and goes on through its album.");
+        StackPanel Choice(string header, string group, (string Value, string Label, string Help)[] options, string current, Action<string> set)
+        {
+            var panel = new StackPanel { Spacing = 2 };
+            panel.Children.Add(new TextBlock { Text = header, Margin = new Thickness(0, 4, 0, 2) });
+            foreach (var (value, label, help) in options)
+            {
+                var radio = new RadioButton { Content = label, GroupName = group, IsChecked = value == current };
+                ToolTipService.SetToolTip(radio, help);
+                radio.Checked += (_, _) =>
+                {
+                    set(value);
+                    save();
+                };
+                panel.Children.Add(radio);
+            }
+            page.Children.Add(panel);
+            return panel;
+        }
+        Choice("When an album ends", "player-end",
+        [
+            ("loop", "Loop the album", "After its last song, the album starts over from the first"),
+            ("once", "Play the album once, then stop", "After its last song, the player stops"),
+        ], settings.PlayerAtEnd == "once" ? "once" : "loop", value => settings.PlayerAtEnd = value);
+        Choice("When a task (ReplayGain, Tidy, a split, a trim…) starts on the folder of the song playing or of a song after it in the album", "player-busy",
+        [
+            ("stop", "Stop playback and say why", "The player stops and the bar says which task is changing which folder; press play once it ends"),
+            ("skip", "Skip to the next song of the album the task doesn't touch",
+             "The player goes on with the album's other songs, leaving out the files the task is changing, and the bar says so"),
+        ], settings.PlayerOnBusy == "skip" ? "skip" : "stop", value => settings.PlayerOnBusy = value);
+        var keep = new CheckBox { Content = "Reopen Refrain on the last song, paused where it was", IsChecked = settings.PlayerKeep };
+        ToolTipService.SetToolTip(keep, "Closing Refrain always stops the music; with this, the bar shows the same song next time, ready to play");
+        void Kept()
+        {
+            settings.PlayerKeep = keep.IsChecked == true;
+            save();
+        }
+        keep.Checked += (_, _) => Kept();
+        keep.Unchecked += (_, _) => Kept();
+        page.Children.Add(keep);
+        RestoreButton(page, "Player", RestorePlayer);
+        return page;
+    }
+
+    void RestorePlayer()
+    {
+        settings.PlayerAtEnd = "loop";
+        settings.PlayerOnBusy = "stop";
+        settings.PlayerKeep = true;
+    }
+
     async Task RestoreAll()
     {
         var dialog = new ContentDialog
@@ -475,6 +532,7 @@ public sealed partial class OptionsWindow : Window
         settings.Set(TidyOptions.Default);
         settings.SaveCueBeside = false;
         settings.TrimSubfolder = Core.Cue.Trim.DefaultSubfolder;
+        RestorePlayer();
         save();
         if (pages.SelectedItem is string name) ShowPage(name);
     }

@@ -3,7 +3,8 @@ using Refrain.Core;
 
 namespace Refrain;
 
-/// <summary>Handing things to Windows: the app itself never opens or plays files (SPEC §14).</summary>
+/// <summary>Handing things to Windows: opening files with their default app and File Explorer (SPEC §14); the app's
+/// own player is <see cref="Views.Player"/> (SPEC §37).</summary>
 static class Shell
 {
     /// <summary>A file with its default app, whatever the type.</summary>

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Refrain.Core.Options;
+using Refrain.Core.Playback;
 
 namespace Refrain.Core;
 
@@ -38,6 +39,18 @@ public sealed class Settings
     /// (<see cref="InfoPanelClosedIn"/>): remembered between sessions, not between installs.</summary>
     public bool InfoPanelClosed { get; set; }
     public string? InfoPanelClosedIn { get; set; }
+
+    // The Player page (SPEC §12, §37): what happens when an album ends, whether Refrain reopens on the last song, and
+    // what a task on the playing song's folder does. Unknown values read as the defaults.
+    public string PlayerAtEnd { get; set; } = "loop";
+    public bool PlayerKeep { get; set; } = true;
+    public string PlayerOnBusy { get; set; } = "stop";
+    public AlbumEnd GetAlbumEnd() => PlayerAtEnd == "once" ? AlbumEnd.Once : AlbumEnd.Loop;
+    public BusyFolder GetBusyFolder() => PlayerOnBusy == "skip" ? BusyFolder.Skip : BusyFolder.Stop;
+    /// <summary>The player's own state, not options: its volume, and where it was when Refrain closed (SPEC §37).</summary>
+    public double PlayerVolume { get; set; } = 0.8;
+    public string? PlayerPath { get; set; }
+    public double PlayerSeconds { get; set; }
 
     // The Options window's pages (SPEC §12, §36 "8."), kept as JSON so a mistyped value falls back alone.
     public JsonElement? FileNames { get; set; }

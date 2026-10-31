@@ -23,7 +23,8 @@ public static class Migration
 {
     public const string Aside = "python-app";  // the Python files, moved aside before they go to the Recycle Bin
     const string Temporary = ".migrating";
-    static readonly string[] PythonFiles = ["library.db", "library.db-wal", "library.db-shm", "settings.json"];
+    // playlist.json: the Python app's playlist builder, which the C# app doesn't have.
+    static readonly string[] PythonFiles = ["library.db", "library.db-wal", "library.db-shm", "settings.json", "playlist.json"];
     static readonly string[] LyricsStatuses = ["found", "instrumental", "not_found"];
 
     /// <summary>The Python app's index: a schema version past this app's, with the Python app's own columns.</summary>
@@ -48,6 +49,50 @@ public static class Migration
         var conn = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = mode, Pooling = false }.ToString());
         conn.Open();
         return conn;
+    }
+
+    /// <summary>MusicDesk's data folder (<c>%LOCALAPPDATA%\MusicDesk</c>), the app's name up to 0.11 (SPEC §36 "10.").</summary>
+    public static string OldDataFolder =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MusicDesk");
+
+    /// <summary>An upgrade straight from MusicDesk (0.11 and earlier, before the rename): its data folder's items move
+    /// into <paramref name="folder"/>, each one <paramref name="folder"/> doesn't have yet (an item it has is never
+    /// overwritten: the menu may have made <c>menu\</c> first), so <see cref="Run"/> then migrates them as the Python
+    /// app's. What is left (such duplicates, logs) goes to the Recycle Bin with the folder. A file in use (MusicDesk
+    /// still running) moves nothing further and says so; the next start finishes. Null when all went well.</summary>
+    public static string? MoveOldDataFolder(string oldFolder, string folder, Action<string>? recycle = null)
+    {
+        recycle ??= Recycle.Send;
+        if (!Directory.Exists(oldFolder)) return null;
+        Directory.CreateDirectory(folder);
+        try
+        {
+            // The index first: if MusicDesk still holds it, nothing has moved yet.
+            var items = Directory.GetFileSystemEntries(oldFolder)
+                .OrderBy(p => Path.GetFileName(p).StartsWith("library.db", StringComparison.OrdinalIgnoreCase) ? 0 : 1);
+            foreach (var item in items)
+            {
+                var target = Path.Combine(folder, Path.GetFileName(item));
+                if (File.Exists(target) || Directory.Exists(target)) continue;
+                if (Directory.Exists(item)) Directory.Move(item, target);
+                else File.Move(item, target);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.Error($"Moving {oldFolder} into {folder} stopped", e);
+            return "MusicDesk still has its files open. Close it, then use Refrain's right-click menu again; nothing was lost.";
+        }
+        try
+        {
+            recycle(oldFolder);
+        }
+        catch (Exception e) when (e is IOException or CannotRecycleException or UnauthorizedAccessException)
+        {
+            Log.Info($"{oldFolder} wasn't sent to the Recycle Bin and stays: {e.Message}");
+        }
+        Log.Info($"Moved MusicDesk's data from {oldFolder} into {folder}");
+        return null;
     }
 
     /// <summary>Migrates <paramref name="folder"/>'s Python files, if it holds any. <paramref name="recycle"/> sends a
@@ -129,7 +174,7 @@ public static class Migration
         {
             Log.Error("Moving the Python app's files aside failed; they were put back", e);
             PutBack();
-            return new MigrationResult(false, Error: "The previous version of Refrain still has its files open. Close it, then start Refrain again.");
+            return new MigrationResult(false, Error: "The previous version of Refrain still has its files open. Close it, then use Refrain's right-click menu again.");
         }
         try
         {

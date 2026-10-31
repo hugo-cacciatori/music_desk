@@ -38,10 +38,13 @@ public static partial class Program
             Log.Info("Another Refrain holds the pipe but didn't answer; starting anyway.");
         }
         // The first start after the Python app moves its settings, library folders and LRCLIB results over (SPEC §36
-        // "10."), before anything opens them. A failure changes nothing and says why.
-        if (Migration.Run(AppPaths.DataFolder) is { Error: { } error })
+        // "10."), before anything opens them; straight from MusicDesk, its data folder joins Refrain's first (only the
+        // installer's build: a preview never takes the installed app's data). A failure changes nothing and says why.
+        var problem = (AppPaths.Release ? Migration.MoveOldDataFolder(Migration.OldDataFolder, AppPaths.DataFolder) : null)
+                      ?? Migration.Run(AppPaths.DataFolder).Error;
+        if (problem is not null)
         {
-            MessageBox(0, error, "Refrain", 0x30);  // MB_ICONWARNING
+            MessageBox(0, problem, "Refrain", 0x30);  // MB_ICONWARNING
             instance?.Dispose();
             return 1;
         }

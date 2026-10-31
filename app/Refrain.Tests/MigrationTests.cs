@@ -118,7 +118,7 @@ public sealed class MigrationTests
         using (new FileStream(Path.Combine(data, "library.db"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             open = Migration.Run(data, _ => throw new InvalidOperationException("nothing is recycled"));
         Assert.False(open.Migrated);
-        Assert.Equal("The previous version of Refrain still has its files open. Close it, then start Refrain again.", open.Error);
+        Assert.Equal("The previous version of Refrain still has its files open. Close it, then use Refrain's right-click menu again.", open.Error);
         Assert.Equal(before, Snapshot(data));
         Assert.Empty(Directory.GetDirectories(data));
 
@@ -128,6 +128,45 @@ public sealed class MigrationTests
         Assert.Equal(Path.Combine(data, Migration.Aside), kept.Kept);
         Assert.Equal(before["settings.json"], Snapshot(Path.Combine(data, Migration.Aside))["settings.json"]);
         Assert.False(Migration.IsPythonIndex(Path.Combine(data, "library.db")));
+    }
+
+    [Fact]
+    public void An_upgrade_straight_from_musicdesk_brings_its_data_folder()
+    {
+        using var temp = new TempFolder();
+        var (old, data, binFolder) = (temp.Sub("MusicDesk"), temp.Sub("Refrain"), temp.Sub("bin"));
+        var expected = MakePythonData(old);
+        Directory.CreateDirectory(Path.Combine(old, "playlists"));
+        File.WriteAllText(Path.Combine(old, "playlist.json"), "[]");  // the Python app's playlist builder
+        File.WriteAllText(Path.Combine(old, "menu.txt"), "MusicDesk's");
+        File.WriteAllText(Path.Combine(data, "menu.txt"), "Refrain's");  // the menu may write before the first start
+        var bin = new Bin(binFolder);
+
+        Assert.Null(Migration.MoveOldDataFolder(old, data, bin.Send));
+        Assert.Equal("Refrain's", File.ReadAllText(Path.Combine(data, "menu.txt")));  // never overwritten
+        Assert.Equal(["MusicDesk"], bin.Sent);  // the rest, to the Recycle Bin with the folder
+        Assert.Equal("MusicDesk's", File.ReadAllText(Path.Combine(binFolder, "MusicDesk-1", "menu.txt")));
+        Assert.False(Directory.Exists(old));
+        Assert.True(Directory.Exists(Path.Combine(data, "playlists")));
+
+        Assert.True(Migration.Run(data, bin.Send).Migrated);  // then migrated as the Python app's
+        Assert.Equal(expected, Read(Path.Combine(data, "library.db")));
+        Assert.False(File.Exists(Path.Combine(data, "playlist.json")));  // aside with the Python files
+        Assert.Null(Migration.MoveOldDataFolder(old, data, bin.Send));  // nothing left to move
+    }
+
+    [Fact]
+    public void A_running_musicdesk_keeps_its_data_folder()
+    {
+        using var temp = new TempFolder();
+        var (old, data) = (temp.Sub("MusicDesk"), temp.Sub("Refrain"));
+        MakePythonData(old);
+        string? problem;
+        using (new FileStream(Path.Combine(old, "library.db"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            problem = Migration.MoveOldDataFolder(old, data, _ => throw new InvalidOperationException("nothing is recycled"));
+        Assert.Equal("MusicDesk still has its files open. Close it, then use Refrain's right-click menu again; nothing was lost.", problem);
+        Assert.True(File.Exists(Path.Combine(old, "library.db")));
+        Assert.Empty(Directory.GetFileSystemEntries(data));  // the index first: nothing moved
     }
 
     [Fact]

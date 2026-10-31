@@ -6,7 +6,8 @@ namespace Refrain.Core.Search;
 
 /// <summary>A song as the discography view's info panel shows it (SPEC §37): its tags and file information, the path
 /// among them, as the index has them. Fields with no value are left out.</summary>
-public sealed record SongInfo(string? Path, IReadOnlyList<(string Label, string Value)> Fields)
+public sealed record SongInfo(string? Path, IReadOnlyList<(string Label, string Value)> Fields, string? RatingKey = null,
+    double? Seconds = null)
 {
     public static SongInfo? Read(SqliteConnection conn, long entryId)
     {
@@ -47,10 +48,12 @@ public sealed record SongInfo(string? Path, IReadOnlyList<(string Label, string 
         Add("Cover", N(15) is 1 ? "In the file" : "None in the file");
         Add("ReplayGain", S(17) is { } album ? $"album {album}{(S(16) is { } track ? $", track {track}" : "")}"
             : S(16) is { } trackOnly ? $"track {trackOnly}" : "No ReplayGain tags");
+        var ratingKey = Ratings.Key(S(2) ?? S(1), S(3), S(0) ?? S(19));
+        double? seconds = r.IsDBNull(10) ? null : r.GetDouble(10);
         r.Close();
         var path = Queries.PathOf(conn, entryId);
         Add("Location", path);
-        return new SongInfo(path, fields);
+        return new SongInfo(path, fields, ratingKey, seconds);
     }
 
     /// <summary>"3:07", "1:02:45".</summary>

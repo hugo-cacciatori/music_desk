@@ -136,6 +136,12 @@ public sealed partial class LyricsPage : UserControl
         : ("", "");
 
     public long? EntryId => entryId;
+
+    /// <summary>The track's title line; off inside the preview, whose own title says it (SPEC §37).</summary>
+    public bool ShowsTitle
+    {
+        set => title.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+    }
     public string? ShownKey => info?.Key;
 
     /// <summary>Shows one track's lyrics state, and puts it first in the lookup queue when it still needs one.</summary>

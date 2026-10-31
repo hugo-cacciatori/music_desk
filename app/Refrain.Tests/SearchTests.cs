@@ -104,8 +104,10 @@ public sealed class SearchTests : IDisposable
     {
         lib.Unread(other, "glove.txt");
         lib.Unread(other, "glove.cue");
-        lib.Folder(other, "Gloves");
-        Assert.Equal(["Glove.mp3", "Gloves"], Find("glove"));
+        lib.Folder(other, "Gloves");  // no song below it: not a result (SPEC §37)
+        var withSong = lib.Folder(other, "Glove box");
+        lib.Unread(withSong, "a.flac");
+        Assert.Equal(["Glove.mp3", "Glove box"], Find("glove"));
         Assert.Empty(Find("Music"));  // not the root's top entry, whose name is the root path
     }
 

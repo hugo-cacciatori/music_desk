@@ -74,6 +74,9 @@ public partial class App : Application
 
     public Settings Settings => settings;
 
+    /// <summary>Ratings and notes (SPEC §37), shared by the Search window's preview and the discography view.</summary>
+    public Ratings Ratings { get; } = new(AppPaths.Ratings);
+
     /// <summary>The index, its indexer and LRCLIB lookups: one for the process, opened by the first window that needs it
     /// (Search, or Options' Library page), closed when the app ends.</summary>
     public Library Library => library ??= new Library(AppPaths.Database);

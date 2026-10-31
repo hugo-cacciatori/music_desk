@@ -49,6 +49,9 @@ public sealed class Settings
     public BusyFolder GetBusyFolder() => PlayerOnBusy == "skip" ? BusyFolder.Skip : BusyFolder.Stop;
     /// <summary>The player's own state, not options: its volume, and where it was when Refrain closed (SPEC §37).</summary>
     public double PlayerVolume { get; set; } = 0.8;
+    /// <summary>The preview's excerpts play with their sound (SPEC §37): the preview's speaker icon and the Player page
+    /// set the same value. Never over the player: while it plays, previews are silent anyway.</summary>
+    public bool PreviewSound { get; set; } = true;
     public string? PlayerPath { get; set; }
     public double PlayerSeconds { get; set; }
 

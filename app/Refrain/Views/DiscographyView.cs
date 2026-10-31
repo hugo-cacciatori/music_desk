@@ -33,6 +33,7 @@ public sealed partial class DiscographyView : UserControl
     readonly Core.Library index;
     readonly Settings settings;
     readonly Player player;
+    readonly Stars songStars = new(App.Instance.Ratings) { Margin = new Thickness(0, 0, 0, 4) };
     // The shown song's synced lyrics, one block per line, and the line lit as it is sung (SPEC §37).
     readonly StackPanel lyricsLines = new() { Spacing = 6 };
     List<SyncedLine> synced = [];
@@ -966,6 +967,7 @@ public sealed partial class DiscographyView : UserControl
         if (panel.Visibility != Visibility.Visible) return;
         var version = ++panelVersion;
         var fields = new List<(string, string)>();
+        string? ratingKey = null;
         string title;
         switch (level)
         {
@@ -997,6 +999,7 @@ public sealed partial class DiscographyView : UserControl
                     fields.Add(("", ""));
                     fields.Add(("Song", ""));
                     fields.AddRange(info.Fields);
+                    ratingKey = info.RatingKey;
                 }
                 break;
             default:
@@ -1009,8 +1012,16 @@ public sealed partial class DiscographyView : UserControl
             Text = title, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(p.Text), Margin = new Thickness(0, 22, 0, 8), IsTextSelectionEnabled = true,
         });
+        // The song's rating and note, as in the preview (SPEC §37).
+        songStars.Load(ratingKey);
         foreach (var (label, value) in fields)
         {
+            if (label == "Song" && ratingKey is not null)
+            {
+                panelBody.Children.Add(new TextBlock { Text = "Song", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(p.Secondary), Margin = new Thickness(0, 10, 0, 2) });
+                panelBody.Children.Add(songStars);
+                continue;
+            }
             if (label.Length > 0)
                 panelBody.Children.Add(new TextBlock
                 {

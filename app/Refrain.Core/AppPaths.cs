@@ -33,5 +33,7 @@ public static class AppPaths
 
     public static string Database => Path.Combine(DataFolder, "library.db");
     public static string Settings => Path.Combine(DataFolder, "settings.json");
+    /// <summary>Ratings and notes (SPEC §37): the user's own data, kept apart from the index.</summary>
+    public static string Ratings => Path.Combine(DataFolder, "ratings.json");
     public static string Logs => Directory.CreateDirectory(Path.Combine(DataFolder, "logs")).FullName;
 }

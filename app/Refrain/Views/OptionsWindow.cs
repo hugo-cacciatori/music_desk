@@ -504,6 +504,16 @@ public sealed partial class OptionsWindow : Window
         keep.Checked += (_, _) => Kept();
         keep.Unchecked += (_, _) => Kept();
         page.Children.Add(keep);
+        var previews = new CheckBox { Content = "Play the search preview's excerpts with their sound", IsChecked = settings.PreviewSound };
+        ToolTipService.SetToolTip(previews, "A click on a result plays about 30 seconds of it; never over the player, which keeps playing while previews stay silent. The speaker button on the preview sets this too");
+        void Previews()
+        {
+            settings.PreviewSound = previews.IsChecked == true;
+            save();
+        }
+        previews.Checked += (_, _) => Previews();
+        previews.Unchecked += (_, _) => Previews();
+        page.Children.Add(previews);
         RestoreButton(page, "Player", RestorePlayer);
         return page;
     }
@@ -513,6 +523,7 @@ public sealed partial class OptionsWindow : Window
         settings.PlayerAtEnd = "loop";
         settings.PlayerOnBusy = "stop";
         settings.PlayerKeep = true;
+        settings.PreviewSound = true;
     }
 
     async Task RestoreAll()

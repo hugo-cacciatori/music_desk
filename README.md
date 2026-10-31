@@ -37,12 +37,14 @@ ready for a search.
   skips those songs if you choose that in Options.
 - **The Search window**, over your whole library. Type any part of a folder or file name, a title, artist, album or
   lyric line; accents and case are ignored, and filters such as `artist:`, `year:`, `ext:` or `lrclib:notfound`
-  narrow it. A double click on a result opens it in File Explorer. The … button adds library folders, and Options'
-  Library page rescans or removes them.
+  narrow it. A click on a result previews it on the right while about 30 seconds of it play (silent while the player
+  plays; the speaker button mutes previews): a song's tags, file and lyrics, an album's songs and ReplayGain state,
+  an artist's albums. Rate songs there with up to five stars, by halves, and add a note; ratings stay in Refrain, not
+  in your files, and follow the song's tags. A double click opens the result in the discography view; right-click it
+  to open it in File Explorer. The … button adds library folders, and Options' Library page rescans or removes them.
 - **Lyrics** from [LRCLIB](https://lrclib.net), looked up in the background for every track. The Search window's
-  Lyrics mode shows the matching lines as cards; a click shows the whole lyrics beside them, with links to search
-  Genius or Google when LRCLIB has none. A double click opens the discography view on that song, its lyrics in
-  front. Refrain never writes lyrics into your files.
+  Lyrics mode shows the matching lines as cards; a click previews the song with its whole lyrics, with links to
+  search Genius or Google when LRCLIB has none. Refrain never writes lyrics into your files.
 - **Edit tags…** (on music files): the tags of one file or many at once, and the cover, in FLAC, MP3, M4A/ALAC,
   Opus, Ogg Vorbis, WMA, WAV, AIFF, WavPack and more. ID3 versions are kept as they were. Nothing changes until you
   save.

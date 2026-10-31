@@ -78,6 +78,35 @@ public sealed record ArtistAlbums(string Artist, IReadOnlyList<ArtistAlbum> Albu
         return new ArtistAlbums(artist, albums, album, song);
     }
 
+    /// <summary>What Open in Refrain opens on a folder (SPEC §37 step a), from the tracks below it: one album of one artist
+    /// opens that album on its first song; several albums of one artist open the artist's albums (<c>AllAlbums</c>).
+    /// Null view: no track below it yet, or tracks of <c>Artists</c> artists (the library level comes with step b).</summary>
+    public static (ArtistAlbums? View, bool AllAlbums, int Artists) ForFolder(SqliteConnection conn, long folderId)
+    {
+        var tracks = new List<(long Id, string? Artist, string Album)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                WITH RECURSIVE down(id) AS (
+                    SELECT $id UNION ALL SELECT e.id FROM entries e JOIN down d ON e.parent_id = d.id
+                )
+                SELECT t.entry_id, COALESCE(NULLIF(TRIM(t.albumartist), ''), NULLIF(TRIM(t.artist), '')),
+                       COALESCE(NULLIF(TRIM(t.album), ''), '')
+                FROM tracks t JOIN down ON down.id = t.entry_id
+                ORDER BY t.entry_id
+                """;
+            cmd.Parameters.AddWithValue("$id", folderId);
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) tracks.Add((r.GetInt64(0), r.IsDBNull(1) ? null : r.GetString(1), r.GetString(2)));
+        }
+        var artists = tracks.Where(t => t.Artist is not null).Select(t => t.Artist!).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        if (artists != 1) return (null, false, artists);
+        var first = tracks.First(t => t.Artist is not null);
+        if (For(conn, first.Id) is not { } view) return (null, false, artists);
+        var oneAlbum = tracks.Where(t => t.Artist is not null).Select(t => t.Album).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
+        return oneAlbum ? (view with { StartSong = 0 }, false, 1) : (view, true, 1);
+    }
+
     /// <summary>The year at the start of a date tag ("1997-09-22", "1997"), or null.</summary>
     static string? Year(string? date) =>
         date is { Length: >= 4 } && date[..4].All(char.IsAsciiDigit) ? date[..4] : null;

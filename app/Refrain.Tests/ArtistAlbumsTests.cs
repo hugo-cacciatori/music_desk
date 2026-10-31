@@ -60,6 +60,29 @@ public sealed class ArtistAlbumsTests : IDisposable
     }
 
     [Fact]
+    public void Open_in_Refrain_opens_a_folder_as_its_album_or_its_artist()
+    {
+        var artist = lib.Folder(lib.Top, "Björk");
+        var homogenic = lib.Folder(artist, "Homogenic");
+        Song(homogenic, "Jóga", "Homogenic", "1997", 2);
+        Song(lib.Folder(homogenic, "CD2"), "Hunter", "HOMOGENIC", "1997", 1);
+        Song(lib.Folder(artist, "Debut"), "Human Behaviour", "Debut", "1993", 1);
+        var mixed = lib.Folder(lib.Top, "Mixed");
+        Song(mixed, "Glove", "Amnesiac", "2001", 1, artist: "Radiohead");
+        Song(mixed, "Venus", "Debut", "1993", 2);
+
+        var album = ArtistAlbums.ForFolder(lib.Conn, homogenic);  // one album, its subfolders with it: zoomed on its first song
+        Assert.False(album.AllAlbums);
+        Assert.Equal(("Homogenic", 0), (album.View!.Albums[album.View.StartAlbum].Name, album.View.StartSong));
+        var discography = ArtistAlbums.ForFolder(lib.Conn, artist);  // an artist's albums
+        Assert.True(discography.AllAlbums);
+        Assert.Equal(["Debut", "Homogenic"], discography.View!.Albums.Select(a => a.Name));
+        Assert.Equal((null, 2), (ArtistAlbums.ForFolder(lib.Conn, mixed).View, ArtistAlbums.ForFolder(lib.Conn, mixed).Artists));
+        var empty = ArtistAlbums.ForFolder(lib.Conn, lib.Folder(lib.Top, "Empty"));  // nothing indexed below it yet
+        Assert.Equal((null, 0), (empty.View, empty.Artists));
+    }
+
+    [Fact]
     public void A_track_without_an_artist_has_no_discography()
     {
         var id = lib.Track(lib.Folder(lib.Top, "Loose"), "untitled.flac");

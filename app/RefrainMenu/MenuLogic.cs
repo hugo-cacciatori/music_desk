@@ -30,7 +30,7 @@ public static class MenuLogic
     public static readonly IReadOnlyList<string> ReplayGainVerbs =
         [ReplayGainAlbum, ReplayGainDiscography, ReplayGainAlbums, ReplayGainTracks, ReplayGainLoose];
 
-    public static readonly Entry Search = new("search", "Search", "Open the Search window, adding this folder to the library if needed");
+    public static readonly Entry Open = new("open", "Open in Refrain", "Opens this in Refrain's discography view, adding the folder to the library if needed");
     public static readonly Entry Settings = new("settings", "Settings", "Open Refrain's Options window");
     public static readonly Entry Separator = new("", "", "");
 
@@ -81,8 +81,8 @@ public static class MenuLogic
     public static string TargetText(double target) =>
         $"{(target < 0 ? "−" : "")}{Math.Abs(target).ToString("G6", CultureInfo.InvariantCulture)} LUFS";
 
-    /// <summary>The entries, in order (SPEC §31, §36 "11."): Edit tags… on music files whose tags Refrain reads (no
-    /// folder); Search on one folder or empty space; the ReplayGain entries on folders only, or on files with tracks
+    /// <summary>The entries, in order (SPEC §31, §37): Open in Refrain on one folder, empty space or one music file whose
+    /// tags Refrain reads; Edit tags… on music files whose tags Refrain reads (no folder); the ReplayGain entries on folders only, or on files with tracks
     /// rsgain scans (no folder); Remove ReplayGain tags when every item is such a track; Tidy on empty space or folders
     /// only (never files); Split this cue sheet… and Edit this cue sheet… on one .cue alone; Trim this track… and New
     /// cue sheet… on one FLAC, WAV or AIFF file alone; a separator; Settings, always.
@@ -100,11 +100,12 @@ public static class MenuLogic
         Entry Make(string verb, string label) => new(verb, label + suffix, Help[verb]);
 
         var entries = new List<Entry>();
+        if (background || (folders == 1 && files == 0) || (folders == 0 && files == 1 && tagged == 1))
+            entries.Add(Open);
         if (!background && folders == 0 && files > 0 && tagged == files)
             entries.Add(new Entry(EditTags, files == 1 ? "Edit tags…" : $"Edit tags of {files} tracks…", Help[EditTags]));
         if (background || (folders == 1 && files == 0))
         {
-            entries.Add(Search);
             entries.Add(Make(ReplayGainAlbum, "ReplayGain as an album"));
             entries.Add(Make(ReplayGainDiscography, "ReplayGain as a discography"));
         }

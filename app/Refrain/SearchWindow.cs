@@ -26,7 +26,7 @@ namespace Refrain;
 /// <summary>The Search window (SPEC §36 "11."): the search field with its Files | Lyrics toggle, the results, and in
 /// lyrics mode the lyrics of the clicked result beside them. A result's only action is Open in File Explorer (a
 /// double click in files mode, the right-click menu in both); none of them clears the search. The library grows from
-/// Add a folder… (the … menu, a dropped folder, or Explorer's Search entry); Options' Library page manages it.</summary>
+/// Add a folder… (the … menu, a dropped folder, or Explorer's Open in Refrain); Options' Library page manages it.</summary>
 public sealed partial class SearchWindow : Window
 {
     readonly Library library;
@@ -536,21 +536,53 @@ public sealed partial class SearchWindow : Window
         });
     }
 
-    /// <summary>Explorer's Search entry (SPEC §36 "11."): the window comes forward, and the folder joins the library
-    /// when it isn't in it yet.</summary>
+    /// <summary>Explorer's Open in Refrain (SPEC §37): the window comes forward, the folder (a file's folder) joins the
+    /// library when it isn't in it yet, and the discography view opens on the path once its tracks are indexed. A start
+    /// on its own asks for nothing more.</summary>
     public async Task OpenFromOutside(StartRequest request)
     {
         BringToFront();
-        var folder = request.Paths.FirstOrDefault();
-        if (folder is null) return;
-        var path = RealPath.Normalize(folder);
-        if (!await Task.Run(() => Directory.Exists(path)))
+        if (request.Paths.FirstOrDefault() is not { } first) return;
+        var path = RealPath.Normalize(first);
+        var (isFile, isFolder) = await Task.Run(() => (File.Exists(path), Directory.Exists(path)));
+        if (!isFile && !isFolder)
         {
-            Status($"{path} isn't a folder that can be searched.");
+            Status($"{path} is gone, so there is nothing to open.");
             return;
         }
-        if (await Read(conn => Queries.Find(conn, path)) is null) await AddFolder(path);
+        var folder = isFile ? Path.GetDirectoryName(path)! : path;
+        var added = await Read(conn => Queries.Find(conn, folder)) is null;
+        if (added) await AddFolder(folder);
+        var opening = ++openings;
+        // A folder just added is still being read: wait for its tracks (the indexer goes idle), two minutes at most.
+        for (var tries = 0; tries < 240 && opening == openings; tries++)
+        {
+            var found = await Read(conn => Queries.Find(conn, path) is { Exact: true } hit
+                ? (isFile ? (ArtistAlbums.For(conn, hit.Id), false, 1) : ArtistAlbums.ForFolder(conn, hit.Id))
+                : ((ArtistAlbums?)null, false, 0));
+            var ready = !added || !library.Indexer.Busy;
+            if (found.Item1 is { } view && ready)
+            {
+                discography.Visibility = Visibility.Visible;
+                discography.Show(view, allAlbums: found.Item2);
+                return;
+            }
+            if (found.Item3 > 1 && ready)
+            {
+                Status($"{path} holds songs of {found.Item3} artists; search for one of them.");
+                return;
+            }
+            if (ready && tries > 0)
+            {
+                Status(isFile ? $"{Path.GetFileName(path)} has no artist in its tags, so it has no discography to show."
+                              : $"{path} has no songs with an artist in their tags.");
+                return;
+            }
+            await Task.Delay(500);
+        }
     }
+
+    int openings;  // a later Open in Refrain replaces one still waiting for its tracks
 
     /// <summary>A task changed files in these folders: the index re-reads them, with their subfolders.</summary>
     public void TaskChanged(IReadOnlyList<string> folders)

@@ -16,14 +16,18 @@ what fits what you clicked, and each entry opens a small window of its own. Seve
 files one is working on are refused to the others. Each window ends with a report of what was done, which stays
 until you close it.
 
-Refrain has no Start menu shortcut: started on its own, it only reminds you to use the right-click menu.
+Refrain also starts on its own, from the Start menu, Windows search or its desktop icon: it opens the Search window,
+ready for a search.
 
 ## Features
 
-- **Search** (on a folder): the Search window, over your whole library. Type any part of a folder or file name, a
-  title, artist, album or lyric line; accents and case are ignored, and filters such as `artist:`, `year:`, `ext:`
-  or `lrclib:notfound` narrow it. A double click on a result opens it in File Explorer. The folder you right-clicked
-  joins the library if it wasn't in it; the … button adds more, and Options' Library page rescans or removes them.
+- **Open in Refrain** (on a folder or a music file): the Search window, opened on the discography of what you
+  right-clicked: a song in its album, an album, or an artist's albums. The folder joins the library if it wasn't in
+  it, and opens once it has been read.
+- **The Search window**, over your whole library. Type any part of a folder or file name, a title, artist, album or
+  lyric line; accents and case are ignored, and filters such as `artist:`, `year:`, `ext:` or `lrclib:notfound`
+  narrow it. A double click on a result opens it in File Explorer. The … button adds library folders, and Options'
+  Library page rescans or removes them.
 - **Lyrics** from [LRCLIB](https://lrclib.net), looked up in the background for every track. The Search window's
   Lyrics mode shows the matching lines as cards; a click shows the whole lyrics beside them, with links to search
   Genius or Google when LRCLIB has none. A double click opens the artist's discography: their albums as floating
@@ -63,10 +67,11 @@ Refrain has no Start menu shortcut: started on its own, it only reminds you to u
 Download `Refrain-Setup-<version>.exe` from the
 [latest release](https://github.com/hugo-cacciatori/refrain/releases/latest) and run it (64-bit Windows 10 1809 or
 later, or Windows 11). It installs for all users in Program Files, or only for you if you choose that on its first
-page. The setup isn't signed, so Windows SmartScreen may warn about it: choose "More info", then "Run anyway".
+page, and adds Refrain to the Start menu and, unless you untick it, a desktop icon. The setup isn't signed, so
+Windows SmartScreen may warn about it: choose "More info", then "Run anyway".
 
 Installing over an earlier version keeps your library: the library folders, the LRCLIB results and your settings
-come over the first time you use an entry, and the library is read again. If the Refrain submenu doesn't show, or
+come over the first time Refrain starts, and the library is read again. If the Refrain submenu doesn't show, or
 still shows the old entries, restart File Explorer (Task Manager › Windows Explorer › Restart) or sign out and in.
 
 To uninstall, open the Refrain folder in the Start menu and choose "Uninstall Refrain", or use Settings › Apps ›

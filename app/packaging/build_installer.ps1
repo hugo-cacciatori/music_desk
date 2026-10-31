@@ -52,9 +52,9 @@ try {
 
     # The window too, which the self-test can't open: started off-screen (beyond every monitor, never the focus), it
     # must still run after 12 s with no error in its log. A published build once closed at start on a XAML resource.
-    # Started as Explorer's Search entry starts it: a bare start only shows a note and closes (SPEC §36 "11.").
+    # Started on its own, as the Start menu starts it: a clear Search window (SPEC §37).
     $env:REFRAIN_OFFSCREEN = '1'
-    $window = Start-Process (Join-Path $gate 'Refrain\Refrain.exe') -ArgumentList '--search' -WorkingDirectory $gate -PassThru
+    $window = Start-Process (Join-Path $gate 'Refrain\Refrain.exe') -WorkingDirectory $gate -PassThru
     Start-Sleep -Seconds 12
     $running = -not $window.HasExited
     if ($running) { Stop-Process -Id $window.Id -Force; $window.WaitForExit() }
@@ -128,7 +128,8 @@ foreach ($size in @(@(55, 58), @(64, 68), @(83, 80), @(92, 97), @(110, 106), @(1
 $iscc = @($env:ISCC, "$env:ProgramFiles\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") |
     Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 if (-not $iscc) { throw 'Inno Setup 6 was not found. Install it (winget install JRSoftware.InnoSetup) or set ISCC.' }
-$release = if ($Output) { $Output } else { Join-Path $root "dist\v$version" }
+# A relative -Output is the caller's folder's (Inno Setup would read it from this script's folder).
+$release = if ($Output) { [IO.Path]::GetFullPath((Join-Path (Get-Location) $Output)) } else { Join-Path $root "dist\v$version" }
 New-Item -ItemType Directory -Force $release | Out-Null
 & $iscc /Q "/DAppVersion=$version" "/DSource=$publish" "/DOutputDir=$release" "/DWizard=$wizard" (Join-Path $PSScriptRoot 'installer.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed' }

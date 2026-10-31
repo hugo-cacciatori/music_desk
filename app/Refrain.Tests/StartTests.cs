@@ -36,13 +36,13 @@ public sealed class StartTests : IDisposable
         Directory.CreateDirectory(StartRequest.MenuFolder);
         var list = Path.Combine(StartRequest.MenuFolder, "test-list.txt");
         File.WriteAllText(list, "D:\\One\nD:\\Two\n\n");
-        var request = StartRequest.Parse(["--search", "--list", list]);
-        Assert.Equal("search", request.Entry);
+        var request = StartRequest.Parse(["--open", "--list", list]);
+        Assert.Equal("open", request.Entry);
         Assert.Equal([@"D:\One", @"D:\Two"], request.Paths);
         Assert.False(File.Exists(list));  // read, then deleted
         var elsewhere = Path.Combine(temp.Path, "list.txt");
         File.WriteAllText(elsewhere, "D:\\Three\n");
-        Assert.Empty(StartRequest.Parse(["--search", "--list", elsewhere]).Paths);  // only the menu folder's lists
+        Assert.Empty(StartRequest.Parse(["--open", "--list", elsewhere]).Paths);  // only the menu folder's lists
         Assert.True(File.Exists(elsewhere));
     }
 
@@ -55,7 +55,7 @@ public sealed class StartTests : IDisposable
         Assert.Null(Instance.TryStart(pipe));  // a second Refrain doesn't get the pipe
         var received = new TaskCompletionSource<StartRequest>();
         first.Received += r => received.TrySetResult(r);
-        Assert.True(Instance.HandOver(new StartRequest("search", [@"D:\Music\Björk"]), pipe));
+        Assert.True(Instance.HandOver(new StartRequest("open", [@"D:\Music\Björk"]), pipe));
         var got = await received.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.Equal([@"D:\Music\Björk"], got.Paths);
         var again = new TaskCompletionSource<StartRequest>();
@@ -71,15 +71,15 @@ public sealed class StartTests : IDisposable
     [Fact]
     public void The_menu_offers_the_entries_of_spec_31_by_what_was_clicked()
     {
-        string[] onFolder = ["Search", "ReplayGain as an album (−15 LUFS)", "ReplayGain as a discography (−15 LUFS)", "Tidy this folder…", "—", "Settings"];
+        string[] onFolder = ["Open in Refrain", "ReplayGain as an album (−15 LUFS)", "ReplayGain as a discography (−15 LUFS)", "Tidy this folder…", "—", "Settings"];
         Assert.Equal(onFolder, Labels(false, (@"D:\Music", true)));
         Assert.Equal(onFolder, Labels(true, (@"D:\Music", true)));
         Assert.Equal(["ReplayGain: 3 folders, each as an album (−15 LUFS)", "Tidy 3 folders…", "—", "Settings"],
             Labels(false, (@"D:\A", true), (@"D:\B", true), (@"D:\C", true)));
-        Assert.Equal(["Edit tags…", "ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "Trim this track…", "New cue sheet…", "—", "Settings"],
+        Assert.Equal(["Open in Refrain", "Edit tags…", "ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "Trim this track…", "New cue sheet…", "—", "Settings"],
             Labels(false, (@"D:\A\1.flac", false)));
-        Assert.Equal(["Edit tags…", "ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.mp3", false)));
-        // A format whose tags Refrain doesn't read: no Edit tags….
+        Assert.Equal(["Open in Refrain", "Edit tags…", "ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.mp3", false)));
+        // A format whose tags Refrain doesn't read: no Open in Refrain, no Edit tags….
         Assert.Equal(["ReplayGain this track (−15 LUFS)", "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.oga", false)));
         Assert.Equal(["Edit tags of 2 tracks…", "ReplayGain: these 2 tracks as an album (−15 LUFS)", "ReplayGain: each of these 2 tracks on its own (−15 LUFS)",
             "Remove ReplayGain tags…", "—", "Settings"], Labels(false, (@"D:\A\1.flac", false), (@"D:\A\2.MP3", false)));
@@ -113,7 +113,7 @@ public sealed class StartTests : IDisposable
     [Fact]
     public void An_entry_hands_its_paths_through_a_list()
     {
-        Assert.Equal((@"C:\App\Refrain.exe", "--search --list ", "D:\\\n"), MenuLogic.Command(MenuLogic.Search, [@"D:\"], @"C:\App"));
+        Assert.Equal((@"C:\App\Refrain.exe", "--open --list ", "D:\\\n"), MenuLogic.Command(MenuLogic.Open, [@"D:\"], @"C:\App"));
         var (_, args, list) = MenuLogic.Command(new Entry("tidy", "Tidy", ""), [@"D:\A", @"D:\B"], @"C:\App");
         Assert.Equal("--tidy --list ", args);
         Assert.Equal("D:\\A\nD:\\B\n", list);
@@ -145,21 +145,21 @@ public sealed class StartTests : IDisposable
         var listsBefore = Lists();
         var music = temp.Sub("Music", "Album");
         var report = Run(music, background: false, out var added);
-        Assert.Equal(6, added);  // Search, ReplayGain as an album and as a discography, Tidy, a separator, Settings
+        Assert.Equal(6, added);  // Open in Refrain, ReplayGain as an album and as a discography, Tidy, a separator, Settings
         Assert.Contains("position=2\n", report);  // just below 7-Zip
         Assert.Contains("again=0\n", report);  // asked twice for one menu: one submenu
         // The labels carry the target of the user's own settings: only their start is checked.
-        Assert.Matches(@"Search\|refrain\.search\nReplayGain as an album \(.* LUFS\)\|refrain\.replaygain-album\n" +
+        Assert.Matches(@"Open in Refrain\|refrain\.open\nReplayGain as an album \(.* LUFS\)\|refrain\.replaygain-album\n" +
                        @"ReplayGain as a discography \(.* LUFS\)\|refrain\.replaygain-discography\nTidy this folder…\|refrain\.tidy\n-\nSettings\|refrain\.settings\n", report);
-        Assert.Contains($"command={Path.GetDirectoryName(Path.GetFullPath(dll))}\\Refrain.exe --search --list <list: {music}|>\n", report);
+        Assert.Contains($"command={Path.GetDirectoryName(Path.GetFullPath(dll))}\\Refrain.exe --open --list <list: {music}|>\n", report);
         Run(music, background: true, out added);
         Assert.Equal(6, added);
         var file = Path.Combine(music, "a.flac");
         File.WriteAllText(file, "");
         report = Run(file, background: false, out added);
-        Assert.Equal(7, added);  // Edit tags…, ReplayGain this track, Remove ReplayGain tags…, Trim, New cue sheet…, a separator, Settings
+        Assert.Equal(8, added);  // Open in Refrain, Edit tags…, ReplayGain this track, Remove ReplayGain tags…, Trim, New cue sheet…, a separator, Settings
         Assert.Contains("Remove ReplayGain tags…|refrain.remove-replaygain\n", report);
-        Assert.Contains($"--edit-tags --list <list: {file}|>", report);  // the first entry's command: described, never written
+        Assert.Contains($"--open --list <list: {file}|>", report);  // the first entry's command: described, never written
         var other = temp.Sub("Music", "Other");
         Run(music + "\n" + other, background: false, out added);
         Assert.Equal(4, added);  // ReplayGain: 2 folders, each as an album; Tidy 2 folders…; a separator; Settings

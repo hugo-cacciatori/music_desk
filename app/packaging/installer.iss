@@ -4,12 +4,13 @@
 ; It upgrades every earlier version in place, MusicDesk (up to 0.11) and the Python Refrain (0.12, 0.13): the same
 ; AppId, so Windows sees one app, one Apps entry and one uninstaller. Refrain goes to its own folder; an earlier
 ; version's folder elsewhere (MusicDesk's) is deleted after the install, its shortcuts and menu keys with it. Their
-; data (%LOCALAPPDATA%\MusicDesk or %LOCALAPPDATA%\Refrain) is migrated by the new app's first start (Migration.cs),
-; from the first right-click entry used. Installs for all users in Program Files by
-; default (admin); the first page also offers "only for me" (no admin, in %LOCALAPPDATA%\Programs). Refrain works from
-; File Explorer's right-click menu only (SPEC §36 "11."): no app shortcut, no desktop icon, no start on the last page;
-; the Start menu gets a Refrain folder with "Uninstall Refrain" alone. The uninstaller keeps the app's own data
-; unless the user asks to delete it. Music folders are never touched.
+; data (%LOCALAPPDATA%\MusicDesk or %LOCALAPPDATA%\Refrain) is migrated by the new app's first start (Migration.cs).
+; Installs for all users in Program Files by default (admin); the first page also offers "only for me" (no admin,
+; in %LOCALAPPDATA%\Programs). Refrain starts
+; from File Explorer's right-click menu (Open in Refrain and the other entries), and on its own from the Start menu's
+; Refrain folder (Refrain, Uninstall Refrain), Windows search and an optional desktop icon; the last page offers to
+; start it (SPEC §37). The uninstaller keeps the app's own data unless the user asks to delete it. Music folders are
+; never touched.
 ;
 ; The right-click menu's handler (SPEC §31) is installed under a name of its own per version, so an update never
 ; replaces the DLL File Explorer has loaded: the registry points at the new file, and the next right-click loads it.
@@ -81,10 +82,9 @@ ChangesAssociations=yes
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
-[Messages]
-; There is no app shortcut to start Refrain from: the last page says where it is.
-FinishedLabel=Setup has finished installing [name]. To use it, right-click a folder or files in File Explorer, then Refrain.
-FinishedLabelNoIcons=Setup has finished installing [name]. To use it, right-click a folder or files in File Explorer, then Refrain.
+[Tasks]
+; Ticked by default (Hugo, 2026-10-31; SPEC §37).
+Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional shortcuts:"
 
 [Files]
 Source: "{#Source}\*"; DestDir: "{app}"; Excludes: "RefrainMenu.dll"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -95,21 +95,26 @@ Source: "{#Source}\RefrainMenu.dll"; DestDir: "{app}"; DestName: "{#MenuDll}"; F
 ; The Python app's program files (PyInstaller's folder); its Refrain.exe and handler DLLs are replaced or removed by
 ; the files above and [Code].
 Type: filesandordirs; Name: "{app}\_internal"
-; What earlier versions installed and this one doesn't (SPEC §36 "11."): the `refrain` keyword's helper and the app's
-; shortcuts (the Start menu's, the desktop's, and the loose one of 0.2.1).
+; What earlier versions installed and this one doesn't: the `refrain` keyword's helper (SPEC §36 "11.") and the loose
+; Start menu shortcut of 0.2.1; a desktop icon left unticked this time goes too.
 Type: files; Name: "{app}\RefrainHere.exe"
-Type: files; Name: "{group}\{#AppName}.lnk"
-Type: files; Name: "{autodesktop}\{#AppName}.lnk"
 Type: files; Name: "{autoprograms}\{#AppName}.lnk"
+Type: files; Name: "{autodesktop}\{#AppName}.lnk"; Tasks: not desktopicon
 ; MusicDesk's (up to 0.11): its Start menu folder, loose shortcut and desktop icon.
 Type: filesandordirs; Name: "{autoprograms}\MusicDesk"
 Type: files; Name: "{autoprograms}\MusicDesk.lnk"
 Type: files; Name: "{autodesktop}\MusicDesk.lnk"
 
 [Icons]
-; A Start menu folder with the uninstaller alone: Start's own Uninstall button only opens Settings for classic apps
-; (SPEC §13); Refrain itself starts from File Explorer's right-click menu.
+; The Start menu's Refrain folder, which Windows search finds too (SPEC §37): the app, and the uninstaller (Start's own
+; Uninstall button only opens Settings for classic apps, SPEC §13).
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; Comment: "Search your music library and its lyrics."
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"; Comment: "Removes Refrain. Your music folders are not touched."
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Comment: "Search your music library and its lyrics."; Tasks: desktopicon
+
+[Run]
+; Unticked by default (Hugo, 2026-10-31; SPEC §37); as the user who ran the setup, not as administrator.
+Filename: "{app}\{#AppExe}"; Description: "Start Refrain"; Flags: nowait postinstall skipifsilent unchecked
 
 [Registry]
 ; The `refrain` keyword is gone (SPEC §36 "11."): its App Paths key, from earlier versions, is deleted.

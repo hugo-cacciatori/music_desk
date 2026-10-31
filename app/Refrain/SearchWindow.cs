@@ -537,7 +537,7 @@ public sealed partial class SearchWindow : Window
                 {
                     var isDir = await Read(conn => Queries.IsDir(conn, hit.Id));
                     await preview.ShowRow(new FileRow { Id = hit.Id, Name = Path.GetFileName(path), IsDir = isDir });
-                    await Task.Delay(1500);
+                    await Task.Delay(4000);
                     Log.Info($"Check preview of {Path.GetFileName(path)}: {preview.Describe()}");
                     break;
                 }
@@ -640,6 +640,7 @@ public sealed partial class SearchWindow : Window
     public void TaskChanged(IReadOnlyList<string> folders)
     {
         foreach (var folder in folders) library.Indexer.ScanPath(folder, recursive: true);
+        preview.TaskEnded(folders);
     }
 
     void PauseForTasks()

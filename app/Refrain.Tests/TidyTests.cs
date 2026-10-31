@@ -311,4 +311,31 @@ public sealed class TidyTests
         Assert.Equal("Rename 5 files, then ReplayGain (missing tags); offer 1 folder", TidyText.AlbumText(album));
         Assert.Equal("Offer empty folder Scans", TidyText.LooseText(Assert.Single(album.Clutter)));
     }
+
+    [Fact]
+    public void The_preview_says_what_tidy_would_do_and_to_which_file()
+    {
+        // SPEC §37 "Tidy in the preview": the plan in plain words, and each file with its planned action.
+        using var temp = new TempFolder();
+        var album = Path.Combine(temp.Path, "Single file");
+        Setup.Copy(Path.Combine(Setup.Fixtures, "cleanup", "single_file_album"), album);
+        var plan = Tidying.Plan(album, Names, Gain, Tidy, TestContext.Current.CancellationToken);
+        var preview = TidyPreview.From(plan, album);
+        Assert.True(preview.HasWork);
+        Assert.Equal(["The album isn't split, ReplayGain after the split, offer 1 picture to the Recycle Bin"], preview.Lines);
+        Assert.Contains(new TidyFile("Fixture Album.flac", "split into 3 tracks, then offered to the Recycle Bin", true), preview.Files);
+        Assert.Contains(preview.Files, f => f.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) && f.Action == "offered to the Recycle Bin");
+
+        var scans = Path.Combine(album, "Scans");
+        Directory.CreateDirectory(scans);
+        File.WriteAllText(Path.Combine(scans, "back.jpg"), "");
+        var withScans = TidyPreview.From(Tidying.Plan(album, Names, Gain, Tidy, TestContext.Current.CancellationToken), album);
+        Assert.Contains(new TidyFile(Path.Combine("Scans", "back.jpg"), "offered to the Recycle Bin with its folder", true), withScans.Files);
+
+        var tidy = Path.Combine(temp.Path, "Tidy");
+        Directory.CreateDirectory(tidy);
+        var quiet = TidyPreview.From(Tidying.Plan(tidy, Names, Gain, Tidy, TestContext.Current.CancellationToken), tidy);
+        Assert.False(quiet.HasWork);
+        Assert.Empty(quiet.Lines);
+    }
 }

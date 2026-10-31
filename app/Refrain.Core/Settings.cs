@@ -52,6 +52,9 @@ public sealed class Settings
     /// <summary>The preview's excerpts play with their sound (SPEC §37): the preview's speaker icon and the Player page
     /// set the same value. Never over the player: while it plays, previews are silent anyway.</summary>
     public bool PreviewSound { get; set; } = true;
+    /// <summary>The Tidy page (SPEC §37 "Tidy in the preview"): the preview's Tidy section alerts (its colour, a red dot)
+    /// when Tidy has something to do in the folder.</summary>
+    public bool PreviewTidyAlert { get; set; } = true;
     public string? PlayerPath { get; set; }
     public double PlayerSeconds { get; set; }
 

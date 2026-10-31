@@ -39,7 +39,8 @@ ready for a search.
   lyric line; accents and case are ignored, and filters such as `artist:`, `year:`, `ext:` or `lrclib:notfound`
   narrow it. A click on a result previews it on the right while about 30 seconds of it play (silent while the player
   plays; the speaker button mutes previews): a song's tags, file and lyrics, an album's songs and ReplayGain state,
-  an artist's albums. Rate songs there with up to five stars, by halves, and add a note; ratings stay in Refrain, not
+  an artist's albums, and for a folder a Tidy section that lights up when Tidy has something to do there, saying
+  what and to which file, with Run Tidy. Rate songs there with up to five stars, by halves, and add a note; ratings stay in Refrain, not
   in your files, and follow the song's tags. A double click opens the result in the discography view; right-click it
   to open it in File Explorer. The … button adds library folders, and Options' Library page rescans or removes them.
 - **Lyrics** from [LRCLIB](https://lrclib.net), looked up in the background for every track. The Search window's

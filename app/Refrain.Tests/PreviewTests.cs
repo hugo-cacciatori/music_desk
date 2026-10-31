@@ -34,13 +34,13 @@ public sealed class PreviewTests : IDisposable
         Song(mixed, "Venus", "Debut", "1993", 2);
 
         var album = FolderPreview.Read(lib.Conn, homogenic)!;
-        Assert.Equal((FolderKind.Album, "Homogenic", "Björk", "1997"), (album.Kind, album.Name, album.Artist, album.Year));
+        Assert.Equal((PreviewKind.Album, "Homogenic", "Björk", "1997"), (album.Kind, album.Name, album.Artist, album.Year));
         Assert.Equal(["Hunter", "Jóga"], album.Songs.Select(s => s.Title));
         var discography = FolderPreview.Read(lib.Conn, artist)!;
-        Assert.Equal((FolderKind.Artist, "Björk"), (discography.Kind, discography.Name));
+        Assert.Equal((PreviewKind.Artist, "Björk"), (discography.Kind, discography.Name));
         Assert.Equal(["Debut 1993 1", "Homogenic 1997 2"], discography.Albums.Select(a => $"{a.Name} {a.Year} {a.Songs}"));
         var other = FolderPreview.Read(lib.Conn, mixed)!;
-        Assert.Equal((FolderKind.Other, "Mixed", 2), (other.Kind, other.Name, other.Songs.Count));
+        Assert.Equal((PreviewKind.Other, "Mixed", 2), (other.Kind, other.Name, other.Songs.Count));
         Assert.Equal(["Björk", "Radiohead"], other.Artists);
         Assert.Null(FolderPreview.Read(lib.Conn, lib.Folder(lib.Top, "Scans")));
     }

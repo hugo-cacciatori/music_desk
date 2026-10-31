@@ -399,7 +399,21 @@ public sealed partial class OptionsWindow : Window
         var videos = Field(page, "Videos it offers", string.Join(" ", options.Videos));
         var others = Field(page, "Other files it offers", string.Join(" ", options.Others));
         var problems = Problems(page);
-        RestoreButton(page, "Tidy", () => settings.Set(TidyOptions.Default));
+        var alert = new CheckBox { Content = "Alert in the search preview when Tidy has something to do", IsChecked = settings.PreviewTidyAlert };
+        ToolTipService.SetToolTip(alert, "A folder's preview shows its Tidy section in colour, with a red dot, while Tidy would split, rename, ReplayGain or offer something there");
+        void Alerted()
+        {
+            settings.PreviewTidyAlert = alert.IsChecked == true;
+            save();
+        }
+        alert.Checked += (_, _) => Alerted();
+        alert.Unchecked += (_, _) => Alerted();
+        page.Children.Add(alert);
+        RestoreButton(page, "Tidy", () =>
+        {
+            settings.Set(TidyOptions.Default);
+            settings.PreviewTidyAlert = true;
+        });
         filling = false;
 
         void Update()
@@ -541,6 +555,7 @@ public sealed partial class OptionsWindow : Window
         settings.Set(FileNamesOptions.Default);
         settings.Set(ReplayGainOptions.Default);
         settings.Set(TidyOptions.Default);
+        settings.PreviewTidyAlert = true;
         settings.SaveCueBeside = false;
         settings.TrimSubfolder = Core.Cue.Trim.DefaultSubfolder;
         RestorePlayer();

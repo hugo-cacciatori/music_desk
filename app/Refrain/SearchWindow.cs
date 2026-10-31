@@ -42,6 +42,12 @@ public sealed partial class SearchWindow : Window
     };
     readonly TextBlock resultCount = new() { Margin = new Thickness(12, 8, 12, 4), VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock status = new() { Margin = new Thickness(16, 4, 16, 6), TextTrimming = TextTrimming.CharacterEllipsis };
+    /// <summary>Turns beside the status line while the index is being built (Hugo, 2026-10-31).</summary>
+    readonly ProgressRing indexing = new()
+    {
+        Width = 14, Height = 14, MinWidth = 14, MinHeight = 14, Margin = new Thickness(16, 4, 0, 6),
+        IsActive = false, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center,
+    };
     readonly TextBlock lyricsStatus = new() { Margin = new Thickness(16, 4, 8, 6), VerticalAlignment = VerticalAlignment.Center };
     readonly Button lyricsRetry = new() { Content = "Retry now", Visibility = Visibility.Collapsed, Margin = new Thickness(0, 2, 16, 4) };
     readonly ToggleButton filesMode = new() { Content = "Files", CornerRadius = new CornerRadius(4, 0, 0, 4) };
@@ -109,13 +115,16 @@ public sealed partial class SearchWindow : Window
         Grid.SetRow(body, 1);
         root.Children.Add(body);
         var statusRow = new Grid();
+        statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        statusRow.Children.Add(indexing);
+        Grid.SetColumn(status, 1);
         statusRow.Children.Add(status);
-        Grid.SetColumn(lyricsStatus, 1);
+        Grid.SetColumn(lyricsStatus, 2);
         statusRow.Children.Add(lyricsStatus);
-        Grid.SetColumn(lyricsRetry, 2);
+        Grid.SetColumn(lyricsRetry, 3);
         statusRow.Children.Add(lyricsRetry);
         ToolTipService.SetToolTip(lyricsRetry, "Try LRCLIB again now");
         Grid.SetRow(statusRow, 2);
@@ -281,6 +290,9 @@ public sealed partial class SearchWindow : Window
         library.Indexer.ScanFinished += () => ui.TryEnqueue(Changed);
         library.Indexer.Progress += (folders, read, busy) => ui.TryEnqueue(() =>
         {
+            indexing.IsActive = busy;
+            indexing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            status.Margin = new Thickness(busy ? 8 : 16, 4, 16, 6);  // the text beside the ring, or where it was
             if (busy) Status($"Indexing: {folders:N0} folders listed, {read:N0} files read", sticky: true);
             else if (status.Text.StartsWith("Indexing", StringComparison.Ordinal)) status.Text = "";
         });

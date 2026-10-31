@@ -5,12 +5,15 @@ using Refrain.Core.Tags;
 namespace Refrain.Core.Index;
 
 /// <summary>Background indexing (SPEC §4): one thread runs one scan at a time from a queue. Phase A walks the
-/// folders breadth-first, so names are browsable and searchable at once; phase B reads the tags in a pool of four.
-/// What the user asks for (the folder on screen, F5) is served first, even inside a running scan.</summary>
+/// folders breadth-first, so names are searchable at once; phase B reads the tags in a pool of four, every
+/// <see cref="ReadChunk"/> files the walk finds, so a track's tags (and then its LRCLIB lookup) never wait for the
+/// whole library to be listed (Hugo, 2026-10-31). What the user asks for is served first, even inside a running scan.</summary>
 public sealed class Indexer : IDisposable
 {
     const int Readers = 4;
     const int TagBatch = 100;
+    /// <summary>The files found by the walk that are read before it goes on.</summary>
+    public const int ReadChunk = 500;
     static readonly TimeSpan BatchTime = TimeSpan.FromMilliseconds(200);
 
     readonly Database db;
@@ -24,6 +27,9 @@ public sealed class Indexer : IDisposable
 
     /// <summary>A folder's children or their tags changed (raised on the indexer thread).</summary>
     public event Action<long>? FolderChanged;
+    /// <summary>A batch of tracks' tags was written, during a scan (raised on the indexer thread): their LRCLIB
+    /// lookups can start.</summary>
+    public event Action? TracksWritten;
     /// <summary>A scan finished; folder totals are up to date (raised on the indexer thread).</summary>
     public event Action? ScanFinished;
     /// <summary>Progress: folders listed, files read, and whether work remains (throttled to 10 a second).</summary>
@@ -170,6 +176,11 @@ public sealed class Indexer : IDisposable
             var found = Reconcile(id, folder);
             if (found is null) continue;
             toRead.AddRange(found.ToRead);
+            if (toRead.Count >= ReadChunk)
+            {
+                ReadTags(toRead);
+                toRead.Clear();
+            }
             if (recursive)
                 foreach (var sub in found.Subfolders)
                     queue.Enqueue(sub);
@@ -220,6 +231,7 @@ public sealed class Indexer : IDisposable
         Interlocked.Add(ref filesRead, batch.Count);
         ReportProgress();
         foreach (var folder in folders) FolderChanged?.Invoke(folder);
+        TracksWritten?.Invoke();
     }
 
     /// <summary>The folders the user asked for: listed and read now, one level.</summary>

@@ -13,6 +13,7 @@ public sealed class Library : IDisposable
     public Lyrics.LyricsService Lyrics { get; }
     readonly Watcher watcher;
     readonly Timer online;
+    long lastWake;
 
     /// <summary>Roots were added, removed, or went on or offline.</summary>
     public event Action? RootsChanged;
@@ -22,7 +23,16 @@ public sealed class Library : IDisposable
         Db = new Database(databasePath);
         Indexer = new Indexer(Db);
         Lyrics = new Lyrics.LyricsService(Db, new Lyrics.LrclibClient());
-        Indexer.ScanFinished += Lyrics.Wake;  // new tracks may need lookups
+        // New tracks may need lookups: as soon as their tags are written, not when the scan ends (Hugo, 2026-10-31),
+        // at most once a second while a scan writes (each wake may query the index for what is pending).
+        Indexer.TracksWritten += () =>
+        {
+            var now = Environment.TickCount64;
+            if (now - Interlocked.Read(ref lastWake) < 1000) return;
+            Interlocked.Exchange(ref lastWake, now);
+            Lyrics.Wake();
+        };
+        Indexer.ScanFinished += Lyrics.Wake;
         Lyrics.Start();
         watcher = new Watcher(Indexer);
         watcher.Unwatchable += root => Log.Info($"{root} isn't watched; folders are checked when opened.");

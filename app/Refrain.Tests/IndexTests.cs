@@ -198,6 +198,23 @@ public sealed class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Tags_are_read_while_the_walk_goes_on()
+    {
+        // A first folder with more files than a chunk, and a second listed after it: the first folder's tracks are
+        // written (and their LRCLIB lookups may start) before the second one is even listed (Hugo, 2026-10-31).
+        var music = temp.Sub("Big");
+        var first = Directory.CreateDirectory(Path.Combine(music, "A")).FullName;
+        for (var i = 0; i < Indexer.ReadChunk + 10; i++) File.WriteAllBytes(Path.Combine(first, $"{i:D4}.mp3"), []);
+        var later = Path.Combine(Directory.CreateDirectory(Path.Combine(music, "B")).FullName, "late.mp3");
+        File.WriteAllBytes(later, []);
+        bool? laterListed = null;
+        indexer.TracksWritten += () => laterListed ??= Read(conn => Queries.Find(conn, later)) is { Exact: true };
+        Scan(Add(music).RootId!.Value);
+        Assert.False(laterListed);
+        Assert.NotNull(Read(conn => Queries.Find(conn, later)));
+    }
+
+    [Fact]
     public void Natural_order_is_explorers()
     {
         var names = new List<string> { "Track 10", "track 2", "Track 1", "B", "a" };

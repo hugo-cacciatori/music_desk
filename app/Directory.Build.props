@@ -8,7 +8,7 @@
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <Version>0.1.0</Version>
+    <Version>0.14.0</Version>
     <Product>Refrain</Product>
     <Copyright>GPL-3.0-or-later</Copyright>
   </PropertyGroup>

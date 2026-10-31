@@ -25,13 +25,14 @@ static class Ui
     const double ReadingWidth = 800;  // wrapped text is laid out at most this wide (px at 100%)
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Window, object> Fitted = new();
 
-    /// <summary>A window of its own (SPEC §35: own taskbar button): title, backdrop, icon and a small first size
-    /// until <see cref="Fit"/> sizes it to its content. In an agent's off-screen check it sits beyond every monitor and
+    /// <summary>A window of its own (SPEC §35: own taskbar button): title, icon, the theme's background behind its
+    /// content (set once the constructor has given it one) and a small first size until <see cref="Fit"/> sizes it to
+    /// its content. In an agent's off-screen check it sits beyond every monitor and
     /// out of Alt+Tab.</summary>
     public static void Prepare(Window window, string title)
     {
         window.Title = title;
-        window.SystemBackdrop = new MicaBackdrop();
+        window.DispatcherQueue.TryEnqueue(() => Background(window.Content));
         window.AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "refrain.ico"));
         window.AppWindow.Resize(new SizeInt32(560, 240));
         if (!SearchWindow.Offscreen) return;
@@ -40,6 +41,17 @@ static class Ui
         for (var i = 0; i < areas.Count; i++) right = Math.Max(right, areas[i].OuterBounds.X + areas[i].OuterBounds.Width);
         window.AppWindow.Move(new PointInt32(right + 200, 0));
         window.AppWindow.IsShownInSwitchers = false;
+    }
+
+    /// <summary>The theme's window background (<see cref="Theme"/>) on a window's root.</summary>
+    public static void Background(UIElement? root)
+    {
+        switch (root)
+        {
+            case Panel panel: panel.Background = Brush("RefrainWindowBrush"); break;
+            case Control control: control.Background = Brush("RefrainWindowBrush"); break;
+            case Border border: border.Background = Brush("RefrainWindowBrush"); break;
+        }
     }
 
     /// <summary>Sizes the window to the smallest size that fits its content (SPEC §36 "Window sizes"), once: call it
@@ -118,7 +130,7 @@ static class Ui
         TextWrapping = TextWrapping.Wrap,
     };
 
-    /// <summary>The main action: filled with the accent colour (SPEC §36 "1." task 4).</summary>
+    /// <summary>The main action: filled with the theme's teal (SPEC §36 "11.").</summary>
     public static Button Primary(string text) => new()
     {
         Content = text,

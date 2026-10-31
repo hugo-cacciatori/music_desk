@@ -47,7 +47,7 @@ public sealed partial class DiscographyView : UserControl
     readonly HyperlinkButton back = new() { Content = "‹ Results", HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, 4, 0, 0) };
     readonly HyperlinkButton allAlbums = new() { Content = "All albums (Esc)", HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 8, 0) };
 
-    Bubbles.Palette p = Bubbles.For(ElementTheme.Light);
+    Theme.Palette p = Theme.For(ElementTheme.Light);
     ArtistAlbums? data;
     int album;
     int song;
@@ -148,7 +148,7 @@ public sealed partial class DiscographyView : UserControl
 
     void Paint()
     {
-        p = Bubbles.For(ActualTheme);
+        p = Theme.For(ActualTheme);
         stage.Background = new SolidColorBrush(p.Background);
         var text = new SolidColorBrush(p.Text);
         var secondary = new SolidColorBrush(p.Secondary);

@@ -90,6 +90,8 @@ public partial class App : Application
         this.instance = instance;
         this.request = request;
         InitializeComponent();
+        // An agent's theme check (SearchWindow.CheckTheme) can ask for the dark theme; otherwise Windows' setting.
+        if (SearchWindow.Offscreen && Environment.GetEnvironmentVariable("REFRAIN_CHECK_THEME") == "dark") RequestedTheme = ApplicationTheme.Dark;
         UnhandledException += (_, e) => Log.Error("Unhandled error", e.Exception);
     }
 
@@ -98,6 +100,7 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs e)
     {
         Log.Info($"Refrain {typeof(App).Assembly.GetName().Version} started");
+        Theme.Apply(this);  // the look, before any window (SPEC §36 "11."); the resources exist only from here
         var queue = DispatcherQueue.GetForCurrentThread();
         if (instance is not null)
             instance.Received += later => queue.TryEnqueue(() => Handle(later));

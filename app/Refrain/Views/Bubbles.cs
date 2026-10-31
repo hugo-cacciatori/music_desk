@@ -6,41 +6,19 @@ using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Windows.Foundation;
-using Windows.UI;
 
 namespace Refrain.Views;
 
 /// <summary>The soap-bubble look (SPEC §36 "11.", Hugo 2026-10-30): light and transparent, relaxing, never deep blue; a
-/// dusk variant in dark mode. The bubbles themselves, and their slow drift.</summary>
+/// dusk variant in dark mode (the palette is <see cref="Theme"/>'s). The bubbles themselves, and their slow drift.</summary>
 public static class Bubbles
 {
-    public sealed record Palette(Color Background, Color Text, Color Secondary, Color Line, Color Fill, Color FillEdge,
-        Color Rim, Color Sheen1, Color Sheen2, Color Highlight, Color Lit);
-
-    static readonly Palette Light = new(
-        Background: Color.FromArgb(255, 0xF3, 0xF8, 0xFA), Text: Color.FromArgb(255, 0x34, 0x4E, 0x5E),
-        Secondary: Color.FromArgb(255, 0x6A, 0x85, 0x95), Line: Color.FromArgb(150, 0x96, 0xB9, 0xD2),
-        Fill: Color.FromArgb(115, 255, 255, 255), FillEdge: Color.FromArgb(70, 0xC8, 0xB4, 0xE6),
-        Rim: Color.FromArgb(180, 0xA0, 0xBE, 0xD7), Sheen1: Color.FromArgb(120, 0xF2, 0xB8, 0xD8),
-        Sheen2: Color.FromArgb(120, 0x9E, 0xDC, 0xD5), Highlight: Color.FromArgb(215, 255, 255, 255),
-        Lit: Color.FromArgb(220, 0xBE, 0xE1, 0xEB));
-
-    static readonly Palette Dusk = new(
-        Background: Color.FromArgb(255, 0x17, 0x21, 0x29), Text: Color.FromArgb(255, 0xD6, 0xE4, 0xEC),
-        Secondary: Color.FromArgb(255, 0x93, 0xAB, 0xB9), Line: Color.FromArgb(120, 0x7F, 0xA4, 0xBE),
-        Fill: Color.FromArgb(28, 255, 255, 255), FillEdge: Color.FromArgb(55, 0xA8, 0x94, 0xD6),
-        Rim: Color.FromArgb(170, 0x8F, 0xB4, 0xCF), Sheen1: Color.FromArgb(110, 0xE0, 0x9C, 0xC6),
-        Sheen2: Color.FromArgb(110, 0x7F, 0xCE, 0xC6), Highlight: Color.FromArgb(150, 255, 255, 255),
-        Lit: Color.FromArgb(150, 0x8F, 0xC9, 0xD8));
-
-    public static Palette For(ElementTheme theme) => theme == ElementTheme.Dark ? Dusk : Light;
-
     /// <summary>Whether Windows' "Animation effects" setting is on: off, nothing drifts and every move is instant.</summary>
     public static bool Animate { get; } = new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
 
     /// <summary>A bubble of <paramref name="diameter"/>: a clear, softly tinted fill, a rim catching pink and teal, and a
     /// small highlight. <paramref name="lit"/> fills it a little, for the chosen song.</summary>
-    public static Grid Make(double diameter, Palette p, bool lit = false)
+    public static Grid Make(double diameter, Theme.Palette p, bool lit = false)
     {
         var fill = new RadialGradientBrush
         {

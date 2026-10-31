@@ -39,7 +39,7 @@ public sealed partial class FileTable : Grid, IRowList
     public HeaderState State { get; private set; }
     public int LayoutVersion { get; private set; }
     public Brush HighlightBrush { get; } =
-        Ui.Resource<Brush>("SystemFillColorCautionBackgroundBrush");
+        Ui.Resource<Brush>("RefrainMatchBrush");
 
     /// <summary>Enter or a double-click on a row.</summary>
     public event Action<FileRow>? Activated;

@@ -26,7 +26,7 @@ public sealed partial class CardList : Grid, IRowList
     bool quiet;
 
     public ListView List { get; }
-    public Microsoft.UI.Xaml.Media.Brush HighlightBrush { get; } = Ui.Brush("SystemFillColorCautionBackgroundBrush");
+    public Microsoft.UI.Xaml.Media.Brush HighlightBrush { get; } = Ui.Brush("RefrainMatchBrush");
 
     public event Action<FileRow>? Activated;
     public event Action<IReadOnlyList<FileRow>, UIElement, Windows.Foundation.Point>? MenuRequested;

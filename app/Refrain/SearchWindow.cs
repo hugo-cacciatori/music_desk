@@ -83,7 +83,6 @@ public sealed partial class SearchWindow : Window
         statusTimer = Timer(TimeSpan.FromSeconds(6), () => status.Text = "");
 
         Title = "Refrain · Search";
-        SystemBackdrop = new MicaBackdrop();
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "refrain.ico"));
 
         resultsPage.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -122,6 +121,7 @@ public sealed partial class SearchWindow : Window
         Grid.SetRow(statusRow, 2);
         root.Children.Add(statusRow);
         Content = root;
+        Ui.Background(root);
 
         Wire(root);
         ApplyMode();
@@ -134,6 +134,7 @@ public sealed partial class SearchWindow : Window
             if (!Offscreen) searchBox.Focus(FocusState.Programmatic);  // the search has the focus at start (SPEC §33)
             // An agent's check opens what needs a double click by itself (SPEC §36 "7.": checks only read).
             if (Offscreen && Environment.GetEnvironmentVariable("REFRAIN_CHECK_DISCOGRAPHY") is { Length: > 0 } track) await CheckDiscography(track);
+            if (Offscreen && Environment.GetEnvironmentVariable("REFRAIN_CHECK_THEME") is "light" or "dark") await CheckTheme(root);
         };
     }
 
@@ -426,6 +427,30 @@ public sealed partial class SearchWindow : Window
         }
         discography.Visibility = Visibility.Visible;
         discography.Show(albums);
+    }
+
+    /// <summary>An agent's off-screen check (SPEC §36 "7."): logs the colours the theme gave this window's controls, as
+    /// they resolved (<see cref="Theme"/>; an agent can't see them). The app starts in that theme (<see cref="App"/>).</summary>
+    async Task CheckTheme(Grid root)
+    {
+        await Task.Delay(300);
+        static string Of(Brush? brush) => brush switch
+        {
+            SolidColorBrush solid => $"#{solid.Color.A:X2}{solid.Color.R:X2}{solid.Color.G:X2}{solid.Color.B:X2}",
+            LinearGradientBrush gradient => "gradient " + string.Join(" ", gradient.GradientStops.Select(s => Of(new SolidColorBrush(s.Color)))),
+            null => "none",
+            _ => brush.GetType().Name,
+        };
+        var accent = Ui.Primary("Check");
+        accent.Visibility = Visibility.Collapsed;
+        root.Children.Add(accent);
+        accent.ApplyTemplate();
+        Log.Info($"Theme check ({root.ActualTheme}): window {Of(root.Background)}; search field {Of(searchBox.Background)} " +
+                 $"edge {Of(searchBox.BorderBrush)} text {Of(searchBox.Foreground)}; Files {Of(filesMode.Background)}; " +
+                 $"Add a folder… {Of(welcomeAdd.Background)} edge {Of(welcomeAdd.BorderBrush)}; filled {Of(accent.Background)} " +
+                 $"text {Of(accent.Foreground)}; status {Of(status.Foreground)}; results card {Of(resultsCard.Background)} " +
+                 $"edge {Of(resultsCard.BorderBrush)}; matches {Of(results.HighlightBrush)}; WinUI brushes recoloured {Theme.Recoloured}");
+        root.Children.Remove(accent);
     }
 
     /// <summary>An agent's off-screen check (SPEC §36 "7."): the discography of <paramref name="track"/>, once the index

@@ -16,7 +16,7 @@ public sealed record Entry(string Verb, string Label, string Help)
 
 /// <summary>The submenu's plain logic, apart from COM so tests can use it: which entries the clicked items get, and
 /// what an entry starts. It only looks at the items' kinds and extensions; it never reads a file. The app compiles
-/// this same file for its own right-click menus and the ReplayGain button (SPEC §35: one entry list).</summary>
+/// this same file for the entries' verbs and ReplayGain's labels (SPEC §31: one entry list).</summary>
 public static class MenuLogic
 {
     public const string SubmenuLabel = "Refrain";

@@ -55,7 +55,7 @@ public sealed partial class SearchWindow : Window
     readonly FileTable results;
     readonly CardList cards = new();
     readonly LyricsPage lyrics;
-    readonly DiscographyView discography = new();
+    readonly DiscographyView discography;
     readonly Grid resultsPage = new();
     readonly Border resultsCard;
     readonly Border lyricsCard;
@@ -81,6 +81,7 @@ public sealed partial class SearchWindow : Window
         ui = DispatcherQueue.GetForCurrentThread();
         search = new SearchService(library.Db);
         lyrics = new LyricsPage(library, library.Lyrics, settings);
+        discography = new DiscographyView(library, settings);
         // The last mode used is kept; an unknown value reads as Files (SPEC §6 "Direction task 5").
         mode = settings.SearchMode == "lyrics" ? SearchMode.Lyrics : SearchMode.Files;
         results = new FileTable(Columns.Search, settings.SearchHeader ?? new HeaderState { SortKey = "folder" }, searchResults: true);
@@ -476,6 +477,7 @@ public sealed partial class SearchWindow : Window
             {
                 discography.Visibility = Visibility.Visible;
                 discography.Show(albums, allAlbums: Environment.GetEnvironmentVariable("REFRAIN_CHECK_ALBUMS") == "1");
+                if (Environment.GetEnvironmentVariable("REFRAIN_CHECK_LEVELS") == "1") await discography.CheckLevels();
                 return;
             }
             await Task.Delay(1000);
@@ -558,8 +560,8 @@ public sealed partial class SearchWindow : Window
         for (var tries = 0; tries < 240 && opening == openings; tries++)
         {
             var found = await Read(conn => Queries.Find(conn, path) is { Exact: true } hit
-                ? (isFile ? (ArtistAlbums.For(conn, hit.Id), false, 1) : ArtistAlbums.ForFolder(conn, hit.Id))
-                : ((ArtistAlbums?)null, false, 0));
+                ? (isFile ? (ArtistAlbums.For(conn, hit.Id), false, (IReadOnlyList<string>)[]) : ArtistAlbums.ForFolder(conn, hit.Id))
+                : ((ArtistAlbums?)null, false, []));
             var ready = !added || !library.Indexer.Busy;
             if (found.Item1 is { } view && ready)
             {
@@ -567,9 +569,11 @@ public sealed partial class SearchWindow : Window
                 discography.Show(view, allAlbums: found.Item2);
                 return;
             }
-            if (found.Item3 > 1 && ready)
+            if (found.Item3.Count > 1 && ready)
             {
-                Status($"{path} holds songs of {found.Item3} artists; search for one of them.");
+                // Several artists: the library level, theirs lit (SPEC §37).
+                discography.Visibility = Visibility.Visible;
+                await discography.ShowLibrary(found.Item3);
                 return;
             }
             if (ready && tries > 0)

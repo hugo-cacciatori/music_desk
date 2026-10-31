@@ -22,16 +22,22 @@ ready for a search.
 ## Features
 
 - **Open in Refrain** (on a folder or a music file): the Search window, opened on the discography of what you
-  right-clicked: a song in its album, an album, or an artist's albums. The folder joins the library if it wasn't in
-  it, and opens once it has been read.
+  right-clicked: a song in its album, an album, an artist's albums, or, for a folder of several artists, the whole
+  library with theirs lit. The folder joins the library if it wasn't in it, and opens once it has been read.
+- **The discography view** rebuilds your library from its tags, wherever the files are: every artist as a bubble, an
+  artist's albums from earliest to latest, an album's songs and their lyrics. The mouse wheel zooms from the library
+  into an artist and an album, and back out; drag to move around the library. Names that differ only in case, accents
+  or punctuation are one artist, and "CD1", "Disc 2" or "[Remastered]" don't split an album. An info panel on the
+  right shows the open artist, album or song (tags, format, ReplayGain, where the file is); right-click anything to
+  open it in File Explorer.
 - **The Search window**, over your whole library. Type any part of a folder or file name, a title, artist, album or
   lyric line; accents and case are ignored, and filters such as `artist:`, `year:`, `ext:` or `lrclib:notfound`
   narrow it. A double click on a result opens it in File Explorer. The … button adds library folders, and Options'
   Library page rescans or removes them.
 - **Lyrics** from [LRCLIB](https://lrclib.net), looked up in the background for every track. The Search window's
   Lyrics mode shows the matching lines as cards; a click shows the whole lyrics beside them, with links to search
-  Genius or Google when LRCLIB has none. A double click opens the artist's discography: their albums as floating
-  bubbles, the song's album and its lyrics in front. Refrain never writes lyrics into your files.
+  Genius or Google when LRCLIB has none. A double click opens the discography view on that song, its lyrics in
+  front. Refrain never writes lyrics into your files.
 - **Edit tags…** (on music files): the tags of one file or many at once, and the cover, in FLAC, MP3, M4A/ALAC,
   Opus, Ogg Vorbis, WMA, WAV, AIFF, WavPack and more. ID3 versions are kept as they were. Nothing changes until you
   save.

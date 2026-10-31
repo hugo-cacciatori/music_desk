@@ -34,6 +34,10 @@ public sealed class Settings
     public double PanelWidth { get; set; } = 380;
     public double LyricsTextSize { get; set; } = 14;
     public string SearchMode { get; set; } = "files";
+    /// <summary>The discography view's info panel was closed (SPEC §37), counted only by the version that recorded it
+    /// (<see cref="InfoPanelClosedIn"/>): remembered between sessions, not between installs.</summary>
+    public bool InfoPanelClosed { get; set; }
+    public string? InfoPanelClosedIn { get; set; }
 
     // The Options window's pages (SPEC §12, §36 "8."), kept as JSON so a mistyped value falls back alone.
     public JsonElement? FileNames { get; set; }

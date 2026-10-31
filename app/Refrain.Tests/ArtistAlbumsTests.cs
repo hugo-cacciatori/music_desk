@@ -77,9 +77,48 @@ public sealed class ArtistAlbumsTests : IDisposable
         var discography = ArtistAlbums.ForFolder(lib.Conn, artist);  // an artist's albums
         Assert.True(discography.AllAlbums);
         Assert.Equal(["Debut", "Homogenic"], discography.View!.Albums.Select(a => a.Name));
-        Assert.Equal((null, 2), (ArtistAlbums.ForFolder(lib.Conn, mixed).View, ArtistAlbums.ForFolder(lib.Conn, mixed).Artists));
+        var several = ArtistAlbums.ForFolder(lib.Conn, mixed);  // several artists: the library level, those lit
+        Assert.Null(several.View);
+        Assert.Equal(["radiohead", "bjork"], several.Artists);
         var empty = ArtistAlbums.ForFolder(lib.Conn, lib.Folder(lib.Top, "Empty"));  // nothing indexed below it yet
-        Assert.Equal((null, 0), (empty.View, empty.Artists));
+        Assert.Equal((null, 0), (empty.View, empty.Artists.Count));
+    }
+
+    [Fact]
+    public void Artists_and_albums_are_grouped_by_their_names_wherever_their_files_are()
+    {
+        // SPEC §37: case, accents and punctuation don't split an artist; disc and edition markers don't split an album.
+        var a = lib.Folder(lib.Top, "A");
+        var b = lib.Folder(lib.Folder(lib.Top, "Elsewhere"), "B");
+        Song(a, "Emerald Sword", "Symphony of Enchanted Lands (CD1)", "1998", 1, artist: "Rhapsody of Fire");
+        Song(b, "Wisdom of the Kings", "Symphony of Enchanted Lands - Disc 2", "1998", 1, artist: "RHAPSODY OF FIRE");
+        Song(b, "Holy Thunderforce", "Dawn of Victory [Remastered]", "2000", 1, artist: "Rhapsody Of Fire");
+        Song(a, "Glove", "Amnesiac", "2001", 1, artist: "Radiohead");
+
+        var found = ArtistAlbums.ForArtist(lib.Conn, Names.Key("rhapsody-of-fire"))!;
+        Assert.Equal("Rhapsody of Fire", found.Artist);  // the first of the most frequent spellings
+        Assert.Equal(["Symphony of Enchanted Lands", "Dawn of Victory"], found.Albums.Select(x => x.Name));
+        Assert.Equal(["Emerald Sword", "Wisdom of the Kings"], found.Albums[0].Songs.Select(x => x.Title));
+        Assert.Equal((0, 0), (found.StartAlbum, found.StartSong));
+        Assert.Equal(["Radiohead 1 1", "Rhapsody of Fire 2 3"], ArtistAlbums.Library(lib.Conn).Select(x => $"{x.Name} {x.Albums} {x.Songs}"));
+        Assert.Equal(@"C:\Music", ArtistAlbums.CommonFolder(lib.Conn, found.Albums.SelectMany(x => x.Songs).Select(x => x.Id)));
+        Assert.Equal(@"C:\Music\Elsewhere\B", ArtistAlbums.CommonFolder(lib.Conn, found.Albums[1].Songs.Select(x => x.Id)));
+    }
+
+    [Fact]
+    public void Names_ignore_case_accents_punctuation_and_album_markers()
+    {
+        Assert.Equal("ac dc", Names.Key("AC/DC"));
+        Assert.Equal(Names.Key("Björk"), Names.Key("BJORK"));
+        Assert.Equal("guns n roses", Names.Key("Guns N' Roses"));
+        Assert.Equal("", Names.Key(" ?? "));
+        Assert.Equal("Homogenic", Names.WithoutMarkers("Homogenic (CD 1)"));
+        Assert.Equal("Homogenic", Names.WithoutMarkers("Homogenic [Remastered 2004] (Disc 2)"));
+        Assert.Equal("Homogenic", Names.WithoutMarkers("Homogenic - CD2"));
+        Assert.Equal("Homogenic", Names.WithoutMarkers("Homogenic (2011 Remaster)"));
+        Assert.Equal("(What's the Story) Morning Glory?", Names.WithoutMarkers("(What's the Story) Morning Glory?"));
+        Assert.Equal("CD1", Names.WithoutMarkers("CD1"));  // only a marker: kept
+        Assert.Equal("Rhapsody of Fire", Names.Shown(["RHAPSODY OF FIRE", "Rhapsody of Fire", "Rhapsody of Fire"]));
     }
 
     [Fact]

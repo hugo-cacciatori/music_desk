@@ -34,7 +34,9 @@ ready for a search.
   and its album goes on, starting over after the last song (or stopping, in Options). Where LRCLIB has timed lyrics,
   the line being sung lights up, and a click on a line plays from there. Refrain reopens on the last song, paused.
   It never plays a file while ReplayGain, Tidy or another task is changing its folder: it stops and says why, or
-  skips those songs if you choose that in Options.
+  skips those songs if you choose that in Options. Options can also mark which songs have ReplayGain tags, and have
+  the player apply them (album gain, or track gain). When the library has albums without ReplayGain tags, Refrain
+  offers once to run ReplayGain on them all.
 - **The Search window**, over your whole library. Type any part of a folder or file name, a title, artist, album or
   lyric line; accents and case are ignored, and filters such as `artist:`, `year:`, `ext:` or `lrclib:notfound`
   narrow it. A click on a result previews it on the right while about 30 seconds of it play (silent while the player

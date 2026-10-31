@@ -41,24 +41,37 @@ public sealed partial class Player : IDisposable
         this.settings = settings;
         this.locks = locks;
         media.CommandManager.IsEnabled = false;  // media keys: not yet (SPEC §37)
-        media.Volume = Math.Clamp(settings.PlayerVolume, 0, 1);
         media.MediaOpened += (_, _) => ui.TryEnqueue(Opened);
         media.MediaEnded += (_, _) => ui.TryEnqueue(Ended);
         media.MediaFailed += (_, e) => ui.TryEnqueue(() => Failed(e.ErrorMessage));
         ticker = ui.CreateTimer();
         ticker.Interval = TimeSpan.FromMilliseconds(200);
-        ticker.Tick += (_, _) => Ticked?.Invoke();
+        ticker.Tick += (_, _) =>
+        {
+            ApplyVolume();
+            Ticked?.Invoke();
+        };
         locks.Changed += () => ui.TryEnqueue(CheckBusy);
     }
 
+    /// <summary>The bar's volume; the song plays at it, lowered by its ReplayGain when the Player page applies it.</summary>
     public double Volume
     {
-        get => media.Volume;
+        get => settings.PlayerVolume;
         set
         {
-            media.Volume = Math.Clamp(value, 0, 1);
-            settings.PlayerVolume = media.Volume;
+            settings.PlayerVolume = Math.Clamp(value, 0, 1);
+            ApplyVolume();
         }
+    }
+
+    /// <summary>ReplayGain while playing (SPEC §37, off by default): the album's gain, or the track's when the Player
+    /// page says so (each falling back on the other), never raising a song past the bar's volume.</summary>
+    void ApplyVolume()
+    {
+        var gain = !settings.PlayerApplyGain || Current is not { } song ? null
+            : settings.PlayerGainMode == "track" ? song.TrackGain ?? song.AlbumGain : song.AlbumGain ?? song.TrackGain;
+        media.Volume = Math.Clamp(settings.PlayerVolume, 0, 1) * Core.ReplayGain.Missing.Factor(gain);
     }
 
     /// <summary>For an agent's off-screen check: no sound at all.</summary>
@@ -109,6 +122,7 @@ public sealed partial class Player : IDisposable
 
     void Opened()
     {
+        ApplyVolume();
         Duration = media.PlaybackSession.NaturalDuration;
         if (startAt > TimeSpan.Zero && startAt < Duration) media.PlaybackSession.Position = startAt;
         if (playWhenOpen)

@@ -518,6 +518,38 @@ public sealed partial class OptionsWindow : Window
         keep.Checked += (_, _) => Kept();
         keep.Unchecked += (_, _) => Kept();
         page.Children.Add(keep);
+        var marks = new CheckBox { Content = "Show which songs have their ReplayGain tags", IsChecked = settings.PlayerGainMarks };
+        ToolTipService.SetToolTip(marks, "In the discography view, a green dot beside each song with its ReplayGain tags and a grey one without; an album whose songs all have them gets one green mark instead");
+        void Marked()
+        {
+            settings.PlayerGainMarks = marks.IsChecked == true;
+            save();
+        }
+        marks.Checked += (_, _) => Marked();
+        marks.Unchecked += (_, _) => Marked();
+        page.Children.Add(marks);
+        var apply = new CheckBox { Content = "Apply ReplayGain while playing", IsChecked = settings.PlayerApplyGain };
+        ToolTipService.SetToolTip(apply, "The player lowers each song by its ReplayGain tags, so albums play at a similar loudness; songs without the tags play as they are. A quiet song is never raised past the volume you set");
+        page.Children.Add(apply);
+        var mode = Choice("Which gain", "player-gain",
+        [
+            ("album", "Album gain: an album keeps its loud and quiet songs as they were mastered",
+             "Every song of an album is lowered by the same amount, so its dynamics stay"),
+            ("track", "Track gain: every song is levelled to the same loudness",
+             "Each song is lowered by its own amount; quiet songs of an album no longer sound quieter"),
+        ], settings.PlayerGainMode == "track" ? "track" : "album", value => settings.PlayerGainMode = value);
+        mode.Margin = new Thickness(28, 0, 0, 0);
+        mode.IsHitTestVisible = settings.PlayerApplyGain;
+        mode.Opacity = settings.PlayerApplyGain ? 1 : 0.5;
+        void Applied()
+        {
+            settings.PlayerApplyGain = apply.IsChecked == true;
+            mode.IsHitTestVisible = settings.PlayerApplyGain;
+            mode.Opacity = settings.PlayerApplyGain ? 1 : 0.5;
+            save();
+        }
+        apply.Checked += (_, _) => Applied();
+        apply.Unchecked += (_, _) => Applied();
         var previews = new CheckBox { Content = "Play the search preview's excerpts with their sound", IsChecked = settings.PreviewSound };
         ToolTipService.SetToolTip(previews, "A click on a result plays about 30 seconds of it; never over the player, which keeps playing while previews stay silent. The speaker button on the preview sets this too");
         void Previews()
@@ -538,6 +570,9 @@ public sealed partial class OptionsWindow : Window
         settings.PlayerOnBusy = "stop";
         settings.PlayerKeep = true;
         settings.PreviewSound = true;
+        settings.PlayerGainMarks = false;
+        settings.PlayerApplyGain = false;
+        settings.PlayerGainMode = "album";
     }
 
     async Task RestoreAll()

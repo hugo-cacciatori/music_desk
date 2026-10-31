@@ -50,6 +50,9 @@ public sealed partial class DiscographyView : UserControl
     readonly TextBlock albumTitle = new() { FontSize = 18, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center };
     readonly TextBlock albumYear = new() { FontSize = 12, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 2, 0, 10) };
     readonly StackPanel songList = new() { Spacing = 2 };
+    // The ReplayGain marks (SPEC §37, a Player option, off by default): one discreet mark for an album whose songs all
+    // have their tags, else a green or grey dot beside each song.
+    readonly Ellipse albumGain = new() { Width = 7, Height = 7, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
     readonly ScrollViewer songScroll = new() { HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden };
     readonly Grid lyricsArea = new();
     readonly Canvas risers = new() { IsHitTestVisible = false };
@@ -197,7 +200,9 @@ public sealed partial class DiscographyView : UserControl
 
         songScroll.Content = songList;
         albumText.Children.Add(albumTitle);
+        albumText.Children.Add(albumGain);
         albumText.Children.Add(albumYear);
+        ToolTipService.SetToolTip(albumGain, "Every song of this album has its ReplayGain tags");
         albumText.Children.Add(songScroll);
         bubbleHost.Children.Add(albumText);
         albumContent.Children.Add(bubbleHost);
@@ -314,6 +319,13 @@ public sealed partial class DiscographyView : UserControl
             var inside = radius2 >= 38;
             var bubble = Labelled(radius2 * 2, inside ? each.Name : null, inside ? each.Year : null, 12);
             bubble.Tag = each;
+            if (settings.PlayerGainMarks && each.Songs.All(s => s.HasGain))
+                bubble.Children.Add(new Ellipse
+                {
+                    Width = 7, Height = 7, Fill = Ui.Brush("SystemFillColorSuccessBrush"), IsHitTestVisible = false,
+                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(0, radius2 * 0.3, radius2 * 0.3, 0),
+                });
             Place(overview, bubble, center, radius2 * 2);
             ToolTipService.SetToolTip(bubble, $"{each.Name}{(each.Year is null ? "" : $" ({each.Year})")} · {each.Songs.Count} songs · double-click to open");
             var index2 = i;
@@ -398,6 +410,8 @@ public sealed partial class DiscographyView : UserControl
         albumTitle.Text = each.Name;
         albumYear.Text = each.Year ?? "";
         albumYear.Visibility = each.Year is null ? Visibility.Collapsed : Visibility.Visible;
+        albumGain.Fill = Ui.Brush("SystemFillColorSuccessBrush");
+        albumGain.Visibility = settings.PlayerGainMarks && each.Songs.All(s => s.HasGain) ? Visibility.Visible : Visibility.Collapsed;
         previous.Visibility = album > 0 ? Visibility.Visible : Visibility.Collapsed;
         next.Visibility = album < data.Albums.Count - 1 ? Visibility.Visible : Visibility.Collapsed;
         ToolTipService.SetToolTip(previous, album > 0 ? $"{data.Albums[album - 1].Name} (Left)" : null);
@@ -429,6 +443,18 @@ public sealed partial class DiscographyView : UserControl
             };
             Grid.SetColumn(title, 1);
             row.Children.Add(title);
+            if (settings.PlayerGainMarks && !each.Songs.All(s => s.HasGain))
+            {
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var mark = new Ellipse
+                {
+                    Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center,
+                    Fill = Ui.Brush(item.HasGain ? "SystemFillColorSuccessBrush" : "ControlStrongFillColorDisabledBrush"),
+                };
+                ToolTipService.SetToolTip(mark, item.HasGain ? "Has its ReplayGain tags" : "No ReplayGain tags");
+                Grid.SetColumn(mark, 2);
+                row.Children.Add(mark);
+            }
             row.Opacity = item.Lyrics is null ? 0.55 : 1;
             ToolTipService.SetToolTip(row, item.Lyrics is null ? $"{item.Title}: {item.Note.ToLowerInvariant()}" : $"{item.Title}: show its lyrics");
             var index2 = j;

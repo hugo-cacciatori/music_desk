@@ -48,3 +48,45 @@ public sealed class PlaybackTests
         Assert.Equal(AlbumEnd.Loop, settings.GetAlbumEnd());
     }
 }
+
+/// <summary>ReplayGain around the player (SPEC §37): the albums a scan's end asks about, from the index alone.</summary>
+public sealed class MissingGainTests : IDisposable
+{
+    readonly HandIndex lib = new();
+
+    public void Dispose() => lib.Dispose();
+
+    [Fact]
+    public void A_scan_asks_about_the_albums_without_their_tags_as_replaygain_sees_albums()
+    {
+        var options = Refrain.Core.Options.ReplayGainOptions.Default;
+        var tagged = lib.Folder(lib.Top, "Tagged");
+        lib.Track(tagged, "01.flac", rg: 4);
+        var half = lib.Folder(lib.Top, "Half");
+        lib.Track(half, "01.flac", rg: 4);
+        lib.Track(half, "02.flac");
+        var discs = lib.Folder(lib.Top, "Discs");
+        lib.Track(discs, "01.flac", rg: 4);
+        lib.Track(lib.Folder(discs, "CD2"), "01.flac");  // a disc measured with its album
+        var copies = lib.Folder(lib.Top, "Copies");
+        lib.Track(copies, "01.flac", rg: 4);
+        lib.Track(lib.Folder(copies, "lite"), "01.flac");  // a copy: never counted
+        var image = lib.Folder(lib.Top, "Image");
+        lib.Track(image, "album.flac");
+        lib.Unread(image, "album.cue");  // an image waiting to be split
+        lib.Unread(lib.Folder(lib.Top, "Unread"), "01.flac");  // tags not read yet: nothing known
+
+        Assert.Equal([@"C:\Music\Discs", @"C:\Music\Half"], Refrain.Core.ReplayGain.Missing.AlbumsWithoutTags(lib.Conn, options));
+    }
+
+    [Fact]
+    public void A_gain_tag_lowers_the_volume_and_never_raises_it()
+    {
+        Assert.Equal(-6.52, Refrain.Core.ReplayGain.Missing.Gain("-6.52 dB"));
+        Assert.Equal(2.1, Refrain.Core.ReplayGain.Missing.Gain("+2.10 dB"));
+        Assert.Null(Refrain.Core.ReplayGain.Missing.Gain("loud"));
+        Assert.Equal(0.5, Refrain.Core.ReplayGain.Missing.Factor(-6.0206), 3);
+        Assert.Equal(1, Refrain.Core.ReplayGain.Missing.Factor(3));
+        Assert.Equal(1, Refrain.Core.ReplayGain.Missing.Factor(null));
+    }
+}

@@ -302,6 +302,7 @@ public sealed partial class SearchWindow : Window
     {
         library.Indexer.FolderChanged += _ => ui.TryEnqueue(Changed);
         library.Indexer.ScanFinished += () => ui.TryEnqueue(Changed);
+        library.Indexer.ScanFinished += () => ui.TryEnqueue(() => _ = AskReplayGain());
         library.Indexer.Progress += (folders, read, busy) => ui.TryEnqueue(() =>
         {
             indexing.IsActive = busy;
@@ -635,6 +636,60 @@ public sealed partial class SearchWindow : Window
     }
 
     int openings;  // a later Open in Refrain replaces one still waiting for its tracks
+
+    // ReplayGain at a scan's end (SPEC §37): the albums already asked about this session, and "Don't remind me".
+    readonly HashSet<string> askedGain = new(StringComparer.OrdinalIgnoreCase);
+    bool gainQuiet, askingGain;
+
+    /// <summary>One popup when a scan ends (the last of a burst, once the indexer is idle) and the library has albums
+    /// without ReplayGain tags that weren't asked about yet this session: run ReplayGain on all of them, one window
+    /// measuring them one after another, each folder as an album (the right-click entry for several folders). "Don't
+    /// remind me" lasts until Refrain closes. Albums a task holds are left out.</summary>
+    async Task AskReplayGain()
+    {
+        if (gainQuiet || askingGain) return;
+        await Task.Delay(1500);
+        if (library.Indexer.Busy || gainQuiet || askingGain) return;
+        var options = settings.GetReplayGain();
+        var albums = (await Read(conn => Core.ReplayGain.Missing.AlbumsWithoutTags(conn, options)))
+            .Where(a => App.Instance.Locks.Conflict(a) is null).ToList();
+        if (albums.All(askedGain.Contains)) return;
+        askedGain.UnionWith(albums);
+        var text = albums.Count == 1 ? "1 album has no ReplayGain tags. Run ReplayGain on it?"
+                                     : $"{albums.Count} albums have no ReplayGain tags. Run ReplayGain on them?";
+        if (Offscreen)
+        {
+            Log.Info($"Check ReplayGain popup: {text} ({string.Join("; ", albums)})");  // an agent's check reads, never clicks
+            return;
+        }
+        var quiet = new CheckBox { Content = "Don't remind me until Refrain closes" };
+        var body = new StackPanel { Spacing = 10 };
+        body.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap });
+        body.Children.Add(Ui.Secondary($"One ReplayGain window measures them one after another, each folder as an album, at " +
+                                       $"{RefrainMenu.MenuLogic.TargetText(options.Target)}, and writes their tags. Nothing changes until you run it."));
+        body.Children.Add(quiet);
+        var dialog = new ContentDialog
+        {
+            Title = "ReplayGain", Content = body, PrimaryButtonText = "Run ReplayGain", CloseButtonText = "Not now",
+            DefaultButton = ContentDialogButton.Close, XamlRoot = Content.XamlRoot,
+        };
+        askingGain = true;
+        try
+        {
+            var answer = await dialog.ShowAsync();
+            gainQuiet = quiet.IsChecked == true;
+            if (answer == ContentDialogResult.Primary) App.Instance.RunEntry(RefrainMenu.MenuLogic.ReplayGainAlbums, albums);
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            Log.Info($"The ReplayGain question couldn't show (another dialog is open): {e.Message}");
+            askedGain.ExceptWith(albums);
+        }
+        finally
+        {
+            askingGain = false;
+        }
+    }
 
     /// <summary>A task changed files in these folders: the index re-reads them, with their subfolders.</summary>
     public void TaskChanged(IReadOnlyList<string> folders)

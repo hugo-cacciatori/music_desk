@@ -5,7 +5,8 @@ using Refrain.Core.Search;
 namespace Refrain.Core.Playback;
 
 /// <summary>A song the player holds (SPEC §37): what the bar shows, where the file is, and its synced lyrics.</summary>
-public sealed record PlayerSong(long Id, string Title, string Album, string Artist, string ArtistKey, string Path, string? Synced)
+public sealed record PlayerSong(long Id, string Title, string Album, string Artist, string ArtistKey, string Path, string? Synced,
+    double? TrackGain = null, double? AlbumGain = null)
 {
     /// <summary>The player's queue for an album of the discography view: its songs in order, those whose file the index
     /// no longer has left out; <c>Start</c> is <paramref name="song"/>'s place in it (0 when it was left out).</summary>
@@ -19,7 +20,7 @@ public sealed record PlayerSong(long Id, string Title, string Album, string Arti
             var item = each.Songs[i];
             if (Queries.PathOf(conn, item.Id) is not { } path) continue;
             if (i == song) start = queue.Count;
-            queue.Add(new PlayerSong(item.Id, item.Title, each.Name, data.Artist, data.Key, path, item.Synced));
+            queue.Add(new PlayerSong(item.Id, item.Title, each.Name, data.Artist, data.Key, path, item.Synced, item.TrackGain, item.AlbumGain));
         }
         return (queue, start);
     }

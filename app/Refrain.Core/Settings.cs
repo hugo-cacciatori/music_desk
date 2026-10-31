@@ -44,6 +44,11 @@ public sealed class Settings
     // what a task on the playing song's folder does. Unknown values read as the defaults.
     public string PlayerAtEnd { get; set; } = "loop";
     public bool PlayerKeep { get; set; } = true;
+    /// <summary>ReplayGain around the player (SPEC §37): which songs have their tags (a mark), and the player applying
+    /// their gain, the album's by default, the track's when this page says so; all off by default.</summary>
+    public bool PlayerGainMarks { get; set; }
+    public bool PlayerApplyGain { get; set; }
+    public string PlayerGainMode { get; set; } = "album";
     public string PlayerOnBusy { get; set; } = "stop";
     public AlbumEnd GetAlbumEnd() => PlayerAtEnd == "once" ? AlbumEnd.Once : AlbumEnd.Loop;
     public BusyFolder GetBusyFolder() => PlayerOnBusy == "skip" ? BusyFolder.Skip : BusyFolder.Stop;

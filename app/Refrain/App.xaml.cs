@@ -39,8 +39,9 @@ public static partial class Program
         }
         // The first start after the Python app moves its settings, library folders and LRCLIB results over (SPEC §36
         // "10."), before anything opens them; straight from MusicDesk, its data folder joins Refrain's first (only the
-        // installer's build: a preview never takes the installed app's data). A failure changes nothing and says why.
-        var problem = (AppPaths.Release ? Migration.MoveOldDataFolder(Migration.OldDataFolder, AppPaths.DataFolder) : null)
+        // installer's build on the real data folder: never a preview's, a test's or the release gate's). A failure
+        // changes nothing and says why.
+        var problem = (AppPaths.Release && AppPaths.IsRealDataFolder ? Migration.MoveOldDataFolder(Migration.OldDataFolder, AppPaths.DataFolder) : null)
                       ?? Migration.Run(AppPaths.DataFolder).Error;
         if (problem is not null)
         {

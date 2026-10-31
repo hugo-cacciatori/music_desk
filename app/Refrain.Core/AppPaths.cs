@@ -14,6 +14,10 @@ public static class AppPaths
     const string Sub = "next";
 #endif
 
+    /// <summary>Whether the data folder is the real one, not REFRAIN_DATA's (a test's, the release gate's, an agent's
+    /// check): only the real one may take MusicDesk's data (measured, 2026-10-31: the gate's off-screen run moved Hugo's).</summary>
+    public static bool IsRealDataFolder => string.IsNullOrEmpty(Environment.GetEnvironmentVariable("REFRAIN_DATA"));
+
     public static string DataFolder
     {
         get
